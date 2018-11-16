@@ -8,7 +8,7 @@ from asphelper.orm import \
     _integer_cltopy, _string_cltopy, _constant_cltopy, \
     _integer_pytocl, _string_pytocl, _constant_pytocl, \
     _integer_unifies, _string_unifies, _constant_unifies, \
-    BasePredicate, \
+    NonLogicalSymbol, Predicate, ComplexTerm, \
     IntegerField, StringField, ConstantField, FunctionField, TupleField, ComplexField, \
     process_facts
 
@@ -67,7 +67,7 @@ class ORMTestCase(unittest.TestCase):
 
         # Create an integer field but we want to interface to it using reals
         # with 100 x scaling.
-        class Fact(BasePredicate):
+        class Fact(Predicate):
             anum = IntegerField(infunc=lambda x: int(x*100),
                                 outfunc=lambda x: x/100.0,
                                 default=1.5)
@@ -76,8 +76,8 @@ class ORMTestCase(unittest.TestCase):
 
         af1=Fact()
         af2=Fact(anum=0.5)
-        self.assertEqual(f1, af1._raw)
-        self.assertEqual(f2, af2._raw)
+        self.assertEqual(f1, af1.clingo_symbol)
+        self.assertEqual(f2, af2.clingo_symbol)
         self.assertEqual(af1.anum, 1.5)
         self.assertEqual(af2.anum, 0.5)
 
@@ -87,7 +87,7 @@ class ORMTestCase(unittest.TestCase):
     # --------------------------------------------------------------------------
     def test_predicate_init(self):
 
-        class Fact(BasePredicate):
+        class Fact(Predicate):
             anum = IntegerField(default=1)
             astr = StringField()
 
@@ -96,7 +96,7 @@ class ORMTestCase(unittest.TestCase):
         f2=Fact(1,"test")
 
         self.assertEqual(f1, f2)
-        self.assertEqual(f1._raw, func)
+        self.assertEqual(f1.clingo_symbol, func)
 
     #--------------------------------------------------------------------------
     # Test that we can define predicates using the class syntax and test that
@@ -104,56 +104,66 @@ class ORMTestCase(unittest.TestCase):
     # --------------------------------------------------------------------------
     def test_simple_predicate_defn(self):
 
-        # Test a bad declaration - the field name starts with an "_"
+        # Test bad declaration - the field name starts with an "_"
         with self.assertRaises(ValueError) as ctx:
-            class BadPredicate(BasePredicate):
+            class BadPredicate(Predicate):
                 _afield = IntegerField()
 
+        # Test bad declaration - the field name is "meta"
+        with self.assertRaises(ValueError) as ctx:
+            class BadPredicate(Predicate):
+                meta = IntegerField()
+
+        # Test bad declaration - the field name is "clingo_symbol"
+        with self.assertRaises(ValueError) as ctx:
+            class BadPredicate(Predicate):
+                clingo_symbol = IntegerField()
+
         # Test declaration of predicate with an implicit name
-        class ImplicitlyNamedPredicate(BasePredicate):
+        class ImplicitlyNamedPredicate(Predicate):
             afield = IntegerField()
 
         inp1 = ImplicitlyNamedPredicate(afield=2)
         inp2 = Function("implicitlyNamedPredicate",[Number(2)])
-        self.assertEqual(inp1._raw, inp2)
+        self.assertEqual(inp1.clingo_symbol, inp2)
 
         # Test declaration of a unary predicate
-        class UnaryPredicate(BasePredicate):
+        class UnaryPredicate(Predicate):
             class Meta: name = "unary"
 
         up1 = UnaryPredicate()
         up2 = Function("unary",[])
-        self.assertEqual(up1._raw, up2)
+        self.assertEqual(up1.clingo_symbol, up2)
 
         # Test the class properties; when access from the class and the object.
-        self.assertEqual(up1._name, "unary")
-        self.assertEqual(UnaryPredicate._name, "unary")
-        self.assertEqual(up1._arity, 0)
-        self.assertEqual(UnaryPredicate._arity, 0)
+        self.assertEqual(up1.meta.name, "unary")
+        self.assertEqual(UnaryPredicate.meta.name, "unary")
+        self.assertEqual(up1.meta.arity, 0)
+        self.assertEqual(UnaryPredicate.meta.arity, 0)
 
         # Test that default fields work and that not specifying a value raises
         # an exception
-        class DefaultFieldPredicate(BasePredicate):
+        class DefaultFieldPredicate(Predicate):
             first = IntegerField()
             second = IntegerField(default=10)
             class Meta: name = "dfp"
 
         dfp1 = DefaultFieldPredicate(first=15)
         dfp2 = Function("dfp",[Number(15),Number(10)])
-        self.assertEqual(dfp1._raw, dfp2)
+        self.assertEqual(dfp1.clingo_symbol, dfp2)
 
         with self.assertRaises(ValueError) as ctx:
             dfp3 = DefaultFieldPredicate()
 
         # Test declaration of predicates with Simple and String fields
-        class MultiFieldPredicate(BasePredicate):
+        class MultiFieldPredicate(Predicate):
             afield1 = StringField()
             afield2 = ConstantField()
             class Meta: name = "mfp"
 
         mfp1 = MultiFieldPredicate(afield1="astring", afield2="asimple")
         mfp2 = Function("mfp", [String("astring"), Function("asimple",[])])
-        self.assertEqual(mfp1._raw, mfp2)
+        self.assertEqual(mfp1.clingo_symbol, mfp2)
 
         # Test that the appropriate field properties are set up properly
         self.assertEqual(mfp1.afield1, "astring")
@@ -164,17 +174,17 @@ class ORMTestCase(unittest.TestCase):
     # --------------------------------------------------------------------------
     def test_complex_predicate_defn(self):
 
-        class Fun(BasePredicate):
+        class Fun(ComplexTerm):
             aint = IntegerField(infunc=lambda x: int(x*100), outfunc=lambda x: x/100.0)
             astr = StringField()
 
-        class MyTuple(BasePredicate):
+        class MyTuple(ComplexTerm):
             aint = IntegerField()
             astr = StringField()
-            class Meta: name = ""
+            class Meta: istuple = True
 
         # A fact definition
-        class Fact(BasePredicate):
+        class Fact(Predicate):
             aint = IntegerField()
             atup = TupleField(fields=[IntegerField(), StringField()],default=(2,"str"))
             afunc = FunctionField(name="fun",
@@ -183,9 +193,10 @@ class ORMTestCase(unittest.TestCase):
                                           StringField()],
                                   default=(2.0,"str"))
         # Alternative fact definition
-        class FactAlt(BasePredicate):
+        class FactAlt(Predicate):
             aint = IntegerField()
-            atup = ComplexField(defn=MyTuple,default=MyTuple(aint=2,astr="str"))
+            # note: don't need to specify defn keyword
+            atup = ComplexField(MyTuple,default=MyTuple(aint=2,astr="str"))
             afunc = ComplexField(defn=Fun,default=Fun(aint=2.0,astr="str"))
             class Meta: name = "fact"
 
@@ -201,8 +212,8 @@ class ORMTestCase(unittest.TestCase):
                               Function("",[Number(4),String("XXX")]),
                               Function("fun",[Number(550),String("YYY")])])
 
-        self.assertEqual(f1, af1._raw)
-        self.assertEqual(f2, af2._raw)
+        self.assertEqual(f1, af1.clingo_symbol)
+        self.assertEqual(f2, af2.clingo_symbol)
         self.assertEqual(af1, bf1)
         self.assertEqual(af2, bf2)
 
@@ -212,7 +223,7 @@ class ORMTestCase(unittest.TestCase):
     # Test predicate equality
     # --------------------------------------------------------------------------
     def test_predicate_operator_overloads(self):
-        class Fact(BasePredicate):
+        class Fact(Predicate):
             anum = IntegerField()
 
         f1 = Function("fact", [Number(1)])
@@ -221,7 +232,7 @@ class ORMTestCase(unittest.TestCase):
         af2 = Fact(anum=2)
         af1_c = Fact(anum=1)
 
-        self.assertEqual(f1, af1._raw)
+        self.assertEqual(f1, af1.clingo_symbol)
         self.assertEqual(af1, f1)
         self.assertEqual(f1, af1)
         self.assertEqual(af1,af1_c)
@@ -242,59 +253,67 @@ class ORMTestCase(unittest.TestCase):
     # Test unifying a symbol with a predicate
     # --------------------------------------------------------------------------
     def test_unifying_symbol_and_predicate(self):
-        class Fact(BasePredicate):
+        class Fact(Predicate):
             anum = IntegerField()
             astr = StringField()
             asim = ConstantField()
 
         gfact1_sym = Function("fact",[Number(1),String("Dave"),Function("ok",[])])
-        gfact1_pred = Fact(_symbol=gfact1_sym)
+        gfact1_pred = Fact._unify(gfact1_sym)
         self.assertEqual(gfact1_pred.anum, 1)
         self.assertEqual(gfact1_pred.astr, "Dave")
         self.assertEqual(gfact1_pred.asim, "ok")
 
         bfact1_sym = Function("fact",[String("1"),String("Dave"),Function("ok",[])])
         with self.assertRaises(ValueError) as ctx:
-            bfact1_pred = Fact(_symbol=bfact1_sym)
+            bfact1_pred = Fact._unify(bfact1_sym)
 
     #--------------------------------------------------------------------------
     # Test unifying a symbol with a predicate
     # --------------------------------------------------------------------------
     def test_unifying_symbol_and_complex_predicate(self):
 
-        class Fact(BasePredicate):
+        class Fact(Predicate):
             afun = FunctionField(name="fun", fields=[IntegerField(),StringField()])
 
-        class Fun(BasePredicate):
-            aint=IntegerField()
-            astr=StringField()
+        class FactAlt(Predicate):
+            class Fun(ComplexTerm):
+                aint=IntegerField()
+                astr=StringField()
 
-        class FactAlt(BasePredicate):
             afun = ComplexField(defn=Fun)
             class Meta: name="fact"
 
         good_fact_symbol1 = Function("fact",[Function("fun",[Number(1),String("Dave")])])
-        good_fact_pred1 = Fact(_symbol=good_fact_symbol1)
-        good_factalt_pred1 = FactAlt(_symbol=good_fact_symbol1)
+        good_fact_symbol2 = Function("fact",[Function("fun",[Number(3),String("Dave")])])
+        good_fact_symbol3 = Function("fact",[Function("fun",[Number(4),String("Bob")])])
+        good_fact_pred1 = Fact._unify(good_fact_symbol1)
+        good_factalt_pred1 = FactAlt._unify(good_fact_symbol1)
         self.assertEqual(good_fact_pred1.afun, (1,"Dave"))
 
         bad_fact_symbol1 = Function("fact",[Function("fun",[Number(1)])])
         with self.assertRaises(ValueError) as ctx:
-            bad_fact_pred1 = Fact(_symbol=bad_fact_symbol1)
+            bad_fact_pred1 = Fact._unify(bad_fact_symbol1)
 
+        good_factalt_pred1.afun.aint = 3
+        self.assertEqual(good_factalt_pred1.clingo_symbol, good_fact_symbol2)
+
+        ct = FactAlt.Fun(4,"Bob")
+        good_factalt_pred1.afun = ct
+        self.assertEqual(good_factalt_pred1.clingo_symbol, good_fact_symbol3)
 
     #--------------------------------------------------------------------------
     # Test processing clingo Model
     #--------------------------------------------------------------------------
 
     def test_process_model(self):
-        class Fact(BasePredicate):
+        class Fact(Predicate):
             anum = IntegerField()
-        class FactAlt(BasePredicate):
+        class FactAlt(Predicate):
             anum = IntegerField()
             astr = StringField()
             class Meta: name = "fact"
-        class Fact2(BasePredicate):
+        class Fact2(Predicate):
             anum = IntegerField()
 
         f1 = Function("fact", [Number(1)])

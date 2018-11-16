@@ -1,6 +1,6 @@
 #------------------------------------------------------------------------------
-# ORM provides a Object Relational Mapper type model for specifying
-# predicates/terms.
+# ORM provides a Object Relational Mapper type model for specifying non-logical
+# symbols (ie., predicates and terms)
 # ------------------------------------------------------------------------------
 
 #import logging
@@ -76,8 +76,8 @@ def _constant_unifies(term):
     return True
 
 #------------------------------------------------------------------------------
-# Predicate field definitions. All fields have the functions: pytocl, cltopy,
-# and unifies, and the properties: default, is_field_defn
+# Field definitions. All fields have the functions: pytocl, cltopy, and unifies,
+# and the properties: default, is_field_defn
 # ------------------------------------------------------------------------------
 
 class SimpleField(object):
@@ -133,7 +133,7 @@ class ConstantField(SimpleField):
                                            default=default)
 
 #------------------------------------------------------------------------------
-# Predicate field definitions for function and tuple fields.
+# Field definitions for function and tuple fields.
 # ------------------------------------------------------------------------------
 
 class FunctionField(object):
@@ -194,12 +194,13 @@ class TupleField(FunctionField):
 
 
 #------------------------------------------------------------------------------
-# A ComplexField definition allows you to wrap an existing Predicate definition
+# A ComplexField definition allows you to wrap an existing NonLogicalSymbol
+# definition.
 # ------------------------------------------------------------------------------
 
 class ComplexField(object):
     def __init__(self, defn, default=None):
-        if not issubclass(defn, BasePredicate):
+        if not issubclass(defn, NonLogicalSymbol):
             raise TypeError("Not a subclass of ComplexTerm: {}".format(defn))
         self._defn = defn
         self._default = default
@@ -207,7 +208,7 @@ class ComplexField(object):
     def pytocl(self, value):
         if not isinstance(value, self._defn):
             raise TypeError("Value not an instance of {}".format(self._defn))
-        return value._raw
+        return value.clingo_symbol
 
     def cltopy(self, symbol):
         return self._defn(_symbol=symbol)
@@ -228,71 +229,32 @@ class ComplexField(object):
 
 
 #------------------------------------------------------------------------------
-# Functions to process and construct the Predicate/ComplexTerm classes and their
-# attributes.
+# The NonLogicalSymbol base class and supporting functions and classes
 # ------------------------------------------------------------------------------
 
 # ------------------------------------------------------------------------------
-# Construct a predicate name from a class name
-def _func_name(name):
-    return name[:1].lower() + name[1:] if name else ''
-
+# Helper functions for NonLogicalSymbolMeta class to create a NonLogicalSymbol
+# class constructor.
 # ------------------------------------------------------------------------------
-# The Meta attribute must be a class that defines predicate metadata
-def _process_func_meta_class(input_dct, func_meta_class):
-    if not inspect.isclass(func_meta_class):
-        raise TypeError("Meta attribute is not an inner class")
-    maa = func_meta_class.__dict__
-#    maa = inspect.getmembers(meta_attr, lambda a: not(inspect.isroutine(a)))
-    if "name" in maa: input_dct["name"] = maa["name"]
 
-# ------------------------------------------------------------------------------
-# Unify a clingo symbol  with a predicate - return False if they don't unify
-def _unify_symbol_and_predicate(symbol, predicate):
-    if type(symbol) != Symbol: return False
-    if symbol.type != SymbolType.Function: return False
-    if not isinstance(predicate, BasePredicate): return False
-
-    pred_name = predicate._metadata["name"]
-    pred_field_defns = predicate._field_defns
-
-    if symbol.name != pred_name: return False
-    if len(symbol.arguments) != len(pred_field_defns): return False
-
-    for idx, (field_name, field_defn) in enumerate(pred_field_defns.items()):
-        term = symbol.arguments[idx]
-        if not field_defn.unifies(symbol.arguments[idx]): return False
-    return True
-
-# ------------------------------------------------------------------------------
-# _predicate_pushup_symbol(self, symbol)
-# ------------------------------------------------------------------------------
-def _predicate_push_symbol_update(self, symbol):
-    self._symbol = symbol
-
-    # Populate the individual fields
-    self._field_values = {}
-    for idx, (field_name, field_defn) in enumerate(self._field_defns.items()):
-        self._field_values[field_name] = field_defn.cltopy(self._symbol.arguments[idx])
-
-# ------------------------------------------------------------------------------
-# Construct predicate via an explicit clingo Symbol
-def _predicate_init_by_symbol(self, **kwargs):
+# Construct a NonLogicalSymbol via an explicit clingo Symbol
+def _nls_init_by_symbol(self, **kwargs):
     if len(kwargs) != 1:
         raise ValueError("Invalid combination of keyword arguments")
     symbol = kwargs["_symbol"]
     class_name = type(self).__name__
-    if not _unify_symbol_and_predicate(symbol, self):
+    if not self._unifies(symbol):
         raise ValueError(("Failed to unify symbol {} with "
-                          "predicate {}").format(symbol, class_name))
-    _predicate_push_symbol_update(self, symbol)
+                          "NonLogicalSymbol class {}").format(symbol, class_name))
+#    self._symbol = symbol
+    for idx, (field_name, field_defn) in enumerate(self.meta.field_defns.items()):
+        self._field_values[field_name] = field_defn.cltopy(symbol.arguments[idx])
 
-# ------------------------------------------------------------------------------
-# Construct predicate via the field keywords
-def _predicate_init_by_keyword_values(self, **kwargs):
+# Construct a NonLogicalSymbol via the field keywords
+def _nls_init_by_keyword_values(self, **kwargs):
     class_name = type(self).__name__
-    pred_name = self._metadata["name"]
-    fields = set(self._field_defns.keys())
+    pred_name = self.meta.name
+    fields = set(self.meta.field_defns.keys())
 
     invalids = [ k for k in kwargs if k not in fields ]
     if invalids:
@@ -300,137 +262,234 @@ def _predicate_init_by_keyword_values(self, **kwargs):
                           "of {}".format(invalids,class_name)))
 
     # Construct the clingo function arguments
-    self._field_values = {}
-    pred_args = []
-    for field_name, field_defn in self._field_defns.items():
-        pyvalue=None
+    for field_name, field_defn in self.meta.field_defns.items():
         if field_name not in kwargs:
             if not field_defn.default:
                 raise ValueError(("Unspecified field {} has no "
                                   "default value".format(field_name)))
-            pyvalue=field_defn.default
+            self._field_values[field_name] = field_defn.default
         else:
-            pyvalue=kwargs[field_name]
-
-        # Set the value
-        clvalue = field_defn.pytocl(pyvalue)
-        self._field_values[field_name] = clvalue
-        pred_args.append(clvalue)
+            self._field_values[field_name] = kwargs[field_name]
 
     # Create the clingo symbol object
-    self._symbol = Function(pred_name, pred_args)
+    #self._symbol = self._generate_symbol()
 
-# ------------------------------------------------------------------------------
-# Construct predicate via the field keywords
-def _predicate_init_by_positional_values(self, *args):
+# Construct a NonLogicalSymbol via the field keywords
+def _nls_init_by_positional_values(self, *args):
     class_name = type(self).__name__
-    pred_name = self._metadata["name"]
+    pred_name = self.meta.name
     argc = len(args)
-    arity = len(self._field_defns)
+    arity = len(self.meta.field_defns)
     if argc != arity:
         return ValueError("Expected {} arguments but {} given".format(arity,argc))
 
-    pred_args = []
-    for idx, (field_name, field_defn) in enumerate(self._field_defns.items()):
-        pred_args.append(field_defn.pytocl(args[idx]))
+    for idx, (field_name, field_defn) in enumerate(self.meta.field_defns.items()):
+        self._field_values[field_name] = args[idx]
 
     # Create the clingo symbol object
-    self._symbol = Function(pred_name, pred_args)
+    #self._symbol = self._generate_symbol()
 
-# ------------------------------------------------------------------------------
-# Constructor for every BasePredicate sub-class
-def _predicate_constructor(self, *args, **kwargs):
+# Constructor for every NonLogicalSymbol sub-class
+def _nls_constructor(self, *args, **kwargs):
     self._symbol = None
+    self._field_values = {}
     if "_symbol" in kwargs:
-        _predicate_init_by_symbol(self, **kwargs)
+        _nls_init_by_symbol(self, **kwargs)
     elif len(args) > 0:
-        _predicate_init_by_positional_values(self, *args)
+        _nls_init_by_positional_values(self, *args)
     else:
-        _predicate_init_by_keyword_values(self, **kwargs)
+        _nls_init_by_keyword_values(self, **kwargs)
 
-
-
-# -----------------------------------------------------------------------------
-# Create a functor that gets the value of a field.
-def _make_field_functor(field_defn, idx):
-    def get_value(self):
-        return field_defn.cltopy(self._symbol.arguments[idx])
-    return get_value
-
-# ------------------------------------------------------------------------------
-# Function to check that an object satisfies the requirements of a field.
-# Must have functions cltopy and pytocl, and a property default
-def _is_field_definition(obj):
-    try:
-        if obj.is_field_defn: return True
-    except AttributeError:
-        pass
-    return False
 
 #------------------------------------------------------------------------------
-#
+# A Metaclass for the NonLogicalSymbol base class
 #------------------------------------------------------------------------------
-class PredicateMeta(type):
-
-    def __new__(meta, name, bases, dct):
-        if name == "BasePredicate":
-            return super(PredicateMeta, meta).__new__(meta, name, bases, dct)
-
-        pred_metadata = { "name" : _func_name(name) }
-        if "Meta" in dct: _process_func_meta_class(pred_metadata, dct["Meta"])
-
-        pred_field_defns = collections.OrderedDict()
-        idx = 0
-        for fname, fdefn in dct.items():
-            if not _is_field_definition(fdefn): continue
-            if fname.startswith('_'):
-                raise ValueError(("Error: field name starts with an "
-                                  "underscore: {}").format(fname))
-            pred_field_defns[fname] = fdefn
-            dct[fname] = property(_make_field_functor(fdefn,idx))
-            idx += 1
-
-        dct["_metadata"] = pred_metadata
-        dct["_field_defns"] = pred_field_defns
-        dct["__init__"] = _predicate_constructor
-
-        return super(PredicateMeta, meta).__new__(meta, name, bases, dct)
-
-#------------------------------------------------------------------------------
-# A base predicate that all predicate declarations must inherit from. The
-# Metaclass creates the magic to create the fields and the underlying clingo
-# symbol object.
-# ------------------------------------------------------------------------------
-
-class BasePredicate(object, metaclass=PredicateMeta):
+class NonLogicalSymbolMeta(type):
 
     #--------------------------------------------------------------------------
-    # Some properties of the predicate
+    # Support member fuctions
+    #--------------------------------------------------------------------------
+
+    # Function to check that an object satisfies the requirements of a field.
+    # Must have functions cltopy and pytocl, and a property default
+    @classmethod
+    def _is_field_defn(cls, obj):
+        try:
+            if obj.is_field_defn: return True
+        except AttributeError:
+            pass
+        return False
+
+    # Create a field getter functor
+    @classmethod
+    def _make_field_getter(cls, idx, field_name, field_defn):
+        def getter(self):
+            return self._field_values[field_name]
+#            return field_defn.cltopy(self._symbol.arguments[idx])
+        return getter
+
+    # Create a field getter functor
+    @classmethod
+    def _make_field_setter(cls, idx, field_name, field_defn):
+        def setter(self,x):
+            self._field_values[field_name] = x
+#            return field_defn.cltopy(self._symbol.arguments[idx])
+        return setter
+
+    # build the metadata for the NonLogicalSymbol
+    @classmethod
+    def _make_metadata(cls, class_name, dct):
+
+        # Generate a name for the NonLogicalSymbol
+        name = class_name[:1].lower() + class_name[1:]  # convert first character to lowercase
+        if "Meta" in dct:
+            metadefn = dct["Meta"]
+            if not inspect.isclass(metadefn):
+                raise TypeError("'Meta' attribute is not an inner class")
+            name_def="name" in metadefn.__dict__
+            istuple_def="istuple" in metadefn.__dict__
+            if name_def : name = metadefn.__dict__["name"]
+            istuple = metadefn.__dict__["istuple"] if istuple_def else False
+
+            if name_def and istuple:
+                raise AttributeError(("Mutually exclusive meta attibutes "
+                                      "'name' and 'istuple' "))
+            elif istuple: name = ""
+
+        # Generate the field definitions
+        field_defns = collections.OrderedDict()
+        idx = 0
+        for field_name, field_defn in dct.items():
+            if not cls._is_field_defn(field_defn): continue
+            if field_name.startswith('_'):
+                raise ValueError(("Error: field name starts with an "
+                                  "underscore: {}").format(field_name))
+            if field_name == "meta":
+                raise ValueError(("Error: invalid field name: 'meta' "
+                                  "is a reserved word"))
+            if field_name == "clingo_symbol":
+                raise ValueError(("Error: invalid field name: 'clingo_symbol' "
+                                  "is a reserved word"))
+            field_defns[field_name] = field_defn
+            idx += 1
+
+        # Now create the MetaData object
+        return NonLogicalSymbol.MetaData(name=name,field_defns=field_defns)
+
+    #--------------------------------------------------------------------------
+    # Allocate the new metaclass
+    #--------------------------------------------------------------------------
+    def __new__(meta, name, bases, dct):
+        if name == "NonLogicalSymbol":
+            return super(NonLogicalSymbolMeta, meta).__new__(meta, name, bases, dct)
+
+        md = meta._make_metadata(name, dct)
+
+        # Set the _meta attribute and constructor
+        dct["_meta"] = md
+        dct["__init__"] = _nls_constructor
+
+        # Create a property attribute corresponding to each field name
+        for idx, (field_name, field_defn) in enumerate(md.field_defns.items()):
+            dct[field_name] = property(meta._make_field_getter(idx, field_name, field_defn),
+                                       meta._make_field_setter(idx, field_name, field_defn))
+
+        return super(NonLogicalSymbolMeta, meta).__new__(meta, name, bases, dct)
+
+#------------------------------------------------------------------------------
+# A base non-logical symbol that all predicate/term declarations must inherit
+# from. The Metaclass creates the magic to create the fields and the underlying
+# clingo symbol object.
+# ------------------------------------------------------------------------------
+
+class NonLogicalSymbol(object, metaclass=NonLogicalSymbolMeta):
+
+    #--------------------------------------------------------------------------
+    # A Metadata internal object for each NonLogicalSymbol class
+    #--------------------------------------------------------------------------
+    class MetaData(object):
+        def __init__(self, name, field_defns):
+            self._name = name
+            self._field_defns = field_defns
+
+        @property
+        def name(self):
+            return self._name
+
+        @property
+        def field_defns(self):
+            return self._field_defns
+
+        @property
+        def field_names(self):
+            return [ fn for fn, fd in self._field_defns.items() ]
+
+        @property
+        def arity(self):
+            return len(self.field_names)
+
+        @property
+        def is_tuple(self):
+            return self.name == ""
+
+    #--------------------------------------------------------------------------
+    # Some properties of the NonLogicalSymbol
     #--------------------------------------------------------------------------
 
     # Get the underlying clingo symbol object
     @property
-    def _raw(self):
-        return self._symbol
+    def clingo_symbol(self):
+        return self._generate_symbol()
 
-    # Get the name of the predicate
-    @classproperty
-    def _name(cls):
-        return cls._metadata["name"]
+    # Recompute the symbol object from the stored field objects
+    def _generate_symbol(self):
+        pred_args = []
+        for field_name, field_defn in self.meta.field_defns.items():
+            pred_args.append(field_defn.pytocl(self._field_values[field_name]))
+        # Create the clingo symbol object
+        return Function(self.meta.name, pred_args)
 
-    # Get the arity of the predicate
+
+    # Get the metadata for the NonLogicalSymbol definition
     @classproperty
-    def _arity(cls):
-        return len(cls._field_defns)
+    def meta(cls):
+        return cls._meta
+
+    #--------------------------------------------------------------------------
+    # Class methods
+    #--------------------------------------------------------------------------
+
+    # Returns whether or not a Symbol can unify with this NonLogicalSymbol
+    @classmethod
+    def _unifies(cls, symbol):
+        if symbol.type != SymbolType.Function: return False
+
+        name = cls.meta.name
+        field_defns = cls.meta.field_defns
+
+        if symbol.name != name: return False
+        if len(symbol.arguments) != len(field_defns): return False
+
+        for idx, (field_name, field_defn) in enumerate(field_defns.items()):
+            term = symbol.arguments[idx]
+            if not field_defn.unifies(symbol.arguments[idx]): return False
+        return True
+
+    # Factory that returns a unified NonLogicalSymbol object
+    @classmethod
+    def _unify(cls, symbol):
+        return cls(_symbol=symbol)
 
     #--------------------------------------------------------------------------
     # Overloaded operators
     #--------------------------------------------------------------------------
     def __eq__(self, other):
-        if isinstance(other, BasePredicate):
-            return self._symbol == other._symbol
+        self_symbol = self.clingo_symbol
+        if isinstance(other, NonLogicalSymbol):
+            other_symbol = other.clingo_symbol
+            return self_symbol == other_symbol
         elif type(other) == Symbol:
-            return self._symbol == other
+            return self_symbol == other
         else:
             return NotImplemented
 
@@ -441,10 +500,12 @@ class BasePredicate(object, metaclass=PredicateMeta):
         return not result
 
     def __lt__(self, other):
-        if isinstance(other, BasePredicate):
-            return self._symbol < other._symbol
+        self_symbol = self.clingo_symbol
+        if isinstance(other, NonLogicalSymbol):
+            other_symbol = other.clingo_symbol
+            return self_symbol < other_symbol
         elif type(other) == Symbol:
-            return self._symbol < other
+            return self_symbol < other
         else:
             return NotImplemented
 
@@ -455,10 +516,12 @@ class BasePredicate(object, metaclass=PredicateMeta):
         return not result
 
     def __gt__(self, other):
-        if isinstance(other, BasePredicate):
-            return self._symbol > other._symbol
+        self_symbol = self.clingo_symbol
+        if isinstance(other, NonLogicalSymbol):
+            other_symbol = other.clingo_symbol
+            return self_symbol > other_symbol
         elif type(other) == Symbol:
-            return self._symbol > other
+            return self_symbol > other
         else:
             return NotImplemented
 
@@ -469,24 +532,29 @@ class BasePredicate(object, metaclass=PredicateMeta):
         return not result
 
     def __str__(self):
-        return str(self._symbol)
+        self_symbol = self.clingo_symbol
+        return str(self_symbol)
 
 #    def __repr__(self):
 #        return self.__str__()
 
-
+#------------------------------------------------------------------------------
+# Convenience aliases for NonLogicalSymbol - this makes it more intuitive
+#------------------------------------------------------------------------------
+Predicate=NonLogicalSymbol
+ComplexTerm=NonLogicalSymbol
 
 #------------------------------------------------------------------------------
 # Functions to process the terms/symbols within the clingo Model object
 #------------------------------------------------------------------------------
 
 def process_facts(facts, pred_filter):
-    # Create a hash for matching predicates
+    # Create a hash for matching NonLogicalSymbols
     matcher = {}
     matches = {}
     for p in pred_filter:
-        name = p._metadata["name"]
-        arity = len(p._field_defns)
+        name = p.meta.name
+        arity = len(p.meta.field_defns)
         matcher[(name,arity)] = p
         matches[p] = []
     for f in facts:
@@ -515,24 +583,24 @@ def process_facts(facts, pred_filter):
 # programming string and add it to the base program - which is not ideal.
 # ------------------------------------------------------------------------------
 def control_insert(ctrl, fact):
-    if not isinstance(fact, BasePredicate):
-        raise TypeError("Object {} is not a predicate".format(fact))
-    fact_str = "{}.".format(fact._raw)
+    if not isinstance(fact, NonLogicalSymbol):
+        raise TypeError("Object {} is not a NonLogicalSymbol".format(fact))
+    fact_str = "{}.".format(fact.clingo_symbol)
     ctrl.add("base",[], fact_str)
 
 #--------------------------------------------------------------------------
-# Set the external status of the predicate instance is easier
+# Set the external status of the NonLogicalSymbol instance is easier
 #--------------------------------------------------------------------------
 def control_assign_external(ctrl, fact, truth):
-    if not isinstance(fact, BasePredicate):
-        raise TypeError("Object {} is not a predicate".format(fact))
-    ctrl.assign_external(fact._raw, truth)
+    if not isinstance(fact, NonLogicalSymbol):
+        raise TypeError("Object {} is not a NonLogicalSymbol".format(fact))
+    ctrl.assign_external(fact.clingo_symbol, truth)
 
 def control_release_external(ctrl, fact):
-    ctrl.release_external(self._raw)
+    ctrl.release_external(self.clingo_symbol)
 
 #------------------------------------------------------------------------------
-# Run the solver - replace any high-level predicate assumptions with their
+# Run the solver - replace any high-level NonLogicalSymbol assumptions with their
 # clingo symbols.
 # ------------------------------------------------------------------------------
 
@@ -540,8 +608,8 @@ def control_solve(ctrl, **kwargs):
     if "assumptions" in kwargs:
         nas = []
         for (a,b) in kwargs["assumptions"]:
-            if isinstance(a, BasePredicate):
-                nas.append((a._raw,b))
+            if isinstance(a, NonLogicalSymbol):
+                nas.append((a.clingo_symbol,b))
             else:
                 nas.append((a,b))
             fi
