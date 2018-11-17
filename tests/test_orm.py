@@ -9,7 +9,7 @@ from asphelper.orm import \
     _integer_pytocl, _string_pytocl, _constant_pytocl, \
     _integer_unifies, _string_unifies, _constant_unifies, \
     NonLogicalSymbol, Predicate, ComplexTerm, \
-    IntegerField, StringField, ConstantField, FunctionField, TupleField, ComplexField, \
+    IntegerField, StringField, ConstantField, ComplexField, \
     process_facts
 
 #------------------------------------------------------------------------------
@@ -183,27 +183,15 @@ class ORMTestCase(unittest.TestCase):
             astr = StringField()
             class Meta: istuple = True
 
-        # A fact definition
-        class Fact(Predicate):
-            aint = IntegerField()
-            atup = TupleField(fields=[IntegerField(), StringField()],default=(2,"str"))
-            afunc = FunctionField(name="fun",
-                                  fields=[IntegerField(infunc=lambda x: int(x*100),
-                                                       outfunc=lambda x: x/100.0),
-                                          StringField()],
-                                  default=(2.0,"str"))
         # Alternative fact definition
-        class FactAlt(Predicate):
+        class Fact(Predicate):
             aint = IntegerField()
             # note: don't need to specify defn keyword
             atup = ComplexField(MyTuple,default=MyTuple(aint=2,astr="str"))
             afunc = ComplexField(defn=Fun,default=Fun(aint=2.0,astr="str"))
-            class Meta: name = "fact"
 
         af1=Fact(aint=1)
-        af2=Fact(aint=2, atup=(4,"XXX"), afunc=(5.5,"YYY"))
-        bf1=FactAlt(aint=1)
-        bf2=FactAlt(aint=2, atup=MyTuple(aint=4,astr="XXX"), afunc=Fun(aint=5.5,astr="YYY"))
+        af2=Fact(aint=2, atup=MyTuple(aint=4,astr="XXX"), afunc=Fun(aint=5.5,astr="YYY"))
 
         f1 = Function("fact",[Number(1),
                               Function("",[Number(2),String("str")]),
@@ -214,10 +202,7 @@ class ORMTestCase(unittest.TestCase):
 
         self.assertEqual(f1, af1.clingo_symbol)
         self.assertEqual(f2, af2.clingo_symbol)
-        self.assertEqual(af1, bf1)
-        self.assertEqual(af2, bf2)
-
-        self.assertEqual(bf2.atup.aint,4)
+        self.assertEqual(af2.atup.aint,4)
 
     #--------------------------------------------------------------------------
     # Test accessing values by index
@@ -233,8 +218,12 @@ class ORMTestCase(unittest.TestCase):
         f[0]=2
         self.assertEqual(f.anum, 2)
 
-        with self.assertRaises(IndexError) as ctx:
-            f[2] = 4
+        (anum,astr) = f
+        self.assertEqual(anum, 2)
+        self.assertEqual(astr, "fun")
+
+        with self.assertRaises(IndexError) as ctx: f[3] = 4
+        with self.assertRaises(TypeError) as ctx: f['bob'] = 4
 
     #--------------------------------------------------------------------------
     # Test predicate equality
@@ -291,33 +280,28 @@ class ORMTestCase(unittest.TestCase):
     def test_unifying_symbol_and_complex_predicate(self):
 
         class Fact(Predicate):
-            afun = FunctionField(name="fun", fields=[IntegerField(),StringField()])
-
-        class FactAlt(Predicate):
             class Fun(ComplexTerm):
                 aint=IntegerField()
                 astr=StringField()
 
             afun = ComplexField(defn=Fun)
-            class Meta: name="fact"
 
         good_fact_symbol1 = Function("fact",[Function("fun",[Number(1),String("Dave")])])
         good_fact_symbol2 = Function("fact",[Function("fun",[Number(3),String("Dave")])])
         good_fact_symbol3 = Function("fact",[Function("fun",[Number(4),String("Bob")])])
         good_fact_pred1 = Fact._unify(good_fact_symbol1)
-        good_factalt_pred1 = FactAlt._unify(good_fact_symbol1)
-        self.assertEqual(good_fact_pred1.afun, (1,"Dave"))
+        self.assertEqual(good_fact_pred1.afun, Fact.Fun(1,"Dave"))
 
         bad_fact_symbol1 = Function("fact",[Function("fun",[Number(1)])])
         with self.assertRaises(ValueError) as ctx:
             bad_fact_pred1 = Fact._unify(bad_fact_symbol1)
 
-        good_factalt_pred1.afun.aint = 3
-        self.assertEqual(good_factalt_pred1.clingo_symbol, good_fact_symbol2)
+        good_fact_pred1.afun.aint = 3
+        self.assertEqual(good_fact_pred1.clingo_symbol, good_fact_symbol2)
 
-        ct = FactAlt.Fun(4,"Bob")
-        good_factalt_pred1.afun = ct
-        self.assertEqual(good_factalt_pred1.clingo_symbol, good_fact_symbol3)
+        ct = Fact.Fun(4,"Bob")
+        good_fact_pred1.afun = ct
+        self.assertEqual(good_fact_pred1.clingo_symbol, good_fact_symbol3)
 
     #--------------------------------------------------------------------------
     # Test processing clingo Model

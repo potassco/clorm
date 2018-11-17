@@ -133,67 +133,6 @@ class ConstantField(SimpleField):
                                            default=default)
 
 #------------------------------------------------------------------------------
-# Field definitions for function and tuple fields.
-# ------------------------------------------------------------------------------
-
-class FunctionField(object):
-    def __init__(self, fields, name="", default=None):
-        if type(self) == FunctionField and not name:
-            raise ValueError("Cannot define a function with an empty name")
-        if not fields: raise ValueError("No defined sub-fields")
-        for fd in fields:
-            if not fd.is_field_defn:
-                raise ValueError("Not a field defintion: {}".format(fd))
-            if fd.default != None:
-                raise ValueError("Tuple fields cannot have a default value")
-        self._field_defns = fields.copy()
-        self._arity = len(fields)
-        self._default = default
-        self._name = name
-
-    def pytocl(self, tuple_value):
-        if len(tuple_value) != self._arity:
-            raise ValueError("Mismatched arity of value and field definitions")
-        clargs = []
-        for idx in range(0,self._arity):
-            fd = self._field_defns[idx]
-            e = tuple_value[idx]
-            clargs.append(fd.pytocl(e))
-        return Function(self._name,clargs)
-
-    def cltopy(self, symbol):
-        values=[]
-        if   (symbol.type != SymbolType.Function or
-              symbol.name != self._name or
-              len(symbol.arguments) != self._arity):
-            raise TypeError("Symbol {0} does not match defn {}".format(self))
-        for idx in range(0,self._arity):
-            fd = self._field_defns[idx]
-            values.append(fd.cltopy(symbol.arguments[idx]))
-        return tuple(values)
-
-    def unifies(self, symbol):
-        if   (symbol.type != SymbolType.Function or
-              symbol.name != self._name or
-              len(symbol.arguments) != self._arity): return False
-        for idx in range(0,self._arity):
-            fd = self._field_defns[idx]
-            if not fd.unifies(symbol.arguments[idx]): return Fasle
-        return True
-
-    @property
-    def default(self):
-        return self._default
-
-    @property
-    def is_field_defn(self): return True
-
-class TupleField(FunctionField):
-    def __init__(self, fields, default=None):
-        super(TupleField,self).__init__(fields, name="", default=default)
-
-
-#------------------------------------------------------------------------------
 # A ComplexField definition allows you to wrap an existing NonLogicalSymbol
 # definition.
 # ------------------------------------------------------------------------------
@@ -499,6 +438,7 @@ class NonLogicalSymbol(object, metaclass=NonLogicalSymbolMeta):
 
     #--------------------------------------------------------------------------
     # Overloaded operators
+    # FIXUP NOT SURE WHETHER I SHOULD SUPPORT THESE OVERLOADS
     #--------------------------------------------------------------------------
     def __eq__(self, other):
         self_symbol = self.clingo_symbol
