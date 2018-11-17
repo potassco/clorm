@@ -220,6 +220,23 @@ class ORMTestCase(unittest.TestCase):
         self.assertEqual(bf2.atup.aint,4)
 
     #--------------------------------------------------------------------------
+    # Test accessing values by index
+    # --------------------------------------------------------------------------
+    def test_predicate_value_by_index(self):
+        class Fact(Predicate):
+            anum = IntegerField()
+            astr = StringField()
+
+        f = Fact(1,"fun")
+        self.assertEqual(f.anum, 1)
+        self.assertEqual(f[0], 1)
+        f[0]=2
+        self.assertEqual(f.anum, 2)
+
+        with self.assertRaises(IndexError) as ctx:
+            f[2] = 4
+
+    #--------------------------------------------------------------------------
     # Test predicate equality
     # --------------------------------------------------------------------------
     def test_predicate_operator_overloads(self):

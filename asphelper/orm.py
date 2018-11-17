@@ -389,10 +389,18 @@ class NonLogicalSymbolMeta(type):
         dct["_meta"] = md
         dct["__init__"] = _nls_constructor
 
-        # Create a property attribute corresponding to each field name
+        # Create a property attribute corresponding to each field name while
+        # also making the values indexable.
+        getters = []
+        setters = []
         for idx, (field_name, field_defn) in enumerate(md.field_defns.items()):
-            dct[field_name] = property(meta._make_field_getter(idx, field_name, field_defn),
-                                       meta._make_field_setter(idx, field_name, field_defn))
+            getter = meta._make_field_getter(idx, field_name, field_defn)
+            setter = meta._make_field_setter(idx, field_name, field_defn)
+            dct[field_name] = property(getter,setter)
+            getters.append(getter)
+            setters.append(setter)
+        dct["_field_getters"] = tuple(getters)
+        dct["_field_setters"] = tuple(setters)
 
         return super(NonLogicalSymbolMeta, meta).__new__(meta, name, bases, dct)
 
@@ -479,6 +487,15 @@ class NonLogicalSymbol(object, metaclass=NonLogicalSymbolMeta):
     @classmethod
     def _unify(cls, symbol):
         return cls(_symbol=symbol)
+
+    #--------------------------------------------------------------------------
+    # Overloaded index operator to access the values
+    #--------------------------------------------------------------------------
+    def __getitem__(self, idx):
+        return self._field_getters[idx](self)
+
+    def __setitem__(self, idx,v):
+        return self._field_setters[idx](self,v)
 
     #--------------------------------------------------------------------------
     # Overloaded operators
