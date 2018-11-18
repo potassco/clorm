@@ -1,3 +1,6 @@
+ASPHelper
+=========
+
 ASPHelper provides some utilities for making it easier to build Answer Set
 Programming (ASP) applications that interact with Python.
 
@@ -15,24 +18,37 @@ Clingo supports Python in two ways:
 ASPHelper can help with both these aspects, although the primary goal of this
 library is to make it easier to build Python applications that use Clingo.
 
+ASPHelper consists of a number of components:
+* the core component is the Object Relational Mapper (ORM).
+* a debug library (TODO)
+* a library of application models (TODO).
 
 
-Clingo supportcan also be run as a library and called from
+Use Case
+--------
 
-high-level Python abstraction for asserting and extracting
-facts from the Clingo  solver.
+The basic use case is for a Python-based database application that needs to
+perform some form of logical reasoning. The database stores a set of facts.  It
+is queried and the results need to be asserted to Clingo. Clingo than solves the
+reasoning problem and produces solutions (technically called "answer
+sets"). Thes answer sets consist of a sets of facts. These facts need to be
+extracted from Clingo and processed in some way, and possibly inserted back to
+the database.
 
+ORM
+---
 
-is a python library to help when interfacing with the Clingo ASP
-reasoner. It is not a replacement for the existing Clingo Python interface but
-instead provides some helper functions and additional high-level abstractions.
+This is the core component of ASPHelper. An ORM provides a high-level interface
+for inserting to and querying databases. A simplified version of this can be
+applied to getting facts in and out of Clingo. The ASPHelper ORM-like interface
+is based heavily on the well-known Peewee ORM.
 
-The heart of ASPHelper is an Object Relational Interface (ORM) style interface
-for mapping between ground ASP facts and Python object instances. The ORM
-interface is inspired by the well-known Peewee ORM used for interfacing Python
-with relational databases.
+Quick Start
+-----------
 
 A simple example:
+
+.. code-block:: python
 
     from asphelper.orm import BasePredicate, NumberField, StringField, SimpleField
 
