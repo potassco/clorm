@@ -12,6 +12,7 @@ executable.
 For more information on Clingo and ASP see the `Clingo home page <https://potassco.org>`_.
 
 Clingo supports Python in two ways:
+
 * calling Python functions from within an ASP program,
 * running Clingo from within a Python application.
 
@@ -19,6 +20,7 @@ ASPHelper can help with both these aspects, although the primary goal of this
 library is to make it easier to build Python applications that use Clingo.
 
 ASPHelper consists of a number of components:
+
 * the core component is the Object Relational Mapper (ORM).
 * a debug library (TODO)
 * a library of application models (TODO).
