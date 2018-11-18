@@ -33,7 +33,7 @@ The basic use case is for a Python-based database application that needs to
 perform some form of logical reasoning. The database stores a set of facts.  It
 is queried and the results need to be asserted to Clingo. Clingo than solves the
 reasoning problem and produces solutions (technically called "answer
-sets"). Thes answer sets consist of a sets of facts. These facts need to be
+sets"), where each solution consists of a set of facts. These facts need to be
 extracted from Clingo and processed in some way, and possibly inserted back to
 the database.
 
