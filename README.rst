@@ -41,9 +41,9 @@ ORM
 ---
 
 This is the core component of ASPHelper. An ORM provides a high-level interface
-for inserting to and querying databases. A simplified version of this can be
-applied to getting facts in and out of Clingo. The ASPHelper ORM-like interface
-is based heavily on the well-known Peewee ORM.
+for inserting to, and querying, a database. A simplified version of this idea
+can be applied to getting facts in and out of Clingo. The ASPHelper ORM-like
+interface that is based heavily on the well-known Peewee ORM.
 
 Quick Start
 -----------
