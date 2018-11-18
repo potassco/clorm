@@ -303,6 +303,7 @@ class ORMTestCase(unittest.TestCase):
         good_fact_pred1.afun = ct
         self.assertEqual(good_fact_pred1.clingo_symbol, good_fact_symbol3)
 
+
     #--------------------------------------------------------------------------
     # Test processing clingo Model
     #--------------------------------------------------------------------------
