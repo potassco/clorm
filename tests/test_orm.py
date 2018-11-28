@@ -388,6 +388,7 @@ class ORMTestCase(unittest.TestCase):
         e2 = Afact.anum1 == Afact.anum2
         e3 = Afact.anum1 == Afact.anum1
         e4 = Bfact.astr == "aaa"
+        e5 = isinstance_(Afact)
 
         self.assertFalse(e1(af1))
         self.assertTrue(e1(af2))
@@ -405,6 +406,9 @@ class ORMTestCase(unittest.TestCase):
         self.assertFalse(e4(af2))
 
         self.assertTrue(e4(bf1))
+
+        self.assertTrue(e5(af1))
+        self.assertFalse(e5(bf1))
 
         es1 = [Afact.anum1 == 2, Afact.anum2 == 3]
 
