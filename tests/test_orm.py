@@ -11,7 +11,7 @@ from asphelper.orm import \
     NonLogicalSymbol, Predicate, ComplexTerm, \
     IntegerField, StringField, ConstantField, ComplexField, \
     not_, and_, or_, isinstance_, \
-    FactSet, process_facts
+    fact_generator, FactSet
 
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
@@ -331,42 +331,6 @@ class ORMTestCase(unittest.TestCase):
 
 
     #--------------------------------------------------------------------------
-    # Test processing clingo Model
-    #--------------------------------------------------------------------------
-
-    def test_process_model(self):
-        class Fact(Predicate):
-            anum = IntegerField()
-        class FactAlt(Predicate):
-            anum = IntegerField()
-            astr = StringField()
-            class Meta: name = "fact"
-        class Fact2(Predicate):
-            anum = IntegerField()
-
-        f1 = Function("fact", [Number(1)])
-        f2 = Function("fact", [Number(2)])
-        f3 = Function("fact", [Number(3), String("blah")])
-        f4 = Function("fact2", [Number(1)])
-        f5 = Function("fact2", [Number(2)])
-        f6 = Function("fact3", [Number(1)])
-
-        af1 = Fact(anum=1)
-        af2 = Fact(anum=2)
-        af3 = FactAlt(anum=3,astr="blah")
-        af4 = Fact2(anum=1)
-        af5 = Fact2(anum=2)
-
-        results = process_facts([f1,f2,f3,f4,f5,f6], [Fact,FactAlt,Fact2])
-        self.assertEqual(len(results), 3)
-        self.assertEqual(len(results[Fact]),2)
-        self.assertEqual(len(results[FactAlt]),1)
-        self.assertEqual(len(results[Fact2]),2)
-        self.assertEqual(results[Fact], [af1,af2])
-        self.assertEqual(results[FactAlt], [af3])
-        self.assertEqual(results[Fact2], [af4,af5])
-
-    #--------------------------------------------------------------------------
     #  Test that the lazy evaluation of field values works
     #--------------------------------------------------------------------------
 
@@ -389,6 +353,12 @@ class ORMTestCase(unittest.TestCase):
         e3 = Afact.anum1 == Afact.anum1
         e4 = Bfact.astr == "aaa"
         e5 = isinstance_(Afact)
+
+        self.assertFalse(e1.is_static)
+        self.assertFalse(e2.is_static)
+        self.assertTrue(e3.is_static)
+        self.assertFalse(e4.is_static)
+        self.assertFalse(e5.is_static)
 
         self.assertFalse(e1(af1))
         self.assertTrue(e1(af2))
@@ -413,21 +383,93 @@ class ORMTestCase(unittest.TestCase):
         es1 = [Afact.anum1 == 2, Afact.anum2 == 3]
 
         ac = and_(*es1)
+
+        self.assertFalse(ac.is_static)
         self.assertFalse(ac(af1))
         self.assertTrue(ac(af2))
         self.assertFalse(ac(bf1))
 
         nc = not_(ac)
+        self.assertFalse(nc.is_static)
         self.assertTrue(nc(af1))
         self.assertFalse(nc(af2))
         self.assertTrue(nc(bf1))
 
         oc = or_(*es1)
+        self.assertFalse(oc.is_static)
         self.assertFalse(oc(af1))
         self.assertTrue(oc(af2))
         self.assertTrue(oc(af3))
         self.assertFalse(oc(bf1))
 
+        es2 = [Afact.anum1 == Afact.anum1, True]
+        ac2 = and_(*es2)
+        self.assertTrue(ac2.is_static)
+
+        es3 = [Afact.anum1 == 1, Afact.anum2 == 1, Bfact.anum == 2, True]
+        ac3 = and_(*es3)
+        self.assertFalse(ac3.is_static)
+        self.assertEqual(len(ac3.components),3)
+        self.assertEqual(ac3.accessors, set([Afact.anum1,Afact.anum2,Bfact.anum]))
+        self.assertEqual(ac3.predicates, set([Afact,Bfact]))
+
+    def test_fact_generator(self):
+        raws = [
+            Function("afact",[Number(1),String("test")]),
+            Function("afact",[Number(2),Number(3),String("test")]),
+            Function("afact",[Number(1),Function("fun",[Number(1)])]),
+            Function("bfact",[Number(3),String("test")])
+            ]
+
+        class Afact1(Predicate):
+            anum=IntegerField()
+            astr=StringField()
+            class Meta: name = "afact"
+
+        class Afact2(Predicate):
+            anum1=IntegerField()
+            anum2=IntegerField()
+            astr=StringField()
+            class Meta: name = "afact"
+
+        class Afact3(Predicate):
+            class Fun(ComplexTerm):
+                fnum=IntegerField()
+
+            anum=IntegerField()
+            afun=ComplexField(Fun)
+            class Meta: name = "afact"
+
+        class Bfact(Predicate):
+            anum=IntegerField()
+            astr=StringField()
+
+        af1_1=Afact1(anum=1,astr="test")
+        af2_1=Afact2(anum1=2,anum2=3,astr="test")
+        af3_1=Afact3(anum=1,afun=Afact3.Fun(fnum=1))
+        bf_1=Bfact(anum=3,astr="test")
+
+        with self.assertRaises(TypeError) as ctx:
+            tmp = [f for f in fact_generator(Afact1)]
+        with self.assertRaises(TypeError) as ctx:
+            tmp = [f for f in fact_generator(raws)]
+        with self.assertRaises(TypeError) as ctx:
+            tmp = [f for f in fact_generator(Afact1,Afact2)]
+
+        g1=[f for f in fact_generator(Afact1,raws)]
+        g2=[f for f in fact_generator(Afact2,raws)]
+        g3=[f for f in fact_generator(Afact3,raws)]
+        g4=[f for f in fact_generator(Bfact,raws)]
+        g5=[f for f in fact_generator(Afact1,Bfact,raws)]
+        self.assertEqual([af1_1], g1)
+        self.assertEqual([af2_1], g2)
+        self.assertEqual([af3_1], g3)
+        self.assertEqual([bf_1], g4)
+        self.assertEqual([af1_1,bf_1], g5)
+
+    #--------------------------------------------------------------------------
+    #
+    #--------------------------------------------------------------------------
 
     def etest_factset(self):
         class Afact(Predicate):
@@ -458,6 +500,11 @@ class ORMTestCase(unittest.TestCase):
         for f in match:
             print("FACT = {}".format(f))
 #        len(match) == 1
+
+    #--------------------------------------------------------------------------
+    # Test processing clingo Model
+    #--------------------------------------------------------------------------
+
 
 
 

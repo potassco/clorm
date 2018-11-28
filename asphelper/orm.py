@@ -8,6 +8,7 @@
 import inspect
 import operator
 import collections
+from functools import reduce
 from clingo import Number, String, Function, Symbol, SymbolType
 from clingo import Control
 
@@ -182,19 +183,19 @@ class _FieldComparator(object):
         self._compop = compop
         self._arg1 = arg1
         self._arg2 = arg2
-        self.static = False
+        self._static = False
 
         # If the objects are identical then it is a trivial comparison and
         # equivalent to checking if the operator satisfies any identity (eg., 1)
         if arg1 is arg2:
-            self.static = True
-            self.value = compop(1,1)
+            self._static = True
+            self._value = compop(1,1)
         elif not isinstance(arg1, _FieldAccessor) and not isinstance(arg2, _FieldAccessor):
-            self.static = True
-            self.value = compop(arg1,arg2)
+            self._static = True
+            self._value = compop(arg1,arg2)
 
     def __call__(self, fact):
-        if self.static: return self.value
+        if self._static: return self._value
         try:
             def getargval(arg,fact):
                 return arg.__get__(fact) if isinstance(arg, _FieldAccessor) else arg
@@ -204,6 +205,25 @@ class _FieldComparator(object):
             return self._compop(v1,v2)
         except (KeyError, TypeError) as e:
             return False
+
+    @property
+    def predicates(self):
+        tmp = []
+        if isinstance(self._arg1, _FieldAccessor): tmp.append(self._arg1.parent)
+        if isinstance(self._arg2, _FieldAccessor): tmp.append(self._arg2.parent)
+        return set(tmp)
+
+    @property
+    def accessors(self):
+        tmp = []
+        if isinstance(self._arg1, _FieldAccessor): tmp.append(self._arg1)
+        if isinstance(self._arg2, _FieldAccessor): tmp.append(self._arg2)
+        return set(tmp)
+
+    @property
+    def is_static(self):
+        return self._static
+
 
 # Instances of _FieldComparator are constructed by calling the comparison
 # operator for FieldAccessor objects.
@@ -217,25 +237,84 @@ class _PredicateTypeComparator(object):
         self._predicate_cls = predicate_cls
     def __call__(self,fact):
         return isinstance(fact, self._predicate_cls)
+    @property
+    def is_static(self):
+        return False
+    @property
+    def predicates(self): return set([self._predicate_cls])
+    @property
+    def accessors(self): return set()
 
 # Function to build PredicateTypeComparator instances
 def isinstance_(predicate_cls):
     return _PredicateTypeComparator(predicate_cls)
 
 #------------------------------------------------------------------------------
+# Functor that creates a static true/false comparator
+#------------------------------------------------------------------------------
+
+class _StaticComparator(object):
+    def __init__(self, value):
+        self._value=bool(value)
+    def __call__(self,fact):
+        return self._value
+    @property
+    def is_static(self):
+        return True
+    @property
+    def predicates(self): return set()
+    @property
+    def accessors(self): return set()
+
+#------------------------------------------------------------------------------
 # Functor that combines multiple Fact test comparators
 # ------------------------------------------------------------------------------
 
+def _simplify_bool_args(boolop, *args):
+    p = Predicate() # a dummy predicate
+
+    # Make sure only have comparators
+    def get(c):
+        try:
+            if c.is_static: return _StaticComparator(c(p))
+            return c
+        except:
+            return _StaticComparator(c)
+
+    if boolop not in [operator.not_, operator.or_, operator.and_]:
+        raise TypeError("non-boolean operator")
+    if boolop == operator.not_ and len(args) != 1:
+        raise IndexError("'not' operator expects exactly one argument")
+    elif boolop != operator.not_ and len(args) <= 1:
+        raise IndexError("bool operator expects more than one argument")
+    newargs=[]
+    for arg in args:
+        a = get(arg)
+        if a.is_static:
+            if boolop == operator.not_: return _StaticComparator(not a(p))
+            if boolop == operator.and_ and not a(p): _StaticComparator(False)
+            if boolop == operator.or_ and a(p): _StaticComparator(True)
+        else:
+            newargs.append(a)
+    if not newargs:
+        if boolop == operator.and_: return _StaticComparator(True)
+        if boolop == operator.or_: return _StaticComparator(False)
+    return newargs
+
+
 class _BoolComparator(object):
     def __init__(self, boolop, *args):
-        self._boolop = boolop
-        if boolop == operator.not_ and len(args) != 1:
-            raise IndexError("'not' operator expects exactly one argument")
-        elif boolop != operator.not_ and len(args) <= 1:
-            raise IndexError("bool operator expects more than one argument")
-        self._args = args
+        self._boolop=boolop
+        result = _simplify_bool_args(boolop, *args)
+        if not isinstance(result,list):
+            self._static = True
+            self._value = result
+        else:
+            self._static = False
+            self._args = result
 
     def __call__(self, fact):
+        if self._static: return self._value
         if self._boolop == operator.not_:
             return operator.not_(self._args[0](fact))
 
@@ -249,6 +328,31 @@ class _BoolComparator(object):
             return False
         raise ValueError("unsupported operator: {}".format(self._boolop))
 
+    @property
+    def boolop(self): return self._boolop
+
+    @property
+    def components(self):
+        if self._static: return []
+        return self._args
+
+    @property
+    def predicates(self):
+        if self._static: return set()
+        tmp = []
+        for a in self._args: tmp.extend(a.predicates)
+        return set(tmp)
+
+    @property
+    def accessors(self):
+        if self._static: return set()
+        tmp = []
+        for a in self._args: tmp.extend(a.accessors)
+        return set(tmp)
+
+    @property
+    def is_static(self):
+        return self._static
 
 # Functions to build BoolComparator instances
 def not_(*conditions):
@@ -258,20 +362,23 @@ def and_(*conditions):
 def or_(*conditions):
     return _BoolComparator(operator.or_,*conditions)
 
-
 #------------------------------------------------------------------------------
 # FieldAccessor - similar to a property but with overloaded comparison operator
 # that build a query so that we can perform lazy evaluation for querying.
 # ------------------------------------------------------------------------------
 class _FieldAccessor(object):
-    def __init__(self, field_name, field_defn, no_setter=True):
+    def __init__(self, field_name, field_index, field_defn, no_setter=True):
         self._no_setter=no_setter
         self._field_name = field_name
+        self._field_index = field_index
         self._field_defn = field_defn
         self._parent_cls = None
 
     @property
     def field_name(self): return self._field_name
+
+    @property
+    def field_index(self): return self._field_index
 
     @property
     def field_defn(self): return self._field_defn
@@ -298,6 +405,8 @@ class _FieldAccessor(object):
         instance._field_values[self._field_name] = value
 
 
+    def __hash__(self):
+        return id(self)
     def __eq__(self, other):
         return _FieldComparator(operator.eq, self, other)
     def __ne__(self, other):
@@ -463,7 +572,7 @@ class NonLogicalSymbolMeta(type):
         # also making the values indexable.
         field_accessors = []
         for idx, (field_name, field_defn) in enumerate(md.field_defns.items()):
-            fa = _FieldAccessor(field_name, field_defn)
+            fa = _FieldAccessor(field_name, idx, field_defn)
             dct[field_name] = fa
             field_accessors.append(fa)
         dct["_field_accessors"] = tuple(field_accessors)
@@ -659,6 +768,26 @@ Predicate=NonLogicalSymbol
 ComplexTerm=NonLogicalSymbol
 
 #------------------------------------------------------------------------------
+# Generate facts from an input array of Symbols
+#------------------------------------------------------------------------------
+
+def fact_generator(*args):
+    def unify(cls, r):
+        try:
+            return cls._unify(r)
+        except ValueError:
+            return None
+
+    if len(args) < 2:
+        raise TypeError("fact generator must have at least 2 arguments")
+    types = {(cls.meta.name, cls.meta.arity) : cls for cls in args[:-1]}
+    for raw in args[-1]:
+        cls = types.get((raw.name, len(raw.arguments)))
+        if not cls: continue
+        f = unify(cls,raw)
+        if f: yield f
+
+#------------------------------------------------------------------------------
 #
 #------------------------------------------------------------------------------
 class Select(object):
@@ -703,7 +832,15 @@ class Select(object):
 #------------------------------------------------------------------------------
 
 class FactSet(object):
-    def __init__(self, facts):
+    def __init__(self, field_accessors):
+        self._indices = { (fa.parent, fa.field_index)  : [] for fa in field_accessors }
+
+    def add(self, fact):
+        for (parent, idx), facts in self._indices.items():
+            if isinstance(fact, parent):
+                fact[idx]
+            pass
+        
         self._factdict = {}
         def _getfacttypelist(fact):
             ft = type(fact)
@@ -740,29 +877,8 @@ class FactSet(object):
 # Functions to process the terms/symbols within the clingo Model object
 #------------------------------------------------------------------------------
 
-def process_facts(facts, pred_filter):
-    # Create a hash for matching NonLogicalSymbols
-    matcher = {}
-    matches = {}
-    for p in pred_filter:
-        name = p.meta.name
-        arity = len(p.meta.field_defns)
-        matcher[(name,arity)] = p
-        matches[p] = []
-    for f in facts:
-        if type(f) != Symbol:
-            raise TypeError("Object {0} is not a Symbol")
-        if f.type != SymbolType.Function:
-            raise TypeError("Symbol {0} is not a Function")
-        name = f.name
-        arity = len(f.arguments)
-        p = matcher.get((name,arity), None)
-        if not p: continue
-        try:
-            matches[p].append(p(_symbol=f))
-        except ValueError:
-            pass
-    return matches
+#------------------------------------------------------------------------------
+#------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 # Functions that overlay the clingo Control object
