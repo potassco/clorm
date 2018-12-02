@@ -10,7 +10,7 @@ from asphelper.orm import \
     integer_unifies, string_unifies, constant_unifies, \
     NonLogicalSymbol, Predicate, ComplexTerm, \
     IntegerField, StringField, ConstantField, ComplexField, \
-    not_, and_, or_, isinstance_, \
+    not_, and_, or_, _StaticComparator, _get_field_comparators, \
     fact_generator, FactSet
 
 #------------------------------------------------------------------------------
@@ -334,7 +334,11 @@ class ORMTestCase(unittest.TestCase):
     #  Test that the lazy evaluation of field values works
     #--------------------------------------------------------------------------
 
-    def test_field_accessor_lazy_evaluation_comparisons(self):
+    def test_fact_comparators(self):
+
+        def is_static(fc):
+            return isinstance(fc, _StaticComparator)
+
         class Afact(Predicate):
             anum1=IntegerField()
             anum2=IntegerField()
@@ -352,13 +356,21 @@ class ORMTestCase(unittest.TestCase):
         e2 = Afact.anum1 == Afact.anum2
         e3 = Afact.anum1 == Afact.anum1
         e4 = Bfact.astr == "aaa"
-        e5 = isinstance_(Afact)
 
-        self.assertFalse(e1.is_static)
-        self.assertFalse(e2.is_static)
-        self.assertTrue(e3.is_static)
-        self.assertFalse(e4.is_static)
-        self.assertFalse(e5.is_static)
+        self.assertEqual(e1, _get_field_comparators(e1)[0])
+        self.assertEqual(e2, _get_field_comparators(e2)[0])
+        self.assertEqual(e3, _get_field_comparators(e3)[0])
+        self.assertEqual([], _get_field_comparators(e3.simplified()))
+
+        self.assertEqual(e1.fields, [Afact.anum1])
+        self.assertEqual(e2.fields, [Afact.anum1, Afact.anum2])
+        self.assertEqual(e2.fields, [Afact.anum1, Afact.anum2])
+        self.assertEqual(e3.fields, [Afact.anum1, Afact.anum1])
+
+        self.assertFalse(is_static(e1.simplified()))
+        self.assertFalse(is_static(e2.simplified()))
+        self.assertTrue(is_static(e3.simplified()))
+        self.assertFalse(is_static(e4.simplified()))
 
         self.assertFalse(e1(af1))
         self.assertTrue(e1(af2))
@@ -377,26 +389,24 @@ class ORMTestCase(unittest.TestCase):
 
         self.assertTrue(e4(bf1))
 
-        self.assertTrue(e5(af1))
-        self.assertFalse(e5(bf1))
-
         es1 = [Afact.anum1 == 2, Afact.anum2 == 3]
 
         ac = and_(*es1)
+        self.assertEqual(es1, _get_field_comparators(ac))
 
-        self.assertFalse(ac.is_static)
+        self.assertFalse(is_static(ac.simplified()))
         self.assertFalse(ac(af1))
         self.assertTrue(ac(af2))
         self.assertFalse(ac(bf1))
 
         nc = not_(ac)
-        self.assertFalse(nc.is_static)
+        self.assertFalse(is_static(nc.simplified()))
         self.assertTrue(nc(af1))
         self.assertFalse(nc(af2))
         self.assertTrue(nc(bf1))
 
         oc = or_(*es1)
-        self.assertFalse(oc.is_static)
+        self.assertFalse(is_static(oc.simplified()))
         self.assertFalse(oc(af1))
         self.assertTrue(oc(af2))
         self.assertTrue(oc(af3))
@@ -404,14 +414,22 @@ class ORMTestCase(unittest.TestCase):
 
         es2 = [Afact.anum1 == Afact.anum1, True]
         ac2 = and_(*es2)
-        self.assertTrue(ac2.is_static)
+        self.assertTrue(is_static(ac2.simplified()))
 
         es3 = [Afact.anum1 == 1, Afact.anum2 == 1, Bfact.anum == 2, True]
         ac3 = and_(*es3)
-        self.assertFalse(ac3.is_static)
-        self.assertEqual(len(ac3.components),3)
-        self.assertEqual(ac3.accessors, set([Afact.anum1,Afact.anum2,Bfact.anum]))
-        self.assertEqual(ac3.predicates, set([Afact,Bfact]))
+        self.assertFalse(is_static(ac3.simplified()))
+
+        self.assertEqual(str(Afact.anum1), "Afact.anum1")
+        self.assertEqual(str(Afact.anum1 == 1), "Afact.anum1 == 1")
+        fcs = [str(fc) for fc in ac3.simplified().field_comparators ]
+        self.assertEqual(fcs, ["Afact.anum1 == 1", "Afact.anum2 == 1", "Bfact.anum == 2"])
+
+        # This cannot be simplified
+        es4 = [Afact.anum1 == Afact.anum1, lambda x: False]
+        ac4 = and_(*es4)
+        self.assertFalse(is_static(ac4.simplified()))
+
 
     def test_fact_generator(self):
         raws = [

@@ -170,13 +170,52 @@ class ComplexField(object):
 
 
 #------------------------------------------------------------------------------
-# Fact tests: A set of functors to determine if a fact (i.e., predicate
-# instance) satisfies some property or condition.
+# Fact comparator: is a function that determines if a fact (i.e., predicate
+# instance) satisfies some property or condition. Any function that takes a
+# single fact as a argument and returns a bool is a fact comparator. However, we
+# define a few special types.
 # ------------------------------------------------------------------------------
 
+# A helper function to return a simplified version of a fact comparator
+def _simplify_fact_comparator(comparator):
+    try:
+        return comparator.simplified()
+    except:
+        if isinstance(comparator, bool):
+            return _StaticComparator(comparator)
+        return comparator
+
+
+# A helper function to return the list of field comparators of a comparator
+def _get_field_comparators(comparator):
+    try:
+        return comparator.field_comparators
+    except:
+        if isinstance(comparator, _FieldComparator):
+            return [comparator]
+        return []
+
 #------------------------------------------------------------------------------
-# Functor to test whether a fact satisfies a comparision with the value of some
-# predicate's field.
+# A Fact comparator functor that returns a static value
+#------------------------------------------------------------------------------
+
+class _StaticComparator(object):
+    def __init__(self, value):
+        self._value=bool(value)
+    def __call__(self,fact):
+        return self._value
+    def simpified(self):
+        return self
+    @property
+    def value(self):
+        return self._value
+
+#------------------------------------------------------------------------------
+# A fact comparator functor that tests whether a fact satisfies a comparision
+# with the value of some predicate's field.
+#
+# Note: instances of _FieldComparator are constructed by calling the comparison
+# operator for FieldAccessor objects.
 # ------------------------------------------------------------------------------
 class _FieldComparator(object):
     def __init__(self, compop, arg1, arg2):
@@ -185,8 +224,10 @@ class _FieldComparator(object):
         self._arg2 = arg2
         self._static = False
 
-        # If the objects are identical then it is a trivial comparison and
-        # equivalent to checking if the operator satisfies any identity (eg., 1)
+        # Comparison is trivial if:
+        # 1) the objects are identical then it is a trivial comparison and
+        # equivalent to checking if the operator satisfies a simple identity (eg., 1)
+        # 2) neither argument is a field accessor
         if arg1 is arg2:
             self._static = True
             self._value = compop(1,1)
@@ -206,118 +247,47 @@ class _FieldComparator(object):
         except (KeyError, TypeError) as e:
             return False
 
-    @property
-    def predicates(self):
-        tmp = []
-        if isinstance(self._arg1, _FieldAccessor): tmp.append(self._arg1.parent)
-        if isinstance(self._arg2, _FieldAccessor): tmp.append(self._arg2.parent)
-        return set(tmp)
+    def simplified(self):
+        if self._static: return _StaticComparator(self._value)
+        return self
 
     @property
-    def accessors(self):
+    def fields(self):
         tmp = []
         if isinstance(self._arg1, _FieldAccessor): tmp.append(self._arg1)
         if isinstance(self._arg2, _FieldAccessor): tmp.append(self._arg2)
-        return set(tmp)
-
-    @property
-    def is_static(self):
-        return self._static
+        return tmp
 
 
-# Instances of _FieldComparator are constructed by calling the comparison
-# operator for FieldAccessor objects.
+    def __str__(self):
+        if self._compop == operator.eq: opstr = "=="
+        elif self._compop == operator.ne: opstr = "!="
+        elif self._compop == operator.lt: opstr = "<"
+        elif self._compop == operator.le: opstr = "<="
+        elif self._compop == operator.gt: opstr = ">"
+        elif self._compop == operator.et: opstr = ">="
+        else: opstr = "<unknown>"
 
+        return "{} {} {}".format(self._arg1, opstr, self._arg2)
 #------------------------------------------------------------------------------
-# Functor to test whether a fact satisfies a predicate type
+# A fact comparator that is a boolean operator over other Fact comparators
 # ------------------------------------------------------------------------------
-
-class _PredicateTypeComparator(object):
-    def __init__(self, predicate_cls):
-        self._predicate_cls = predicate_cls
-    def __call__(self,fact):
-        return isinstance(fact, self._predicate_cls)
-    @property
-    def is_static(self):
-        return False
-    @property
-    def predicates(self): return set([self._predicate_cls])
-    @property
-    def accessors(self): return set()
-
-# Function to build PredicateTypeComparator instances
-def isinstance_(predicate_cls):
-    return _PredicateTypeComparator(predicate_cls)
-
-#------------------------------------------------------------------------------
-# Functor that creates a static true/false comparator
-#------------------------------------------------------------------------------
-
-class _StaticComparator(object):
-    def __init__(self, value):
-        self._value=bool(value)
-    def __call__(self,fact):
-        return self._value
-    @property
-    def is_static(self):
-        return True
-    @property
-    def predicates(self): return set()
-    @property
-    def accessors(self): return set()
-
-#------------------------------------------------------------------------------
-# Functor that combines multiple Fact test comparators
-# ------------------------------------------------------------------------------
-
-def _simplify_bool_args(boolop, *args):
-    p = Predicate() # a dummy predicate
-
-    # Make sure only have comparators
-    def get(c):
-        try:
-            if c.is_static: return _StaticComparator(c(p))
-            return c
-        except:
-            return _StaticComparator(c)
-
-    if boolop not in [operator.not_, operator.or_, operator.and_]:
-        raise TypeError("non-boolean operator")
-    if boolop == operator.not_ and len(args) != 1:
-        raise IndexError("'not' operator expects exactly one argument")
-    elif boolop != operator.not_ and len(args) <= 1:
-        raise IndexError("bool operator expects more than one argument")
-    newargs=[]
-    for arg in args:
-        a = get(arg)
-        if a.is_static:
-            if boolop == operator.not_: return _StaticComparator(not a(p))
-            if boolop == operator.and_ and not a(p): _StaticComparator(False)
-            if boolop == operator.or_ and a(p): _StaticComparator(True)
-        else:
-            newargs.append(a)
-    if not newargs:
-        if boolop == operator.and_: return _StaticComparator(True)
-        if boolop == operator.or_: return _StaticComparator(False)
-    return newargs
-
 
 class _BoolComparator(object):
     def __init__(self, boolop, *args):
+        if boolop not in [operator.not_, operator.or_, operator.and_]:
+            raise TypeError("non-boolean operator")
+        if boolop == operator.not_ and len(args) != 1:
+            raise IndexError("'not' operator expects exactly one argument")
+        elif boolop != operator.not_ and len(args) <= 1:
+            raise IndexError("bool operator expects more than one argument")
+
         self._boolop=boolop
-        result = _simplify_bool_args(boolop, *args)
-        if not isinstance(result,list):
-            self._static = True
-            self._value = result
-        else:
-            self._static = False
-            self._args = result
+        self._args = args
 
     def __call__(self, fact):
-        if self._static: return self._value
         if self._boolop == operator.not_:
             return operator.not_(self._args[0](fact))
-
         elif self._boolop == operator.and_:
             for a in self._args:
                 if not a(fact): return False
@@ -328,9 +298,39 @@ class _BoolComparator(object):
             return False
         raise ValueError("unsupported operator: {}".format(self._boolop))
 
+    def simplified(self):
+        newargs=[]
+        # Try and simplify each argument
+        for arg in self._args:
+            sarg = _simplify_fact_comparator(arg)
+            if isinstance(sarg, _StaticComparator):
+                if self._boolop == operator.not_: return _StaticComparator(not sarg.value)
+                if self._boolop == operator.and_ and not sarg.value: sarg
+                if self._boolop == operator.or_ and sarg.value: sarg
+            else:
+                newargs.append(sarg)
+        # Now see if we can simplify the combination of the arguments
+        if not newargs:
+            if self._boolop == operator.and_: return _StaticComparator(True)
+            if self._boolop == operator.or_: return _StaticComparator(False)
+        if self._boolop != operator.not_ and len(newargs) == 1:
+            return newargs[0]
+        # If we get here there then there is a real boolean comparison
+        return _BoolComparator(self._boolop, *newargs)
+
     @property
     def boolop(self): return self._boolop
 
+    @property
+    def field_comparators(self):
+        fcs = []
+        for arg in self._args:
+            if isinstance(arg, _FieldComparator): fcs.append(arg)
+            elif isinstance(arg, _BoolComparator): fcs.extend(arg.field_comparators)
+        return fcs
+
+
+    
     @property
     def components(self):
         if self._static: return []
@@ -350,17 +350,18 @@ class _BoolComparator(object):
         for a in self._args: tmp.extend(a.accessors)
         return set(tmp)
 
-    @property
-    def is_static(self):
-        return self._static
 
+# ------------------------------------------------------------------------------
 # Functions to build BoolComparator instances
+# ------------------------------------------------------------------------------
+
 def not_(*conditions):
     return _BoolComparator(operator.not_,*conditions)
 def and_(*conditions):
     return _BoolComparator(operator.and_,*conditions)
 def or_(*conditions):
     return _BoolComparator(operator.or_,*conditions)
+
 
 #------------------------------------------------------------------------------
 # FieldAccessor - similar to a property but with overloaded comparison operator
@@ -396,14 +397,12 @@ class _FieldAccessor(object):
         return instance._field_values[self._field_name]
 #            return field_defn.cltopy(self._symbol.arguments[idx])
 
-
     def __set__(self, instance, value):
         if not self._no_setter:
             raise AttributeError("can't set attribute")
         if not isinstance(instance, self._parent_cls):
             raise TypeError("field accessor doesn't match instance type")
         instance._field_values[self._field_name] = value
-
 
     def __hash__(self):
         return id(self)
@@ -420,8 +419,8 @@ class _FieldAccessor(object):
     def __ge__(self, other):
         return _FieldComparator(operator.ge, self, other)
 
-
-
+    def __str__(self):
+        return "{}.{}".format(self.parent.__name__,self.field_name)
 #------------------------------------------------------------------------------
 # The NonLogicalSymbol base class and supporting functions and classes
 # ------------------------------------------------------------------------------
