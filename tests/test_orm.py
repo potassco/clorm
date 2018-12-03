@@ -553,6 +553,60 @@ class ORMTestCase(unittest.TestCase):
         self.assertEqual(s2_str1_eq_4.get_unique(), f4)
         self.assertEqual(s2_num2_eq_4.get_unique(), f4)
 
+
+        # Test more complex selection
+        s1_complex1 = fm1.select().where(Afact1.num1 == 4, Afact1.str1 == "42")
+        s1_complex2 = fm1.select().where(lambda x: x.str1 == "42", Afact1.num1 == 4)
+
+        self.assertTrue(s1_complex1._debug())
+        self.assertTrue(s1_complex2._debug())
+        self.assertEqual(s1_complex1.get_unique(), f42)
+        self.assertEqual(s1_complex2.get_unique(), f42)
+
+    #--------------------------------------------------------------------------
+    # Test basic insert and selection of facts in a factbase
+    #--------------------------------------------------------------------------
+
+    def test_factbase(self):
+
+        class Afact(Predicate):
+            num1=IntegerField()
+            num2=IntegerField()
+            str1=StringField()
+        class Bfact(Predicate):
+            num1=IntegerField()
+            str1=StringField()
+        class Cfact(Predicate):
+            num1=IntegerField()
+
+        af1 = Afact(1,10,"bbb")
+        af2 = Afact(2,20,"aaa")
+        af3 = Afact(3,20,"aaa")
+        bf1 = Bfact(1,"aaa")
+        bf2 = Bfact(2,"bbb")
+        cf1 = Cfact(1)
+
+        fb = FactBase(Afact.num1, Afact.num2, Afact.str1)
+        fb.add([af1,af2,af3,bf1,bf2,cf1])
+        self.assertEqual(fb.predicate_types(), set([Afact,Bfact,Cfact]))
+
+        s_af_all = fb.select(Afact)
+        s_af_num1_eq_1 = fb.select(Afact).where(Afact.num1 == 1)
+        s_af_num1_le_2 = fb.select(Afact).where(Afact.num1 <= 2)
+        s_af_num2_eq_20 = fb.select(Afact).where(Afact.num2 == 20)
+        s_bf_str1_eq_aaa = fb.select(Bfact).where(Bfact.str1 == "aaa")
+        s_bf_str1_eq_ccc = fb.select(Bfact).where(Bfact.str1 == "ccc")
+        s_cf_num1_eq_1 = fb.select(Cfact).where(Cfact.num1 == 1)
+
+        self.assertEqual(set(s_af_all.get()), set([af1,af2,af3]))
+        self.assertEqual(set(s_af_num1_eq_1.get()), set([af1]))
+        self.assertEqual(set(s_af_num1_le_2.get()), set([af1,af2]))
+        self.assertEqual(set(s_af_num2_eq_20.get()), set([af2, af3]))
+        self.assertEqual(set(s_bf_str1_eq_aaa.get()), set([bf1]))
+        self.assertEqual(set(s_bf_str1_eq_ccc.get()), set([]))
+        self.assertEqual(set(s_cf_num1_eq_1.get()), set([cf1]))
+
+
     #--------------------------------------------------------------------------
     #  
     #--------------------------------------------------------------------------
@@ -610,50 +664,6 @@ class ORMTestCase(unittest.TestCase):
         self.assertEqual([af3_1], g3)
         self.assertEqual([bf_1], g4)
         self.assertEqual([af1_1,bf_1], g5)
-
-    #--------------------------------------------------------------------------
-    # Test basic insert and selection of facts in a factbase
-    #--------------------------------------------------------------------------
-
-    def test_factbase(self):
-
-        class Afact(Predicate):
-            num1=IntegerField()
-            num2=IntegerField()
-            str1=StringField()
-        class Bfact(Predicate):
-            num1=IntegerField()
-            str1=StringField()
-        class Cfact(Predicate):
-            num1=IntegerField()
-
-        af1 = Afact(1,10,"bbb")
-        af2 = Afact(2,20,"aaa")
-        af3 = Afact(3,20,"aaa")
-        bf1 = Bfact(1,"aaa")
-        bf2 = Bfact(2,"bbb")
-        cf1 = Cfact(1)
-
-        fb = FactBase(Afact.num1, Afact.num2, Afact.str1)
-        fb.add([af1,af2,af3,bf1,bf2,cf1])
-        self.assertEqual(fb.predicate_types(), set([Afact,Bfact,Cfact]))
-
-        s_af_all = fb.select(Afact)
-        s_af_num1_eq_1 = fb.select(Afact).where(Afact.num1 == 1)
-        s_af_num1_le_2 = fb.select(Afact).where(Afact.num1 <= 2)
-        s_af_num2_eq_20 = fb.select(Afact).where(Afact.num2 == 20)
-        s_bf_str1_eq_aaa = fb.select(Bfact).where(Bfact.str1 == "aaa")
-        s_bf_str1_eq_ccc = fb.select(Bfact).where(Bfact.str1 == "ccc")
-        s_cf_num1_eq_1 = fb.select(Cfact).where(Cfact.num1 == 1)
-
-        self.assertEqual(set(s_af_all.get()), set([af1,af2,af3]))
-        self.assertEqual(set(s_af_num1_eq_1.get()), set([af1]))
-        self.assertEqual(set(s_af_num1_le_2.get()), set([af1,af2]))
-        self.assertEqual(set(s_af_num2_eq_20.get()), set([af2, af3]))
-        self.assertEqual(set(s_bf_str1_eq_aaa.get()), set([bf1]))
-        self.assertEqual(set(s_bf_str1_eq_ccc.get()), set([]))
-        self.assertEqual(set(s_cf_num1_eq_1.get()), set([cf1]))
-
 
 
     #--------------------------------------------------------------------------

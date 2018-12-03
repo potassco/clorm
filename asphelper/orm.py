@@ -748,6 +748,8 @@ class _BoolComparator(object):
     @property
     def boolop(self): return self._boolop
 
+    @property
+    def args(self): return self._args
 
 # ------------------------------------------------------------------------------
 # Functions to build BoolComparator instances
@@ -897,20 +899,22 @@ class Select(object):
         else:
             self._where = _simplify_fact_comparator(and_(*expressions))
 
-        self._generate_primary_search(self._where)
+        self._indexable = self._primary_search(self._where)
         return self
 
-    def _generate_primary_search(self, where):
-#        if isinstance(where, _BoolComparator)
-        if not isinstance(where, _FieldComparator):
-            self._indexable = None
-            return
-        self._indexable = self._where.indexable()
-        if not self._indexable: return
+    def _primary_search(self, where):
+        def validate_indexable(indexable):
+            if not indexable: return None
+            if indexable[0] not in self._factmap.indexed_fields(): return None
+            return indexable
 
-        if not self._indexable[0] in self._factmap.indexed_fields():
-            self._indexable = None
-            return
+        if isinstance(where, _FieldComparator):
+            return validate_indexable(where.indexable())
+        if isinstance(where, _BoolComparator) and where.boolop == operator.and_:
+            for arg in where.args:
+                indexable = self._primary_search(arg)
+                if indexable: return indexable
+        return None
 
 #    @property
     def _debug(self):
@@ -928,7 +932,7 @@ class Select(object):
                     if self._where(f): yield f
 
     def get_unique(self):
-        tmp = [ f for f in self.get() ]
+        tmp = list(self.get())
         if len(tmp) != 1:
             raise ValueError("{} elements found - exactly 1 expected".format(len(tmp)))
         return tmp[0]
