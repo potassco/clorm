@@ -171,169 +171,6 @@ class ComplexField(object):
 
 
 #------------------------------------------------------------------------------
-# Fact comparator: is a function that determines if a fact (i.e., predicate
-# instance) satisfies some property or condition. Any function that takes a
-# single fact as a argument and returns a bool is a fact comparator. However, we
-# define a few special types.
-# ------------------------------------------------------------------------------
-
-# A helper function to return a simplified version of a fact comparator
-def _simplify_fact_comparator(comparator):
-    try:
-        return comparator.simplified()
-    except:
-        if isinstance(comparator, bool):
-            return _StaticComparator(comparator)
-        return comparator
-
-
-# A helper function to return the list of field comparators of a comparator
-def _get_field_comparators(comparator):
-    try:
-        return comparator.field_comparators
-    except:
-        if isinstance(comparator, _FieldComparator):
-            return [comparator]
-        return []
-
-#------------------------------------------------------------------------------
-# A Fact comparator functor that returns a static value
-#------------------------------------------------------------------------------
-
-class _StaticComparator(object):
-    def __init__(self, value):
-        self._value=bool(value)
-    def __call__(self,fact):
-        return self._value
-    def simpified(self):
-        return self
-    @property
-    def value(self):
-        return self._value
-
-#------------------------------------------------------------------------------
-# A fact comparator functor that tests whether a fact satisfies a comparision
-# with the value of some predicate's field.
-#
-# Note: instances of _FieldComparator are constructed by calling the comparison
-# operator for FieldAccessor objects.
-# ------------------------------------------------------------------------------
-class _FieldComparator(object):
-    def __init__(self, compop, arg1, arg2):
-        self._compop = compop
-        self._arg1 = arg1
-        self._arg2 = arg2
-        self._static = False
-
-        # Comparison is trivial if:
-        # 1) the objects are identical then it is a trivial comparison and
-        # equivalent to checking if the operator satisfies a simple identity (eg., 1)
-        # 2) neither argument is a field accessor
-        if arg1 is arg2:
-            self._static = True
-            self._value = compop(1,1)
-        elif not isinstance(arg1, _FieldAccessor) and not isinstance(arg2, _FieldAccessor):
-            self._static = True
-            self._value = compop(arg1,arg2)
-
-    def __call__(self, fact):
-        if self._static: return self._value
-        try:
-            def getargval(arg,fact):
-                return arg.__get__(fact) if isinstance(arg, _FieldAccessor) else arg
-
-            v1 = getargval(self._arg1, fact)
-            v2 = getargval(self._arg2, fact)
-            return self._compop(v1,v2)
-        except (KeyError, TypeError) as e:
-            return False
-
-    def simplified(self):
-        if self._static: return _StaticComparator(self._value)
-        return self
-
-    def indexable(self):
-        if self._static: return None
-        if not isinstance(self._arg1, _FieldAccessor) or isinstance(self._arg2, _FieldAccessor):
-            return None
-        return (self._arg1, self._compop, self._arg2)
-
-    def __str__(self):
-        if self._compop == operator.eq: opstr = "=="
-        elif self._compop == operator.ne: opstr = "!="
-        elif self._compop == operator.lt: opstr = "<"
-        elif self._compop == operator.le: opstr = "<="
-        elif self._compop == operator.gt: opstr = ">"
-        elif self._compop == operator.et: opstr = ">="
-        else: opstr = "<unknown>"
-
-        return "{} {} {}".format(self._arg1, opstr, self._arg2)
-#------------------------------------------------------------------------------
-# A fact comparator that is a boolean operator over other Fact comparators
-# ------------------------------------------------------------------------------
-
-class _BoolComparator(object):
-    def __init__(self, boolop, *args):
-        if boolop not in [operator.not_, operator.or_, operator.and_]:
-            raise TypeError("non-boolean operator")
-        if boolop == operator.not_ and len(args) != 1:
-            raise IndexError("'not' operator expects exactly one argument")
-        elif boolop != operator.not_ and len(args) <= 1:
-            raise IndexError("bool operator expects more than one argument")
-
-        self._boolop=boolop
-        self._args = args
-
-    def __call__(self, fact):
-        if self._boolop == operator.not_:
-            return operator.not_(self._args[0](fact))
-        elif self._boolop == operator.and_:
-            for a in self._args:
-                if not a(fact): return False
-            return True
-        elif self._boolop == operator.or_:
-            for a in self._args:
-                if a(fact): return True
-            return False
-        raise ValueError("unsupported operator: {}".format(self._boolop))
-
-    def simplified(self):
-        newargs=[]
-        # Try and simplify each argument
-        for arg in self._args:
-            sarg = _simplify_fact_comparator(arg)
-            if isinstance(sarg, _StaticComparator):
-                if self._boolop == operator.not_: return _StaticComparator(not sarg.value)
-                if self._boolop == operator.and_ and not sarg.value: sarg
-                if self._boolop == operator.or_ and sarg.value: sarg
-            else:
-                newargs.append(sarg)
-        # Now see if we can simplify the combination of the arguments
-        if not newargs:
-            if self._boolop == operator.and_: return _StaticComparator(True)
-            if self._boolop == operator.or_: return _StaticComparator(False)
-        if self._boolop != operator.not_ and len(newargs) == 1:
-            return newargs[0]
-        # If we get here there then there is a real boolean comparison
-        return _BoolComparator(self._boolop, *newargs)
-
-    @property
-    def boolop(self): return self._boolop
-
-
-# ------------------------------------------------------------------------------
-# Functions to build BoolComparator instances
-# ------------------------------------------------------------------------------
-
-def not_(*conditions):
-    return _BoolComparator(operator.not_,*conditions)
-def and_(*conditions):
-    return _BoolComparator(operator.and_,*conditions)
-def or_(*conditions):
-    return _BoolComparator(operator.or_,*conditions)
-
-
-#------------------------------------------------------------------------------
 # FieldAccessor - similar to a property but with overloaded comparison operator
 # that build a query so that we can perform lazy evaluation for querying.
 # ------------------------------------------------------------------------------
@@ -762,6 +599,168 @@ def fact_generator(*args):
         if f: yield f
 
 #------------------------------------------------------------------------------
+# Fact comparator: is a function that determines if a fact (i.e., predicate
+# instance) satisfies some property or condition. Any function that takes a
+# single fact as a argument and returns a bool is a fact comparator. However, we
+# define a few special types.
+# ------------------------------------------------------------------------------
+
+# A helper function to return a simplified version of a fact comparator
+def _simplify_fact_comparator(comparator):
+    try:
+        return comparator.simplified()
+    except:
+        if isinstance(comparator, bool):
+            return _StaticComparator(comparator)
+        return comparator
+
+
+# A helper function to return the list of field comparators of a comparator
+def _get_field_comparators(comparator):
+    try:
+        return comparator.field_comparators
+    except:
+        if isinstance(comparator, _FieldComparator):
+            return [comparator]
+        return []
+
+#------------------------------------------------------------------------------
+# A Fact comparator functor that returns a static value
+#------------------------------------------------------------------------------
+
+class _StaticComparator(object):
+    def __init__(self, value):
+        self._value=bool(value)
+    def __call__(self,fact):
+        return self._value
+    def simpified(self):
+        return self
+    @property
+    def value(self):
+        return self._value
+
+#------------------------------------------------------------------------------
+# A fact comparator functor that tests whether a fact satisfies a comparision
+# with the value of some predicate's field.
+#
+# Note: instances of _FieldComparator are constructed by calling the comparison
+# operator for FieldAccessor objects.
+# ------------------------------------------------------------------------------
+class _FieldComparator(object):
+    def __init__(self, compop, arg1, arg2):
+        self._compop = compop
+        self._arg1 = arg1
+        self._arg2 = arg2
+        self._static = False
+
+        # Comparison is trivial if:
+        # 1) the objects are identical then it is a trivial comparison and
+        # equivalent to checking if the operator satisfies a simple identity (eg., 1)
+        # 2) neither argument is a field accessor
+        if arg1 is arg2:
+            self._static = True
+            self._value = compop(1,1)
+        elif not isinstance(arg1, _FieldAccessor) and not isinstance(arg2, _FieldAccessor):
+            self._static = True
+            self._value = compop(arg1,arg2)
+
+    def __call__(self, fact):
+        if self._static: return self._value
+        try:
+            def getargval(arg,fact):
+                return arg.__get__(fact) if isinstance(arg, _FieldAccessor) else arg
+
+            v1 = getargval(self._arg1, fact)
+            v2 = getargval(self._arg2, fact)
+            return self._compop(v1,v2)
+        except (KeyError, TypeError) as e:
+            return False
+
+    def simplified(self):
+        if self._static: return _StaticComparator(self._value)
+        return self
+
+    def indexable(self):
+        if self._static: return None
+        if not isinstance(self._arg1, _FieldAccessor) or isinstance(self._arg2, _FieldAccessor):
+            return None
+        return (self._arg1, self._compop, self._arg2)
+
+    def __str__(self):
+        if self._compop == operator.eq: opstr = "=="
+        elif self._compop == operator.ne: opstr = "!="
+        elif self._compop == operator.lt: opstr = "<"
+        elif self._compop == operator.le: opstr = "<="
+        elif self._compop == operator.gt: opstr = ">"
+        elif self._compop == operator.et: opstr = ">="
+        else: opstr = "<unknown>"
+
+        return "{} {} {}".format(self._arg1, opstr, self._arg2)
+#------------------------------------------------------------------------------
+# A fact comparator that is a boolean operator over other Fact comparators
+# ------------------------------------------------------------------------------
+
+class _BoolComparator(object):
+    def __init__(self, boolop, *args):
+        if boolop not in [operator.not_, operator.or_, operator.and_]:
+            raise TypeError("non-boolean operator")
+        if boolop == operator.not_ and len(args) != 1:
+            raise IndexError("'not' operator expects exactly one argument")
+        elif boolop != operator.not_ and len(args) <= 1:
+            raise IndexError("bool operator expects more than one argument")
+
+        self._boolop=boolop
+        self._args = args
+
+    def __call__(self, fact):
+        if self._boolop == operator.not_:
+            return operator.not_(self._args[0](fact))
+        elif self._boolop == operator.and_:
+            for a in self._args:
+                if not a(fact): return False
+            return True
+        elif self._boolop == operator.or_:
+            for a in self._args:
+                if a(fact): return True
+            return False
+        raise ValueError("unsupported operator: {}".format(self._boolop))
+
+    def simplified(self):
+        newargs=[]
+        # Try and simplify each argument
+        for arg in self._args:
+            sarg = _simplify_fact_comparator(arg)
+            if isinstance(sarg, _StaticComparator):
+                if self._boolop == operator.not_: return _StaticComparator(not sarg.value)
+                if self._boolop == operator.and_ and not sarg.value: sarg
+                if self._boolop == operator.or_ and sarg.value: sarg
+            else:
+                newargs.append(sarg)
+        # Now see if we can simplify the combination of the arguments
+        if not newargs:
+            if self._boolop == operator.and_: return _StaticComparator(True)
+            if self._boolop == operator.or_: return _StaticComparator(False)
+        if self._boolop != operator.not_ and len(newargs) == 1:
+            return newargs[0]
+        # If we get here there then there is a real boolean comparison
+        return _BoolComparator(self._boolop, *newargs)
+
+    @property
+    def boolop(self): return self._boolop
+
+
+# ------------------------------------------------------------------------------
+# Functions to build BoolComparator instances
+# ------------------------------------------------------------------------------
+
+def not_(*conditions):
+    return _BoolComparator(operator.not_,*conditions)
+def and_(*conditions):
+    return _BoolComparator(operator.and_,*conditions)
+def or_(*conditions):
+    return _BoolComparator(operator.or_,*conditions)
+
+#------------------------------------------------------------------------------
 # A multimap
 #------------------------------------------------------------------------------
 
@@ -898,11 +897,12 @@ class Select(object):
         else:
             self._where = _simplify_fact_comparator(and_(*expressions))
 
-        self._generate_primary_search()
+        self._generate_primary_search(self._where)
         return self
 
-    def _generate_primary_search(self):
-        if not isinstance(self._where, _FieldComparator):
+    def _generate_primary_search(self, where):
+#        if isinstance(where, _BoolComparator)
+        if not isinstance(where, _FieldComparator):
             self._indexable = None
             return
         self._indexable = self._where.indexable()
