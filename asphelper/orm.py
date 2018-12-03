@@ -8,6 +8,7 @@
 import inspect
 import operator
 import collections
+import bisect
 from functools import reduce
 from clingo import Number, String, Function, Symbol, SymbolType
 from clingo import Control
@@ -251,6 +252,12 @@ class _FieldComparator(object):
         if self._static: return _StaticComparator(self._value)
         return self
 
+    def indexable(self):
+        if self._static: return None
+        if not isinstance(self._arg1, _FieldAccessor) or isinstance(self._arg2, _FieldAccessor):
+            return None
+        return (self._arg1, self._compop, self._arg2)
+
     @property
     def fields(self):
         tmp = []
@@ -258,6 +265,7 @@ class _FieldComparator(object):
         if isinstance(self._arg2, _FieldAccessor): tmp.append(self._arg2)
         return tmp
 
+    
 
     def __str__(self):
         if self._compop == operator.eq: opstr = "=="
@@ -753,12 +761,15 @@ class NonLogicalSymbol(object, metaclass=NonLogicalSymbolMeta):
             return result
         return not result
 
+    def __hash__(self):
+        return self.symbol.__hash__()
+
     def __str__(self):
         self_symbol = self.symbol
         return str(self_symbol)
 
-#    def __repr__(self):
-#        return self.__str__()
+    def __repr__(self):
+        return self.__str__()
 
 #------------------------------------------------------------------------------
 # Convenience aliases for NonLogicalSymbol - this makes it more intuitive
@@ -767,8 +778,10 @@ Predicate=NonLogicalSymbol
 ComplexTerm=NonLogicalSymbol
 
 #------------------------------------------------------------------------------
-# Generate facts from an input array of Symbols
-#------------------------------------------------------------------------------
+# Generate facts from an input array of Symbols.  The first n-1 arguments are
+# the names of predicate classes and the last argument is the list of raw
+# symbols.
+# ------------------------------------------------------------------------------
 
 def fact_generator(*args):
     def unify(cls, r):
@@ -786,25 +799,14 @@ def fact_generator(*args):
         f = unify(cls,raw)
         if f: yield f
 
-#------------------------------------------------------------------------------
-#
-#------------------------------------------------------------------------------
-class Select(object):
-    def __init__(self, predicate_cls, factset):
-        self._predicate_cls = predicate_cls
-        self._factset = factset
-        self._where = None
-        self._idx = 0
 
-    def where(self, *expressions):
-        if not expressions: return self
-        if self._where:
-            raise ValueError("trying to specify multiple where clauses")
-        if len(expressions) == 1:
-            self._where = expressions[0]
-        else:
-            self._where = and_(*expressions)
-        return self
+#------------------------------------------------------------------------------
+# SelectIterator - an iterator returned by a Select.get()
+#------------------------------------------------------------------------------
+class SelectIterator(object):
+    def __init__(self, factset, comparator):
+        self._factset = factset
+        self._comparator = comparator
 
     def __iter__(self):
         return self
@@ -826,51 +828,214 @@ class Select(object):
         except IndexError: pass
         raise StopIteration
 
+
 #------------------------------------------------------------------------------
-# FactSet a set of facts
+# A multimap
 #------------------------------------------------------------------------------
 
-class FactSet(object):
-    def __init__(self, field_accessors):
-        self._indices = { (fa.parent, fa.field_index)  : [] for fa in field_accessors }
+class MultiMap(object):
+    def __init__(self):
+        self._keylist = []
+        self._key2values = {}
+
+    def keys(self):
+        return list(self._keylist)
+
+    def keys_eq(self, key):
+        if key in self._key2values: return [key]
+
+    def keys_ne(self, key):
+        posn1 = bisect.bisect_left(self._keylist, key)
+        if posn1: left =  self._keylist[:posn1]
+        else: left = []
+        posn2 = bisect.bisect_right(self._keylist, key)
+        if posn2: right = self._keylist[posn2:]
+        else: right = []
+        return left + right
+
+    def keys_lt(self, key):
+        posn = bisect.bisect_left(self._keylist, key)
+        if posn: return self._keylist[:posn]
+        return []
+
+    def keys_le(self, key):
+        posn = bisect.bisect_right(self._keylist, key)
+        if posn: return self._keylist[:posn]
+        return []
+
+    def keys_gt(self, key):
+        posn = bisect.bisect_right(self._keylist, key)
+        if posn: return self._keylist[posn:]
+        return []
+
+    def keys_ge(self, key):
+        posn = bisect.bisect_left(self._keylist, key)
+        if posn: return self._keylist[posn:]
+        return []
+
+    def keys_op(self, op, key):
+        if op == operator.eq: return self.keys_eq(key)
+        elif op == operator.ne: return self.keys_ne(key)
+        elif op == operator.lt: return self.keys_lt(key)
+        elif op == operator.le: return self.keys_le(key)
+        elif op == operator.gt: return self.keys_gt(key)
+        elif op == operator.ge: return self.keys_ge(key)
+        raise ValueError("unsupported operator")
+
+    def clear(self):
+        self._keylist.clear()
+        self._key2values.clear()
+
+    #--------------------------------------------------------------------------
+    # Overloaded index operator to access the values
+    #--------------------------------------------------------------------------
+    def __getitem__(self, key):
+        return self._key2values[key]
+
+    def __setitem__(self, key,v):
+        if key not in self._key2values: self._key2values[key] = []
+        self._key2values[key].append(v)
+        posn = bisect.bisect_left(self._keylist, key)
+        if len(self._keylist) > posn and self._keylist[posn] == key: return
+        bisect.insort_left(self._keylist, key)
+
+    def __delitem__(self, key):
+        del self._key2values[key]
+        posn = bisect.bisect_left(self._keylist, key)
+        del self._keylist[posn]
+
+    def __str__(self):
+        tmp = ", ".join(["{} : {}".format(key, self._key2values[key]) for key in self._keylist])
+        return "{{ {} }}".format(tmp)
+
+
+#------------------------------------------------------------------------------
+# A map for facts of the same type
+#------------------------------------------------------------------------------
+
+class FactMap(object):
+    def __init__(self, *fields_to_index):
+        self._allfacts = []
+        if len(fields_to_index) == 0:
+            self._mmaps = None
+        else:
+            self._mmaps = { f  : MultiMap() for f in fields_to_index }
 
     def add(self, fact):
-        for (parent, idx), facts in self._indices.items():
-            if isinstance(fact, parent):
-                fact[idx]
-            pass
-        
-        self._factdict = {}
-        def _getfacttypelist(fact):
-            ft = type(fact)
-            print("Type for fact {} = {}".format(fact, ft))
-            if ft not in self._factdict: self._factdict[ft] = []
-            return self._factdict[ft]
+        self._allfacts.append(fact)
+        if self._mmaps:
+            for field, mmap in self._mmaps.items():
+                mmap[field.__get__(fact)] = fact
 
-        for f in facts: _getfacttypelist(f).append(f)
+    def indexed_fields(self):
+        return set(self._mmaps.keys() if self._mmaps else [])
 
-        for ft in self._factdict.keys():
-            print("{} = {}".format(ft, len(self._factdict[ft])))
+    def get_indexed_facts(self, field):
+        return self._mmaps[field]
 
-    def get_unique(self, predicate_cls, *expressions):
-        try:
-            found=False
-            value=None
-            print("SEARCHING: {}".format(predicate_cls))
-            for f in self._factdict[predicate_cls]:
-                print("TESTING {}".format(f))
-                if _fact_satisfies_expressions(f, *expressions):
-                    print("TRUE===============")
-                    if found: raise ValueError("Non-unique value")
-                    found = True
-                    value = f
-            if found: return value
-        except AttributeError:
-            pass
-        raise ValueError("failed to find a unique value")
+    def get_all_facts(self):
+        return self._allfacts
 
-    def get(self, predicate_cls):
-        return Select(predicate_cls, self)
+    def clear(self):
+        if self._mmaps:
+            for field, mmap in _mmaps:
+                mmap.clear()
+        else:
+            self._allfacts.clear()
+
+    def select(self):
+        return Select(self)
+
+
+#------------------------------------------------------------------------------
+# A selection over a FactMap
+#------------------------------------------------------------------------------
+class Select(object):
+    def __init__(self, factmap):
+        self._factmap = factmap
+        self._where = None
+        self._indexable = None
+
+    def where(self, *expressions):
+        if self._where:
+            raise ValueError("trying to specify multiple where clauses")
+        if not expressions:
+            self._where = None
+        elif len(expressions) == 1:
+            self._where = _simplify_fact_comparator(expressions[0])
+        else:
+            self._where = _simplify_fact_comparator(and_(*expressions))
+
+        self._generate_primary_search()
+        return self
+
+    def _generate_primary_search(self):
+        if not isinstance(self._where, _FieldComparator):
+            self._indexable = None
+            return
+        self._indexable = self._where.indexable()
+        if not self._indexable: return
+
+        if not self._indexable[0] in self._factmap.indexed_fields():
+            self._indexable = None
+            return
+
+#    @property
+    def _debug(self):
+        return self._indexable
+
+    def get(self):
+        if not self._indexable:
+            for f in self._factmap.get_all_facts():
+                if not self._where: yield f
+                elif self._where and self._where(f): yield(f)
+        else:
+            mmap=self._factmap.get_indexed_facts(self._indexable[0])
+            for key in mmap.keys_op(self._indexable[1], self._indexable[2]):
+                for f in mmap[key]:
+                    if self._where(f): yield f
+
+    def get_unique(self):
+        tmp = [ f for f in self.get() ]
+        if len(tmp) != 1:
+            raise ValueError("{} elements found - exactly 1 expected".format(len(tmp)))
+        return tmp[0]
+
+
+#------------------------------------------------------------------------------
+# A FactBase consisting of facts of different types
+#------------------------------------------------------------------------------
+
+class FactBase(object):
+    def __init__(self, *fields_to_index):
+        grouped = {}
+        for f in fields_to_index:
+            if f.parent not in grouped: grouped[f.parent] = []
+            grouped[f.parent].append(f)
+
+        # Created the FactMaps for the predicate types
+        self._factmaps = { pt : FactMap(*fs) for pt, fs in grouped.items() }
+
+    def add(self, arg):
+        def _add(fact):
+            predicate_cls = type(fact)
+            if predicate_cls not in self._factmaps: self._factmaps[predicate_cls] = FactMap()
+            self._factmaps[predicate_cls].add(fact)
+
+        if not isinstance(arg, NonLogicalSymbol) and hasattr(arg, '__iter__'):
+            for f in arg: _add(f)
+        else:
+            _add(arg)
+
+    def select(self, predicate_cls):
+        # For a non-existent class I think it makes sense to return an empty
+        # selection than it does to throw and exception.
+        if predicate_cls not in self._factmaps:
+            return FactMap().select()
+        return self._factmaps[predicate_cls].select()
+
+    def predicate_types(self):
+        return set(self._factmaps.keys())
 
 #------------------------------------------------------------------------------
 # Functions to process the terms/symbols within the clingo Model object
