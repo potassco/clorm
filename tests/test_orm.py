@@ -702,16 +702,19 @@ class ORMTestCase(unittest.TestCase):
         fb1 = FactBase(Afact.num1, Bfact.str1)
         fb1.add([af1,af2,af3,bf1,bf2])
 
-        fb2 = FactBase(Afact.num1, Afact.str1)
+        symbols = None
         def on_model(model):
+            nonlocal symbols
             symbols = model.symbols(atoms=True)
-            facts = list(fact_generator(Afact, Bfact, symbols))
-            fb2.add(facts)
 
         ctrl = Control()
         control_add_facts(ctrl,fb1)
         ctrl.ground([("base",[])])
         ctrl.solve(on_model=on_model)
+
+        fb2 = FactBase(Afact.num1, Afact.str1)
+        facts = list(fact_generator(Afact, Bfact, symbols))
+        fb2.add(facts)
 
         self.assertEqual(fb2.select(Afact).where(Afact.num1 == 1).get_unique(), af1)
         self.assertEqual(fb2.select(Afact).where(Afact.num1 == 2).get_unique(), af2)
