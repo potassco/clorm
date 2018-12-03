@@ -258,15 +258,6 @@ class _FieldComparator(object):
             return None
         return (self._arg1, self._compop, self._arg2)
 
-    @property
-    def fields(self):
-        tmp = []
-        if isinstance(self._arg1, _FieldAccessor): tmp.append(self._arg1)
-        if isinstance(self._arg2, _FieldAccessor): tmp.append(self._arg2)
-        return tmp
-
-    
-
     def __str__(self):
         if self._compop == operator.eq: opstr = "=="
         elif self._compop == operator.ne: opstr = "!="
@@ -328,35 +319,6 @@ class _BoolComparator(object):
 
     @property
     def boolop(self): return self._boolop
-
-    @property
-    def field_comparators(self):
-        fcs = []
-        for arg in self._args:
-            if isinstance(arg, _FieldComparator): fcs.append(arg)
-            elif isinstance(arg, _BoolComparator): fcs.extend(arg.field_comparators)
-        return fcs
-
-
-    
-    @property
-    def components(self):
-        if self._static: return []
-        return self._args
-
-    @property
-    def predicates(self):
-        if self._static: return set()
-        tmp = []
-        for a in self._args: tmp.extend(a.predicates)
-        return set(tmp)
-
-    @property
-    def accessors(self):
-        if self._static: return set()
-        tmp = []
-        for a in self._args: tmp.extend(a.accessors)
-        return set(tmp)
 
 
 # ------------------------------------------------------------------------------
@@ -799,36 +761,6 @@ def fact_generator(*args):
         f = unify(cls,raw)
         if f: yield f
 
-
-#------------------------------------------------------------------------------
-# SelectIterator - an iterator returned by a Select.get()
-#------------------------------------------------------------------------------
-class SelectIterator(object):
-    def __init__(self, factset, comparator):
-        self._factset = factset
-        self._comparator = comparator
-
-    def __iter__(self):
-        return self
-
-    def __next__(self):
-
-        try:
-            fl = self._factset._factdict[self._predicate_cls]
-        except AttributeError:
-            raise StopIteration
-
-        try:
-            while True:
-                f = fl[self._idx]
-                self._idx += 1
-                if not self._where: return f
-                elif self._where(f): return f
-
-        except IndexError: pass
-        raise StopIteration
-
-
 #------------------------------------------------------------------------------
 # A multimap
 #------------------------------------------------------------------------------
@@ -913,7 +845,7 @@ class MultiMap(object):
 # A map for facts of the same type
 #------------------------------------------------------------------------------
 
-class FactMap(object):
+class _FactMap(object):
     def __init__(self, *fields_to_index):
         self._allfacts = []
         if len(fields_to_index) == 0:
@@ -948,7 +880,7 @@ class FactMap(object):
 
 
 #------------------------------------------------------------------------------
-# A selection over a FactMap
+# A selection over a _FactMap
 #------------------------------------------------------------------------------
 class Select(object):
     def __init__(self, factmap):
@@ -1013,13 +945,13 @@ class FactBase(object):
             if f.parent not in grouped: grouped[f.parent] = []
             grouped[f.parent].append(f)
 
-        # Created the FactMaps for the predicate types
-        self._factmaps = { pt : FactMap(*fs) for pt, fs in grouped.items() }
+        # Created the _FactMaps for the predicate types
+        self._factmaps = { pt : _FactMap(*fs) for pt, fs in grouped.items() }
 
     def add(self, arg):
         def _add(fact):
             predicate_cls = type(fact)
-            if predicate_cls not in self._factmaps: self._factmaps[predicate_cls] = FactMap()
+            if predicate_cls not in self._factmaps: self._factmaps[predicate_cls] = _FactMap()
             self._factmaps[predicate_cls].add(fact)
 
         if not isinstance(arg, NonLogicalSymbol) and hasattr(arg, '__iter__'):
@@ -1031,7 +963,7 @@ class FactBase(object):
         # For a non-existent class I think it makes sense to return an empty
         # selection than it does to throw and exception.
         if predicate_cls not in self._factmaps:
-            return FactMap().select()
+            return _FactMap().select()
         return self._factmaps[predicate_cls].select()
 
     def predicate_types(self):

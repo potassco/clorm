@@ -11,7 +11,7 @@ from asphelper.orm import \
     NonLogicalSymbol, Predicate, ComplexTerm, \
     IntegerField, StringField, ConstantField, ComplexField, \
     not_, and_, or_, _StaticComparator, _get_field_comparators, \
-    MultiMap, FactMap, \
+    MultiMap, _FactMap, \
     fact_generator, FactBase
 
 #------------------------------------------------------------------------------
@@ -363,11 +363,6 @@ class ORMTestCase(unittest.TestCase):
         self.assertEqual(e3, _get_field_comparators(e3)[0])
         self.assertEqual([], _get_field_comparators(e3.simplified()))
 
-        self.assertEqual(e1.fields, [Afact.anum1])
-        self.assertEqual(e2.fields, [Afact.anum1, Afact.anum2])
-        self.assertEqual(e2.fields, [Afact.anum1, Afact.anum2])
-        self.assertEqual(e3.fields, [Afact.anum1, Afact.anum1])
-
         self.assertFalse(is_static(e1.simplified()))
         self.assertFalse(is_static(e2.simplified()))
         self.assertTrue(is_static(e3.simplified()))
@@ -393,7 +388,6 @@ class ORMTestCase(unittest.TestCase):
         es1 = [Afact.anum1 == 2, Afact.anum2 == 3]
 
         ac = and_(*es1)
-        self.assertEqual(es1, _get_field_comparators(ac))
 
         self.assertFalse(is_static(ac.simplified()))
         self.assertFalse(ac(af1))
@@ -423,8 +417,6 @@ class ORMTestCase(unittest.TestCase):
 
         self.assertEqual(str(Afact.anum1), "Afact.anum1")
         self.assertEqual(str(Afact.anum1 == 1), "Afact.anum1 == 1")
-        fcs = [str(fc) for fc in ac3.simplified().field_comparators ]
-        self.assertEqual(fcs, ["Afact.anum1 == 1", "Afact.anum2 == 1", "Bfact.anum == 2"])
 
         # This cannot be simplified
         es4 = [Afact.anum1 == Afact.anum1, lambda x: False]
@@ -483,8 +475,8 @@ class ORMTestCase(unittest.TestCase):
             str1=StringField()
             class Meta: name = "afact"
 
-        fm1 = FactMap(Afact1.num1,Afact1.str1)
-        fm2 = FactMap()
+        fm1 = _FactMap(Afact1.num1,Afact1.str1)
+        fm2 = _FactMap()
         f1 = Afact1(1,1,"1")
         f3 = Afact1(3,3,"3")
         f4 = Afact1(4,4,"4")
