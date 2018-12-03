@@ -332,6 +332,66 @@ class ORMTestCase(unittest.TestCase):
 
 
     #--------------------------------------------------------------------------
+    #  Test a generator that takes n-1 Predicate types and a list of raw symbols
+    #  as the last parameter, then tries to unify the raw symbols with the
+    #  predicate types.
+    #  --------------------------------------------------------------------------
+
+    def test_fact_generator(self):
+        raws = [
+            Function("afact",[Number(1),String("test")]),
+            Function("afact",[Number(2),Number(3),String("test")]),
+            Function("afact",[Number(1),Function("fun",[Number(1)])]),
+            Function("bfact",[Number(3),String("test")])
+            ]
+
+        class Afact1(Predicate):
+            anum=IntegerField()
+            astr=StringField()
+            class Meta: name = "afact"
+
+        class Afact2(Predicate):
+            anum1=IntegerField()
+            anum2=IntegerField()
+            astr=StringField()
+            class Meta: name = "afact"
+
+        class Afact3(Predicate):
+            class Fun(ComplexTerm):
+                fnum=IntegerField()
+
+            anum=IntegerField()
+            afun=ComplexField(Fun)
+            class Meta: name = "afact"
+
+        class Bfact(Predicate):
+            anum=IntegerField()
+            astr=StringField()
+
+        af1_1=Afact1(anum=1,astr="test")
+        af2_1=Afact2(anum1=2,anum2=3,astr="test")
+        af3_1=Afact3(anum=1,afun=Afact3.Fun(fnum=1))
+        bf_1=Bfact(anum=3,astr="test")
+
+        with self.assertRaises(TypeError) as ctx:
+            tmp = list(fact_generator(Afact1))
+        with self.assertRaises(TypeError) as ctx:
+            tmp = list(fact_generator(raws))
+        with self.assertRaises(TypeError) as ctx:
+            tmp = list(fact_generator(Afact1,Afact2))
+
+        g1=list(fact_generator(Afact1,raws))
+        g2=list(fact_generator(Afact2,raws))
+        g3=list(fact_generator(Afact3,raws))
+        g4=list(fact_generator(Bfact,raws))
+        g5=list(fact_generator(Afact1,Bfact,raws))
+        self.assertEqual([af1_1], g1)
+        self.assertEqual([af2_1], g2)
+        self.assertEqual([af3_1], g3)
+        self.assertEqual([bf_1], g4)
+        self.assertEqual([af1_1,bf_1], g5)
+
+    #--------------------------------------------------------------------------
     #  Test that the fact comparators work
     #--------------------------------------------------------------------------
 
@@ -514,13 +574,13 @@ class ORMTestCase(unittest.TestCase):
         s2_num2_eq_4 = fm2.select().where(Afact1.num2 == 4)
 
         self.assertFalse(s1_all._debug())
-        self.assertTrue(s1_num1_eq_4._debug())
+        self.assertEqual(s1_num1_eq_4._debug()[0], Afact1.num1)
         self.assertTrue(s1_num1_ne_4._debug())
         self.assertTrue(s1_num1_lt_4._debug())
         self.assertTrue(s1_num1_le_4._debug())
         self.assertTrue(s1_num1_gt_4._debug())
         self.assertTrue(s1_num1_ge_4._debug())
-        self.assertTrue(s1_str1_eq_4._debug())
+        self.assertEqual(s1_str1_eq_4._debug()[0], Afact1.str1)
         self.assertFalse(s1_num2_eq_4._debug())
 
         self.assertFalse(s2_all._debug())
@@ -555,13 +615,16 @@ class ORMTestCase(unittest.TestCase):
 
 
         # Test more complex selection
-        s1_complex1 = fm1.select().where(Afact1.num1 == 4, Afact1.str1 == "42")
-        s1_complex2 = fm1.select().where(lambda x: x.str1 == "42", Afact1.num1 == 4)
+        s1_complex1 = fm1.select().where(Afact1.str1 == "42", Afact1.num1 == 4)
+        s1_complex2 = fm1.select().where(Afact1.num1 == 4, Afact1.str1 == "42")
+        s1_complex3 = fm1.select().where(lambda x: x.str1 == "42", Afact1.num1 == 4)
 
-        self.assertTrue(s1_complex1._debug())
-        self.assertTrue(s1_complex2._debug())
+        self.assertEqual(s1_complex1._debug()[0], Afact1.num1)
+        self.assertEqual(s1_complex2._debug()[0], Afact1.num1)
+        self.assertEqual(s1_complex3._debug()[0], Afact1.num1)
         self.assertEqual(s1_complex1.get_unique(), f42)
         self.assertEqual(s1_complex2.get_unique(), f42)
+        self.assertEqual(s1_complex3.get_unique(), f42)
 
     #--------------------------------------------------------------------------
     # Test basic insert and selection of facts in a factbase
@@ -606,64 +669,14 @@ class ORMTestCase(unittest.TestCase):
         self.assertEqual(set(s_bf_str1_eq_ccc.get()), set([]))
         self.assertEqual(set(s_cf_num1_eq_1.get()), set([cf1]))
 
-
-    #--------------------------------------------------------------------------
-    #  
-    #--------------------------------------------------------------------------
-
-    def test_fact_generator(self):
-        raws = [
-            Function("afact",[Number(1),String("test")]),
-            Function("afact",[Number(2),Number(3),String("test")]),
-            Function("afact",[Number(1),Function("fun",[Number(1)])]),
-            Function("bfact",[Number(3),String("test")])
-            ]
-
-        class Afact1(Predicate):
-            anum=IntegerField()
-            astr=StringField()
-            class Meta: name = "afact"
-
-        class Afact2(Predicate):
-            anum1=IntegerField()
-            anum2=IntegerField()
-            astr=StringField()
-            class Meta: name = "afact"
-
-        class Afact3(Predicate):
-            class Fun(ComplexTerm):
-                fnum=IntegerField()
-
-            anum=IntegerField()
-            afun=ComplexField(Fun)
-            class Meta: name = "afact"
-
-        class Bfact(Predicate):
-            anum=IntegerField()
-            astr=StringField()
-
-        af1_1=Afact1(anum=1,astr="test")
-        af2_1=Afact2(anum1=2,anum2=3,astr="test")
-        af3_1=Afact3(anum=1,afun=Afact3.Fun(fnum=1))
-        bf_1=Bfact(anum=3,astr="test")
-
-        with self.assertRaises(TypeError) as ctx:
-            tmp = list(fact_generator(Afact1))
-        with self.assertRaises(TypeError) as ctx:
-            tmp = list(fact_generator(raws))
-        with self.assertRaises(TypeError) as ctx:
-            tmp = list(fact_generator(Afact1,Afact2))
-
-        g1=list(fact_generator(Afact1,raws))
-        g2=list(fact_generator(Afact2,raws))
-        g3=list(fact_generator(Afact3,raws))
-        g4=list(fact_generator(Bfact,raws))
-        g5=list(fact_generator(Afact1,Bfact,raws))
-        self.assertEqual([af1_1], g1)
-        self.assertEqual([af2_1], g2)
-        self.assertEqual([af3_1], g3)
-        self.assertEqual([bf_1], g4)
-        self.assertEqual([af1_1,bf_1], g5)
+        fb.clear()
+        self.assertEqual(set(s_af_all.get()), set())
+        self.assertEqual(set(s_af_num1_eq_1.get()), set())
+        self.assertEqual(set(s_af_num1_le_2.get()), set())
+        self.assertEqual(set(s_af_num2_eq_20.get()), set())
+        self.assertEqual(set(s_bf_str1_eq_aaa.get()), set())
+        self.assertEqual(set(s_bf_str1_eq_ccc.get()), set())
+        self.assertEqual(set(s_cf_num1_eq_1.get()), set())
 
 
     #--------------------------------------------------------------------------

@@ -776,6 +776,7 @@ class MultiMap(object):
 
     def keys_eq(self, key):
         if key in self._key2values: return [key]
+        return []
 
     def keys_ne(self, key):
         posn1 = bisect.bisect_left(self._keylist, key)
@@ -816,8 +817,8 @@ class MultiMap(object):
         raise ValueError("unsupported operator")
 
     def clear(self):
-        self._keylist.clear()
-        self._key2values.clear()
+        self._keylist = []
+        self._key2values = {}
 
     #--------------------------------------------------------------------------
     # Overloaded index operator to access the values
@@ -843,8 +844,9 @@ class MultiMap(object):
 
 
 #------------------------------------------------------------------------------
-# A map for facts of the same type
-#------------------------------------------------------------------------------
+# A map for facts of the same type - The order of the fields matters as it
+# determines the priority of the index.
+# ------------------------------------------------------------------------------
 
 class _FactMap(object):
     def __init__(self, *fields_to_index):
@@ -852,7 +854,7 @@ class _FactMap(object):
         if len(fields_to_index) == 0:
             self._mmaps = None
         else:
-            self._mmaps = { f  : MultiMap() for f in fields_to_index }
+            self._mmaps = collections.OrderedDict( (f, MultiMap()) for f in fields_to_index )
 
     def add(self, fact):
         self._allfacts.append(fact)
@@ -861,20 +863,19 @@ class _FactMap(object):
                 mmap[field.__get__(fact)] = fact
 
     def indexed_fields(self):
-        return set(self._mmaps.keys() if self._mmaps else [])
+        return self._mmaps.keys() if self._mmaps else []
 
-    def get_indexed_facts(self, field):
+    def get_facts_multimap(self, field):
         return self._mmaps[field]
 
     def get_all_facts(self):
         return self._allfacts
 
     def clear(self):
+        self._allfacts.clear()
         if self._mmaps:
-            for field, mmap in _mmaps:
+            for field, mmap in self._mmaps.items():
                 mmap.clear()
-        else:
-            self._allfacts.clear()
 
     def select(self):
         return Select(self)
@@ -886,6 +887,7 @@ class _FactMap(object):
 class Select(object):
     def __init__(self, factmap):
         self._factmap = factmap
+        self._index_priority = { f:p for (p,f) in enumerate(factmap.indexed_fields()) }
         self._where = None
         self._indexable = None
 
@@ -905,16 +907,20 @@ class Select(object):
     def _primary_search(self, where):
         def validate_indexable(indexable):
             if not indexable: return None
-            if indexable[0] not in self._factmap.indexed_fields(): return None
+            if indexable[0] not in self._index_priority: return None
             return indexable
 
         if isinstance(where, _FieldComparator):
             return validate_indexable(where.indexable())
+        indexable = None
         if isinstance(where, _BoolComparator) and where.boolop == operator.and_:
             for arg in where.args:
-                indexable = self._primary_search(arg)
-                if indexable: return indexable
-        return None
+                tmp = self._primary_search(arg)
+                if tmp:
+                    if not indexable: indexable = tmp
+                    elif self._index_priority[tmp[0]] < self._index_priority[indexable[0]]:
+                        indexable = tmp
+        return indexable
 
 #    @property
     def _debug(self):
@@ -926,7 +932,7 @@ class Select(object):
                 if not self._where: yield f
                 elif self._where and self._where(f): yield(f)
         else:
-            mmap=self._factmap.get_indexed_facts(self._indexable[0])
+            mmap=self._factmap.get_facts_multimap(self._indexable[0])
             for key in mmap.keys_op(self._indexable[1], self._indexable[2]):
                 for f in mmap[key]:
                     if self._where(f): yield f
@@ -944,12 +950,13 @@ class Select(object):
 
 class FactBase(object):
     def __init__(self, *fields_to_index):
+
+        # Created _FactMaps for the predicate types with indexed fields
         grouped = {}
         for f in fields_to_index:
             if f.parent not in grouped: grouped[f.parent] = []
             grouped[f.parent].append(f)
 
-        # Created the _FactMaps for the predicate types
         self._factmaps = { pt : _FactMap(*fs) for pt, fs in grouped.items() }
 
     def add(self, arg):
@@ -972,6 +979,11 @@ class FactBase(object):
 
     def predicate_types(self):
         return set(self._factmaps.keys())
+
+
+    def clear(self):
+        for pt, fm in self._factmaps.items():
+            fm.clear()
 
 #------------------------------------------------------------------------------
 # Functions to process the terms/symbols within the clingo Model object
