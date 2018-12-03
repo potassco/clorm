@@ -3,7 +3,8 @@
 #------------------------------------------------------------------------------
 
 import unittest
-from clingo import Number, String, Function, __version__ as clingo_version
+from clingo import Number, String, Function,  __version__ as clingo_version
+from clingo import Control
 from asphelper.orm import \
     integer_cltopy, string_cltopy, constant_cltopy, \
     integer_pytocl, string_pytocl, constant_pytocl, \
@@ -12,7 +13,7 @@ from asphelper.orm import \
     IntegerField, StringField, ConstantField, ComplexField, \
     not_, and_, or_, _StaticComparator, _get_field_comparators, \
     MultiMap, _FactMap, \
-    fact_generator, FactBase
+    fact_generator, FactBase, control_add_facts
 
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
@@ -651,6 +652,7 @@ class ORMTestCase(unittest.TestCase):
 
         fb = FactBase(Afact.num1, Afact.num2, Afact.str1)
         fb.add([af1,af2,af3,bf1,bf2,cf1])
+
         self.assertEqual(fb.predicate_types(), set([Afact,Bfact,Cfact]))
 
         s_af_all = fb.select(Afact)
@@ -682,20 +684,42 @@ class ORMTestCase(unittest.TestCase):
     #--------------------------------------------------------------------------
     # Test processing clingo Model
     #--------------------------------------------------------------------------
+    def test_clingo_integration(self):
+        class Afact(Predicate):
+            num1=IntegerField()
+            num2=IntegerField()
+            str1=StringField()
+        class Bfact(Predicate):
+            num1=IntegerField()
+            str1=StringField()
 
+        af1 = Afact(1,10,"bbb")
+        af2 = Afact(2,20,"aaa")
+        af3 = Afact(3,20,"aaa")
+        bf1 = Bfact(1,"aaa")
+        bf2 = Bfact(2,"bbb")
 
+        fb1 = FactBase(Afact.num1, Bfact.str1)
+        fb1.add([af1,af2,af3,bf1,bf2])
 
-
-
-
-    def ___testing(self):
-        aspstr = 'afact(1,"aaa"). afact(1,"aaa"). fact(2,"aaa"). fact(2,"bbb"). bfact(3,"none").'
-        ctrl = Control()
-        with ctrl.builder() as b:
-            clingo.parse_program(aspstr, lambda stmt: b.add(stmt))
-
+        fb2 = FactBase(Afact.num1, Afact.str1)
         def on_model(model):
-            pass
+            symbols = model.symbols(atoms=True)
+            facts = list(fact_generator(Afact, Bfact, symbols))
+            fb2.add(facts)
+
+        ctrl = Control()
+        control_add_facts(ctrl,fb1)
+        ctrl.ground([("base",[])])
+        ctrl.solve(on_model=on_model)
+
+        self.assertEqual(fb2.select(Afact).where(Afact.num1 == 1).get_unique(), af1)
+        self.assertEqual(fb2.select(Afact).where(Afact.num1 == 2).get_unique(), af2)
+        self.assertEqual(fb2.select(Afact).where(Afact.num1 == 3).get_unique(), af3)
+        self.assertEqual(fb2.select(Bfact).where(Bfact.str1 == "aaa").get_unique(), bf1)
+        self.assertEqual(fb2.select(Bfact).where(Bfact.str1 == "bbb").get_unique(), bf2)
+
+
 
 #------------------------------------------------------------------------------
 # main

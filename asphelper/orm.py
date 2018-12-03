@@ -5,13 +5,14 @@
 
 #import logging
 #import os
+import io
 import inspect
 import operator
 import collections
 import bisect
 from functools import reduce
 from clingo import Number, String, Function, Symbol, SymbolType
-from clingo import Control
+from clingo import Control, parse_program
 
 
 #------------------------------------------------------------------------------
@@ -880,6 +881,16 @@ class _FactMap(object):
     def select(self):
         return Select(self)
 
+    def asp_str(self):
+        out = io.StringIO()
+        for f in self._allfacts:
+            print("{}.".format(f), file=out)
+        data = out.getvalue()
+        out.close()
+        return data
+
+    def __str__(self):
+        self.asp_str()
 
 #------------------------------------------------------------------------------
 # A selection over a _FactMap
@@ -980,14 +991,29 @@ class FactBase(object):
     def predicate_types(self):
         return set(self._factmaps.keys())
 
-
     def clear(self):
         for pt, fm in self._factmaps.items():
             fm.clear()
 
+    def asp_str(self):
+        out = io.StringIO()
+        for fm in self._factmaps.values():
+            print("{}".format(fm.asp_str()), file=out)
+        data = out.getvalue()
+        out.close()
+        return data
+
+    def __str__(self):
+        return self.asp_str()
+
 #------------------------------------------------------------------------------
-# Functions to process the terms/symbols within the clingo Model object
+# Functions to insert to a clingo program
 #------------------------------------------------------------------------------
+
+def control_add_facts(prg, factbase):
+    with prg.builder() as b:
+        parse_program(factbase.asp_str(), lambda stmt: b.add(stmt))
+
 
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
