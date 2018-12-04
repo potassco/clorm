@@ -10,6 +10,7 @@ import inspect
 import operator
 import collections
 import bisect
+import abc
 from functools import reduce
 from clingo import Number, String, Function, Symbol, SymbolType
 from clingo import Control, parse_program
@@ -21,9 +22,9 @@ from clingo import Control, parse_program
 #g_logger = logging.getLogger(__name__)
 
 #------------------------------------------------------------------------------
-# A classproperty decorator. (see https://stackoverflow.com/questions/3203286/how-to-create-a-read-only-class-property-in-python)
+# A _classproperty decorator. (see https://stackoverflow.com/questions/3203286/how-to-create-a-read-only-class-property-in-python)
 #------------------------------------------------------------------------------
-class classproperty(object):
+class _classproperty(object):
     def __init__(self, getter):
         self.getter= getter
     def __get__(self, instance, owner):
@@ -170,12 +171,49 @@ class ComplexField(object):
     @property
     def is_field_defn(self): return True
 
-
 #------------------------------------------------------------------------------
 # FieldAccessor - similar to a property but with overloaded comparison operator
 # that build a query so that we can perform lazy evaluation for querying.
+#------------------------------------------------------------------------------
+
+class FieldAccessor(abc.ABC):
+
+    @abc.abstractmethod
+    def __get__(self, instance, owner=None):
+        pass
+
+    @abc.abstractmethod
+    def __hash__(self):
+        pass
+
+    @abc.abstractmethod
+    def __eq__(self, other):
+        pass
+
+    @abc.abstractmethod
+    def __ne__(self, other):
+        pass
+
+    @abc.abstractmethod
+    def __lt__(self, other):
+        pass
+
+    @abc.abstractmethod
+    def __le__(self, other):
+        pass
+
+    @abc.abstractmethod
+    def __gt__(self, other):
+        pass
+
+    @abc.abstractmethod
+    def __ge__(self, other):
+        pass
+
+#------------------------------------------------------------------------------
+# Implementation of a FieldAccessor
 # ------------------------------------------------------------------------------
-class _FieldAccessor(object):
+class _FieldAccessor(FieldAccessor):
     def __init__(self, field_name, field_index, field_defn, no_setter=True):
         self._no_setter=no_setter
         self._field_name = field_name
@@ -355,7 +393,7 @@ def _make_metadata(class_name, dct):
 #------------------------------------------------------------------------------
 # A Metaclass for the NonLogicalSymbol base class
 #------------------------------------------------------------------------------
-class NonLogicalSymbolMeta(type):
+class _NonLogicalSymbolMeta(type):
 
     #--------------------------------------------------------------------------
     # Support member fuctions
@@ -367,7 +405,7 @@ class NonLogicalSymbolMeta(type):
     #--------------------------------------------------------------------------
     def __new__(meta, name, bases, dct):
         if name == "NonLogicalSymbol":
-            return super(NonLogicalSymbolMeta, meta).__new__(meta, name, bases, dct)
+            return super(_NonLogicalSymbolMeta, meta).__new__(meta, name, bases, dct)
 
         md = _make_metadata(name, dct)
 
@@ -384,11 +422,11 @@ class NonLogicalSymbolMeta(type):
             field_accessors.append(fa)
         dct["_field_accessors"] = tuple(field_accessors)
 
-        return super(NonLogicalSymbolMeta, meta).__new__(meta, name, bases, dct)
+        return super(_NonLogicalSymbolMeta, meta).__new__(meta, name, bases, dct)
 
     def __init__(cls, name, bases, dct):
         if name == "NonLogicalSymbol":
-            return super(NonLogicalSymbolMeta, cls).__init__(name, bases, dct)
+            return super(_NonLogicalSymbolMeta, cls).__init__(name, bases, dct)
 
         md = dct["_meta"]
         # Create a property attribute corresponding to each field name while
@@ -397,7 +435,7 @@ class NonLogicalSymbolMeta(type):
             dct[field_name].set_parent(cls)
 
 #        print("CLS: {}".format(cls) + "I am still called '" + name +"'")
-        return super(NonLogicalSymbolMeta, cls).__init__(name, bases, dct)
+        return super(_NonLogicalSymbolMeta, cls).__init__(name, bases, dct)
 
 #------------------------------------------------------------------------------
 # A base non-logical symbol that all predicate/term declarations must inherit
@@ -405,7 +443,7 @@ class NonLogicalSymbolMeta(type):
 # clingo symbol object.
 # ------------------------------------------------------------------------------
 
-class NonLogicalSymbol(object, metaclass=NonLogicalSymbolMeta):
+class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
 
     #--------------------------------------------------------------------------
     # A Metadata internal object for each NonLogicalSymbol class
@@ -476,7 +514,7 @@ class NonLogicalSymbol(object, metaclass=NonLogicalSymbolMeta):
     #--------------------------------------------------------------------------
 
     # Get the metadata for the NonLogicalSymbol definition
-    @classproperty
+    @_classproperty
     def meta(cls):
         return cls._meta
 
@@ -628,8 +666,10 @@ def _get_field_comparators(comparator):
 #------------------------------------------------------------------------------
 # Placeholder allows for variable substituion of a query
 #------------------------------------------------------------------------------
+class Placeholder(abc.ABC):
+    pass
 
-class _Placeholder(object):
+class _Placeholder(Placeholder):
     def __init__(self, name, default=None):
         self._name = name
         self._default = default
@@ -654,10 +694,21 @@ def ph3_(): return _Placeholder(2)
 def ph4_(): return _Placeholder(3)
 
 #------------------------------------------------------------------------------
+# A Comparator is a boolean functor that takes a fact instance and returns
+# whether it satisfies some condition.
+# ------------------------------------------------------------------------------
+
+class Comparator(abc.ABC):
+
+    @abc.abstractmethod
+    def __call__(self,fact):
+        pass
+
+#------------------------------------------------------------------------------
 # A Fact comparator functor that returns a static value
 #------------------------------------------------------------------------------
 
-class _StaticComparator(object):
+class _StaticComparator(Comparator):
     def __init__(self, value):
         self._value=bool(value)
     def __call__(self,fact):
@@ -675,7 +726,7 @@ class _StaticComparator(object):
 # Note: instances of _FieldComparator are constructed by calling the comparison
 # operator for FieldAccessor objects.
 # ------------------------------------------------------------------------------
-class _FieldComparator(object):
+class _FieldComparator(Comparator):
     def __init__(self, compop, arg1, arg2):
         self._compop = compop
         self._arg1 = arg1
@@ -739,7 +790,7 @@ class _FieldComparator(object):
 # A fact comparator that is a boolean operator over other Fact comparators
 # ------------------------------------------------------------------------------
 
-class _BoolComparator(object):
+class _BoolComparator(Comparator):
     def __init__(self, boolop, *args):
         if boolop not in [operator.not_, operator.or_, operator.and_]:
             raise TypeError("non-boolean operator")
@@ -791,7 +842,7 @@ class _BoolComparator(object):
     def args(self): return self._args
 
 # ------------------------------------------------------------------------------
-# Functions to build BoolComparator instances
+# Functions to build _BoolComparator instances
 # ------------------------------------------------------------------------------
 
 def not_(*conditions):
@@ -805,7 +856,7 @@ def or_(*conditions):
 # A multimap
 #------------------------------------------------------------------------------
 
-class MultiMap(object):
+class _MultiMap(object):
     def __init__(self):
         self._keylist = []
         self._key2values = {}
@@ -893,7 +944,7 @@ class _FactMap(object):
         if len(fields_to_index) == 0:
             self._mmaps = None
         else:
-            self._mmaps = collections.OrderedDict( (f, MultiMap()) for f in fields_to_index )
+            self._mmaps = collections.OrderedDict( (f, _MultiMap()) for f in fields_to_index )
 
     def add(self, fact):
         self._allfacts.append(fact)
@@ -917,7 +968,7 @@ class _FactMap(object):
                 mmap.clear()
 
     def select(self):
-        return Select(self)
+        return _Select(self)
 
     def asp_str(self):
         out = io.StringIO()
@@ -930,10 +981,29 @@ class _FactMap(object):
     def __str__(self):
         self.asp_str()
 
+
+#------------------------------------------------------------------------------
+# Select is an interface query over a FactBase.
+# ------------------------------------------------------------------------------
+
+class Select(abc.ABC):
+
+    @abc.abstractmethod
+    def where(self, *expressions):
+        pass
+
+    @abc.abstractmethod
+    def get(self, *args, **kwargs):
+        pass
+
+    @abc.abstractmethod
+    def get_unique(self, *args, **kwargs):
+        pass
+
 #------------------------------------------------------------------------------
 # A selection over a _FactMap
 #------------------------------------------------------------------------------
-class Select(object):
+class _Select(Select):
     def __init__(self, factmap):
         self._factmap = factmap
         self._index_priority = { f:p for (p,f) in enumerate(factmap.indexed_fields()) }

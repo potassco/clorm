@@ -13,7 +13,7 @@ from asphelper.orm import \
     IntegerField, StringField, ConstantField, ComplexField, \
     not_, and_, or_, _StaticComparator, _get_field_comparators, \
     ph_, ph1_, ph2_, \
-    MultiMap, _FactMap, \
+    _MultiMap, _FactMap, \
     fact_generator, FactBase, control_add_facts
 
 #------------------------------------------------------------------------------
@@ -495,7 +495,7 @@ class ORMTestCase(unittest.TestCase):
             astr=StringField()
             class Meta: name = "afact"
 
-        mymm = MultiMap()
+        mymm = _MultiMap()
         mymm[4] = Afact1(4,"4")
         mymm[4] = Afact1(4,"42")
         mymm[3] = Afact1(3,"3")
