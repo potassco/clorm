@@ -638,9 +638,9 @@ class ORMTestCase(unittest.TestCase):
         self.assertEqual(s1_ph2.get_unique(str1="42",num1=4), f42)
 
         with self.assertRaises(ValueError) as ctx:
-            tmp = list(s1_ph1.get_unique(num1=4))
+            tmp = list(s1_ph1.get_unique(num1=4))  # fails because of multiple values
         with self.assertRaises(ValueError) as ctx:
-            tmp = list(s1_ph2.get(num2=5))
+            tmp = list(s1_ph2.get(num2=5))         # fails because of no values
         with self.assertRaises(ValueError) as ctx:
             tmp = list(s1_ph2.get(str1="42"))
 

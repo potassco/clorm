@@ -1108,10 +1108,16 @@ class _Select(Select):
                     if self._where(f): yield f
 
     def get_unique(self, *args, **kwargs):
-        tmp = list(self.get(*args, **kwargs))
-        if len(tmp) != 1:
-            raise ValueError("{} elements found - exactly 1 expected".format(len(tmp)))
-        return tmp[0]
+        count=0
+        fact=None
+        for f in self.get(*args, **kwargs):
+            fact=f
+            count += 1
+            if count > 1:
+                raise ValueError("Multiple facts found - exactly one expected")
+        if count == 0:
+            raise ValueError("No facts found - exactly one expected")
+        return fact
 
 
 #------------------------------------------------------------------------------
