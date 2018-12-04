@@ -626,6 +626,30 @@ def _get_field_comparators(comparator):
         return []
 
 #------------------------------------------------------------------------------
+# Placeholder allows for variable substituion of a query
+#------------------------------------------------------------------------------
+
+class _Placeholder(object):
+    def __init__(self, name, default=None):
+        self._name = name
+        self._default = default
+        self._value = None
+    @property
+    def name(self):
+        return self._name
+    def reset(self):
+        self._value = self._default
+    @property
+    def value(self):
+        return self._value
+    @value.setter
+    def value(self, v):
+        self._value = v
+
+def ph_(name,default=None):
+    return _Placeholder(name,default)
+
+#------------------------------------------------------------------------------
 # A Fact comparator functor that returns a static value
 #------------------------------------------------------------------------------
 
@@ -669,7 +693,9 @@ class _FieldComparator(object):
         if self._static: return self._value
         try:
             def getargval(arg,fact):
-                return arg.__get__(fact) if isinstance(arg, _FieldAccessor) else arg
+                if isinstance(arg, _FieldAccessor): return arg.__get__(fact)
+                elif isinstance(arg, _Placeholder): return arg.value
+                else: return arg
 
             v1 = getargval(self._arg1, fact)
             v2 = getargval(self._arg2, fact)
@@ -680,6 +706,12 @@ class _FieldComparator(object):
     def simplified(self):
         if self._static: return _StaticComparator(self._value)
         return self
+
+    def placeholders(self):
+        tmp = []
+        if isinstance(self._arg1, _Placeholder): tmp.append(self._arg1)
+        if isinstance(self._arg2, _Placeholder): tmp.append(self._arg2)
+        return tmp
 
     def indexable(self):
         if self._static: return None
@@ -901,6 +933,7 @@ class Select(object):
         self._index_priority = { f:p for (p,f) in enumerate(factmap.indexed_fields()) }
         self._where = None
         self._indexable = None
+        self._name_to_ph = {}
 
     def where(self, *expressions):
         if self._where:
@@ -913,6 +946,7 @@ class Select(object):
             self._where = _simplify_fact_comparator(and_(*expressions))
 
         self._indexable = self._primary_search(self._where)
+        self._name_to_ph = { p.name : p for p in self._get_placeholders(self._where) }
         return self
 
     def _primary_search(self, where):
@@ -933,23 +967,56 @@ class Select(object):
                         indexable = tmp
         return indexable
 
+    def  _get_placeholders(self, where):
+        if isinstance(where, _FieldComparator): return where.placeholders()
+        tmp = []
+        if isinstance(where, _BoolComparator):
+            for arg in where.args:
+                tmp.extend(self._get_placeholders(arg))
+        return tmp
+
+    def _set_placeholder_values(self, **kwargs):
+        if not self._name_to_ph and not kwargs: return
+
+        # Sanity check that argument names match placeholders
+        for n in kwargs.keys():
+            if not self._name_to_ph or n not in self._name_to_ph:
+                raise ValueError("unknown placeholder name: {}".format(n))
+
+        # Set the placeholder values based on the keyword arguments or the default
+        for n, ph in self._name_to_ph.items():
+            v = kwargs.get(n, None)
+            if v is None: ph.reset()
+            else: ph.value = v
+            if ph.value is None:
+                raise ValueError("no value for placeholder: {}".format(n))
+
 #    @property
     def _debug(self):
         return self._indexable
 
-    def get(self):
+    def get(self, **kwargs):
+        # Function to get the value of an indexable - resolving placeholder if necessary
+        def get_value(v):
+            if isinstance(v, _Placeholder): return v.value
+            return v
+
+        # Set any placeholder values
+        self._set_placeholder_values(**kwargs)
+
+        # If there is no index test all instances else use the index
         if not self._indexable:
             for f in self._factmap.get_all_facts():
                 if not self._where: yield f
                 elif self._where and self._where(f): yield(f)
         else:
             mmap=self._factmap.get_facts_multimap(self._indexable[0])
-            for key in mmap.keys_op(self._indexable[1], self._indexable[2]):
+            for key in mmap.keys_op(self._indexable[1], get_value(self._indexable[2])):
                 for f in mmap[key]:
                     if self._where(f): yield f
 
-    def get_unique(self):
-        tmp = list(self.get())
+    def get_unique(self, **kwargs):
+        tmp = list(self.get(**kwargs))
         if len(tmp) != 1:
             raise ValueError("{} elements found - exactly 1 expected".format(len(tmp)))
         return tmp[0]

@@ -11,7 +11,7 @@ from asphelper.orm import \
     integer_unifies, string_unifies, constant_unifies, \
     NonLogicalSymbol, Predicate, ComplexTerm, \
     IntegerField, StringField, ConstantField, ComplexField, \
-    not_, and_, or_, _StaticComparator, _get_field_comparators, \
+    not_, and_, or_, ph_, _StaticComparator, _get_field_comparators, \
     MultiMap, _FactMap, \
     fact_generator, FactBase, control_add_facts
 
@@ -615,17 +615,33 @@ class ORMTestCase(unittest.TestCase):
         self.assertEqual(s2_num2_eq_4.get_unique(), f4)
 
 
-        # Test more complex selection
-        s1_complex1 = fm1.select().where(Afact1.str1 == "42", Afact1.num1 == 4)
-        s1_complex2 = fm1.select().where(Afact1.num1 == 4, Afact1.str1 == "42")
-        s1_complex3 = fm1.select().where(lambda x: x.str1 == "42", Afact1.num1 == 4)
+        # Test simple conjunction select
+        s1_conj1 = fm1.select().where(Afact1.str1 == "42", Afact1.num1 == 4)
+        s1_conj2 = fm1.select().where(Afact1.num1 == 4, Afact1.str1 == "42")
+        s1_conj3 = fm1.select().where(lambda x: x.str1 == "42", Afact1.num1 == 4)
 
-        self.assertEqual(s1_complex1._debug()[0], Afact1.num1)
-        self.assertEqual(s1_complex2._debug()[0], Afact1.num1)
-        self.assertEqual(s1_complex3._debug()[0], Afact1.num1)
-        self.assertEqual(s1_complex1.get_unique(), f42)
-        self.assertEqual(s1_complex2.get_unique(), f42)
-        self.assertEqual(s1_complex3.get_unique(), f42)
+        self.assertEqual(s1_conj1._debug()[0], Afact1.num1)
+        self.assertEqual(s1_conj2._debug()[0], Afact1.num1)
+        self.assertEqual(s1_conj3._debug()[0], Afact1.num1)
+        self.assertEqual(s1_conj1.get_unique(), f42)
+        self.assertEqual(s1_conj2.get_unique(), f42)
+        self.assertEqual(s1_conj3.get_unique(), f42)
+
+        # Test select with placeholders
+        s1_ph1 = fm1.select().where(Afact1.num1 == ph_("num1"))
+        s1_ph2 = fm1.select().where(Afact1.str1 == ph_("str1","42"), Afact1.num1 == ph_("num1"))
+        self.assertEqual(set(list(s1_ph1.get(num1=4))), set([f4,f42]))
+        self.assertEqual(set(list(s1_ph1.get(num1=3))), set([f3]))
+        self.assertEqual(set(list(s1_ph1.get(num1=2))), set([]))
+        self.assertEqual(s1_ph2.get_unique(num1=4), f42)
+        self.assertEqual(s1_ph2.get_unique(str1="42",num1=4), f42)
+
+        with self.assertRaises(ValueError) as ctx:
+            tmp = list(s1_ph1.get_unique(num1=4))
+        with self.assertRaises(ValueError) as ctx:
+            tmp = list(s1_ph2.get(num2=5))
+        with self.assertRaises(ValueError) as ctx:
+            tmp = list(s1_ph2.get(str1="42"))
 
     #--------------------------------------------------------------------------
     # Test basic insert and selection of facts in a factbase
@@ -715,13 +731,18 @@ class ORMTestCase(unittest.TestCase):
         fb2 = FactBase(Afact.num1, Afact.str1)
         facts = list(fact_generator(Afact, Bfact, symbols))
         fb2.add(facts)
-
-        self.assertEqual(fb2.select(Afact).where(Afact.num1 == 1).get_unique(), af1)
-        self.assertEqual(fb2.select(Afact).where(Afact.num1 == 2).get_unique(), af2)
-        self.assertEqual(fb2.select(Afact).where(Afact.num1 == 3).get_unique(), af3)
+        safact1 = fb2.select(Afact).where(Afact.num1 == ph_("num1"))
+        safact2 = fb2.select(Afact).where(Afact.num1 < ph_("num1"))
+        self.assertEqual(safact1.get_unique(num1=1), af1)
+        self.assertEqual(safact1.get_unique(num1=2), af2)
+        self.assertEqual(safact1.get_unique(num1=3), af3)
+        self.assertEqual(set(list(safact2.get(num1=1))), set([]))
+        self.assertEqual(set(list(safact2.get(num1=2))), set([af1]))
+        self.assertEqual(set(list(safact2.get(num1=3))), set([af1,af2]))
         self.assertEqual(fb2.select(Bfact).where(Bfact.str1 == "aaa").get_unique(), bf1)
         self.assertEqual(fb2.select(Bfact).where(Bfact.str1 == "bbb").get_unique(), bf2)
 
+        # Now test a select
 
 
 #------------------------------------------------------------------------------
