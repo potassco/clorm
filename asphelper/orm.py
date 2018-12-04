@@ -11,9 +11,8 @@ import operator
 import collections
 import bisect
 import abc
-from functools import reduce
-from clingo import Number, String, Function, Symbol, SymbolType
-from clingo import Control, parse_program
+import clingo
+#from functools import reduce
 
 
 #------------------------------------------------------------------------------
@@ -35,17 +34,17 @@ class _classproperty(object):
 #------------------------------------------------------------------------------
 
 def integer_cltopy(term):
-    if term.type != SymbolType.Number:
+    if term.type != clingo.SymbolType.Number:
         raise TypeError("Object {0} is not a Number term")
     return term.number
 
 def string_cltopy(term):
-    if term.type != SymbolType.String:
+    if term.type != clingo.SymbolType.String:
         raise TypeError("Object {0} is not a String term")
     return term.string
 
 def constant_cltopy(term):
-    if   (term.type != SymbolType.Function or
+    if   (term.type != clingo.SymbolType.Function or
           not term.name or len(term.arguments) != 0):
         raise TypeError("Object {0} is not a Simple term")
     return term.name
@@ -55,28 +54,28 @@ def constant_cltopy(term):
 #------------------------------------------------------------------------------
 
 def integer_pytocl(v):
-    return Number(v)
+    return clingo.Number(v)
 
 def string_pytocl(v):
-    return String(v)
+    return clingo.String(v)
 
 def constant_pytocl(v):
-    return Function(v,[])
+    return clingo.Function(v,[])
 
 #------------------------------------------------------------------------------
 # check that a symbol unifies with the different field types
 #------------------------------------------------------------------------------
 
 def integer_unifies(term):
-    if term.type != SymbolType.Number: return False
+    if term.type != clingo.SymbolType.Number: return False
     return True
 
 def string_unifies(term):
-    if term.type != SymbolType.String: return False
+    if term.type != clingo.SymbolType.String: return False
     return True
 
 def constant_unifies(term):
-    if term.type != SymbolType.Function: return False
+    if term.type != clingo.SymbolType.Function: return False
     if not term.name or len(term.arguments) != 0: return False
     return True
 
@@ -489,7 +488,7 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
         for field_name, field_defn in self.meta.field_defns.items():
             pred_args.append(field_defn.pytocl(self._field_values[field_name]))
         # Create the clingo symbol object
-        return Function(self.meta.name, pred_args)
+        return clingo.Function(self.meta.name, pred_args)
 
     # Clone the object with some differences
     def clone(self, **kwargs):
@@ -521,7 +520,7 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
     # Returns whether or not a Symbol can unify with this NonLogicalSymbol
     @classmethod
     def _unifies(cls, symbol):
-        if symbol.type != SymbolType.Function: return False
+        if symbol.type != clingo.SymbolType.Function: return False
 
         name = cls.meta.name
         field_defns = cls.meta.field_defns
@@ -556,7 +555,7 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
         if isinstance(other, NonLogicalSymbol):
             other_symbol = other.symbol
             return self_symbol == other_symbol
-        elif type(other) == Symbol:
+        elif type(other) == clingo.Symbol:
             return self_symbol == other
         else:
             return NotImplemented
@@ -572,7 +571,7 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
         if isinstance(other, NonLogicalSymbol):
             other_symbol = other.symbol
             return self_symbol < other_symbol
-        elif type(other) == Symbol:
+        elif type(other) == clingo.Symbol:
             return self_symbol < other
         else:
             return NotImplemented
@@ -588,7 +587,7 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
         if isinstance(other, NonLogicalSymbol):
             other_symbol = other.symbol
             return self_symbol > other_symbol
-        elif type(other) == Symbol:
+        elif type(other) == clingo.Symbol:
             return self_symbol > other
         else:
             return NotImplemented
@@ -1172,7 +1171,7 @@ class FactBase(object):
 
 def control_add_facts(prg, factbase):
     with prg.builder() as b:
-        parse_program(factbase.asp_str(), lambda stmt: b.add(stmt))
+        clingo.parse_program(factbase.asp_str(), lambda stmt: b.add(stmt))
 
 
 #------------------------------------------------------------------------------
