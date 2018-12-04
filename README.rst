@@ -19,11 +19,9 @@ Clingo supports Python in two ways:
 ASPHelper can help with both these aspects, although the primary goal of this
 library is to make it easier to build Python applications that use Clingo.
 
-ASPHelper consists of a number of components:
+ASPHelper consists of the following components:
 
 * the core component is the Object Relational Mapper (ORM).
-* a debug library (TODO)
-* a library of application models (TODO).
 
 
 Use Case
@@ -60,4 +58,15 @@ A simple example:
        role = SimpleField()
 
     e1 = Employee(id=1, name="Dave", role="developer")
+
+TODO
+----
+
+* add Sphinx documentation
+* add examples
+
+Components to add:
+
+* a library of resuable ASP integration components.
+* a debug library.
 
