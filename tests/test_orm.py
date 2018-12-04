@@ -11,7 +11,8 @@ from asphelper.orm import \
     integer_unifies, string_unifies, constant_unifies, \
     NonLogicalSymbol, Predicate, ComplexTerm, \
     IntegerField, StringField, ConstantField, ComplexField, \
-    not_, and_, or_, ph_, _StaticComparator, _get_field_comparators, \
+    not_, and_, or_, _StaticComparator, _get_field_comparators, \
+    ph_, ph1_, ph2_, \
     MultiMap, _FactMap, \
     fact_generator, FactBase, control_add_facts
 
@@ -696,11 +697,34 @@ class ORMTestCase(unittest.TestCase):
         self.assertEqual(set(s_bf_str1_eq_ccc.get()), set())
         self.assertEqual(set(s_cf_num1_eq_1.get()), set())
 
+        # Test that the select can work with an initially empty factbase
         fb2 = FactBase()
         s2 = fb2.select(Afact).where(Afact.num1 == 1)
         self.assertEqual(set(s2.get()), set())
         fb2.add([af1,af2])
         self.assertEqual(set(s2.get()), set([af1]))
+
+        # Test select with placeholders
+        fb3 = FactBase(Afact.num1)
+        fb3.add([af1,af2,af3])
+        s3 = fb3.select(Afact).where(Afact.num1 == ph_("num1"))
+        self.assertEqual(s3.get_unique(num1=1), af1)
+        self.assertEqual(s3.get_unique(num1=2), af2)
+        self.assertEqual(s3.get_unique(num1=3), af3)
+
+
+        # Test placeholders with positional arguments
+        s4 = fb3.select(Afact).where(Afact.num1 < ph1_)
+        self.assertEqual(set(list(s4.get(1))), set([]))
+        self.assertEqual(set(list(s4.get(2))), set([af1]))
+        self.assertEqual(set(list(s4.get(3))), set([af1,af2]))
+
+        s5 = fb3.select(Afact).where(Afact.num1 <= ph1_, Afact.num2 == ph2_)
+        self.assertEqual(set(s5.get(3,10)), set([af1]))
+
+        with self.assertRaises(ValueError) as ctx:
+            self.assertEqual(set(list(s5.get(1))), set([]))
+
 
     #--------------------------------------------------------------------------
     # Test processing clingo Model

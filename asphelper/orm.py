@@ -648,6 +648,10 @@ class _Placeholder(object):
 
 def ph_(name,default=None):
     return _Placeholder(name,default)
+def ph1_(): return _Placeholder(0)
+def ph2_(): return _Placeholder(1)
+def ph3_(): return _Placeholder(2)
+def ph4_(): return _Placeholder(3)
 
 #------------------------------------------------------------------------------
 # A Fact comparator functor that returns a static value
@@ -688,6 +692,8 @@ class _FieldComparator(object):
         elif not isinstance(arg1, _FieldAccessor) and not isinstance(arg2, _FieldAccessor):
             self._static = True
             self._value = compop(arg1,arg2)
+        elif callable(self._arg2):
+            self._arg2 = self._arg2()
 
     def __call__(self, fact):
         if self._static: return self._value
@@ -975,8 +981,25 @@ class Select(object):
                 tmp.extend(self._get_placeholders(arg))
         return tmp
 
-    def _set_placeholder_values(self, **kwargs):
-        if not self._name_to_ph and not kwargs: return
+    def _set_placeholder_values(self, *args, **kwargs):
+        if not self._name_to_ph and not kwargs and not args: return
+
+        # Cannot specify both keyword and positional arguments
+        if args and kwargs:
+                raise ValueError("cannot specify both positional and keyword arguments")
+
+        # If variable length positional arguments are used then there must be a
+        # matching placeholder with a matching index.
+        if args:
+            if len(args) != len(self._name_to_ph):
+                raise ValueError("Mismatch in the number of placeholder arguments")
+            for idx,arg in enumerate(args):
+                ph = self._name_to_ph.get(idx,None)
+                if not ph:
+                    raise ValueError(("no placeholder for positional argument "
+                                      "index: {}").format(idx))
+                ph.value = arg
+            return
 
         # Sanity check that argument names match placeholders
         for n in kwargs.keys():
@@ -995,14 +1018,14 @@ class Select(object):
     def _debug(self):
         return self._indexable
 
-    def get(self, **kwargs):
+    def get(self, *args, **kwargs):
         # Function to get a value - resolving placeholder if necessary
         def get_value(v):
             if isinstance(v, _Placeholder): return v.value
             return v
 
         # Set any placeholder values
-        self._set_placeholder_values(**kwargs)
+        self._set_placeholder_values(*args, **kwargs)
 
         # If there is no index test all instances else use the index
         if not self._indexable:
@@ -1015,8 +1038,8 @@ class Select(object):
                 for f in mmap[key]:
                     if self._where(f): yield f
 
-    def get_unique(self, **kwargs):
-        tmp = list(self.get(**kwargs))
+    def get_unique(self, *args, **kwargs):
+        tmp = list(self.get(*args, **kwargs))
         if len(tmp) != 1:
             raise ValueError("{} elements found - exactly 1 expected".format(len(tmp)))
         return tmp[0]
