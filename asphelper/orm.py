@@ -171,11 +171,11 @@ class ComplexField(object):
     def is_field_defn(self): return True
 
 #------------------------------------------------------------------------------
-# FieldAccessor - similar to a property but with overloaded comparison operator
+# Field - similar to a property but with overloaded comparison operator
 # that build a query so that we can perform lazy evaluation for querying.
 #------------------------------------------------------------------------------
 
-class FieldAccessor(abc.ABC):
+class Field(abc.ABC):
 
     @abc.abstractmethod
     def __get__(self, instance, owner=None):
@@ -210,9 +210,9 @@ class FieldAccessor(abc.ABC):
         pass
 
 #------------------------------------------------------------------------------
-# Implementation of a FieldAccessor
+# Implementation of a Field
 # ------------------------------------------------------------------------------
-class _FieldAccessor(FieldAccessor):
+class _Field(Field):
     def __init__(self, field_name, field_index, field_defn, no_setter=True):
         self._no_setter=no_setter
         self._field_name = field_name
@@ -416,7 +416,7 @@ class _NonLogicalSymbolMeta(type):
         # also making the values indexable.
         field_accessors = []
         for idx, (field_name, field_defn) in enumerate(md.field_defns.items()):
-            fa = _FieldAccessor(field_name, idx, field_defn)
+            fa = _Field(field_name, idx, field_defn)
             dct[field_name] = fa
             field_accessors.append(fa)
         dct["_field_accessors"] = tuple(field_accessors)
@@ -723,7 +723,7 @@ class _StaticComparator(Comparator):
 # with the value of some predicate's field.
 #
 # Note: instances of _FieldComparator are constructed by calling the comparison
-# operator for FieldAccessor objects.
+# operator for Field objects.
 # ------------------------------------------------------------------------------
 class _FieldComparator(Comparator):
     def __init__(self, compop, arg1, arg2):
@@ -739,7 +739,7 @@ class _FieldComparator(Comparator):
         if arg1 is arg2:
             self._static = True
             self._value = compop(1,1)
-        elif not isinstance(arg1, _FieldAccessor) and not isinstance(arg2, _FieldAccessor):
+        elif not isinstance(arg1, _Field) and not isinstance(arg2, _Field):
             self._static = True
             self._value = compop(arg1,arg2)
         elif callable(self._arg2):
@@ -749,7 +749,7 @@ class _FieldComparator(Comparator):
         if self._static: return self._value
         try:
             def getargval(arg,fact):
-                if isinstance(arg, _FieldAccessor): return arg.__get__(fact)
+                if isinstance(arg, _Field): return arg.__get__(fact)
                 elif isinstance(arg, _Placeholder): return arg.value
                 else: return arg
 
@@ -771,7 +771,7 @@ class _FieldComparator(Comparator):
 
     def indexable(self):
         if self._static: return None
-        if not isinstance(self._arg1, _FieldAccessor) or isinstance(self._arg2, _FieldAccessor):
+        if not isinstance(self._arg1, _Field) or isinstance(self._arg2, _Field):
             return None
         return (self._arg1, self._compop, self._arg2)
 

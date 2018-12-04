@@ -397,7 +397,7 @@ class ORMTestCase(unittest.TestCase):
     #  Test that the fact comparators work
     #--------------------------------------------------------------------------
 
-    def test_fact_comparators(self):
+    def test_comparators(self):
 
         def is_static(fc):
             return isinstance(fc, _StaticComparator)
