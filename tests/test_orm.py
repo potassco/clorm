@@ -696,6 +696,11 @@ class ORMTestCase(unittest.TestCase):
         self.assertEqual(set(s_bf_str1_eq_ccc.get()), set())
         self.assertEqual(set(s_cf_num1_eq_1.get()), set())
 
+        fb2 = FactBase()
+        s2 = fb2.select(Afact).where(Afact.num1 == 1)
+        self.assertEqual(set(s2.get()), set())
+        fb2.add([af1,af2])
+        self.assertEqual(set(s2.get()), set([af1]))
 
     #--------------------------------------------------------------------------
     # Test processing clingo Model

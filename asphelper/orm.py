@@ -996,7 +996,7 @@ class Select(object):
         return self._indexable
 
     def get(self, **kwargs):
-        # Function to get the value of an indexable - resolving placeholder if necessary
+        # Function to get a value - resolving placeholder if necessary
         def get_value(v):
             if isinstance(v, _Placeholder): return v.value
             return v
@@ -1049,10 +1049,10 @@ class FactBase(object):
             _add(arg)
 
     def select(self, predicate_cls):
-        # For a non-existent class I think it makes sense to return an empty
-        # selection than it does to throw and exception.
+        # If no predicate class exists then create one on the basis that facts
+        # of this class may be inserted at some future point.
         if predicate_cls not in self._factmaps:
-            return _FactMap().select()
+            self._factmaps[predicate_cls] = _FactMap()
         return self._factmaps[predicate_cls].select()
 
     def predicate_types(self):
