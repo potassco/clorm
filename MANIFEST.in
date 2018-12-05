@@ -2,4 +2,4 @@ include README.rst
 include LICENSE
 include runtests.py
 include tests/*.py
-include asphelper/*.py
+include clorm/*.py

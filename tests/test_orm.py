@@ -5,7 +5,7 @@
 import unittest
 from clingo import Number, String, Function,  __version__ as clingo_version
 from clingo import Control
-from asphelper.orm import \
+from clorm.orm import \
     integer_cltopy, string_cltopy, constant_cltopy, \
     integer_pytocl, string_pytocl, constant_pytocl, \
     integer_unifies, string_unifies, constant_unifies, \
