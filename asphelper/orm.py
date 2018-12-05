@@ -1000,6 +1000,20 @@ class Select(abc.ABC):
         pass
 
 #------------------------------------------------------------------------------
+# Delete is an interface to perform a query delete from a FactBase.
+# ------------------------------------------------------------------------------
+
+class Delete(abc.ABC):
+
+    @abc.abstractmethod
+    def where(self, *expressions):
+        pass
+
+    @abc.abstractmethod
+    def execute(self, *args, **kwargs):
+        pass
+
+#------------------------------------------------------------------------------
 # A selection over a _FactMap
 #------------------------------------------------------------------------------
 class _Select(Select):
