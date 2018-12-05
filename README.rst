@@ -23,7 +23,7 @@ Clingo supports Python in two ways:
 
 While the Python API is both extensive and flexible it is fairly low-level when
 it comes to getting data into, and out of, the solver. This also means that as
-you ASP program evolves and changes, adapting your Python code to match your ASP
+an ASP program evolves and changes, adapting the Python code to match the ASP
 code become very tedious. CLORM is intended to help by providing a higher-level
 ORM interface to make it easy to match the ASP facts to Python objects.
 
