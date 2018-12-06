@@ -375,18 +375,11 @@ class ORMTestCase(unittest.TestCase):
         af3_1=Afact3(anum=1,afun=Afact3.Fun(fnum=1))
         bf_1=Bfact(anum=3,astr="test")
 
-        with self.assertRaises(TypeError) as ctx:
-            tmp = list(fact_generator(Afact1))
-        with self.assertRaises(TypeError) as ctx:
-            tmp = list(fact_generator(raws))
-        with self.assertRaises(TypeError) as ctx:
-            tmp = list(fact_generator(Afact1,Afact2))
-
-        g1=list(fact_generator(Afact1,raws))
-        g2=list(fact_generator(Afact2,raws))
-        g3=list(fact_generator(Afact3,raws))
-        g4=list(fact_generator(Bfact,raws))
-        g5=list(fact_generator(Afact1,Bfact,raws))
+        g1=list(fact_generator([Afact1],raws))
+        g2=list(fact_generator([Afact2],raws))
+        g3=list(fact_generator([Afact3],raws))
+        g4=list(fact_generator([Bfact],raws))
+        g5=list(fact_generator([Afact1,Bfact],raws))
         self.assertEqual([af1_1], g1)
         self.assertEqual([af2_1], g2)
         self.assertEqual([af3_1], g3)
@@ -537,7 +530,7 @@ class ORMTestCase(unittest.TestCase):
             str1=StringField()
             class Meta: name = "afact"
 
-        fm1 = _FactMap(Afact1.num1,Afact1.str1)
+        fm1 = _FactMap([Afact1.num1,Afact1.str1])
         fm2 = _FactMap()
         f1 = Afact1(1,1,"1")
         f3 = Afact1(3,3,"3")
@@ -667,7 +660,7 @@ class ORMTestCase(unittest.TestCase):
         bf2 = Bfact(2,"bbb")
         cf1 = Cfact(1)
 
-        fb = FactBase(Afact.num1, Afact.num2, Afact.str1)
+        fb = FactBase([Afact.num1, Afact.num2, Afact.str1])
         fb.add([af1,af2,af3,bf1,bf2,cf1])
 
         self.assertEqual(fb.predicate_types(), set([Afact,Bfact,Cfact]))
@@ -705,7 +698,7 @@ class ORMTestCase(unittest.TestCase):
         self.assertEqual(set(s2.get()), set([af1]))
 
         # Test select with placeholders
-        fb3 = FactBase(Afact.num1)
+        fb3 = FactBase([Afact.num1])
         fb3.add([af1,af2,af3])
         s3 = fb3.select(Afact).where(Afact.num1 == ph_("num1"))
         self.assertEqual(s3.get_unique(num1=1), af1)
@@ -744,7 +737,7 @@ class ORMTestCase(unittest.TestCase):
         bf1 = Bfact(1,"aaa")
         bf2 = Bfact(2,"bbb")
 
-        fb1 = FactBase(Afact.num1, Bfact.str1)
+        fb1 = FactBase([Afact.num1, Bfact.str1])
         fb1.add([af1,af2,af3,bf1,bf2])
 
         symbols = None
@@ -757,8 +750,8 @@ class ORMTestCase(unittest.TestCase):
         ctrl.ground([("base",[])])
         ctrl.solve(on_model=on_model)
 
-        fb2 = FactBase(Afact.num1, Afact.str1)
-        facts = list(fact_generator(Afact, Bfact, symbols))
+        fb2 = FactBase([Afact.num1, Afact.str1])
+        facts = list(fact_generator([Afact, Bfact], symbols))
         fb2.add(facts)
         safact1 = fb2.select(Afact).where(Afact.num1 == ph_("num1"))
         safact2 = fb2.select(Afact).where(Afact.num1 < ph_("num1"))
