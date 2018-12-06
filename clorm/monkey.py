@@ -63,7 +63,6 @@ class _SolveHandleMetaClass(type):
         overrides=["__init__", "__iter__", "__next__"]
         for key,value in OSolveHandle.__dict__.items():
             if key not in overrides and callable(value):
-                print("WRAPPING: {}".format(key))
                 dct[key]=_model_wrapper(value)
         return super(_SolveHandleMetaClass, meta).__new__(meta, name, bases, dct)
 
@@ -137,7 +136,7 @@ class Control(object, metaclass=_ControlMetaClass):
 # Now patch the clingo objects
 #------------------------------------------------------------------------------
 
-def replace_all():
+def replace_control():
     clingo.Control=Control
 
 #------------------------------------------------------------------------------
