@@ -14,6 +14,39 @@ import abc
 import clingo
 #from functools import reduce
 
+__version__ = '0.1.0'
+__all__ = [
+    'IntegerField',
+    'StringField',
+    'ConstantField',
+    'ComplexField',
+    'Field',
+    'NonLogicalSymbol',
+    'Predicate',
+    'ComplexTerm',
+    'Comparator',
+    'Select',
+    'FactBase',
+    'integer_cltopy',
+    'string_cltopy',
+    'constant_cltopy',
+    'integer_pytocl',
+    'string_pytocl',
+    'constant_pytocl',
+    'integer_unifies',
+    'string_unifies',
+    'constant_unifies',
+    'ph_',
+    'ph1_',
+    'ph2_',
+    'ph3_',
+    'ph4_',
+    'not_',
+    'and_',
+    'or_',
+    'fact_generator',
+    'control_add_facts'
+    ]
 
 #------------------------------------------------------------------------------
 # Global
