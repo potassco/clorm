@@ -1,4 +1,4 @@
-#------------------------------------------------------------------------------
+#-----------------------------------------------------------------------------
 # ORM provides a Object Relational Mapper type model for specifying non-logical
 # symbols (ie., predicates and terms)
 # ------------------------------------------------------------------------------
@@ -12,7 +12,6 @@ import collections
 import bisect
 import abc
 import clingo
-#from functools import reduce
 
 __version__ = '0.1.0'
 __all__ = [
@@ -45,7 +44,11 @@ __all__ = [
     'and_',
     'or_',
     'fact_generator',
-    'control_add_facts'
+    'control_add_facts',
+    'control_assign_external',
+    'control_release_external',
+    'model_contains',
+    'model_facts'
     ]
 
 #------------------------------------------------------------------------------
@@ -653,17 +656,15 @@ ComplexTerm=NonLogicalSymbol
 # symbols.
 # ------------------------------------------------------------------------------
 
-def fact_generator(*args):
+def fact_generator(unifiers, symbols):
     def unify(cls, r):
         try:
             return cls._unify(r)
         except ValueError:
             return None
 
-    if len(args) < 2:
-        raise TypeError("fact generator must have at least 2 arguments")
-    types = {(cls.meta.name, cls.meta.arity) : cls for cls in args[:-1]}
-    for raw in args[-1]:
+    types = {(cls.meta.name, cls.meta.arity) : cls for cls in unifiers}
+    for raw in symbols:
         cls = types.get((raw.name, len(raw.arguments)))
         if not cls: continue
         f = unify(cls,raw)
@@ -971,12 +972,12 @@ class _MultiMap(object):
 # ------------------------------------------------------------------------------
 
 class _FactMap(object):
-    def __init__(self, *fields_to_index):
+    def __init__(self, index=[]):
         self._allfacts = []
-        if len(fields_to_index) == 0:
+        if len(index) == 0:
             self._mmaps = None
         else:
-            self._mmaps = collections.OrderedDict( (f, _MultiMap()) for f in fields_to_index )
+            self._mmaps = collections.OrderedDict( (f, _MultiMap()) for f in index )
 
     def add(self, fact):
         self._allfacts.append(fact)
@@ -1172,15 +1173,15 @@ class _Select(Select):
 #------------------------------------------------------------------------------
 
 class FactBase(object):
-    def __init__(self, *fields_to_index):
+    def __init__(self, index=[]):
 
         # Created _FactMaps for the predicate types with indexed fields
         grouped = {}
-        for f in fields_to_index:
+        for f in index:
             if f.parent not in grouped: grouped[f.parent] = []
             grouped[f.parent].append(f)
 
-        self._factmaps = { pt : _FactMap(*fs) for pt, fs in grouped.items() }
+        self._factmaps = { pt : _FactMap(fs) for pt, fs in grouped.items() }
 
     def add(self, arg):
         def _add(fact):
@@ -1219,69 +1220,41 @@ class FactBase(object):
         return self.asp_str()
 
 #------------------------------------------------------------------------------
-# Functions to insert to a clingo program
+# Functions that operate on a clingo Control object
 #------------------------------------------------------------------------------
 
-def control_add_facts(prg, factbase):
-    with prg.builder() as b:
+# Add the facts in a FactBase
+def control_add_facts(ctrl, factbase):
+    with ctrl.builder() as b:
         clingo.parse_program(factbase.asp_str(), lambda stmt: b.add(stmt))
 
-
-#------------------------------------------------------------------------------
-#------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-# Functions that overlay the clingo Control object
-#------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-# Insert a fact (i.e., a ground atom) into the logic program.  Note: I don't
-# think clingo.Control has a function for adding an atomic Function symbol,
-# similar to the assign_external interface. Instead I regenerate a logic
-# programming string and add it to the base program - which is not ideal.
-# ------------------------------------------------------------------------------
-def control_insert(ctrl, fact):
-    if not isinstance(fact, NonLogicalSymbol):
-        raise TypeError("Object {} is not a NonLogicalSymbol".format(fact))
-    fact_str = "{}.".format(fact.symbol)
-    ctrl.add("base",[], fact_str)
-
-#--------------------------------------------------------------------------
-# Set the external status of the NonLogicalSymbol instance is easier
-#--------------------------------------------------------------------------
+# assign/release externals for a NonLogicalSymbol object or a Clingo Symbol
 def control_assign_external(ctrl, fact, truth):
-    if not isinstance(fact, NonLogicalSymbol):
-        raise TypeError("Object {} is not a NonLogicalSymbol".format(fact))
-    ctrl.assign_external(fact.symbol, truth)
+    if isinstance(fact, NonLogicalSymbol):
+        ctrl.assign_external(fact.symbol, truth)
+    else:
+        ctrl.assign_external(fact, truth)
 
 def control_release_external(ctrl, fact):
-    ctrl.release_external(self.symbol)
+    if isinstance(fact, NonLogicalSymbol):
+        ctrl.release_external(fact.symbol)
+    else:
+        ctrl.release_external(fact)
 
 #------------------------------------------------------------------------------
-# Run the solver - replace any high-level NonLogicalSymbol assumptions with their
-# clingo symbols.
-# ------------------------------------------------------------------------------
+# Functions that operator on a clingo Model object
+#------------------------------------------------------------------------------
 
-def control_solve(ctrl, **kwargs):
-    if "assumptions" in kwargs:
-        nas = []
-        for (a,b) in kwargs["assumptions"]:
-            if isinstance(a, NonLogicalSymbol):
-                nas.append((a.symbol,b))
-            else:
-                nas.append((a,b))
-            fi
-        kwargs["assumptions"] = nas
-    return ctrl.solve(kwargs)
+def model_contains(model, fact):
+    if isinstance(fact, NonLogicalSymbol):
+        return model.contains(fact.symbol)
+    return model.contains(fact)
 
+def model_facts(model, unifiers, atoms=False, terms=False, shown=False):
+    for f in fact_generator(unifiers,
+                            model.symbols(atoms=atoms,terms=terms,shown=shown)):
+        yield f
 
-
-# ------------------------------------------------------------------------------
-# Patch the Symbol comparison operators
-# ------------------------------------------------------------------------------
-
-def patch_symbol():
-    pass
 
 #------------------------------------------------------------------------------
 # main
