@@ -1240,6 +1240,20 @@ class _FactBaseMeta(type):
             dct["add"] = _fb_base_add
             return super(_FactBaseMeta, meta).__new__(meta, name, bases, dct)
 
+        # Cumulatively inherits the predicates and indexes from the base classes -
+        # which we can then override.
+        # use ordered dict to preserve ordering
+        p_oset = collections.OrderedDict()
+        i_oset = collections.OrderedDict()
+        for bc in bases:
+            if not issubclass(bc, FactBase): continue
+            for p in bc.predicates: p_oset[p] = p
+            for i in bc.indexes: i_oset[i] = i
+        if plistname not in dct:
+            dct[plistname] = [ p for p,_ in p_oset.items() ]
+        if ilistname not in dct:
+            dct[ilistname] = [ i for i,_ in i_oset.items() ]
+
         # If we're dealing with a subclass then validate the specified
         # predicates and indexes and add the sub-class constructor
 

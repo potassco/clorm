@@ -878,6 +878,69 @@ class ORMTestCase(unittest.TestCase):
 
         # Now test a select
 
+    #--------------------------------------------------------------------------
+    # Test that subclass factbase works and we can specify indexes
+    #--------------------------------------------------------------------------
+
+    def test_factbase_subsubclasses(self):
+
+        class Afact(Predicate):
+            num1=IntegerField()
+            str1=StringField()
+        class Bfact(Predicate):
+            num1=IntegerField()
+            str1=StringField()
+
+        af1 = Afact(1,"bbb")
+        af2 = Afact(2,"aaa")
+        bf1 = Bfact(1,"bbb")
+        bf2 = Bfact(2,"aaa")
+
+        facts = [af1,af2,bf1,bf2]
+        raws = [
+            Function("afact",[Number(1), String("bbb")]),
+            Function("afact",[Number(2), String("aaa")]),
+            Function("bfact",[Number(1),String("bbb")]),
+            Function("bfact",[Number(2),String("aaa")]),
+            ]
+
+        class FBA(FactBase):
+            predicates = [Afact]
+
+        class FBB(FactBase):
+            predicates = [Bfact]
+
+        self.assertEqual(FBA.predicates, [Afact])
+        self.assertEqual(FBB.predicates, [Bfact])
+        self.assertEqual(FBA.indexes,[])
+        self.assertEqual(FBB.indexes,[])
+
+        # NOTE: I don't think there is a good reason for multiple inheritence
+        # but still test that it does actually work as expected.
+        class FBAB(FBA,FBB):
+            pass
+
+        self.assertEqual(FBAB.predicates, [Afact,Bfact])
+        self.assertEqual(FBAB.indexes,[])
+
+        class FBAIdx(FBA):
+            indexes=[Afact.num1]
+
+        self.assertEqual(FBAIdx.predicates, [Afact])
+        self.assertEqual(FBAIdx.indexes,[Afact.num1])
+
+        class FBBIdx(FBB):
+            indexes=[Bfact.num1]
+
+        self.assertEqual(FBBIdx.predicates, [Bfact])
+        self.assertEqual(FBBIdx.indexes,[Bfact.num1])
+
+        class FBABIdx(FBAIdx,FBBIdx):
+            pass
+
+        self.assertEqual(FBABIdx.predicates, [Afact,Bfact])
+        self.assertEqual(FBABIdx.indexes,[Afact.num1,Bfact.num1])
+
 
 #------------------------------------------------------------------------------
 # main
