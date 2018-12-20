@@ -632,10 +632,38 @@ class ORMTestCase(unittest.TestCase):
 
         with self.assertRaises(ValueError) as ctx:
             tmp = list(s1_ph1.get_unique(num1=4))  # fails because of multiple values
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(TypeError) as ctx:
             tmp = list(s1_ph2.get(num2=5))         # fails because of no values
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(TypeError) as ctx:
             tmp = list(s1_ph2.get(str1="42"))
+
+
+    #--------------------------------------------------------------------------
+    #   Test that we can use the same placeholder multiple times
+    #--------------------------------------------------------------------------
+    def test_select_multi_placeholder(self):
+        class Afact(Predicate):
+            num1=IntegerField()
+            num2=IntegerField()
+
+        fm1 = _FactMap([Afact.num1])
+        f1 = Afact(1,1)
+        f2 = Afact(1,2)
+        f3 = Afact(1,3)
+        f4 = Afact(2,1)
+        f5 = Afact(2,2)
+
+        fm1.add(f1) ; fm1.add(f2) ; fm1.add(f3) ; fm1.add(f4) ; fm1.add(f5)
+
+        s1 = fm1.select().where(Afact.num1 == ph1_, Afact.num2 == ph1_)
+        self.assertTrue(set([f for f in s1.get(1)]), set([f1]))
+        self.assertTrue(set([f for f in s1.get(2)]), set([f5]))
+
+        s2 = fm1.select().where(Afact.num1 == ph_("a",1), Afact.num2 == ph_("a",2))
+        self.assertTrue(set([f for f in s2.get(a=1)]), set([f1]))
+        self.assertTrue(set([f for f in s2.get(a=2)]), set([f5]))
+        self.assertTrue(set([f for f in s2.get()]), set([f2]))
+
 
     #--------------------------------------------------------------------------
     # Test basic insert and selection of facts in a factbase
@@ -719,7 +747,7 @@ class ORMTestCase(unittest.TestCase):
         s5 = fb3.select(Afact).where(Afact.num1 <= ph1_, Afact.num2 == ph2_)
         self.assertEqual(set(s5.get(3,10)), set([af1]))
 
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(TypeError) as ctx:
             self.assertEqual(set(list(s5.get(1))), set([]))
 
 

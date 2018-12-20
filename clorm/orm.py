@@ -706,14 +706,24 @@ def _get_field_comparators(comparator):
         return []
 
 #------------------------------------------------------------------------------
-# Placeholder allows for variable substituion of a query
-#------------------------------------------------------------------------------
+# Placeholder allows for variable substituion of a query. Placeholder is
+# an abstract class that exposes no API other than its existence.
+# ------------------------------------------------------------------------------
 class Placeholder(abc.ABC):
     pass
 
 class _Placeholder(Placeholder):
+    @property
+    @abc.abstractmethod
+    def value(self): pass
+
+    @value.setter
+    @abc.abstractmethod
+    def value(self, v): pass
+
+class _NamedPlaceholder(_Placeholder):
     def __init__(self, name, default=None):
-        self._name = name
+        self._name = str(name)
         self._default = default
         self._value = None
     @property
@@ -728,12 +738,80 @@ class _Placeholder(Placeholder):
     def value(self, v):
         self._value = v
 
+class _PositionalPlaceholder(_Placeholder):
+    def __init__(self, posn):
+        self._posn = posn
+        self._value = None
+    @property
+    def posn(self):
+        return self._posn
+    def reset(self):
+        self._value = None
+    @property
+    def value(self):
+        return self._value
+    @value.setter
+    def value(self, v):
+        self._value = v
+
 def ph_(name,default=None):
-    return _Placeholder(name,default)
-def ph1_(): return _Placeholder(0)
-def ph2_(): return _Placeholder(1)
-def ph3_(): return _Placeholder(2)
-def ph4_(): return _Placeholder(3)
+    return _NamedPlaceholder(name,default)
+def ph1_(): return _PositionalPlaceholder(0)
+def ph2_(): return _PositionalPlaceholder(1)
+def ph3_(): return _PositionalPlaceholder(2)
+def ph4_(): return _PositionalPlaceholder(3)
+
+
+#------------------------------------------------------------------------------
+#
+#------------------------------------------------------------------------------
+class _PlaceholderManager(object):
+    def __init__(self):
+        self._posn2phs = {}
+        self._name2phs = {}
+
+    def register(self, ph):
+        if isinstance(ph, _PositionalPlaceholder):
+            if ph.posn not in self._posn2phs: self._posn2phs[ph.posn] = [ph]
+            else: self._posn2phs[ph.posn].append(ph)
+        if isinstance(ph, _NamedPlaceholder):
+            if ph.name not in self._name2phs: self._name2phs[ph.name] = [ph]
+            else: self._name2phs[ph.name].append(ph)
+
+    def validate(self):
+        num_posn = len(self._posn2phs)
+        for i in range(num_posn):
+            if i not in self._posn2phs:
+                raise ValueError("missing positional placeholder ph{}_".format(i+1))
+
+    def set_values(self, *args, **kwargs):
+        if not self._name2phs and not self._posn2phs and not kwargs and not args: return
+
+        # Set the positional arguments
+        if len(self._posn2phs) != len(args):
+            raise TypeError("mismatched positional placeholder arguments")
+        for (i,v) in enumerate(args):
+            for ph in self._posn2phs[i]: ph.value = v
+
+        # Validate that the named arguments are all valid placeholder names
+        kwkeys = set(kwargs.keys())
+        namedkeys = set(self._name2phs.keys())
+        if not kwkeys.issubset(namedkeys):
+            raise TypeError(("named arguments don't match named placeholders: "
+                             "{}").format(list(namedkeys-kwkeys)))
+
+        # Set and track the values of the named placeholders. For the missing
+        # names reset and make sure they are have valid defaults.
+        for (n,ph) in self._name2phs.items():
+            if n in kwargs:
+                for ph in self._name2phs[n]: ph.value = kwargs[n]
+            else:
+                for ph in self._name2phs[n]:
+                    ph.reset()
+                    if ph.value is None:
+                        raise TypeError(("missing named placeholder with no "
+                                         "default: {}").format(n))
+
 
 #------------------------------------------------------------------------------
 # A Comparator is a boolean functor that takes a fact instance and returns
@@ -778,7 +856,7 @@ class _FieldComparator(Comparator):
         # Comparison is trivial if:
         # 1) the objects are identical then it is a trivial comparison and
         # equivalent to checking if the operator satisfies a simple identity (eg., 1)
-        # 2) neither argument is a field accessor
+        # 2) neither argument is a Field
         if arg1 is arg2:
             self._static = True
             self._value = compop(1,1)
@@ -1007,6 +1085,9 @@ class Delete(abc.ABC):
     def execute(self, *args, **kwargs):
         pass
 
+
+
+
 #------------------------------------------------------------------------------
 # A selection over a _FactMap
 #------------------------------------------------------------------------------
@@ -1016,7 +1097,7 @@ class _Select(Select):
         self._index_priority = { f:p for (p,f) in enumerate(factmap.indexed_fields()) }
         self._where = None
         self._indexable = None
-        self._name_to_ph = {}
+        self._phmanager = _PlaceholderManager()
 
     def where(self, *expressions):
         if self._where:
@@ -1029,7 +1110,7 @@ class _Select(Select):
             self._where = _simplify_fact_comparator(and_(*expressions))
 
         self._indexable = self._primary_search(self._where)
-        self._name_to_ph = { p.name : p for p in self._get_placeholders(self._where) }
+        for ph in self._get_placeholders(self._where): self._phmanager.register(ph)
         return self
 
     def _primary_search(self, where):
@@ -1058,39 +1139,6 @@ class _Select(Select):
                 tmp.extend(self._get_placeholders(arg))
         return tmp
 
-    def _set_placeholder_values(self, *args, **kwargs):
-        if not self._name_to_ph and not kwargs and not args: return
-
-        # Cannot specify both keyword and positional arguments
-        if args and kwargs:
-                raise ValueError("cannot specify both positional and keyword arguments")
-
-        # If variable length positional arguments are used then there must be a
-        # matching placeholder with a matching index.
-        if args:
-            if len(args) != len(self._name_to_ph):
-                raise ValueError("Mismatch in the number of placeholder arguments")
-            for idx,arg in enumerate(args):
-                ph = self._name_to_ph.get(idx,None)
-                if not ph:
-                    raise ValueError(("no placeholder for positional argument "
-                                      "index: {}").format(idx))
-                ph.value = arg
-            return
-
-        # Sanity check that argument names match placeholders
-        for n in kwargs.keys():
-            if not self._name_to_ph or n not in self._name_to_ph:
-                raise ValueError("unknown placeholder name: {}".format(n))
-
-        # Set the placeholder values based on the keyword arguments or the default
-        for n, ph in self._name_to_ph.items():
-            v = kwargs.get(n, None)
-            if v is None: ph.reset()
-            else: ph.value = v
-            if ph.value is None:
-                raise ValueError("no value for placeholder: {}".format(n))
-
 #    @property
     def _debug(self):
         return self._indexable
@@ -1098,11 +1146,11 @@ class _Select(Select):
     def get(self, *args, **kwargs):
         # Function to get a value - resolving placeholder if necessary
         def get_value(v):
-            if isinstance(v, _Placeholder): return v.value
+            if isinstance(v, Placeholder): return v.value
             return v
 
         # Set any placeholder values
-        self._set_placeholder_values(*args, **kwargs)
+        self._phmanager.set_values(*args, **kwargs)
 
         # If there is no index test all instances else use the index
         if not self._indexable:
