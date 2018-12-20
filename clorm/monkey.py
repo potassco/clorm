@@ -4,7 +4,8 @@
 
 import clingo
 import functools
-import clorm as orm
+from .orm import *
+#import clorm as orm
 
 __version__ = '0.1.0'
 __all__ = [
@@ -42,11 +43,11 @@ class Model(object, metaclass=_ModelMetaClass):
 
     # A new function to return a list of facts - similar to symbols
     def facts(self, unifiers, *, atoms=False, terms=False, shown=False):
-        return orm.model_facts(self._model, unifiers, atoms=atoms, terms=terms,shown=shown)
+        return model_facts(self._model, unifiers, atoms=atoms, terms=terms,shown=shown)
 
     # Overide contains
     def contains(self, fact):
-        return orm.model_contains(self._model, fact)
+        return model_contains(self._model, fact)
 
 
 # ------------------------------------------------------------------------------
@@ -101,21 +102,21 @@ class Control(object, metaclass=_ControlMetaClass):
 
     # A new function to add facts from a factbase
     def add_facts(self, factbase):
-        orm.control_add_facts(self._ctrl, factbase)
+        control_add_facts(self._ctrl, factbase)
 
     # Overide assign_external
     def assign_external(self, fact, truth):
-        orm.control_assign_external(self._ctrl, fact, truth)
+        control_assign_external(self._ctrl, fact, truth)
 
     # Overide release_external
     def release_external(ctrl, fact):
-        orm.control_release_external(self._ctrl, fact)
+        control_release_external(self._ctrl, fact)
 
     # Overide solve and call on_model with a replace Model object
     def solve(self, *, assumptions=[], on_model=None,
               on_finish=None,yield_=False,async_=False):
 
-        if isinstance(assumptions, orm.FactBase):
+        if isinstance(assumptions, FactBase):
             new_a = [f.symbol for f in assumptions.facts()]
         else:
             new_a = [ (f.symbol if isinstance(f, NonLogicalSymbol) \
