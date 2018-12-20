@@ -389,7 +389,7 @@ def _is_field_defn(obj):
     return False
 
 # build the metadata for the NonLogicalSymbol
-def _make_metadata(class_name, dct):
+def _make_nls_metadata(class_name, dct):
 
     # Generate a name for the NonLogicalSymbol
     name = class_name[:1].lower() + class_name[1:]  # convert first character to lowercase
@@ -442,7 +442,7 @@ class _NonLogicalSymbolMeta(type):
         if name == "NonLogicalSymbol":
             return super(_NonLogicalSymbolMeta, meta).__new__(meta, name, bases, dct)
 
-        md = _make_metadata(name, dct)
+        md = _make_nls_metadata(name, dct)
 
         # Set the _meta attribute and constructor
         dct["_meta"] = md
@@ -464,8 +464,10 @@ class _NonLogicalSymbolMeta(type):
             return super(_NonLogicalSymbolMeta, cls).__init__(name, bases, dct)
 
         md = dct["_meta"]
-        # Create a property attribute corresponding to each field name while
-        # also making the values indexable.
+        # The property attribute for each field can only be created in __new__
+        # but the class itself does not get created until after __new__. Hence
+        # we have to set the pointer within the field back to the this class
+        # here.
         for idx, (field_name, field_defn) in enumerate(md.field_defns.items()):
             dct[field_name].set_parent(cls)
 
@@ -651,9 +653,12 @@ Predicate=NonLogicalSymbol
 ComplexTerm=NonLogicalSymbol
 
 #------------------------------------------------------------------------------
-# Generate facts from an input array of Symbols.  The first n-1 arguments are
-# the names of predicate classes and the last argument is the list of raw
-# symbols.
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+# Generate facts from an input array of Symbols.  The unifiers argument is
+# contains the names of predicate classes to unify against (order matters) and
+# symbols contains the list of raw clingo.Symbol objects.
 # ------------------------------------------------------------------------------
 
 def fact_generator(unifiers, symbols):
@@ -669,6 +674,10 @@ def fact_generator(unifiers, symbols):
         if not cls: continue
         f = unify(cls,raw)
         if f: yield f
+
+
+#------------------------------------------------------------------------------
+#------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 # Fact comparator: is a function that determines if a fact (i.e., predicate
@@ -967,55 +976,6 @@ class _MultiMap(object):
 
 
 #------------------------------------------------------------------------------
-# A map for facts of the same type - The order of the fields matters as it
-# determines the priority of the index.
-# ------------------------------------------------------------------------------
-
-class _FactMap(object):
-    def __init__(self, index=[]):
-        self._allfacts = []
-        if len(index) == 0:
-            self._mmaps = None
-        else:
-            self._mmaps = collections.OrderedDict( (f, _MultiMap()) for f in index )
-
-    def add(self, fact):
-        self._allfacts.append(fact)
-        if self._mmaps:
-            for field, mmap in self._mmaps.items():
-                mmap[field.__get__(fact)] = fact
-
-    def indexed_fields(self):
-        return self._mmaps.keys() if self._mmaps else []
-
-    def get_facts_multimap(self, field):
-        return self._mmaps[field]
-
-    def get_all_facts(self):
-        return self._allfacts
-
-    def clear(self):
-        self._allfacts.clear()
-        if self._mmaps:
-            for field, mmap in self._mmaps.items():
-                mmap.clear()
-
-    def select(self):
-        return _Select(self)
-
-    def asp_str(self):
-        out = io.StringIO()
-        for f in self._allfacts:
-            print("{}.".format(f), file=out)
-        data = out.getvalue()
-        out.close()
-        return data
-
-    def __str__(self):
-        self.asp_str()
-
-
-#------------------------------------------------------------------------------
 # Select is an interface query over a FactBase.
 # ------------------------------------------------------------------------------
 
@@ -1146,7 +1106,7 @@ class _Select(Select):
 
         # If there is no index test all instances else use the index
         if not self._indexable:
-            for f in self._factmap.get_all_facts():
+            for f in self._factmap.facts():
                 if not self._where: yield f
                 elif self._where and self._where(f): yield(f)
         else:
@@ -1169,32 +1129,193 @@ class _Select(Select):
 
 
 #------------------------------------------------------------------------------
+# A map for facts of the same type - Indexes can be built to allow for fast
+# lookups based on a field value. The order that the fields are specified in the
+# index matters as it determines the priority of the index.
+# ------------------------------------------------------------------------------
+
+class _FactMap(object):
+    def __init__(self, index=[]):
+        self._allfacts = []
+        if len(index) == 0:
+            self._mmaps = None
+        else:
+            self._mmaps = collections.OrderedDict( (f, _MultiMap()) for f in index )
+
+    def add(self, fact):
+        self._allfacts.append(fact)
+        if self._mmaps:
+            for field, mmap in self._mmaps.items():
+                mmap[field.__get__(fact)] = fact
+
+    def indexed_fields(self):
+        return self._mmaps.keys() if self._mmaps else []
+
+    def get_facts_multimap(self, field):
+        return self._mmaps[field]
+
+    def facts(self):
+        return self._allfacts
+
+    def clear(self):
+        self._allfacts.clear()
+        if self._mmaps:
+            for field, mmap in self._mmaps.items():
+                mmap.clear()
+
+    def select(self):
+        return _Select(self)
+
+    def asp_str(self):
+        out = io.StringIO()
+        for f in self._allfacts:
+            print("{}.".format(f), file=out)
+        data = out.getvalue()
+        out.close()
+        return data
+
+    def __str__(self):
+        self.asp_str()
+
+
+#------------------------------------------------------------------------------
+# Functions to be added to FactBase class or sub-class definitions
+#------------------------------------------------------------------------------
+
+def _fb_base_constructor(self, facts=[], delayed_init=False):
+    _fb_subclass_constructor(self, facts=facts, delayed_init=delayed_init)
+
+def _fb_subclass_constructor(self, facts=None, symbols=None, delayed_init=False):
+    if facts is not None and symbols is not None:
+        raise ValueError("'facts' and 'symbols' are mutually exclusive arguments")
+    if not delayed_init:
+        self._init(facts=facts, symbols=symbols)
+    else:
+        self._delayed_init = lambda : self._init(facts=facts, symbols=symbols)
+
+
+def _fb_base_add(self, fact=None,facts=None):
+    # Always check if we have delayed initialisation
+    if self._delayed_init: self.delayed_init()
+
+    count = 0
+    if fact is not None: count += 1
+    if facts is not None: count += 1
+    if count != 1:
+        raise ValueError(("Must specify exactly one of a "
+                          "'facts' list, or a 'symbols' list"))
+    self._add(fact=fact,facts=facts)
+
+def _fb_subclass_add(self, fact=None,facts=None,symbols=None):
+    # Always check if we have delayed initialisation
+    if self._delayed_init: self.delayed_init()
+
+    count = 0
+    if fact is not None: count += 1
+    if facts is not None: count += 1
+    if symbols is not None: count += 1
+    if count != 1:
+        raise ValueError(("Must specify exactly one of a fact argument, a "
+                          "'facts' list, or a 'symbols' list"))
+
+    self._add(fact=fact,facts=facts,symbols=symbols)
+
+#------------------------------------------------------------------------------
+# A Metaclass for FactBase
+#------------------------------------------------------------------------------
+
+class _FactBaseMeta(type):
+    #--------------------------------------------------------------------------
+    # Allocate the new metaclass
+    #--------------------------------------------------------------------------
+    def __new__(meta, name, bases, dct):
+        plistname = "predicates"
+        ilistname = "indexes"
+
+        # Creating the FactBase class itself
+        if name == "FactBase":
+            dct[plistname] = []
+            dct[ilistname] = []
+            dct["__init__"] = _fb_base_constructor
+            dct["add"] = _fb_base_add
+            return super(_FactBaseMeta, meta).__new__(meta, name, bases, dct)
+
+        # If we're dealing with a subclass then validate the specified
+        # predicates and indexes and add the sub-class constructor
+
+        # Make sure "predicates" is defined and is a non-empty list
+        pset = set()
+        if plistname not in dct:
+            raise TypeError("Error: class definition missing 'predicates' specification")
+        if not dct[plistname]:
+            raise TypeError("Error: class definition empty 'predicates' specification")
+        for pitem in dct[plistname]:
+            pset.add(pitem)
+            if not issubclass(pitem, Predicate):
+                raise TypeError("Error: non-predicate class {} in list".format(pitem))
+
+        # Validate the "indexes" list (and define if if it doesn't exist)
+        if ilistname not in dct: dct[ilistname] = []
+        for iitem in dct[ilistname]:
+            if iitem.parent not in pset:
+                raise TypeError(("Error: parent of index {} item not in the predicates "
+                                  "list").format(iitem))
+        dct["__init__"] = _fb_subclass_constructor
+        dct["add"] = _fb_subclass_add
+        return super(_FactBaseMeta, meta).__new__(meta, name, bases, dct)
+
+#------------------------------------------------------------------------------
 # A FactBase consisting of facts of different types
 #------------------------------------------------------------------------------
 
-class FactBase(object):
-    def __init__(self, index=[]):
+class FactBase(object, metaclass=_FactBaseMeta):
 
-        # Created _FactMaps for the predicate types with indexed fields
+    #--------------------------------------------------------------------------
+    # Internal member functions
+    #--------------------------------------------------------------------------
+
+    # A special purpose initialiser so that we can do delayed initialisation
+    def _init(self, facts=None, symbols=None):
+
+        # Create _FactMaps for the predicate types with indexed fields
         grouped = {}
-        for f in index:
-            if f.parent not in grouped: grouped[f.parent] = []
-            grouped[f.parent].append(f)
-
+        for field in self.indexes:
+            if field.parent not in grouped: grouped[field.parent] = []
+            grouped[field.parent].append(field)
+        for p in self.predicates:
+            if p not in grouped: grouped[p] = []
         self._factmaps = { pt : _FactMap(fs) for pt, fs in grouped.items() }
 
-    def add(self, arg):
-        def _add(fact):
-            predicate_cls = type(fact)
-            if predicate_cls not in self._factmaps: self._factmaps[predicate_cls] = _FactMap()
-            self._factmaps[predicate_cls].add(fact)
+        # add the facts
+        self._add(facts=facts, symbols=symbols)
 
-        if not isinstance(arg, NonLogicalSymbol) and hasattr(arg, '__iter__'):
-            for f in arg: _add(f)
-        else:
-            _add(arg)
+        # flag that initialisation has taken place
+        self._delayed_init = None
+
+    def _add(self, fact=None,facts=None,symbols=None):
+        if fact is not None: self._add_fact(fact)
+        elif facts is not None:
+            for f in facts: self._add_fact(f)
+        elif symbols is not None:
+            for f in fact_generator(self.predicates, symbols):
+                self._add_fact(f)
+
+    def _add_fact(self, fact):
+        predicate_cls = type(fact)
+        if not issubclass(predicate_cls,Predicate):
+            raise TypeError("type of object {} is not a Predicate subclass".format(fact))
+        if predicate_cls not in self._factmaps: self._factmaps[predicate_cls] = _FactMap()
+        self._factmaps[predicate_cls].add(fact)
+
+
+    #--------------------------------------------------------------------------
+    # External member functions
+    #--------------------------------------------------------------------------
 
     def select(self, predicate_cls):
+        # Always check if we have delayed initialisation
+        if self._delayed_init: self._delayed_init()
+
         # If no predicate class exists then create one on the basis that facts
         # of this class may be inserted at some future point.
         if predicate_cls not in self._factmaps:
@@ -1202,13 +1323,32 @@ class FactBase(object):
         return self._factmaps[predicate_cls].select()
 
     def predicate_types(self):
+        # Always check if we have delayed initialisation
+        if self._delayed_init: self._delayed_init()
+
         return set(self._factmaps.keys())
 
     def clear(self):
+        # Always check if we have delayed initialisation
+        if self._delayed_init: self._delayed_init()
+
+        self._symbols = None
+
         for pt, fm in self._factmaps.items():
             fm.clear()
 
+    def facts(self):
+        # Always check if we have delayed initialisation
+        if self._delayed_init: self._delayed_init()
+        fcts = []
+        for fm in self._factmaps.values():
+            fcts.extend(fm.facts())
+        return fcts
+
     def asp_str(self):
+        # Always check if we have delayed initialisation
+        if self._delayed_init: self._delayed_init()
+
         out = io.StringIO()
         for fm in self._factmaps.values():
             print("{}".format(fm.asp_str()), file=out)
@@ -1218,6 +1358,9 @@ class FactBase(object):
 
     def __str__(self):
         return self.asp_str()
+
+#------------------------------------------------------------------------------
+#------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 # Functions that operate on a clingo Control object
@@ -1250,11 +1393,11 @@ def model_contains(model, fact):
         return model.contains(fact.symbol)
     return model.contains(fact)
 
-def model_facts(model, unifiers, atoms=False, terms=False, shown=False):
-    for f in fact_generator(unifiers,
-                            model.symbols(atoms=atoms,terms=terms,shown=shown)):
-        yield f
-
+def model_facts(model, factbase, atoms=False, terms=False, shown=False):
+#    symbols=[ f for f in fact_generator(factbase.predicates,\
+#              model.symbols(atoms=atoms,terms=terms,shown=shown))]
+    return factbase(symbols=model.symbols(atoms=atoms,terms=terms,shown=shown),
+                    delayed_init=True)
 
 #------------------------------------------------------------------------------
 # main

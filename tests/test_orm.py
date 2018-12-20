@@ -1,5 +1,5 @@
 #------------------------------------------------------------------------------
-# Unit tests for the peewee based data model
+# Unit tests for the clorm ORM interface
 #------------------------------------------------------------------------------
 
 import unittest
@@ -14,7 +14,7 @@ from clorm.orm import \
     not_, and_, or_, _StaticComparator, _get_field_comparators, \
     ph_, ph1_, ph2_, \
     _MultiMap, _FactMap, \
-    fact_generator, FactBase, control_add_facts
+    fact_generator, FactBase, control_add_facts, model_facts, model_contains
 
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
@@ -660,9 +660,12 @@ class ORMTestCase(unittest.TestCase):
         bf2 = Bfact(2,"bbb")
         cf1 = Cfact(1)
 
-        fb = FactBase([Afact.num1, Afact.num2, Afact.str1])
-        fb.add([af1,af2,af3,bf1,bf2,cf1])
+#        fb = FactBase([Afact.num1, Afact.num2, Afact.str1])
+        fb = FactBase()
+        facts=[af1,af2,af3,bf1,bf2,cf1]
+        fb.add(facts=facts)
 
+        self.assertEqual(set(fb.facts()), set(facts))
         self.assertEqual(fb.predicate_types(), set([Afact,Bfact,Cfact]))
 
         s_af_all = fb.select(Afact)
@@ -694,12 +697,13 @@ class ORMTestCase(unittest.TestCase):
         fb2 = FactBase()
         s2 = fb2.select(Afact).where(Afact.num1 == 1)
         self.assertEqual(set(s2.get()), set())
-        fb2.add([af1,af2])
+        fb2.add(facts=[af1,af2])
         self.assertEqual(set(s2.get()), set([af1]))
 
         # Test select with placeholders
-        fb3 = FactBase([Afact.num1])
-        fb3.add([af1,af2,af3])
+#        fb3 = FactBase([Afact.num1])
+        fb3 = FactBase()
+        fb3.add(facts=[af1,af2,af3])
         s3 = fb3.select(Afact).where(Afact.num1 == ph_("num1"))
         self.assertEqual(s3.get_unique(num1=1), af1)
         self.assertEqual(s3.get_unique(num1=2), af2)
@@ -720,9 +724,116 @@ class ORMTestCase(unittest.TestCase):
 
 
     #--------------------------------------------------------------------------
+    # Test that subclass factbase works and we can specify indexes
+    #--------------------------------------------------------------------------
+
+    def test_factbase_subclasses(self):
+
+        class Afact(Predicate):
+            num1=IntegerField()
+            num2=IntegerField()
+            str1=StringField()
+        class Bfact(Predicate):
+            num1=IntegerField()
+            str1=StringField()
+        class Cfact(Predicate):
+            num1=IntegerField()
+
+        af1 = Afact(1,10,"bbb")
+        af2 = Afact(2,20,"aaa")
+        af3 = Afact(3,20,"aaa")
+        bf1 = Bfact(1,"aaa")
+        bf2 = Bfact(2,"bbb")
+        cf1 = Cfact(1)
+
+        raws = [
+            Function("afact",[Number(1), Number(10), String("bbb")]),
+            Function("afact",[Number(2), Number(20), String("aaa")]),
+            Function("afact",[Number(3), Number(20), String("aaa")]),
+            Function("bfact",[Number(1),String("aaa")]),
+            Function("bfact",[Number(2),String("bbb")]),
+            Function("cfact",[Number(1)])
+            ]
+
+        class MyFactBase(FactBase):
+            predicates = [Afact, Bfact,Cfact]
+
+        # Test the different ways that facts can be added
+        fb = MyFactBase(symbols=raws)
+        self.assertFalse(fb._delayed_init)
+        self.assertEqual(fb.predicate_types(), set([Afact,Bfact,Cfact]))
+        s_af_all = fb.select(Afact)
+        self.assertEqual(set(s_af_all.get()), set([af1,af2,af3]))
+
+        fb = MyFactBase(symbols=raws, delayed_init=True)
+        self.assertTrue(fb._delayed_init)
+        self.assertEqual(fb.predicate_types(), set([Afact,Bfact,Cfact]))
+        s_af_all = fb.select(Afact)
+        self.assertEqual(set(s_af_all.get()), set([af1,af2,af3]))
+
+        fb = MyFactBase()
+        fb.add(symbols=raws)
+        s_af_all = fb.select(Afact)
+        self.assertEqual(set(s_af_all.get()), set([af1,af2,af3]))
+
+        fb = MyFactBase()
+        fb.add(facts=[af1,af2, af3])
+        s_af_all = fb.select(Afact)
+        self.assertEqual(set(s_af_all.get()), set([af1,af2,af3]))
+
+        fb = MyFactBase()
+        fb.add(af1); fb.add(af2); fb.add(af3);
+        s_af_all = fb.select(Afact)
+        self.assertEqual(set(s_af_all.get()), set([af1,af2,af3]))
+
+        # Test that adding symbols can handle symbols that don't unify
+        class MyFactBase2(FactBase):
+            predicates = [Afact]
+
+        fb = MyFactBase2(symbols=raws)
+        self.assertEqual(fb.predicate_types(), set([Afact]))
+        s_af_all = fb.select(Afact)
+        self.assertEqual(set(s_af_all.get()), set([af1,af2,af3]))
+        s_cf_num1_eq_1 = fb.select(Cfact).where(Cfact.num1 == 1)
+        self.assertEqual(set(s_cf_num1_eq_1.get()), set([]))
+
+
+        # Test badly specified FactBase subclasses
+        with self.assertRaises(TypeError) as ctx:
+            class BadFactBase(FactBase):
+                pass
+        with self.assertRaises(TypeError) as ctx:
+            class BadFactBase(FactBase):
+                predicates = [Afact]
+                indexes = [Afact.num1, Bfact.num1]
+
+        with self.assertRaises(TypeError) as ctx:
+            class BadFactBase(FactBase):
+                predicates = None
+
+        with self.assertRaises(TypeError) as ctx:
+            class BadFactBase(FactBase):
+                predicates = [Afact]
+                indexes = None
+
+
+        # Test the specification of indexes
+        class MyFactBase3(FactBase):
+            predicates = [Afact, Bfact]
+            indexes = [Afact.num1, Bfact.num1]
+
+        fb = MyFactBase3()
+        fb.add(symbols=raws)
+
+        s = fb.select(Afact).where(Afact.num1 == 1)
+        self.assertEqual(s.get_unique(), af1)
+        s = fb.select(Bfact).where(Bfact.num1 == 1)
+        self.assertEqual(s.get_unique(), bf1)
+
+    #--------------------------------------------------------------------------
     # Test processing clingo Model
     #--------------------------------------------------------------------------
-    def test_clingo_integration(self):
+    def test_control_model_integration(self):
         class Afact(Predicate):
             num1=IntegerField()
             num2=IntegerField()
@@ -737,22 +848,23 @@ class ORMTestCase(unittest.TestCase):
         bf1 = Bfact(1,"aaa")
         bf2 = Bfact(2,"bbb")
 
-        fb1 = FactBase([Afact.num1, Bfact.str1])
-        fb1.add([af1,af2,af3,bf1,bf2])
+        fb1 = FactBase()
+        fb1.add(facts=[af1,af2,af3,bf1,bf2])
 
-        symbols = None
+        class MyFacts(FactBase):
+            predicates = [Afact,Bfact]
+
+        fb2 = None
         def on_model(model):
-            nonlocal symbols
-            symbols = model.symbols(atoms=True)
+            nonlocal fb2
+            self.assertTrue(model_contains(model, af1))
+            fb2 = model_facts(model, MyFacts, atoms=True)
 
         ctrl = Control()
         control_add_facts(ctrl,fb1)
         ctrl.ground([("base",[])])
         ctrl.solve(on_model=on_model)
 
-        fb2 = FactBase([Afact.num1, Afact.str1])
-        facts = list(fact_generator([Afact, Bfact], symbols))
-        fb2.add(facts)
         safact1 = fb2.select(Afact).where(Afact.num1 == ph_("num1"))
         safact2 = fb2.select(Afact).where(Afact.num1 < ph_("num1"))
         self.assertEqual(safact1.get_unique(num1=1), af1)

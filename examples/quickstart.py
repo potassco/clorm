@@ -3,8 +3,7 @@ import sys,os
 PARENT_DIR=os.path.abspath("..")
 sys.path.insert(0,PARENT_DIR)
 
-from clorm import monkey; monkey.replace_control() # must call this before
-                                                   # importing clingo
+from clorm import monkey; monkey.patch() # must call this before importing clingo
 
 from clorm import Predicate, ConstantField, IntegerField, FactBase
 from clorm import ph1_
@@ -31,9 +30,18 @@ class Penguin(Predicate):
 class Flies(Predicate):
     name=ConstantField()
 
+class AnimalBase(FactBase):
+    predicates = [Bird,Penguin,Flies]
+    indexes = [Flies.name]
+
+#class AnimalBaseIdx1(AnimalBase):
+#    indexes = [Flies.name]
+
 #------------------------------------------------------
 #
 #------------------------------------------------------
+
+
 
 def on_model(model):
     # To show that the Model wrapper copies the original
@@ -41,8 +49,7 @@ def on_model(model):
     if model.contains(Bird("tweety")): print("YES")
 
     print("========== MODEL: START ==============")
-    fb=FactBase([Flies.name])
-    fb.add(model.facts([Bird,Penguin,Flies], atoms=True))
+    fb = model.facts(AnimalBase, atoms=True)
 
     query=fb.select(Flies).where(Flies.name == ph1_)
     for b in fb.select(Bird).get():
@@ -62,11 +69,10 @@ def main():
     with ctrl.builder() as b:
         parse_program(logic_program, lambda stmt: b.add(stmt))
 
-    inputs=FactBase([Penguin.name])
     f1=Bird("tweety")
     f2=Bird("tux")
     f3=Penguin("tux")
-    inputs.add([f1,f2,f3])
+    inputs=FactBase([f1,f2,f3])
 
     ctrl.add_facts(inputs)
     ctrl.ground([("base",[])])

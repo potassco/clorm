@@ -112,11 +112,14 @@ class Control(object, metaclass=_ControlMetaClass):
         orm.control_release_external(self._ctrl, fact)
 
     # Overide solve and call on_model with a replace Model object
-    def solve(self, *, assumptions=[], on_model=None, on_finish=None,
-              yield_=False, async_=False):
+    def solve(self, *, assumptions=[], on_model=None,
+              on_finish=None,yield_=False,async_=False):
 
-        new_a = [ (f.symbol if isinstance(f, NonLogicalSymbol) \
-                    else f, b) for f,b in assumptions ]
+        if isinstance(assumptions, orm.FactBase):
+            new_a = [f.symbol for f in assumptions.facts()]
+        else:
+            new_a = [ (f.symbol if isinstance(f, NonLogicalSymbol) \
+                       else f, b) for f,b in assumptions ]
 
         @functools.wraps(on_model)
         def on_model_wrapper(model):
@@ -136,7 +139,7 @@ class Control(object, metaclass=_ControlMetaClass):
 # Now patch the clingo objects
 #------------------------------------------------------------------------------
 
-def replace_control():
+def patch():
     clingo.Control=Control
 
 #------------------------------------------------------------------------------
