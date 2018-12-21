@@ -17,7 +17,6 @@ from clingo import Control, parse_program
 logic_program='''
 flies(X) :- bird(X), not penguin(X).
 '''
-
 #------------------------------------------------------
 # The data model
 #------------------------------------------------------
@@ -30,7 +29,7 @@ class Penguin(Predicate):
 class Flies(Predicate):
     name=ConstantField()
 
-class AnimalBase(FactBase):
+class AnimalFB(FactBase):
     predicates = [Bird,Penguin,Flies]
     indexes = [Flies.name]
 
@@ -41,15 +40,13 @@ class AnimalBase(FactBase):
 #
 #------------------------------------------------------
 
-
-
 def on_model(model):
     # To show that the Model wrapper copies the original
     for a in model.symbols(atoms=True): print("ATOM: {}".format(a))
     if model.contains(Bird("tweety")): print("YES")
 
     print("========== MODEL: START ==============")
-    fb = model.facts(AnimalBase, atoms=True)
+    fb = model.facts(AnimalFB, atoms=True)
 
     query=fb.select(Flies).where(Flies.name == ph1_)
     for b in fb.select(Bird).get():
@@ -65,7 +62,6 @@ def on_model(model):
 
 def main():
     ctrl = Control()
-    print("CONTROL: {}".format(ctrl))
     with ctrl.builder() as b:
         parse_program(logic_program, lambda stmt: b.add(stmt))
 

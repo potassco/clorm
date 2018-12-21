@@ -274,7 +274,8 @@ class _Field(Field):
     def __get__(self, instance, owner=None):
         if not instance: return self
         if not isinstance(instance, self._parent_cls):
-            raise TypeError("field accessor doesn't match instance type")
+            raise TypeError(("field {} doesn't match type "
+                             "{}").format(self, type(instance).__name__))
         return instance._field_values[self._field_name]
 #            return field_defn.cltopy(self._symbol.arguments[idx])
 
@@ -712,16 +713,7 @@ def _get_field_comparators(comparator):
 class Placeholder(abc.ABC):
     pass
 
-class _Placeholder(Placeholder):
-    @property
-    @abc.abstractmethod
-    def value(self): pass
-
-    @value.setter
-    @abc.abstractmethod
-    def value(self, v): pass
-
-class _NamedPlaceholder(_Placeholder):
+class _NamedPlaceholder(Placeholder):
     def __init__(self, name, default=None):
         self._name = str(name)
         self._default = default
@@ -729,16 +721,14 @@ class _NamedPlaceholder(_Placeholder):
     @property
     def name(self):
         return self._name
-    def reset(self):
-        self._value = self._default
     @property
-    def value(self):
-        return self._value
-    @value.setter
-    def value(self, v):
-        self._value = v
+    def default(self):
+        return self._default
+    def __str__(self):
+        tmpstr = "" if not self._default else ",{}"
+        return "ph_({}{})".format(self._name, tmpstr)
 
-class _PositionalPlaceholder(_Placeholder):
+class _PositionalPlaceholder(Placeholder):
     def __init__(self, posn):
         self._posn = posn
         self._value = None
@@ -747,71 +737,15 @@ class _PositionalPlaceholder(_Placeholder):
         return self._posn
     def reset(self):
         self._value = None
-    @property
-    def value(self):
-        return self._value
-    @value.setter
-    def value(self, v):
-        self._value = v
+    def __str__(self):
+        return "ph{}_".format(self._posn+1)
 
 def ph_(name,default=None):
     return _NamedPlaceholder(name,default)
-def ph1_(): return _PositionalPlaceholder(0)
-def ph2_(): return _PositionalPlaceholder(1)
-def ph3_(): return _PositionalPlaceholder(2)
-def ph4_(): return _PositionalPlaceholder(3)
-
-
-#------------------------------------------------------------------------------
-#
-#------------------------------------------------------------------------------
-class _PlaceholderManager(object):
-    def __init__(self):
-        self._posn2phs = {}
-        self._name2phs = {}
-
-    def register(self, ph):
-        if isinstance(ph, _PositionalPlaceholder):
-            if ph.posn not in self._posn2phs: self._posn2phs[ph.posn] = [ph]
-            else: self._posn2phs[ph.posn].append(ph)
-        if isinstance(ph, _NamedPlaceholder):
-            if ph.name not in self._name2phs: self._name2phs[ph.name] = [ph]
-            else: self._name2phs[ph.name].append(ph)
-
-    def validate(self):
-        num_posn = len(self._posn2phs)
-        for i in range(num_posn):
-            if i not in self._posn2phs:
-                raise ValueError("missing positional placeholder ph{}_".format(i+1))
-
-    def set_values(self, *args, **kwargs):
-        if not self._name2phs and not self._posn2phs and not kwargs and not args: return
-
-        # Set the positional arguments
-        if len(self._posn2phs) != len(args):
-            raise TypeError("mismatched positional placeholder arguments")
-        for (i,v) in enumerate(args):
-            for ph in self._posn2phs[i]: ph.value = v
-
-        # Validate that the named arguments are all valid placeholder names
-        kwkeys = set(kwargs.keys())
-        namedkeys = set(self._name2phs.keys())
-        if not kwkeys.issubset(namedkeys):
-            raise TypeError(("named arguments don't match named placeholders: "
-                             "{}").format(list(namedkeys-kwkeys)))
-
-        # Set and track the values of the named placeholders. For the missing
-        # names reset and make sure they are have valid defaults.
-        for (n,ph) in self._name2phs.items():
-            if n in kwargs:
-                for ph in self._name2phs[n]: ph.value = kwargs[n]
-            else:
-                for ph in self._name2phs[n]:
-                    ph.reset()
-                    if ph.value is None:
-                        raise TypeError(("missing named placeholder with no "
-                                         "default: {}").format(n))
-
+ph1_ = _PositionalPlaceholder(0)
+ph2_ = _PositionalPlaceholder(1)
+ph3_ = _PositionalPlaceholder(2)
+ph4_ = _PositionalPlaceholder(3)
 
 #------------------------------------------------------------------------------
 # A Comparator is a boolean functor that takes a fact instance and returns
@@ -821,7 +755,7 @@ class _PlaceholderManager(object):
 class Comparator(abc.ABC):
 
     @abc.abstractmethod
-    def __call__(self,fact):
+    def __call__(self,fact, *args, **kwargs):
         pass
 
 #------------------------------------------------------------------------------
@@ -831,7 +765,7 @@ class Comparator(abc.ABC):
 class _StaticComparator(Comparator):
     def __init__(self, value):
         self._value=bool(value)
-    def __call__(self,fact):
+    def __call__(self,fact, *args, **kwargs):
         return self._value
     def simpified(self):
         return self
@@ -863,22 +797,33 @@ class _FieldComparator(Comparator):
         elif not isinstance(arg1, _Field) and not isinstance(arg2, _Field):
             self._static = True
             self._value = compop(arg1,arg2)
-        elif callable(self._arg2):
-            self._arg2 = self._arg2()
 
-    def __call__(self, fact):
+    def __call__(self, fact, *args, **kwargs):
         if self._static: return self._value
-        try:
-            def getargval(arg,fact):
-                if isinstance(arg, _Field): return arg.__get__(fact)
-                elif isinstance(arg, _Placeholder): return arg.value
-                else: return arg
 
-            v1 = getargval(self._arg1, fact)
-            v2 = getargval(self._arg2, fact)
-            return self._compop(v1,v2)
-        except (KeyError, TypeError) as e:
-            return False
+        # Get the value of an argument (resolving placeholder)
+        def getargval(arg):
+            if isinstance(arg, _Field): return arg.__get__(fact)
+            elif isinstance(arg, _PositionalPlaceholder):
+                if arg.posn >= len(args):
+                    raise TypeError(("missing argument in {} for placeholder "
+                                     "{}").format(args, arg))
+                return args[arg.posn]
+            elif isinstance(arg, _NamedPlaceholder):
+                if arg.name in kwargs:
+                    return kwargs[arg.name]
+                elif arg.default is not None:
+                    return arg.default
+                else:
+                    raise TypeError(("missing argument in {} for named "
+                                     "placeholder with no default "
+                                     "{}").format(kwargs, arg))
+            else: return arg
+
+        # Get the values of the two arguments and then calculate the operator
+        v1 = getargval(self._arg1)
+        v2 = getargval(self._arg2)
+        return self._compop(v1,v2)
 
     def simplified(self):
         if self._static: return _StaticComparator(self._value)
@@ -886,8 +831,8 @@ class _FieldComparator(Comparator):
 
     def placeholders(self):
         tmp = []
-        if isinstance(self._arg1, _Placeholder): tmp.append(self._arg1)
-        if isinstance(self._arg2, _Placeholder): tmp.append(self._arg2)
+        if isinstance(self._arg1, Placeholder): tmp.append(self._arg1)
+        if isinstance(self._arg2, Placeholder): tmp.append(self._arg2)
         return tmp
 
     def indexable(self):
@@ -922,16 +867,16 @@ class _BoolComparator(Comparator):
         self._boolop=boolop
         self._args = args
 
-    def __call__(self, fact):
+    def __call__(self, fact, *args, **kwargs):
         if self._boolop == operator.not_:
-            return operator.not_(self._args[0](fact))
+            return operator.not_(self._args[0](fact,*args,**kwargs))
         elif self._boolop == operator.and_:
             for a in self._args:
-                if not a(fact): return False
+                if not a(fact,*args,**kwargs): return False
             return True
         elif self._boolop == operator.or_:
             for a in self._args:
-                if a(fact): return True
+                if a(fact,*args,**kwargs): return True
             return False
         raise ValueError("unsupported operator: {}".format(self._boolop))
 
@@ -1085,19 +1030,17 @@ class Delete(abc.ABC):
     def execute(self, *args, **kwargs):
         pass
 
-
-
-
 #------------------------------------------------------------------------------
 # A selection over a _FactMap
 #------------------------------------------------------------------------------
+
 class _Select(Select):
+
     def __init__(self, factmap):
         self._factmap = factmap
         self._index_priority = { f:p for (p,f) in enumerate(factmap.indexed_fields()) }
         self._where = None
         self._indexable = None
-        self._phmanager = _PlaceholderManager()
 
     def where(self, *expressions):
         if self._where:
@@ -1110,7 +1053,6 @@ class _Select(Select):
             self._where = _simplify_fact_comparator(and_(*expressions))
 
         self._indexable = self._primary_search(self._where)
-        for ph in self._get_placeholders(self._where): self._phmanager.register(ph)
         return self
 
     def _primary_search(self, where):
@@ -1145,23 +1087,36 @@ class _Select(Select):
 
     def get(self, *args, **kwargs):
         # Function to get a value - resolving placeholder if necessary
-        def get_value(v):
-            if isinstance(v, Placeholder): return v.value
-            return v
+        def get_value(arg):
+            if isinstance(arg, _PositionalPlaceholder):
+                if arg.posn >= len(args):
+                    raise TypeError(("missing argument in {} for placeholder "
+                                     "{}").format(args, arg))
+                return args[arg.posn]
+            elif isinstance(arg, _NamedPlaceholder):
+                if arg.name in kwargs:
+                    return kwargs[arg.name]
+                elif arg.default is not None:
+                    return arg.default
+                else:
+                    raise TypeError(("missing argument in {} for named "
+                                     "placeholder with no default "
+                                     "{}").format(kwargs, arg))
+            else: return arg
 
         # Set any placeholder values
-        self._phmanager.set_values(*args, **kwargs)
+#        self._phmanager.set_values(*args, **kwargs)
 
         # If there is no index test all instances else use the index
         if not self._indexable:
             for f in self._factmap.facts():
                 if not self._where: yield f
-                elif self._where and self._where(f): yield(f)
+                elif self._where and self._where(f,*args,**kwargs): yield(f)
         else:
             mmap=self._factmap.get_facts_multimap(self._indexable[0])
             for key in mmap.keys_op(self._indexable[1], get_value(self._indexable[2])):
                 for f in mmap[key]:
-                    if self._where(f): yield f
+                    if self._where(f,*args,**kwargs): yield f
 
     def get_unique(self, *args, **kwargs):
         count=0
