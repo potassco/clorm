@@ -1016,6 +1016,15 @@ class _MultiMap(object):
         elif op == operator.ge: return self.keys_ge(key)
         raise ValueError("unsupported operator")
 
+    def del_values(self, keys, valueset):
+        for k in keys:
+            vs = self._key2values[k]
+            newvs = [ f for f in vs if f not in valueset ]
+            if not newvs:
+                del self._key2values[k]
+                del self._keylist[bisect.bisect_left(self._keylist, k)]
+            else: self._key2values[k] = newvs
+
     def clear(self):
         self._keylist = []
         self._key2values = {}
@@ -1119,14 +1128,6 @@ class _Select(Select):
                         indexable = tmp
         return indexable
 
-    def  _get_placeholders(self, where):
-        if isinstance(where, _FieldComparator): return where.placeholders()
-        tmp = []
-        if isinstance(where, _BoolComparator):
-            for arg in where.args:
-                tmp.extend(self._get_placeholders(arg))
-        return tmp
-
 #    @property
     def _debug(self):
         return self._indexable
@@ -1175,6 +1176,54 @@ class _Select(Select):
 
 
 #------------------------------------------------------------------------------
+# A deletion over a _FactMap
+# - a stupid implementation that iterates over all facts and indexes
+#------------------------------------------------------------------------------
+
+class _Delete(Delete):
+
+    def __init__(self, factmap):
+        self._factmap = factmap
+        self._index_prior = { f:p for (p,f) in enumerate(factmap.indexed_fields()) }
+        self._where = None
+
+    def where(self, *expressions):
+        if self._where:
+            raise ValueError("trying to specify multiple where clauses")
+        if not expressions:
+            self._where = None
+        elif len(expressions) == 1:
+            self._where = _simplify_fact_comparator(expressions[0])
+        else:
+            self._where = _simplify_fact_comparator(and_(*expressions))
+        return self
+
+    def execute(self, *args, **kwargs):
+        # If there is no where clause then delete everything
+        if not self._where:
+            num_deleted = len(self._factmap.facts())
+            self._factmap.clear()
+            return num_deleted
+
+        # Gather all the facts to delete
+        to_delete = \
+            set([ f for f in self._factmap.facts() if self._where(f,*args,**kwargs) ])
+
+        # Replace the all facts by a new list with the matching facts removed
+        self._factmap._allfacts = \
+            [ f for f in self._factmap.facts() if f not in to_delete ]
+
+        # Remove the facts from each multimap
+        for fid, field in enumerate(self._factmap.indexed_fields()):
+            keys = set([ field.__get__(f) for f in to_delete ])
+            mm  = self._factmap.get_facts_multimap(field)
+            mm.del_values(keys, to_delete)
+
+        # return the number deleted
+        return len(to_delete)
+
+
+#------------------------------------------------------------------------------
 # A map for facts of the same type - Indexes can be built to allow for fast
 # lookups based on a field value. The order that the fields are specified in the
 # index matters as it determines the priority of the index.
@@ -1211,6 +1260,9 @@ class _FactMap(object):
 
     def select(self):
         return _Select(self)
+
+    def delete(self):
+        return _Delete(self)
 
     def asp_str(self):
         out = io.StringIO()
@@ -1465,11 +1517,13 @@ class FactBase(object, metaclass=_FactBaseMeta):
         # Always check if we have delayed initialisation
         if self._delayed_init: self._delayed_init()
 
-        # If no predicate class exists then create one on the basis that facts
-        # of this class may be inserted at some future point.
-        if predicate_cls not in self._factmaps:
-            self._factmaps[predicate_cls] = _FactMap()
         return self._factmaps[predicate_cls].select()
+
+    def delete(self, predicate_cls):
+        # Always check if we have delayed initialisation
+        if self._delayed_init: self._delayed_init()
+
+        return self._factmaps[predicate_cls].delete()
 
     def predicate_types(self):
         # Always check if we have delayed initialisation
