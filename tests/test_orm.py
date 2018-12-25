@@ -14,7 +14,8 @@ from clorm.orm import \
     not_, and_, or_, _StaticComparator, _get_field_comparators, \
     ph_, ph1_, ph2_, \
     _MultiMap, _FactMap, \
-    fact_generator, FactBase, control_add_facts, model_facts, model_contains
+    fact_generator, FactBase, FactBaseHelper, \
+    control_add_facts, model_facts, model_contains
 
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
@@ -64,26 +65,59 @@ class ORMTestCase(unittest.TestCase):
         self.assertTrue(fstr.unifies(cstr1))
         self.assertTrue(fconst.unifies(csim1))
 
-    #--------------------------------------------------------------------------
-    # Test the use of getters and setters are correct
-    #--------------------------------------------------------------------------
-    def test_field_inout_functions(self):
 
-        # Create an integer field but we want to interface to it using reals
-        # with 100 x scaling.
-        class Fact(Predicate):
-            anum = IntegerField(infunc=lambda x: int(x*100),
-                                outfunc=lambda x: x/100.0,
-                                default=1.5)
-        f1=Function("fact",[Number(150)])
-        f2=Function("fact",[Number(50)])
+    #--------------------------------------------------------------------------
+    # Simple test to make sure the default getters and setters are correct
+    #--------------------------------------------------------------------------
+    def test_pytocl_and_cltopy_and_unifies(self):
+        num1 = 1
+        str1 = "string"
+        sim1 = "name"
+        cnum1 = Number(num1)
+        cstr1 = String(str1)
+        csim1 = Function(sim1,[])
+        self.assertEqual(num1, integer_cltopy(cnum1))
+        self.assertEqual(str1, string_cltopy(cstr1))
+        self.assertEqual(sim1, constant_cltopy(csim1))
 
-        af1=Fact()
-        af2=Fact(anum=0.5)
-        self.assertEqual(f1, af1.symbol)
-        self.assertEqual(f2, af2.symbol)
-        self.assertEqual(af1.anum, 1.5)
-        self.assertEqual(af2.anum, 0.5)
+        self.assertEqual(cnum1, integer_pytocl(num1))
+        self.assertEqual(cstr1, string_pytocl(str1))
+        self.assertEqual(csim1, constant_pytocl(sim1))
+
+        self.assertTrue(integer_unifies(cnum1))
+        self.assertTrue(string_unifies(cstr1))
+        self.assertTrue(constant_unifies(csim1))
+
+        self.assertFalse(integer_unifies(csim1))
+        self.assertFalse(string_unifies(cnum1))
+        self.assertFalse(constant_unifies(cstr1))
+
+        fint = IntegerField()
+        fstr = StringField()
+        fconst = ConstantField()
+
+        self.assertTrue(fint.unifies(cnum1))
+        self.assertTrue(fstr.unifies(cstr1))
+        self.assertTrue(fconst.unifies(csim1))
+
+
+    #--------------------------------------------------------------------------
+    # Test setting index for a field
+    #--------------------------------------------------------------------------
+    def test_field_index(self):
+        fint1 = IntegerField()
+        fstr1 = StringField()
+        fconst1 = ConstantField()
+        fint2 = IntegerField(index=True)
+        fstr2 = StringField(index=True)
+        fconst2 = ConstantField(index=True)
+
+        self.assertFalse(fint1.index)
+        self.assertFalse(fstr1.index)
+        self.assertFalse(fconst1.index)
+        self.assertTrue(fint2.index)
+        self.assertTrue(fstr2.index)
+        self.assertTrue(fconst2.index)
 
     #--------------------------------------------------------------------------
     # Test that we can define predicates using the class syntax and test that
@@ -729,6 +763,9 @@ class ORMTestCase(unittest.TestCase):
         class Cfact(Predicate):
             num1=IntegerField()
 
+        class FactSet(FactBase):
+            predicates = [Afact,Bfact,Cfact]
+
         af1 = Afact(1,10,"bbb")
         af2 = Afact(2,20,"aaa")
         af3 = Afact(3,20,"aaa")
@@ -737,7 +774,7 @@ class ORMTestCase(unittest.TestCase):
         cf1 = Cfact(1)
 
 #        fb = FactBase([Afact.num1, Afact.num2, Afact.str1])
-        fb = FactBase()
+        fb = FactSet()
         facts=[af1,af2,af3,bf1,bf2,cf1]
         fb.add(facts=facts)
 
@@ -770,7 +807,7 @@ class ORMTestCase(unittest.TestCase):
         self.assertEqual(set(s_cf_num1_eq_1.get()), set())
 
         # Test that the select can work with an initially empty factbase
-        fb2 = FactBase()
+        fb2 = FactSet()
         s2 = fb2.select(Afact).where(Afact.num1 == 1)
         self.assertEqual(set(s2.get()), set())
         fb2.add(facts=[af1,af2])
@@ -778,7 +815,7 @@ class ORMTestCase(unittest.TestCase):
 
         # Test select with placeholders
 #        fb3 = FactBase([Afact.num1])
-        fb3 = FactBase()
+        fb3 = FactSet()
         fb3.add(facts=[af1,af2,af3])
         s3 = fb3.select(Afact).where(Afact.num1 == ph_("num1"))
         self.assertEqual(s3.get_unique(num1=1), af1)
@@ -797,6 +834,114 @@ class ORMTestCase(unittest.TestCase):
 
         with self.assertRaises(TypeError) as ctx:
             self.assertEqual(set(list(s5.get(1))), set([]))
+
+    #--------------------------------------------------------------------------
+    # Test that a factbase only imports from the specified predicates
+    #--------------------------------------------------------------------------
+
+    def test_factbase_import(self):
+
+        class Afact(Predicate):
+            num1=IntegerField()
+            num2=IntegerField()
+            str1=StringField()
+        class Bfact(Predicate):
+            num1=IntegerField()
+            str1=StringField()
+        class Cfact(Predicate):
+            num1=IntegerField()
+
+        class FactSet(FactBase):
+            predicates = [Afact,Bfact]
+
+        af1 = Afact(1,10,"bbb")
+        bf1 = Bfact(1,"aaa")
+        cf1 = Cfact(1)
+
+        fs1 = FactSet()
+        self.assertEqual(fs1.add(facts=[af1,bf1,cf1]), 2)
+        self.assertEqual(fs1.select(Afact).get_unique(), af1)
+        self.assertEqual(fs1.select(Bfact).get_unique(), bf1)
+
+
+    #--------------------------------------------------------------------------
+    # Test the FactBaseHelper
+    #--------------------------------------------------------------------------
+    def test_factbasehelper(self):
+
+        # Using the FactBaseHelper as a decorator
+        fbh1 = FactBaseHelper()
+
+        # decorator with argument to specify an index
+        @fbh1.register("num1","num2")
+        class Afact(Predicate):
+            num1=IntegerField()
+            num2=IntegerField()
+            str1=StringField()
+
+        # decorator without argument
+        @fbh1.register
+        class Bfact(Predicate):
+            num1=IntegerField()
+            str1=StringField()
+
+        self.assertEqual(fbh1.predicates, [Afact,Bfact])
+        self.assertEqual(fbh1.indexes, [Afact.num1,Afact.num2])
+
+        # Test that when registering an index we only allow a field whose parent
+        # predicate is already registered.
+        with self.assertRaises(TypeError) as ctx:
+            class Tmp(Predicate):
+                num1=IntegerField()
+            fbh1.register_index(Tmp.num1)
+
+        # Using the FactBaseHelper as a ContextManager and using delayed index
+        # registration.
+        with FactBaseHelper() as fbh2:
+
+            class Cfact(Predicate):
+                num1=IntegerField()
+
+            class Dfact(Predicate):
+                num1=IntegerField()
+            fbh2.register_index(Dfact.num1)
+
+        self.assertEqual(fbh2.predicates, [Cfact,Dfact])
+        self.assertEqual(fbh2.indexes, [Dfact.num1])
+
+        # Test the field.index
+        with FactBaseHelper() as fbh3:
+
+            class Mess(ComplexTerm):
+                str1=StringField()
+                str2=StringField()
+
+            class Efact(Predicate):
+                num1=IntegerField(index=True)
+                num3=IntegerField()
+                mess=ComplexField(Mess)
+
+        self.assertEqual(fbh3.predicates, [Efact])
+        self.assertEqual(fbh3.indexes, [Efact.num1])
+
+        FactDB = fbh3.create_class("FactDB")
+        self.assertTrue(issubclass(FactDB, FactBase))
+        self.assertEqual(FactDB.predicates, [Efact])
+        self.assertEqual(FactDB.indexes, [Efact.num1])
+        fdb = FactDB()
+        ef = Efact(1,1,Mess("str1","str2"))
+        self.assertEqual(fdb.add(ef), 1)
+
+        # Test with field.index suppressed
+        fbh4 = FactBaseHelper(suppress_auto_index=True)  # alternative syntax
+        with fbh4:
+
+            class Ffact(Predicate):
+                num1=IntegerField(index=True)
+                num3=IntegerField()
+
+        self.assertEqual(fbh4.predicates, [Ffact])
+        self.assertEqual(fbh4.indexes, [])
 
     #--------------------------------------------------------------------------
     # Test that subclass factbase works and we can specify indexes
@@ -917,17 +1062,17 @@ class ORMTestCase(unittest.TestCase):
             num1=IntegerField()
             str1=StringField()
 
+        class MyFacts(FactBase):
+            predicates = [Afact,Bfact]
+
         af1 = Afact(1,10,"bbb")
         af2 = Afact(2,20,"aaa")
         af3 = Afact(3,20,"aaa")
         bf1 = Bfact(1,"aaa")
         bf2 = Bfact(2,"bbb")
 
-        fb1 = FactBase()
+        fb1 = MyFacts()
         fb1.add(facts=[af1,af2,af3,bf1,bf2])
-
-        class MyFacts(FactBase):
-            predicates = [Afact,Bfact]
 
         fb2 = None
         def on_model(model):

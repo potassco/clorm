@@ -48,7 +48,7 @@ class MonkeyTestCase(unittest.TestCase):
             nonlocal fb2
             fb2 = model.facts(MyFacts, atoms=True)
 
-        fb1 = FactBase(facts=[af1,af2,af3,bf1,bf2])
+        fb1 = MyFacts(facts=[af1,af2,af3,bf1,bf2])
         ctrl = Control()
         ctrl.add_facts(fb1)
         ctrl.ground([("base",[])])

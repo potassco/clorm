@@ -6,6 +6,7 @@
 #import logging
 #import os
 import io
+import contextlib
 import inspect
 import operator
 import collections
@@ -26,6 +27,7 @@ __all__ = [
     'Comparator',
     'Select',
     'FactBase',
+    'FactBaseHelper',
     'integer_cltopy',
     'string_cltopy',
     'constant_cltopy',
@@ -122,13 +124,14 @@ def constant_unifies(term):
 
 class SimpleField(object):
     def __init__(self, inner_cltopy, inner_pytocl, unifies,
-                 outfunc=None, infunc=None, default=None):
+                 outfunc=None, infunc=None, default=None, index=False):
         self._inner_cltopy = inner_cltopy
         self._inner_pytocl = inner_pytocl
         self._unifies = unifies
         self._outfunc = outfunc
         self._infunc = infunc
         self._default = default
+        self._index = index
 
     def pytocl(self, v):
         if self._infunc: return self._inner_pytocl(self._infunc(v))
@@ -146,31 +149,38 @@ class SimpleField(object):
         return self._default
 
     @property
+    def index(self):
+        return self._index
+
+    @property
     def is_field_defn(self): return True
 
 class IntegerField(SimpleField):
-    def __init__(self, outfunc=None, infunc=None, default=None):
+    def __init__(self, outfunc=None, infunc=None, default=None, index=False):
         super(IntegerField,self).__init__(inner_cltopy=integer_cltopy,
                                           inner_pytocl=integer_pytocl,
                                           unifies=integer_unifies,
                                           outfunc=outfunc,infunc=infunc,
-                                          default=default)
+                                          default=default,
+                                          index=index)
 
 class StringField(SimpleField):
-    def __init__(self, outfunc=None, infunc=None, default=None):
+    def __init__(self, outfunc=None, infunc=None, default=None, index=False):
         super(StringField,self).__init__(inner_cltopy=string_cltopy,
                                          inner_pytocl=string_pytocl,
                                          unifies=string_unifies,
                                          outfunc=outfunc,infunc=infunc,
-                                         default=default)
+                                         default=default,
+                                         index=index)
 
 class ConstantField(SimpleField):
-    def __init__(self, outfunc=None, infunc=None, default=None):
+    def __init__(self, outfunc=None, infunc=None, default=None, index=False):
         super(ConstantField,self).__init__(inner_cltopy=constant_cltopy,
                                            inner_pytocl=constant_pytocl,
                                            unifies=constant_unifies,
                                            outfunc=outfunc,infunc=infunc,
-                                           default=default)
+                                           default=default,
+                                           index=index)
 
 #------------------------------------------------------------------------------
 # A ComplexField definition allows you to wrap an existing NonLogicalSymbol
@@ -386,8 +396,7 @@ def _is_field_defn(obj):
     try:
         if obj.is_field_defn: return True
     except AttributeError:
-        pass
-    return False
+        return False
 
 # build the metadata for the NonLogicalSymbol
 def _make_nls_metadata(class_name, dct):
@@ -409,8 +418,9 @@ def _make_nls_metadata(class_name, dct):
         elif istuple: name = ""
 
     reserved = set(["meta", "symbol", "clone"])
-    # Generate the field definitions
-    field_defns = collections.OrderedDict()
+
+    # Generate the fields - NOTE: relies on dct being an OrderedDict()
+    fields = []
     idx = 0
     for field_name, field_defn in dct.items():
         if not _is_field_defn(field_defn): continue
@@ -420,11 +430,14 @@ def _make_nls_metadata(class_name, dct):
         if field_name in reserved:
             raise ValueError(("Error: invalid field name: '{}' "
                               "is a reserved keyword").format(field_name))
-        field_defns[field_name] = field_defn
+
+        field = _Field(field_name, idx, field_defn)
+        dct[field_name] = field
+        fields.append(field)
         idx += 1
 
     # Now create the MetaData object
-    return NonLogicalSymbol.MetaData(name=name,field_defns=field_defns)
+    return NonLogicalSymbol.MetaData(name=name,fields=fields)
 
 #------------------------------------------------------------------------------
 # A Metaclass for the NonLogicalSymbol base class
@@ -443,20 +456,12 @@ class _NonLogicalSymbolMeta(type):
         if name == "NonLogicalSymbol":
             return super(_NonLogicalSymbolMeta, meta).__new__(meta, name, bases, dct)
 
+        # Create the metadata and populate the class dict (including the fields)
         md = _make_nls_metadata(name, dct)
 
-        # Set the _meta attribute and constructor
+        # Set the _meta attribute and constuctor
         dct["_meta"] = md
         dct["__init__"] = _nls_constructor
-
-        # Create a property attribute corresponding to each field name while
-        # also making the values indexable.
-        field_accessors = []
-        for idx, (field_name, field_defn) in enumerate(md.field_defns.items()):
-            fa = _Field(field_name, idx, field_defn)
-            dct[field_name] = fa
-            field_accessors.append(fa)
-        dct["_field_accessors"] = tuple(field_accessors)
 
         return super(_NonLogicalSymbolMeta, meta).__new__(meta, name, bases, dct)
 
@@ -469,7 +474,7 @@ class _NonLogicalSymbolMeta(type):
         # but the class itself does not get created until after __new__. Hence
         # we have to set the pointer within the field back to the this class
         # here.
-        for idx, (field_name, field_defn) in enumerate(md.field_defns.items()):
+        for field_name, field_defn in md.field_defns.items():
             dct[field_name].set_parent(cls)
 
 #        print("CLS: {}".format(cls) + "I am still called '" + name +"'")
@@ -487,9 +492,9 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
     # A Metadata internal object for each NonLogicalSymbol class
     #--------------------------------------------------------------------------
     class MetaData(object):
-        def __init__(self, name, field_defns):
+        def __init__(self, name, fields):
             self._name = name
-            self._field_defns = field_defns
+            self._fields = tuple(fields)
 
         @property
         def name(self):
@@ -497,22 +502,26 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
 
         @property
         def field_defns(self):
-            return self._field_defns
+            return { f.field_name : f.field_defn for f in self._fields }
 
         @property
         def field_names(self):
-            return [ fn for fn, fd in self._field_defns.items() ]
+            return [ f.field_name for f in self._fields ]
+
+        @property
+        def fields(self):
+            return self._fields
 
         @property
         def arity(self):
-            return len(self.field_names)
+            return len(self._fields)
 
         @property
         def is_tuple(self):
             return self.name == ""
 
     #--------------------------------------------------------------------------
-    # Properties and functions the NonLogicalSymbol
+    # Properties and functions for NonLogicalSymbol
     #--------------------------------------------------------------------------
 
     # Get the underlying clingo symbol object
@@ -581,10 +590,10 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
     # Overloaded index operator to access the values
     #--------------------------------------------------------------------------
     def __getitem__(self, idx):
-        return self._field_accessors[idx].__get__(self)
+        return self.meta.fields[idx].__get__(self)
 
     def __setitem__(self, idx,v):
-        return self._field_accessors[idx].__set__(self,v)
+        return self.meta.fields[idx].__set__(self,v)
 
     #--------------------------------------------------------------------------
     # Overloaded operators
@@ -648,10 +657,19 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
         return self.__str__()
 
 #------------------------------------------------------------------------------
-# Convenience aliases for NonLogicalSymbol - this makes it more intuitive
+# Predicate and ComplexTerm are now subclasses of NonLogicalSymbol rather than
+# aliases. This makes the FactBaseHelper's behaviour more intuitive.
 #------------------------------------------------------------------------------
-Predicate=NonLogicalSymbol
-ComplexTerm=NonLogicalSymbol
+class Predicate(NonLogicalSymbol):
+    def __init__(self, *args, **kwargs):
+        super(Predicate, self).__init__(*args, **kwargs)
+
+class ComplexTerm(NonLogicalSymbol):
+    def __init__(self, *args, **kwargs):
+        super(ComplexTerm, self).__init__(*args, **kwargs)
+
+#Predicate=NonLogicalSymbol
+#ComplexTerm=NonLogicalSymbol
 
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
@@ -994,7 +1012,8 @@ class _MultiMap(object):
         del self._keylist[posn]
 
     def __str__(self):
-        tmp = ", ".join(["{} : {}".format(key, self._key2values[key]) for key in self._keylist])
+        tmp = ", ".join(["{} : {}".format(
+            key, self._key2values[key]) for key in self._keylist])
         return "{{ {} }}".format(tmp)
 
 
@@ -1104,9 +1123,6 @@ class _Select(Select):
                                      "{}").format(kwargs, arg))
             else: return arg
 
-        # Set any placeholder values
-#        self._phmanager.set_values(*args, **kwargs)
-
         # If there is no index test all instances else use the index
         if not self._indexable:
             for f in self._factmap.facts():
@@ -1182,11 +1198,95 @@ class _FactMap(object):
 
 
 #------------------------------------------------------------------------------
+# FactBaseHelper offers a decorator as well as a context manager interface for
+# gathering predicate and index definitions to be used in defining a FactBase
+# subclass.
+# ------------------------------------------------------------------------------
+class FactBaseHelper(object):
+    def __init__(self, suppress_auto_index=False):
+        self._predicates = []
+        self._indexes = []
+        self._predset = set()
+        self._indset = set()
+        self._in_context = False
+        self._delayed_ri = []
+        self._suppress_auto_index = suppress_auto_index
+
+    def register_predicate(self, cls):
+        if cls in self._predset: return    # ignore if already registered
+        if not issubclass(cls, Predicate):
+            raise TypeError("{} is not a Predicate sub-class".format(cls))
+        self._predset.add(cls)
+        self._predicates.append(cls)
+        if self._suppress_auto_index: return
+
+        # Register the fields that have the index flag set
+        for field in cls.meta.fields:
+            with contextlib.suppress(AttributeError):
+                if field.field_defn.index: self.register_index(field)
+
+    def register_index(self, field):
+        def ri():
+            if field in self._indset: return    # ignore if already registered
+            if isinstance(field, Field) and field.parent in self.predicates:
+                self._indset.add(field)
+                self._indexes.append(field)
+            else:
+                raise TypeError("{} is not a predicate field for one of {}".format(
+                    field, [ p.__name__ for p in self.predicates ]))
+
+        # If in context manager mode then delay registration
+        if self._in_context: self._delayed_ri.append(ri)
+        else: ri()
+
+    def register(self, *args):
+        def wrapper(cls):
+            self.register_predicate(cls)
+            fields = [ getattr(cls, fn) for fn in args ]
+            for f in fields: self.register_index(f)
+            return cls
+
+        if len(args) == 1 and inspect.isclass(args[0]):
+            self.register_predicate(args[0])
+            return args[0]
+        else:
+            return wrapper
+
+    def __enter__(self):
+        self._in_context = True
+        self._exclude = set(Predicate.__subclasses__())
+        return self
+
+    def __exit__(self,et,ev,tb):
+        self._in_context = False
+        for sc in Predicate.__subclasses__():
+            if sc not in self._exclude:
+                self.register_predicate(sc)
+
+        # Now process any delayed index registrations
+        for ri in self._delayed_ri: ri()
+        self._delayed_ri = []
+
+        return self
+
+    def create_class(self, name):
+        return type(name, (FactBase,),
+                    { "predicates" : self.predicates, "indexes" : self.indexes })
+
+    @property
+    def predicates(self): return self._predicates
+    @property
+    def indexes(self): return self._indexes
+
+#------------------------------------------------------------------------------
 # Functions to be added to FactBase class or sub-class definitions
 #------------------------------------------------------------------------------
 
-def _fb_base_constructor(self, facts=[], delayed_init=False):
-    _fb_subclass_constructor(self, facts=facts, delayed_init=delayed_init)
+def _fb_base_constructor(self):
+    raise TypeError("{} must be sub-classed ".format(self.__class__.__name__))
+
+#def _fb_base_constructor(self, facts=[], delayed_init=False):
+#    _fb_subclass_constructor(self, facts=facts, delayed_init=delayed_init)
 
 def _fb_subclass_constructor(self, facts=None, symbols=None, delayed_init=False):
     if facts is not None and symbols is not None:
@@ -1221,7 +1321,9 @@ def _fb_subclass_add(self, fact=None,facts=None,symbols=None):
         raise ValueError(("Must specify exactly one of a fact argument, a "
                           "'facts' list, or a 'symbols' list"))
 
-    self._add(fact=fact,facts=facts,symbols=symbols)
+    return self._add(fact=fact,facts=facts,symbols=symbols)
+
+
 
 #------------------------------------------------------------------------------
 # A Metaclass for FactBase
@@ -1237,15 +1339,15 @@ class _FactBaseMeta(type):
 
         # Creating the FactBase class itself
         if name == "FactBase":
+            dct["__init__"] = _fb_base_constructor
             dct[plistname] = []
             dct[ilistname] = []
-            dct["__init__"] = _fb_base_constructor
-            dct["add"] = _fb_base_add
+#            dct["add"] = _fb_base_add
             return super(_FactBaseMeta, meta).__new__(meta, name, bases, dct)
 
-        # Cumulatively inherits the predicates and indexes from the base classes -
-        # which we can then override.
-        # use ordered dict to preserve ordering
+        # Cumulatively inherits the predicates and indexes from the FactBase
+        # base classes - which we can then override.  Use ordered dict to
+        # preserve ordering
         p_oset = collections.OrderedDict()
         i_oset = collections.OrderedDict()
         for bc in bases:
@@ -1256,9 +1358,6 @@ class _FactBaseMeta(type):
             dct[plistname] = [ p for p,_ in p_oset.items() ]
         if ilistname not in dct:
             dct[ilistname] = [ i for i,_ in i_oset.items() ]
-
-        # If we're dealing with a subclass then validate the specified
-        # predicates and indexes and add the sub-class constructor
 
         # Make sure "predicates" is defined and is a non-empty list
         pset = set()
@@ -1310,19 +1409,25 @@ class FactBase(object, metaclass=_FactBaseMeta):
         self._delayed_init = None
 
     def _add(self, fact=None,facts=None,symbols=None):
-        if fact is not None: self._add_fact(fact)
+        count = 0
+        if fact is not None: return self._add_fact(fact)
         elif facts is not None:
-            for f in facts: self._add_fact(f)
+            for f in facts:
+                count += self._add_fact(f)
         elif symbols is not None:
             for f in fact_generator(self.predicates, symbols):
-                self._add_fact(f)
+                count += self._add_fact(f)
+        return count
 
     def _add_fact(self, fact):
         predicate_cls = type(fact)
         if not issubclass(predicate_cls,Predicate):
-            raise TypeError("type of object {} is not a Predicate subclass".format(fact))
-        if predicate_cls not in self._factmaps: self._factmaps[predicate_cls] = _FactMap()
+            raise TypeError(("type of object {} is not a Predicate "
+                             "subclass").format(fact))
+        if predicate_cls not in self._factmaps: return 0
+#            self._factmaps[predicate_cls] = _FactMap()
         self._factmaps[predicate_cls].add(fact)
+        return 1
 
 
     #--------------------------------------------------------------------------
