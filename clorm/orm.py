@@ -1361,7 +1361,7 @@ class FactBaseHelper(object):
 # Functions to be added to FactBase class or sub-class definitions
 #------------------------------------------------------------------------------
 
-def _fb_base_constructor(self):
+def _fb_base_constructor(self, *args, **kwargs):
     raise TypeError("{} must be sub-classed ".format(self.__class__.__name__))
 
 #def _fb_base_constructor(self, facts=[], delayed_init=False):

@@ -5,7 +5,7 @@ sys.path.insert(0,PARENT_DIR)
 
 from clorm import monkey; monkey.patch() # must call this before importing clingo
 
-from clorm import Predicate, ConstantField, IntegerField, FactBase
+from clorm import Predicate, ConstantField, IntegerField, FactBase, FactBaseHelper
 from clorm import ph1_
 
 from clingo import Control, parse_program
@@ -20,21 +20,22 @@ flies(X) :- bird(X), not penguin(X).
 #------------------------------------------------------
 # The data model
 #------------------------------------------------------
-class Bird(Predicate):
-    name=ConstantField()
 
-class Penguin(Predicate):
-    name=ConstantField()
+with FactBaseHelper() as fbh:
+    class Bird(Predicate):
+        name=ConstantField()
 
-class Flies(Predicate):
-    name=ConstantField()
+    class Penguin(Predicate):
+        name=ConstantField()
 
-class AnimalFB(FactBase):
-    predicates = [Bird,Penguin,Flies]
-    indexes = [Flies.name]
+    class Flies(Predicate):
+        name=ConstantField()
 
-#class AnimalBaseIdx1(AnimalBase):
-#    indexes = [Flies.name]
+    class AnimalFB(FactBase):
+        predicates = [Bird,Penguin,Flies]
+        indexes = [Flies.name]
+
+AnimalFB = fbh.create_class("AnimalFB")
 
 #------------------------------------------------------
 #
@@ -68,7 +69,7 @@ def main():
     f1=Bird("tweety")
     f2=Bird("tux")
     f3=Penguin("tux")
-    inputs=FactBase([f1,f2,f3])
+    inputs=AnimalFB([f1,f2,f3])
 
     ctrl.add_facts(inputs)
     ctrl.ground([("base",[])])
