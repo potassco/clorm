@@ -31,10 +31,6 @@ with FactBaseHelper() as fbh:
     class Flies(Predicate):
         name=ConstantField()
 
-    class AnimalFB(FactBase):
-        predicates = [Bird,Penguin,Flies]
-        indexes = [Flies.name]
-
 AnimalFB = fbh.create_class("AnimalFB")
 
 #------------------------------------------------------
