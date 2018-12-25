@@ -20,6 +20,7 @@ __all__ = [
     'StringField',
     'ConstantField',
     'ComplexField',
+    'RawField',
     'Field',
     'NonLogicalSymbol',
     'Predicate',
@@ -189,7 +190,7 @@ class ConstantField(SimpleField):
 
 class ComplexField(object):
     def __init__(self, defn, default=None):
-        if not issubclass(defn, NonLogicalSymbol):
+        if not issubclass(defn, ComplexTerm):
             raise TypeError("Not a subclass of ComplexTerm: {}".format(defn))
         self._defn = defn
         self._default = default
@@ -208,6 +209,32 @@ class ComplexField(object):
             return True
         except ValueError:
             return False
+
+    @property
+    def default(self):
+        return self._default
+
+    @property
+    def is_field_defn(self): return True
+
+
+#------------------------------------------------------------------------------
+# A RawField definition allows you to pass through a raw clingo Symbol
+# object. It will unify against any Symbol.
+# ------------------------------------------------------------------------------
+
+class RawField(object):
+    def __init__(self, default=None):
+        self._default = default
+
+    def pytocl(self, value):
+        return value
+
+    def cltopy(self, symbol):
+        return symbol
+
+    def unifies(self, symbol):
+        return True
 
     @property
     def default(self):

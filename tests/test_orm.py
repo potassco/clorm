@@ -10,7 +10,7 @@ from clorm.orm import \
     integer_pytocl, string_pytocl, constant_pytocl, \
     integer_unifies, string_unifies, constant_unifies, \
     NonLogicalSymbol, Predicate, ComplexTerm, \
-    IntegerField, StringField, ConstantField, ComplexField, \
+    IntegerField, StringField, ConstantField, ComplexField, RawField, \
     not_, and_, or_, _StaticComparator, _get_field_comparators, \
     ph_, ph1_, ph2_, \
     _MultiMap, _FactMap, \
@@ -65,6 +65,31 @@ class ORMTestCase(unittest.TestCase):
         self.assertTrue(fstr.unifies(cstr1))
         self.assertTrue(fconst.unifies(csim1))
 
+    #--------------------------------------------------------------------------
+    # Simple test to make sure the default getters and setters are correct
+    #--------------------------------------------------------------------------
+    def test_raw_field(self):
+
+        raw1 = Function("func",[Number(1)])
+        raw2 = Function("bob",[String("no")])
+        rf1 = RawField()
+        rf2 = RawField(default=raw1)
+        rt1 = Function("tmp", [Number(1), raw1])
+        rt2 = Function("tmp", [Number(1), raw2])
+        self.assertTrue(rf1.unifies(raw1))
+
+        class Tmp(Predicate):
+            n1 = IntegerField()
+            r1 = RawField()
+
+        self.assertTrue(Tmp._unifies(rt1))
+        self.assertTrue(Tmp._unifies(rt2))
+        t1 = Tmp(1,raw1)
+        t2 = Tmp(1,raw2)
+
+        self.assertEqual(set([f for f in fact_generator([Tmp], [rt1,rt2])]),set([t1,t2]))
+        self.assertEqual(t1.r1, raw1)
+        self.assertEqual(t2.r1, raw2)
 
     #--------------------------------------------------------------------------
     # Simple test to make sure the default getters and setters are correct
