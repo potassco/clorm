@@ -7,7 +7,6 @@ import functools
 from .orm import *
 #import clorm as orm
 
-__version__ = '0.1.0'
 __all__ = [
     'Control',
     'Model',
