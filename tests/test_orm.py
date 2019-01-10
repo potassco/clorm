@@ -159,7 +159,7 @@ class ORMTestCase(unittest.TestCase):
         f2=Fact(1,"test")
 
         self.assertEqual(f1, f2)
-        self.assertEqual(f1.symbol, func)
+        self.assertEqual(f1.raw, func)
 
     #--------------------------------------------------------------------------
     # Test that we can define predicates using the class syntax and test that
@@ -188,7 +188,7 @@ class ORMTestCase(unittest.TestCase):
 
         inp1 = ImplicitlyNamedPredicate(afield=2)
         inp2 = Function("implicitlyNamedPredicate",[Number(2)])
-        self.assertEqual(inp1.symbol, inp2)
+        self.assertEqual(inp1.raw, inp2)
 
         # Test declaration of a unary predicate
         class UnaryPredicate(Predicate):
@@ -196,7 +196,7 @@ class ORMTestCase(unittest.TestCase):
 
         up1 = UnaryPredicate()
         up2 = Function("unary",[])
-        self.assertEqual(up1.symbol, up2)
+        self.assertEqual(up1.raw, up2)
 
         # Test the class properties; when access from the class and the object.
         self.assertEqual(up1.meta.name, "unary")
@@ -213,7 +213,7 @@ class ORMTestCase(unittest.TestCase):
 
         dfp1 = DefaultFieldPredicate(first=15)
         dfp2 = Function("dfp",[Number(15),Number(10)])
-        self.assertEqual(dfp1.symbol, dfp2)
+        self.assertEqual(dfp1.raw, dfp2)
 
         with self.assertRaises(ValueError) as ctx:
             dfp3 = DefaultFieldPredicate()
@@ -226,7 +226,7 @@ class ORMTestCase(unittest.TestCase):
 
         mfp1 = MultiFieldPredicate(afield1="astring", afield2="asimple")
         mfp2 = Function("mfp", [String("astring"), Function("asimple",[])])
-        self.assertEqual(mfp1.symbol, mfp2)
+        self.assertEqual(mfp1.raw, mfp2)
 
         # Test that the appropriate field properties are set up properly
         self.assertEqual(mfp1.afield1, "astring")
@@ -263,8 +263,8 @@ class ORMTestCase(unittest.TestCase):
                               Function("",[Number(4),String("XXX")]),
                               Function("fun",[Number(550),String("YYY")])])
 
-        self.assertEqual(f1, af1.symbol)
-        self.assertEqual(f2, af2.symbol)
+        self.assertEqual(f1, af1.raw)
+        self.assertEqual(f2, af2.raw)
         self.assertEqual(af2.atup.aint,4)
 
     #--------------------------------------------------------------------------
@@ -322,7 +322,7 @@ class ORMTestCase(unittest.TestCase):
         af2 = Fact(anum=2)
         af1_c = Fact(anum=1)
 
-        self.assertEqual(f1, af1.symbol)
+        self.assertEqual(f1, af1.raw)
         self.assertEqual(af1,af1_c)
         self.assertNotEqual(af1, af2)
         self.assertEqual(str(f1), str(af1))
@@ -385,11 +385,11 @@ class ORMTestCase(unittest.TestCase):
             bad_fact_pred1 = Fact._unify(bad_fact_symbol1)
 
         good_fact_pred1.afun.aint = 3
-        self.assertEqual(good_fact_pred1.symbol, good_fact_symbol2)
+        self.assertEqual(good_fact_pred1.raw, good_fact_symbol2)
 
 #        ct = Fact.Fun(4,"Bob")
 #        good_fact_pred1.afun = ct
-#        self.assertEqual(good_fact_pred1.symbol, good_fact_symbol3)
+#        self.assertEqual(good_fact_pred1.raw, good_fact_symbol3)
 
 
     #--------------------------------------------------------------------------

@@ -198,7 +198,7 @@ class ComplexField(object):
     def pytocl(self, value):
         if not isinstance(value, self._defn):
             raise TypeError("Value not an instance of {}".format(self._defn))
-        return value.symbol
+        return value.raw
 
     def cltopy(self, symbol):
         return self._defn(_symbol=symbol)
@@ -553,7 +553,7 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
 
     # Get the underlying clingo symbol object
     @property
-    def symbol(self):
+    def raw(self):
 #        return self._symbol
         return self._generate_symbol()
 
@@ -626,9 +626,9 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
     # Overloaded operators
     #--------------------------------------------------------------------------
     def __eq__(self, other):
-        self_symbol = self.symbol
+        self_symbol = self.raw
         if isinstance(other, NonLogicalSymbol):
-            other_symbol = other.symbol
+            other_symbol = other.raw
             return self_symbol == other_symbol
         elif type(other) == clingo.Symbol:
             return self_symbol == other
@@ -642,9 +642,9 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
         return not result
 
     def __lt__(self, other):
-        self_symbol = self.symbol
+        self_symbol = self.raw
         if isinstance(other, NonLogicalSymbol):
-            other_symbol = other.symbol
+            other_symbol = other.raw
             return self_symbol < other_symbol
         elif type(other) == clingo.Symbol:
             return self_symbol < other
@@ -658,9 +658,9 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
         return not result
 
     def __gt__(self, other):
-        self_symbol = self.symbol
+        self_symbol = self.raw
         if isinstance(other, NonLogicalSymbol):
-            other_symbol = other.symbol
+            other_symbol = other.raw
             return self_symbol > other_symbol
         elif type(other) == clingo.Symbol:
             return self_symbol > other
@@ -674,10 +674,10 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
         return not result
 
     def __hash__(self):
-        return self.symbol.__hash__()
+        return self.raw.__hash__()
 
     def __str__(self):
-        self_symbol = self.symbol
+        self_symbol = self.raw
         return str(self_symbol)
 
     def __repr__(self):
@@ -1577,13 +1577,13 @@ def control_add_facts(ctrl, factbase):
 # assign/release externals for a NonLogicalSymbol object or a Clingo Symbol
 def control_assign_external(ctrl, fact, truth):
     if isinstance(fact, NonLogicalSymbol):
-        ctrl.assign_external(fact.symbol, truth)
+        ctrl.assign_external(fact.raw, truth)
     else:
         ctrl.assign_external(fact, truth)
 
 def control_release_external(ctrl, fact):
     if isinstance(fact, NonLogicalSymbol):
-        ctrl.release_external(fact.symbol)
+        ctrl.release_external(fact.raw)
     else:
         ctrl.release_external(fact)
 
@@ -1593,7 +1593,7 @@ def control_release_external(ctrl, fact):
 
 def model_contains(model, fact):
     if isinstance(fact, NonLogicalSymbol):
-        return model.contains(fact.symbol)
+        return model.contains(fact.raw)
     return model.contains(fact)
 
 def model_facts(model, factbase, atoms=False, terms=False, shown=False):
