@@ -8,68 +8,68 @@ from clorm import monkey; monkey.patch() # must call this before importing cling
 from clorm import Predicate, ConstantField, IntegerField, FactBase, FactBaseHelper
 from clorm import ph1_
 
-from clingo import Control, parse_program
+from clingo import Control
 
-#------------------------------------------------------
-# A Logic program
-#------------------------------------------------------
 
-logic_program='''
-flies(X) :- bird(X), not penguin(X).
-'''
-#------------------------------------------------------
-# The data model
-#------------------------------------------------------
+ASP_PROGRAM="quickstart.lp"
+
+#--------------------------------------------------------------------------
+# Define a data model - we only care about defining the input and output
+# predicates.
+#--------------------------------------------------------------------------
 
 with FactBaseHelper() as fbh:
-    class Bird(Predicate):
+    class Driver(Predicate):
         name=ConstantField()
 
-    class Penguin(Predicate):
+    class Item(Predicate):
         name=ConstantField()
 
-    class Flies(Predicate):
-        name=ConstantField()
+    class Assignment(Predicate):
+        item=ConstantField()
+        driver=ConstantField()
+        time=IntegerField()
 
-AnimalFB = fbh.create_class("AnimalFB")
+DB = fbh.create_class("DB")
 
-#------------------------------------------------------
+#--------------------------------------------------------------------------
 #
-#------------------------------------------------------
-
-def on_model(model):
-    # To show that the Model wrapper copies the original
-    for a in model.symbols(atoms=True): print("ATOM: {}".format(a))
-    if model.contains(Bird("tweety")): print("YES")
-
-    print("========== MODEL: START ==============")
-    fb = model.facts(AnimalFB, atoms=True)
-
-    query=fb.select(Flies).where(Flies.name == ph1_)
-    for b in fb.select(Bird).get():
-        if len(list(query.get(b.name))):
-            print("{} is a flying bird".format(b.name))
-        else:
-            print("{} is a non-flying bird".format(b.name))
-    print("========== MODEL: END ==============")
-
-#------------------------------------------------------
-#
-#------------------------------------------------------
+#--------------------------------------------------------------------------
 
 def main():
+    # Create and load asp file that encodes the problem domain
     ctrl = Control()
-    with ctrl.builder() as b:
-        parse_program(logic_program, lambda stmt: b.add(stmt))
+    ctrl.load(ASP_PROGRAM)
 
-    f1=Bird("tweety")
-    f2=Bird("tux")
-    f3=Penguin("tux")
-    inputs=AnimalFB([f1,f2,f3])
+    # Dynamically generate the instance data
+    drivers = [ Driver(name=n) for n in ["dave", "morri", "michael" ] ]
+    items = [ Item(name="item{}".format(i)) for i in range(1,6) ]
+    instance = DB(drivers + items)
 
-    ctrl.add_facts(inputs)
+    # Add the instance data and ground the ASP program
+    ctrl.add_facts(instance)
     ctrl.ground([("base",[])])
+
+    # Generate a solution - use a call back that saves the solution
+    solution=None
+    def on_model(model):
+        nonlocal solution
+        solution = model.facts(DB, atoms=True)
     ctrl.solve(on_model=on_model)
+    if not solution:
+        raise ValueError("No solution found")
+
+    # Do something with the solution - create a query so we can print out the
+    # assignments for each driver.
+    query=solution.select(Assignment).where(Assignment.driver == ph1_)
+    for d in drivers:
+        assignments = list(query.get(d.name))
+        if not assignments:
+            print("Driver {} is not working today".format(d.name))
+        else:
+            print("Driver {} must deliver: ".format(d.name))
+            for a in assignments:
+                print("\t Item {} at time {}".format(a.item, a.time))
 
 #------------------------------------------------------------------------------
 # main
