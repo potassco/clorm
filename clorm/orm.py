@@ -1569,9 +1569,19 @@ class FactBase(object, metaclass=_FactBaseMeta):
 #------------------------------------------------------------------------------
 
 # Add the facts in a FactBase
-def control_add_facts(ctrl, factbase):
+def control_add_facts(ctrl, facts):
+    # Facts can be a FactBase or a list of facts
+    if isinstance(facts, FactBase):
+        asp_str = facts.asp_str()
+    else:
+        out = io.StringIO()
+        for f in facts:
+            print("{}.".format(f), file=out)
+        asp_str = out.getvalue()
+        out.close()
+    # Parse and add the facts
     with ctrl.builder() as b:
-        clingo.parse_program(factbase.asp_str(), lambda stmt: b.add(stmt))
+        clingo.parse_program(asp_str, lambda stmt: b.add(stmt))
 
 # assign/release externals for a NonLogicalSymbol object or a Clingo Symbol
 def control_assign_external(ctrl, fact, truth):

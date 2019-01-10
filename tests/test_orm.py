@@ -1142,7 +1142,7 @@ class ORMTestCase(unittest.TestCase):
         bf2 = Bfact(2,"bbb")
 
         fb1 = MyFacts()
-        fb1.add(facts=[af1,af2,af3,bf1,bf2])
+        fb1.add(facts= [af1,af2,af3,bf1,bf2])
 
         fb2 = None
         def on_model(model):
@@ -1154,6 +1154,10 @@ class ORMTestCase(unittest.TestCase):
         control_add_facts(ctrl,fb1)
         ctrl.ground([("base",[])])
         ctrl.solve(on_model=on_model)
+
+        # control_add_facts works with both a list of facts and a FactBase
+        ctrl2 = Control()
+        control_add_facts(ctrl2,[af1,af2,af3,bf1,bf2])
 
         safact1 = fb2.select(Afact).where(Afact.num1 == ph_("num1"))
         safact2 = fb2.select(Afact).where(Afact.num1 < ph_("num1"))
