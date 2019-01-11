@@ -2,6 +2,7 @@
 # Monkey patching Clingo (or at least wrapping the Clingo objects).
 # ------------------------------------------------------------------------------
 
+import sys
 import clingo
 import functools
 from .orm import *
@@ -95,6 +96,8 @@ class _ControlMetaClass(type):
                 dct[key]=_control_wrapper(value)
         return super(_ControlMetaClass, meta).__new__(meta, name, bases, dct)
 
+
+
 class Control(object, metaclass=_ControlMetaClass):
     def __init__(self, *args, **kwargs):
         self._ctrl = OControl(*args, **kwargs)
@@ -111,29 +114,52 @@ class Control(object, metaclass=_ControlMetaClass):
     def release_external(ctrl, fact):
         control_release_external(self._ctrl, fact)
 
-    # Overide solve and call on_model with a replace Model object
-    def solve(self, *, assumptions=[], on_model=None,
-              on_finish=None,yield_=False,async_=False):
+    # Overide solve and if necessary replace on_model with a wrapper that
+    # returns a clorm.Model object. Also because of the issue with using the
+    # keyword "async" as a parameter in Python 3.7 (which means that newer
+    # clingo version use "async_") we use a more complicated way to determine
+    # the function parameters.
+    def solve(self, **kwargs):
+        # validargs stores the valid arguments and their default values
+        validargs = { "assumptions": [], "on_model" : None,
+                        "on_finish": None, "yield_" : False }
 
-        if isinstance(assumptions, FactBase):
-            new_a = [f.symbol for f in assumptions.facts()]
+        # Use "async" or "async_" depending on the python or clingo version
+        if sys.version_info >= (3,7) or clingo.__version__ > '5.3.1':
+            validargs["async_"] = False
         else:
-            new_a = [ (f.symbol if isinstance(f, NonLogicalSymbol) \
-                       else f, b) for f,b in assumptions ]
+            validargs["async"] = False
 
+        # validate the arguments and assign any missing default values
+        keys = set(kwargs.keys())
+        validkeys = set(validargs.keys())
+        if not keys.issubset(validkeys):
+            diff = keys - validkeys
+            msg = "solve() got an unexpected keyword argument '{}'".format(next(iter(diff)))
+            raise TypeError(msg)
+        for k,v in validargs.items():
+            if k not in kwargs: kwargs[k]=v
+
+        # generate a new assumptions list if necesary
+        assumptions = kwargs["assumptions"]
+        if isinstance(assumptions, FactBase):
+            kwargs["assumptions"] = [f.symbol for f in assumptions.facts()]
+        else:
+            kwargs["assumptions"] = [ (f.symbol if isinstance(f, NonLogicalSymbol) \
+                                       else f, b) for f,b in assumptions ]
+
+        # generate a new on_model function if necessary
+        on_model=kwargs["on_model"]
         @functools.wraps(on_model)
         def on_model_wrapper(model):
             return on_model(Model(model))
-        new_om = on_model_wrapper if on_model else None
-        if yield_:
-            sh = self._ctrl.solve(assumptions=new_a, on_model=new_om,
-                                  on_finish=on_finish,
-                                  yield_=yield_, async_=async_)
-            return SolveHandle(sh)
+        if on_model: kwargs["on_model"] =  on_model_wrapper
+
+        result = self._ctrl.solve(**kwargs)
+        if kwargs["yield_"]:
+            return SolveHandle(result)
         else:
-            return self._ctrl.solve(assumptions=new_a, on_model=new_om,
-                                    on_finish=on_finish,
-                                    yield_=yield_, async_=async_)
+            return result
 
 #------------------------------------------------------------------------------
 # Now patch the clingo objects
