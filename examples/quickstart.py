@@ -27,7 +27,7 @@ with FactBaseHelper() as fbh:
 
     class Assignment(Predicate):
         item=ConstantField()
-        driver=ConstantField()
+        driver=ConstantField(index=True)
         time=IntegerField()
 
 DB = fbh.create_class("DB")
