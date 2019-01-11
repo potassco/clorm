@@ -58,13 +58,13 @@ Quick Start
 
 The following is a simplified scheduling problem. Imagine you are running a
 courier company and you have drivers and items that need to be delivered. An
-item is delivered during one of four time slots, and you want assign drivers to
-delivery items, ensuring that all items are assigned and drivers aren't
+item is delivered during one of four time slots, and you want to assign drivers
+to delivery items, ensuring that all items are assigned and drivers aren't
 double-booked for a time slot.
 
-You want to minimise the number of drivers you use (maybe bringing a driver on
-for a day has some fixed cost), and as a secondary criteria to deliver items as
-quickly as possible.
+You want to minimise the number of drivers you use (for example, because
+bringing a driver on for a day has some fixed cost), and as a secondary
+optimisation criteria you want to deliver items as early in the day as possible.
 
 The following ASP program encodes this problem:
 
@@ -81,11 +81,12 @@ The following ASP program encodes this problem:
    #minimize { T@1,D : assignment(_,D,T) }.
 
 
-Assume that this ASP program is in a file ``quickstart.lp``.
+Now, assume that this ASP program is in a file ``quickstart.lp``.
 
-We now write a Python program that loads up this ASP program, gives it a
-problem instance (i.e., a list of drivers and items to be delivered) and
-generates a solution as an assignment of drivers to deliver items.
+We now write a Python program that loads up this ASP program, gives it a problem
+instance (i.e., a list of drivers and items to be delivered) and generates a
+solution as an assignment of drivers to deliver items. The following gives a
+breakdown of this Python program.
 
 First we need to import from the relavant libraries
 
@@ -96,10 +97,10 @@ First we need to import from the relavant libraries
    from clorm import Predicate, ConstantField, IntegerField, FactBaseHelper, ph1_
    from clingo import Control
 
-The first line monkey patches the a number of Clingo classes by creating
-wrappers that make the integration with CLORM seemless. You can use CLORM
-without monkey patching Clingo but it makes the interaction with the solver a
-bit more cumbersome.
+The first line `monkey patches <https://en.wikipedia.org/wiki/Monkey_patch>`_ a
+number of Clingo classes by creating wrappers that make the integration with
+CLORM seemless. You can of course use CLORM without monkey patching Clingo but
+it makes the interaction with the solver a bit more cumbersome.
 
 The second and third line imports the basic functions and classes that we need.
 
@@ -134,13 +135,11 @@ associated ``FactBase`` CLORM provides a helper class to make this process
 
    DB = fbh.create_class("DB")
 
-Although the above code looks straightforward, there is lot going on that needs
-to be explained.
 
 The ``FactBaseHelper`` class provides a mechanism for easily creating
 ``FactBase`` sub-classes. The instance is declared as a context so that any
 predicate declaration within this context will be automatically incorporated
-into defining the ``FactBase`` sub-class.
+into the subsequently defined ``FactBase`` sub-class.
 
 Within the ``FactBaseHelper`` context we declare the ``Driver`` predicate to
 match the ASP ``driver`` definition. Note: by default the name of the matching
@@ -341,7 +340,7 @@ TODO
 ----
 * clean up the API - test whether clingo solving under assumptions requires
   external declarations. I don't think this would be possible (without declaring
-  all possible inputs as ``external``s). However, if this is the case then it
+  all possible inputs as ``externals``). However, if this is the case then it
   would be better to use this rather than having the ``add_facts()`` function.
 * add Sphinx documentation
 * add more examples
