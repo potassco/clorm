@@ -53,6 +53,29 @@ asserted to the Clingo reasoner. Clingo then produces a solution (or sets of
 possibly solutions) which can be used in the application or simply inserted back
 to the database.
 
+Installation
+------------
+
+The easiest way to install CLORM is with Anaconda. This is ideal if you have
+already used Anaconda for installing Clingo.
+
+So assumming you have already installed Clingo with something like:
+
+.. code-block:: bash
+
+    $ conda install -c potassco clingo
+
+Then also install CLORM with:
+
+.. code-block:: bash
+
+    $ conda install -c daveraja clorm
+
+
+Note: CLORM currently only works with Python 3.x. I may look at supporting
+Python 2.7 in the future.
+
+
 Quick Start
 -----------
 
@@ -329,19 +352,12 @@ the above covers a fairly broad use case.
 
 Development
 -----------
-* CLORM was developed using Python 3.7. Python 3.7 introduced the ``async``
-  keyword which meant that the Clingo API had to change slightly to use
-  ``_async``. Because of this the unit tests will fail on Python 3.6. However, I
-  don't think there are any other Python 3.7 specific things and I will look at
-  getting CLORM to work on earlier Python 3.X versions. Not sure if I'll worry
-  about supporting Python 2.7.
+* Python version: CLORM was developed using Python 3.7 and has been tested with Python 3.6.
+* Clingo version: CLORM has been tested with clingo version 5.3.0 and 5.3.1
 
 TODO
 ----
-* clean up the API - test whether clingo solving under assumptions requires
-  external declarations. I don't think this would be possible (without declaring
-  all possible inputs as ``externals``). However, if this is the case then it
-  would be better to use this rather than having the ``add_facts()`` function.
+* clean up the API
 * add Sphinx documentation
 * add more examples
 
