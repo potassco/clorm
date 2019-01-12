@@ -34,7 +34,7 @@ Quick Start
 -----------
 
 The following example highlights the basic features of CLORM. The ASP and Python
-parts of this example are location in the ``examples`` sub-directory in the git
+parts of this example are located in the ``examples`` sub-directory in the git
 repository. The ASP program is ``quickstart.lp`` and the Python program is
 ``quickstart.py``.
 
