@@ -44,10 +44,10 @@ time slots, and you want to assign a driver to deliver each item, while also
 ensuring that all items are assigned and drivers aren't double-booked for a time
 slot.
 
-You also want to apply some optimsation criteria. Firstly, you want minimise the
-number of drivers that you use (for example, because bringing a driver on for a
-day has some fixed cost). Secondly, you want to deliver items as early in the
-day as possible.
+You also want to apply some optimsation criteria. Firstly, you want to minimise
+the number of drivers that you use (for example, because bringing a driver on
+for a day has some fixed cost). Secondly, you want to deliver items as early in
+the day as possible.
 
 The above crieria can be encoded with the following simple ASP program:
 
@@ -123,11 +123,10 @@ definitions and provides a member function for dynamically defining a
 ``FactBase`` sub-class. Here we define the class ``DB`` for storing predicate
 instance (i.e., the *facts*) for these types.
 
-The astute reader will note that the declaration of the ``driver`` field is
-declared with ``index=True``. This ensures that the ``driver`` field is indexed
-whenever an ``Assignment`` object is inserted into a ``DB`` instance. As with a
-traditional database indexing improves query performance but should also be used
-sparingly.
+You will notice that the declaration of the ``driver`` field contains the option
+``index=True``. This ensures that the ``driver`` field is indexed whenever an
+``Assignment`` object is inserted into a ``DB`` instance. As with a traditional
+database indexing improves query performance but should also be used sparingly.
 
 Having defined the data model we now show how to dynamically add a problem
 instance, solve the resulting ASP program, and print the solution.
@@ -140,8 +139,8 @@ First we create the Clingo ``Control`` object and load the ASP program.
     ctrl.load("quickstart.lp")
 
 
-Next we generate a problem instance by generating a set of ``drivers`` and
-``items``. These items are added to a ``DB`` instance.
+Next we generate a problem instance by generating a lists of ``Driver`` and
+``Item`` objects. These items are added to a ``DB`` instance.
 
 .. code-block:: python
 
@@ -152,10 +151,8 @@ Next we generate a problem instance by generating a set of ``drivers`` and
 The ``Driver`` and ``Item`` constructors require named parameters that match the
 declared field names; you cannot use "normal" Python list arguments.
 
-Finally, the ``DB`` class is initialised with a list of facts.
-
-The facts can now be added to the control object and the combined ASP program
-grounded.
+Now, the facts can now be added to the control object and the combined ASP
+program grounded.
 
 .. code-block:: python
 
@@ -188,7 +185,8 @@ the predicates that were defined in the data model. In this case it ignores the
 object.
 
 The final part of our Python program involves querying the solution to print out
-the relevant parts. To do this we first create a `Select` object.
+the relevant parts. To do this we call the ``DB.select()`` member function that
+returns a suitable ``Select`` object.
 
 .. code-block:: python
 
@@ -215,8 +213,8 @@ each driver and print the result.
                 print("\t Item {} at time {}".format(a.item, a.time))
 
 Calling ``query.get(d.name)`` executes the query for the given driver. Because
-it is the first parameter it matches against the placeholder ``ph1_`` in the
-query definition. Currently, CLORM support up to four placeholders.
+``d.name`` is the first parameter it matches against the placeholder ``ph1_`` in
+the query definition. Currently, CLORM support up to four placeholders.
 
 Running this example produces the following results:
 
@@ -248,5 +246,5 @@ TODO
 * add more examples
 
 * add a library of resuable ASP integration components.
-* add a debug library.
+* add a debug library -- my ideas on this are still vague.
 
