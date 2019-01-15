@@ -66,6 +66,9 @@ There are some things to note here:
   class name with the first letter translated to lower-case.
 * Field order: the order of declared fields in the predicate class definition is
   important.
+* Field names: besides the Python keywords that should not be used as keywords,
+  CLORM also disallows three reserved words: ``raw``, ``meta``, and ``clone`` as
+  these are used as properties or functions of a ``Predicate`` object.
 * Constant vs string: ``"bob"`` and ``"Sydney uni"`` are both Python strings but
   because of the declaration of ``entity`` as a ``ConstantField`` this ensures
   that the Python string ``"bob"`` is treated as an ASP constant. Note:
@@ -229,8 +232,8 @@ will print the output:
     Event booking(20181231,"NYE Party"): date "2018-12-31" type <class 'datetime.date'>
 
 
-Fields Indexing
----------------
+Field Indexing
+^^^^^^^^^^^^^^
 
 The final option that can be specified as part of a field definition is
 indexing. Specifying ``index = True`` can affect the behaviour when a
