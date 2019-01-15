@@ -177,10 +177,10 @@ class ORMTestCase(unittest.TestCase):
             class BadPredicate(Predicate):
                 meta = IntegerField()
 
-        # Test bad declaration - the field name is "symbol"
+        # Test bad declaration - the field name is "raw"
         with self.assertRaises(ValueError) as ctx:
             class BadPredicate(Predicate):
-                symbol = IntegerField()
+                raw = IntegerField()
 
         # Test declaration of predicate with an implicit name
         class ImplicitlyNamedPredicate(Predicate):

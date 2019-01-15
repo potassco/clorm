@@ -200,7 +200,7 @@ class ComplexField(object):
         return value.raw
 
     def cltopy(self, symbol):
-        return self._defn(_symbol=symbol)
+        return self._defn(raw=symbol)
 
     def unifies(self, symbol):
         try:
@@ -352,7 +352,7 @@ class _Field(Field):
 def _nls_init_by_symbol(self, **kwargs):
     if len(kwargs) != 1:
         raise ValueError("Invalid combination of keyword arguments")
-    symbol = kwargs["_symbol"]
+    symbol = kwargs["raw"]
     class_name = type(self).__name__
     if not self._unifies(symbol):
         raise ValueError(("Failed to unify symbol {} with "
@@ -404,7 +404,7 @@ def _nls_init_by_positional_values(self, *args):
 def _nls_constructor(self, *args, **kwargs):
     self._symbol = None
     self._field_values = {}
-    if "_symbol" in kwargs:
+    if "raw" in kwargs:
         _nls_init_by_symbol(self, **kwargs)
     elif len(args) > 0:
         _nls_init_by_positional_values(self, *args)
@@ -443,7 +443,7 @@ def _make_nls_metadata(class_name, dct):
                                   "'name' and 'istuple' "))
         elif istuple: name = ""
 
-    reserved = set(["meta", "symbol", "clone"])
+    reserved = set(["meta", "raw", "clone"])
 
     # Generate the fields - NOTE: relies on dct being an OrderedDict()
     fields = []
@@ -610,7 +610,7 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
     # Factory that returns a unified NonLogicalSymbol object
     @classmethod
     def _unify(cls, symbol):
-        return cls(_symbol=symbol)
+        return cls(raw=symbol)
 
     #--------------------------------------------------------------------------
     # Overloaded index operator to access the values

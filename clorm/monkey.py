@@ -143,9 +143,9 @@ class Control(object, metaclass=_ControlMetaClass):
         # generate a new assumptions list if necesary
         assumptions = kwargs["assumptions"]
         if isinstance(assumptions, FactBase):
-            kwargs["assumptions"] = [f.symbol for f in assumptions.facts()]
+            kwargs["assumptions"] = [f.raw for f in assumptions.facts()]
         else:
-            kwargs["assumptions"] = [ (f.symbol if isinstance(f, NonLogicalSymbol) \
+            kwargs["assumptions"] = [ (f.raw if isinstance(f, NonLogicalSymbol) \
                                        else f, b) for f,b in assumptions ]
 
         # generate a new on_model function if necessary
