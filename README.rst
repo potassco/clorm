@@ -232,8 +232,9 @@ Running this example produces the following results:
     Driver michael is not working today
 
 The above example shows some of the main features of CLORM and how to match the
-Python data model to the defined ASP predicates. For more details of the CLORM
-API see the documentation (**coming soon**).
+Python data model to the defined ASP predicates. For more details about how to
+use CLORM see the `documentation
+<https://clorm.readthedocs.io/en/latest/>`_ (**work in progress**).
 
 Development
 -----------
