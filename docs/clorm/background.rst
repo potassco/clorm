@@ -1,5 +1,5 @@
-Background and Motivation
-=========================
+Motivation
+==========
 
 Object Relational Mapping (ORM)
 -------------------------------
