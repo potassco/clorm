@@ -23,7 +23,8 @@ maintain Python application that integrate with Clingo.
    clorm/background
    clorm/quickstart
    clorm/predicate
-
+   clorm/factbase
+   clorm/clingo
 
 Indices and tables
 ==================
