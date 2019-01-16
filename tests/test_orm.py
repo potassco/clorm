@@ -928,9 +928,9 @@ class ORMTestCase(unittest.TestCase):
         cf1 = Cfact(1)
 
         fs1 = FactSet()
-#        self.assertEqual(fs1.add(facts=[af1,bf1,cf1]), 2)
-#        self.assertEqual(fs1.select(Afact).get_unique(), af1)
-#        self.assertEqual(fs1.select(Bfact).get_unique(), bf1)
+        self.assertEqual(fs1.add(facts=[af1,bf1,cf1]), 2)
+        self.assertEqual(fs1.select(Afact).get_unique(), af1)
+        self.assertEqual(fs1.select(Bfact).get_unique(), bf1)
 
 
     #--------------------------------------------------------------------------
@@ -1011,6 +1011,34 @@ class ORMTestCase(unittest.TestCase):
 
         self.assertEqual(fbh4.predicates, [Ffact])
         self.assertEqual(fbh4.indexes, [])
+
+    #--------------------------------------------------------------------------
+    # Test the factbasehelper with double decorators
+    #--------------------------------------------------------------------------
+    def test_factbasehelper(self):
+
+        # Using the FactBaseHelper as a decorator
+        fbh1 = FactBaseHelper()
+        fbh2 = FactBaseHelper()
+
+        # decorator both
+        @fbh2.register
+        @fbh1.register
+        class Afact(Predicate):
+            num1=IntegerField(index=True)
+            num2=IntegerField()
+            str1=StringField()
+
+        # decorator without argument
+        @fbh1.register
+        class Bfact(Predicate):
+            num1=IntegerField(index=True)
+            str1=StringField()
+
+        self.assertEqual(fbh1.predicates, [Afact,Bfact])
+        self.assertEqual(fbh2.predicates, [Afact])
+        self.assertEqual(fbh1.indexes, [Afact.num1,Afact.num1])
+        self.assertEqual(fbh2.indexes, [Afact.num1])
 
     #--------------------------------------------------------------------------
     # Test that subclass factbase works and we can specify indexes
