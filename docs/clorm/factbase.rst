@@ -43,13 +43,36 @@ The fact base can be populated at object construction time or later.
    dave_dog = Pet(owner="dave", petname="Bob")
    morri_cat = Pet(onwer="morri", petname="Fido")
 
-   facts = AppDB([date, morri, dave_cat])
+   facts = AppDB([dave, morri, dave_cat])
    facts.add([dave_dog, morri_cat])
 
 It should be noted that adding a fact for a predicate type that has not been
 registered for a given ``FactBase`` sub-class will result in the fact not being
 added; which is also why the ``FactBase.add()`` function returns the number of
 facts that have been added.
+
+Importing Raw Clingo Symbols
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+While a container can be populated with existing predicate objects, it can also
+be used a generate predicate objects from the raw ``Clingo.Symbol`` objects by
+passing a named parameter ``symbols`` to the constructor.
+
+.. code-block:: python
+
+   from clingo import *
+
+   dave_raw = Function("person", [Function("dave",[]),String("UNSW")])
+   facts = AppDB(symbols=[dave_raw])
+
+Here the ``AppDB`` object tries to unify each raw symbol with its list of
+predicates and creates a matching object for the first predicate that it unifies
+with. If there are no unifying predicates then the symbol is ignored.
+
+.. note:: Since a raw Clingo symbol is mapped to the first predicate that it
+   unifies with, hence the order that the predicates are defined can change the
+   behaviour of the fact base. Therefore, in general it is a good idea to avoid
+   defining multiple predicates that can unify with the same symbols.
 
 A Helper for Defining Containers
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
