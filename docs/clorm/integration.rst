@@ -19,6 +19,33 @@ The two most important Clingo classes that an app developer will like deal with 
 * ``Model``. This is the class that contains the facts (and other meta-data)
   associated with an ASP model.
 
+For the rest of this chapter we shall assume the following starter code from the
+previous chapter:
+
+.. code-block:: python
+
+   from clorm import *
+
+   fbh = FactBaseHelper()
+   with fbh:
+      class Person(Predicate):
+         person = ConstantField()
+         address = StringField()
+
+      class Pet(Predicate):
+         owner = ConstantField(index=True)
+         petname = StringField()
+
+   AppDB = fbh.create_class("AppDB")
+
+   f1 = Person(person="dave", address="UNSW")
+   f2 = Person(person="morri", address="UNSW")
+   f3 = Pet(owner="dave", petname="Frank")
+   f4 = Pet(owner="dave", petname="Bob")
+   f5 = Pet(onwer="morri", petname="Fido")
+
+   facts = AppDB([f1,f2,f3,f4,f5])
+
 Integration Functions
 ---------------------
 
@@ -30,6 +57,16 @@ parameter while the second parameter contains any fact related objects.
   program. The facts can be either a list of predicate objects or a fact
   base. Because the initial facts in an ASP program will affect the grounding,
   new facts should only be added to the program **before** grounding.
+
+.. code-block:: python
+
+    from clingo import Control
+
+    ctrl = Control()
+    ctrl.load("program.lp")
+    ctrl.add_facts(db)
+    ctrl.ground([("base",[])])
+
 
 * ``control_assign_external(ctrl, fact, truth)`` and
   ``control_release_external(ctrl, fact)``. These functions are simple wrappers

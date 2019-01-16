@@ -70,9 +70,16 @@ predicates and creates a matching object for the first predicate that it unifies
 with. If there are no unifying predicates then the symbol is ignored.
 
 .. note:: Since a raw Clingo symbol is mapped to the first predicate that it
-   unifies with, hence the order that the predicates are defined can change the
+   unifies with, the order that the predicates are defined can change the
    behaviour of the fact base. Therefore, in general it is a good idea to avoid
    defining multiple predicates that can unify with the same symbols.
+
+A final feature of the ``FactBase`` constructors is that they implement a
+delayed initialisation feature with the constructor option
+``delayed_init=True``. With this option the importing of a symbols list is
+delayed until the first access of the object. The usefulness of this option will
+be discussed later when we examine the integration of CLORM with the ASP solver
+and dealing with ASP models.
 
 A Helper for Defining Containers
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

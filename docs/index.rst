@@ -24,7 +24,7 @@ maintain Python application that integrate with Clingo.
    clorm/quickstart
    clorm/predicate
    clorm/factbase
-   clorm/clingo
+   clorm/integration
 
 Indices and tables
 ==================
