@@ -8,13 +8,8 @@ Whether they are the set of facts that make up the problem instance or,
 alternatively, the facts that constitute the *model* of a problem, an ASP
 application typically does not simply deal with individual facts in isolation.
 
-<<<<<<< HEAD
 A Container for Facts
 ---------------------
-=======
-Defining a ``FactBase``
------------------------
->>>>>>> c3470a6aafde0b666ffd488a9a20993c1f5945cc
 
 CLORM provides the ``FactBase`` as a container class for storing and querying
 facts. This class must be sub-classed, and each sub-class is distinguished by
@@ -56,8 +51,8 @@ registered for a given ``FactBase`` sub-class will result in the fact not being
 added; which is also why the ``FactBase.add()`` function returns the number of
 facts that have been added.
 
-``FactBaseHelper``
-^^^^^^^^^^^^^^^^^^
+A Helper for Defining Containers
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 While defining a ``FactBase`` is not a particularly onerous task, nevertheless
 it does leave open some room for mistakes; for example when a new Predicate is
@@ -196,11 +191,7 @@ Here when ``query1`` is execute it will return any person who is either
 ``"dave""`` or or based at ``"UNSW"``.
 
 Functors and Lambdas
-<<<<<<< HEAD
 ^^^^^^^^^^^^^^^^^^^^
-=======
---------------------
->>>>>>> c3470a6aafde0b666ffd488a9a20993c1f5945cc
 
 Finally, it should be noted that the specification of a select ``where`` clause
 is in reality a mechanism for generating functors. Therefore it is possible to
