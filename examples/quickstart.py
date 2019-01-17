@@ -1,7 +1,7 @@
 #!/usr/bin/env python
-import sys,os
-PARENT_DIR=os.path.abspath("..")
-sys.path.insert(0,PARENT_DIR)
+#import sys,os
+#PARENT_DIR=os.path.abspath("..")
+#sys.path.insert(0,PARENT_DIR)
 
 from clorm import monkey; monkey.patch() # must call this before importing clingo
 

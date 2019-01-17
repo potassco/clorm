@@ -19,8 +19,16 @@ The two most important Clingo classes that an app developer will like deal with 
 * ``Model``. This is the class that contains the facts (and other meta-data)
   associated with an ASP model.
 
-For the rest of this chapter we shall assume the following starter code from the
-previous chapter:
+For the rest of this chapter we shall assume the following ASP program in a file
+``starter.lp``:
+
+.. code-block:: python
+
+   #external Penguin(dave).
+
+   Bird(X) :- Penguin(X).
+
+as well as the following Python starter code:
 
 .. code-block:: python
 
@@ -28,23 +36,18 @@ previous chapter:
 
    fbh = FactBaseHelper()
    with fbh:
-      class Person(Predicate):
-         person = ConstantField()
-         address = StringField()
+      class Penguin(Predicate):
+         name = ConstantField()
 
-      class Pet(Predicate):
-         owner = ConstantField(index=True)
-         petname = StringField()
+      class Bird(Predicate):
+         name = ConstantField()
 
    AppDB = fbh.create_class("AppDB")
 
-   f1 = Person(person="dave", address="UNSW")
-   f2 = Person(person="morri", address="UNSW")
-   f3 = Pet(owner="dave", petname="Frank")
-   f4 = Pet(owner="dave", petname="Bob")
-   f5 = Pet(onwer="morri", petname="Fido")
+   f1 = Penguin(name="dave")
+   f2 = Penguin(name="tux")
 
-   facts = AppDB([f1,f2,f3,f4,f5])
+   facts = AppDB([f1,f2])
 
 Integration Functions
 ---------------------
@@ -63,7 +66,7 @@ parameter while the second parameter contains any fact related objects.
     from clingo import Control
 
     ctrl = Control()
-    ctrl.load("program.lp")
+    ctrl.load("starter.lp")
     ctrl.add_facts(db)
     ctrl.ground([("base",[])])
 
