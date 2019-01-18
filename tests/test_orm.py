@@ -3,6 +3,8 @@
 #------------------------------------------------------------------------------
 
 import unittest
+import datetime
+import calendar
 from clingo import Number, String, Function,  __version__ as clingo_version
 from clingo import Control
 from clorm.orm import \
@@ -15,7 +17,8 @@ from clorm.orm import \
     ph_, ph1_, ph2_, \
     _MultiMap, _FactMap, \
     fact_generator, FactBase, FactBaseHelper, \
-    control_add_facts, model_facts, model_contains
+    control_add_facts, model_facts, model_contains, \
+    Signature
 
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
@@ -1265,6 +1268,57 @@ class ORMTestCase(unittest.TestCase):
         self.assertEqual(FBABIdx.predicates, [Afact,Bfact])
         self.assertEqual(FBABIdx.indexes,[Afact.num1,Bfact.num1])
 
+
+    #--------------------------------------------------------------------------
+    # Test the signature generation for writing python functions that can be
+    # called from ASP.
+    # --------------------------------------------------------------------------
+
+    def test_signature(self):
+
+        date_field = StringField(infunc=lambda dt: dt.strftime("%Y%m%d"),
+                                 outfunc=lambda s: datetime.datetime.strptime(s,"%Y%m%d").date())
+        dow_field = ConstantField(infunc=lambda dt: calendar.day_name[dt.weekday()].lower())
+
+        class EDate(ComplexTerm):
+            idx = IntegerField()
+            date = date_field
+            class Meta: name="edate"
+
+
+        sig1 = Signature(date_field)     # returns a single date
+        sig2 = Signature([date_field])   # returns a list of dates
+        sig3 = Signature(date_field, dow_field)  # takes a date and returns the day or week
+
+        sig4 = Signature(EDate,EDate)    # takes an EDate and returns an EDate
+        date1 = datetime.date(2018,1,1)
+        date2 = datetime.date(2019,2,2)
+
+        edate1 = EDate(idx=1, date=date1)
+        edate2 = EDate(idx=2, date=date2)
+
+        # Test simple output and list output
+
+        def getdate1() : return date1
+        def getdates() : return [date1, date2]
+
+        cl_getdate1 = sig1.make_clingo_wrapper(getdate1)
+        cl_getdates = sig2.make_clingo_wrapper(getdates)
+        self.assertEqual(cl_getdate1(), String("20180101"))
+        self.assertEqual(cl_getdates(), [String("20180101"), String("20190202")])
+
+        # Use decoractor mode
+
+        @sig3.make_clingo_wrapper
+        def getdow(dt) : return dt
+        result = getdow(String("20180101"))
+        self.assertEqual(result, Function("monday",[]))
+
+        # Test a ComplexTerm input and output
+        @sig4.make_clingo_wrapper
+        def getedate(indate): return indate
+        self.assertEqual(getedate(edate1.raw), edate1.raw)
+        self.assertEqual(getedate(edate2.raw), edate2.raw)
 
 #------------------------------------------------------------------------------
 # main

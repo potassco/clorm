@@ -50,7 +50,8 @@ __all__ = [
     'control_assign_external',
     'control_release_external',
     'model_contains',
-    'model_facts'
+    'model_facts',
+    'Signature'
     ]
 
 #------------------------------------------------------------------------------
@@ -1610,6 +1611,62 @@ def model_facts(model, factbase, atoms=False, terms=False, shown=False):
 #              model.symbols(atoms=atoms,terms=terms,shown=shown))]
     return factbase(symbols=model.symbols(atoms=atoms,terms=terms,shown=shown),
                     delayed_init=True)
+
+
+#------------------------------------------------------------------------------
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+# When calling Python functions from ASP you need to do some type
+# conversions. The Signature class can be used to generate a wrapper function
+# that does the type conversion for you.
+# ------------------------------------------------------------------------------
+
+class Signature(object):
+    def __init__(self, *sigs):
+        def _validate_basic_sig(sig):
+            if inspect.isclass(sig) and issubclass(sig, ComplexTerm): return True
+            if isinstance(sig, SimpleField): return True
+
+            raise TypeError(("Invalid signature element {}: must be a ComplexTerm "
+                             "class or SimpleField object".format(s)))
+
+        self._insigs = sigs[:-1]
+        self._outsig = sigs[-1]
+
+        # Validate the signature
+        for s in self._insigs: _validate_basic_sig(s)
+        if isinstance(self._outsig, collections.Iterable):
+            if len(self._outsig) != 1:
+                raise ValueError("Return value list signature must contain only one element")
+            _validate_basic_sig(self._outsig[0])
+        else:
+            _validate_basic_sig(self._outsig)
+
+    def _input(self, sig, arg):
+        # Since signature already validated we can make assumptions
+        if inspect.isclass(sig) and issubclass(sig, ComplexTerm):
+            return sig._unify(arg)
+        return sig.cltopy(arg)
+
+    def _output(self, sig, arg):
+        # Since signature already validated we can make assumptions
+        if inspect.isclass(sig) and issubclass(sig, ComplexTerm) and isinstance(arg, sig):
+            return arg.raw
+        if isinstance(sig, SimpleField):
+            return sig.pytocl(arg)
+        if isinstance(sig, collections.Iterable) and isinstance(arg, collections.Iterable):
+            return [ self._output(sig[0], v) for v in arg ]
+        raise ValueError("Value {} does not match signature {}".format(arg, sig))
+
+
+    def make_clingo_wrapper(self, fn):
+        def wrapper(*args):
+            if len(args) > len(self._insigs):
+                raise ValueError("Mis-matched arguments in call of clingo wrapper")
+            newargs = [ self._input(self._insigs[i], arg) for i,arg in enumerate(args) ]
+            return self._output(self._outsig, fn(*newargs))
+        return wrapper
 
 #------------------------------------------------------------------------------
 # main
