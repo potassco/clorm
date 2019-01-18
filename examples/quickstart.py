@@ -1,7 +1,4 @@
 #!/usr/bin/env python
-#import sys,os
-#PARENT_DIR=os.path.abspath("..")
-#sys.path.insert(0,PARENT_DIR)
 
 from clorm import monkey; monkey.patch() # must call this before importing clingo
 
@@ -18,17 +15,21 @@ ASP_PROGRAM="quickstart.lp"
 # predicates.
 #--------------------------------------------------------------------------
 
-with FactBaseHelper() as fbh:
-    class Driver(Predicate):
-        name=ConstantField()
+fbh = FactBaseHelper()
 
-    class Item(Predicate):
-        name=ConstantField()
+@fbh.register
+class Driver(Predicate):
+    name=ConstantField()
 
-    class Assignment(Predicate):
-        item=ConstantField()
-        driver=ConstantField(index=True)
-        time=IntegerField()
+@fbh.register
+class Item(Predicate):
+    name=ConstantField()
+
+@fbh.register
+class Assignment(Predicate):
+    item=ConstantField()
+    driver=ConstantField(index=True)
+    time=IntegerField()
 
 DB = fbh.create_class("DB")
 

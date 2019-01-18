@@ -95,18 +95,21 @@ class ``FactBaseHelper`` is provided for simplifying the construction of the
 
 .. code-block:: python
 
-   with FactBaseHelper() as fbh:
+   fbh = FactBaseHelper()
 
-	class Driver(Predicate):
-            name=ConstantField()
+   @fbh.register
+   class Driver(Predicate):
+       name=ConstantField()
 
-	class Item(Predicate):
-	    name=ConstantField()
+   @fbh.register
+   class Item(Predicate):
+       name=ConstantField()
 
-	class Assignment(Predicate):
-	    item=ConstantField()
-	    driver=ConstantField(index=True)
-	    time=IntegerField()
+   @fbh.register
+   class Assignment(Predicate):
+       item=ConstantField()
+       driver=ConstantField(index=True)
+       time=IntegerField()
 
    DB = fbh.create_class("DB")
 
@@ -118,8 +121,8 @@ predicates.
 must match the predicate arity and the order in which the fields are defined
 must also match the position of each parameter in the predicate.
 
-The ``FactBaseHelper`` class provides a context for capturing the predicate
-definitions and provides a member function for dynamically defining a
+The ``FactBaseHelper`` provides a decorator that registers the predicate class
+with the helper. It then provides a member function for dynamically defining a
 ``FactBase`` sub-class. Here we define the class ``DB`` for storing predicate
 instance (i.e., the *facts*) for these types.
 

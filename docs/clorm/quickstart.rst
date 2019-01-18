@@ -98,18 +98,21 @@ of the ``FactBase`` sub-class.
 
 .. code-block:: python
 
-   with FactBaseHelper() as fbh:
+   fbh = FactBaseHelper()
 
-	class Driver(Predicate):
-            name=ConstantField()
+   @fbh.register
+   class Driver(Predicate):
+       name=ConstantField()
 
-	class Item(Predicate):
-	    name=ConstantField()
+   @fbh.register
+   class Item(Predicate):
+       name=ConstantField()
 
-	class Assignment(Predicate):
-	    item=ConstantField()
-	    driver=ConstantField(index=True)
-	    time=IntegerField()
+   @fbh.register
+   class Assignment(Predicate):
+       item=ConstantField()
+       driver=ConstantField(index=True)
+       time=IntegerField()
 
    DB = fbh.create_class("DB")
 
@@ -121,11 +124,10 @@ predicates.
 must match the predicate arity and the order in which the fields are defined
 must also match the position of each parameter in the predicate.
 
-The ``FactBaseHelper`` class provides a Python *context* for capturing the
-predicate definitions and provides a member function for dynamically defining a
+The ``FactBaseHelper`` provides a decorator that registers the predicate class
+with the helper. It then provides a member function for dynamically defining a
 ``FactBase`` sub-class. Here we define the class ``DB`` for storing predicate
-instance for these types (i.e., essentially the *facts* that were interested
-in).
+instance (i.e., the *facts*) for these types.
 
 You will notice that the declaration of the ``driver`` field contains the option
 ``index=True``. This ensures that the ``driver`` field is indexed whenever an

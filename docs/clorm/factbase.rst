@@ -85,36 +85,13 @@ A Helper for Defining Containers
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 While defining a ``FactBase`` is not a particularly onerous task, nevertheless
-it does leave open some room for mistakes; for example when a new Predicate is
-defined but not aded to the fact base definition.
+it does leave open some room for mistakes; for example when a Predicate
+definition is modified and the modification is not reflected in the fact base
+definitions.
 
-To help with this CLORM provides a ``FactBaseHelper`` class. It is especially
-useful when these needs to be only one ``FactBase`` sub-class consisting of all
-the difined predicates. In such a case the helper can be used as a context to
-capture the predicate definitions and then the ``create_class()`` member
-function used to dynamically define the corresponding class.
 
-.. code-block:: python
-
-   from clorm import *
-
-   with FactBaseHelper() as fbh:
-      class Person(Predicate):
-         person = ConstantField()
-         address = StringField()
-
-      class Pet(Predicate):
-         owner = ConstantField(index=True)
-         petname = StringField()
-
-   AppDB = fbh.create_class("AppDB")
-
-As was mentioned in the previous chapter the indexes are defined by specifying
-``index=True`` for the appropriate predicate definition, so that the above to
-sets of versions will produce identical results.
-
-The ``FactBaseHelper`` also supports a decorator mode that allows for slighly
-more control.
+To help with this CLORM provides a ``FactBaseHelper`` class that instantiates a
+decorator that can be used to associate a predicate with a helper object.
 
 .. code-block:: python
 
@@ -136,6 +113,42 @@ more control.
 
    AppDB1 = fbh1.create_class("AppDB1")
    AppDB2 = fbh2.create_class("AppDB2")
+
+As was mentioned in the previous chapter the indexes are defined by specifying
+``index=True`` for the appropriate predicate definition, so that the above to
+sets of versions will produce identical results.
+
+
+The ``FactBaseHelper`` also offers a contex mode which is useful for when you
+want only one ``FactBase`` sub-class consisting of all the defined
+predicates. In such a case the helper can be used as a context to capture all the
+predicates defined within the context.
+
+.. code-block:: python
+
+   from clorm import *
+
+   with FactBaseHelper() as fbh:
+      class Person(Predicate):
+         person = ConstantField()
+         address = StringField()
+
+      class Pet(Predicate):
+         owner = ConstantField(index=True)
+         petname = StringField()
+
+   AppDB = fbh.create_class("AppDB")
+
+.. warning::
+
+   I am leaning towards removing the context interface from the API! It allows
+   for fewer lines of code by implicitly capturing the predicates that are
+   defined within the context block. This leads to two issues. Firstly, it
+   possibly breaks the *Zen of Python* directive that says that it is better to
+   be explicit than implicit. Secondly, it also means that the predicate
+   definition process is not thread-safe; if two threads are defining predicates
+   simultaneously then the context may capture both sets of definitions.
+
 
 Querying
 --------

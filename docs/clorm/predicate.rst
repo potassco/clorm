@@ -251,13 +251,13 @@ So far we have shown how to create Python definitions that match predicates with
 simple terms. However, in ASP it is common to also use complex terms (also
 called *functions*) within a predicate.
 
-.. code-block:: prolog
+.. code-block:: none
 
     booking(20181231, location("Sydney", "Australia)).
 
 or a tuple
 
-.. code-block:: prolog
+.. code-block:: none
 
     booking2(20181231, ("Sydney", "Australia)).
 
