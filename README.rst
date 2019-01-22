@@ -1,30 +1,30 @@
-Clingo ORM (CLORM)
+Clingo ORM (ClORM)
 ==================
 
-CLORM is a Python library that provides an Object Relational Mapping (ORM)
+ClORM is a Python library that provides an Object Relational Mapping (ORM)
 interface to the Clingo Answer Set Programming (ASP) solver. The goal of this
 library is to make it easier to integrate Clingo within a Python application. It
 is designed to supplement and not replace the existing Clingo API.
 
 When integrating an ASP program into an application you typically want to model
 the domain as a statically written ASP program, but then to generate problem
-instances and process the results dynamically. CLORM makes this integration
+instances and process the results dynamically. ClORM makes this integration
 cleaner, both in terms of code readability but also by making it easier to
 refactor the python code as the ASP program evolves.
 
-Note: CLORM currently only works with Python 3.x.
+Note: ClORM currently only works with Python 3.x.
 
 Installation
 ------------
 
-The easiest way to install CLORM is with Anaconda. Assuming you have already
+The easiest way to install ClORM is with Anaconda. Assuming you have already
 installed some variant of Anaconda, first you need to install Clingo:
 
 .. code-block:: bash
 
     $ conda install -c potassco clingo
 
-Then install CLORM:
+Then install ClORM:
 
 .. code-block:: bash
 
@@ -33,7 +33,7 @@ Then install CLORM:
 Quick Start
 -----------
 
-The following example highlights the basic features of CLORM. The ASP and Python
+The following example highlights the basic features of ClORM. The ASP and Python
 parts of this example are located in the ``examples`` sub-directory in the git
 repository. The ASP program is ``quickstart.lp`` and the Python program is
 ``quickstart.py``.
@@ -82,11 +82,11 @@ First the relevant libraries need to be imported.
 
 The first line `monkey patches <https://en.wikipedia.org/wiki/Monkey_patch>`_ a
 number of Clingo classes by creating wrappers that makes the integration with
-CLORM seemless. You can of course use CLORM without monkey patching Clingo, but
+ClORM seemless. You can of course use ClORM without monkey patching Clingo, but
 it requires a bit more code.
 
 The next step is to define a data model that maps the Clingo predicates to
-Python classes. CLORM introduces two basic concepts for defining the data model:
+Python classes. ClORM introduces two basic concepts for defining the data model:
 ``Predicate`` and ``FactBase``. ``Predicate`` maps the ASP predicates to Python
 classes, while ``FactBase`` provides a container for storing facts of these
 types.  Both classes must be sub-classed when defining the data model. A helper
@@ -195,7 +195,7 @@ returns a suitable ``Select`` object.
 
     query=solution.select(Assignment).where(Assignment.driver == ph1_)
 
-A CLORM query can be viewed as a simplified version of a traditional database
+A ClORM query can be viewed as a simplified version of a traditional database
 query. Here we want to find ``Assignment`` instances that match the ``driver``
 field to a special placeholder object ``ph1_``. The value of ``ph1_`` will be
 provided when the query is actually executed; which allows the query to be
@@ -217,7 +217,7 @@ each driver and print the result.
 
 Calling ``query.get(d.name)`` executes the query for the given driver. Because
 ``d.name`` is the first parameter it matches against the placeholder ``ph1_`` in
-the query definition. Currently, CLORM support up to four placeholders.
+the query definition. Currently, ClORM support up to four placeholders.
 
 Running this example produces the following results:
 
@@ -234,15 +234,15 @@ Running this example produces the following results:
              Item item3 at time 3
     Driver michael is not working today
 
-The above example shows some of the main features of CLORM and how to match the
+The above example shows some of the main features of ClORM and how to match the
 Python data model to the defined ASP predicates. For more details about how to
-use CLORM see the `documentation
+use ClORM see the `documentation
 <https://clorm.readthedocs.io/en/latest/>`_ (**work in progress**).
 
 Development
 -----------
-* Python version: CLORM was developed using Python 3.7 and has been tested with Python 3.6.
-* Clingo version: CLORM has been tested with Clingo version 5.3.0 and 5.3.1
+* Python version: ClORM was developed using Python 3.7 and has been tested with Python 3.6.
+* Clingo version: ClORM has been tested with Clingo version 5.3.0 and 5.3.1
 
 TODO
 ----
