@@ -56,6 +56,7 @@ def main():
     def on_model(model):
         nonlocal solution
         solution = model.facts(DB, atoms=True)
+
     ctrl.solve(on_model=on_model)
     if not solution:
         raise ValueError("No solution found")
@@ -77,5 +78,4 @@ def main():
 #------------------------------------------------------------------------------
 if __name__ == "__main__":
     main()
-
 

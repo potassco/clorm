@@ -1,7 +1,7 @@
 Quick Start
 ===========
 
-We now highlight the basic features of CLORM by way of a simple example. This
+We now highlight the basic features of ClORM by way of a simple example. This
 example covers:
 
 * defining a simple data model
@@ -17,7 +17,7 @@ reader is reasonably familiar with ASP syntax and how to write an ASP
 program. However, if this is not the case it is worth going to the `Clingo docs <https://potassco.org/doc/start>`_ for links to some good reference material.
 
 While we assume that the reader is familiar with ASP, we do not assume that the
-reader is necessarily familiar with the official Clingo Python API. Since CLORM
+reader is necessarily familiar with the official Clingo Python API. Since ClORM
 is designed to be used with the Clingo API we therefore provide some basic
 explanations of the relevant steps necessary to run the Clingo solver. However,
 for more detailed documentation see the `Clingo API <https://potassco.org/clingo/python-api/current/clingo.html>`_.
@@ -80,14 +80,14 @@ First the relevant libraries need to be imported.
 
 The first line `monkey patches <https://en.wikipedia.org/wiki/Monkey_patch>`_ a
 number of Clingo classes by creating wrappers that make the integration with
-CLORM seemless. While you can use CLORM without monkey patching Clingo the
+ClORM seemless. While you can use ClORM without monkey patching Clingo the
 interaction requires a bit more cumbersome.
 
 Defining the Data Model
 -----------------------
 
 The most important setp is to define a data model that maps the Clingo
-predicates to Python classes. CLORM introduces two basic concepts for defining
+predicates to Python classes. ClORM introduces two basic concepts for defining
 the data model: ``Predicate`` and ``FactBase``. ``Predicate`` maps the ASP
 predicates to Python classes, while ``FactBase`` provides a container for
 storing facts of these types.  Both classes must be sub-classed when defining
@@ -114,7 +114,7 @@ of the ``FactBase`` sub-class.
        driver=ConstantField(index=True)
        time=IntegerField()
 
-   DB = fbh.create_class("DB")
+   AppDB = fbh.create_class("AppDB")
 
 The above code defines three classes to match the ASP program's input and output
 predicates.
@@ -124,15 +124,16 @@ predicates.
 must match the predicate arity and the order in which the fields are defined
 must also match the position of each parameter in the predicate.
 
-The ``FactBaseHelper`` provides a decorator that registers the predicate class
+The ``FactBaseHelper`` implements a decorator that registers the predicate class
 with the helper. It then provides a member function for dynamically defining a
-``FactBase`` sub-class. Here we define the class ``DB`` for storing predicate
+``FactBase`` sub-class. Here we define the class ``AppDB`` for storing predicate
 instance (i.e., the *facts*) for these types.
 
 You will notice that the declaration of the ``driver`` field contains the option
 ``index=True``. This ensures that the ``driver`` field is indexed whenever an
-``Assignment`` object is inserted into a ``DB`` instance. As with a traditional
-database indexing improves query performance but should also be used sparingly.
+``Assignment`` object is inserted into a ``AppDB`` instance. As with a
+traditional database indexing improves query performance but should also be used
+sparingly.
 
 Using the Data Model
 --------------------
@@ -149,13 +150,13 @@ First we create the Clingo ``Control`` object and load the ASP program.
 
 
 Next we generate a problem instance by generating a lists of ``Driver`` and
-``Item`` objects. These items are added to a ``DB`` instance.
+``Item`` objects. These items are added to a ``AppDB`` instance.
 
 .. code-block:: python
 
     drivers = [ Driver(name=n) for n in ["dave", "morri", "michael" ] ]
     items = [ Item(name="item{}".format(i)) for i in range(1,6) ]
-    instance = DB(drivers + items)
+    instance = AppDB(drivers + items)
 
 The ``Driver`` and ``Item`` constructors require named parameters that match the
 declared field names; you cannot use "normal" Python list arguments.
@@ -177,7 +178,8 @@ ASP program is typically called an *answer set* or simply a *model*.
     solution=None
     def on_model(model):
         nonlocal solution
-        solution = model.facts(DB, atoms=True)
+        solution = model.facts(AppDB, atoms=True)
+
     ctrl.solve(on_model=on_model)
     if not solution:
         raise ValueError("No solution found")
@@ -188,24 +190,24 @@ before an optimal model is found. Also, note that if the problem is
 unsatisfiable then it will never be called and you should always check for this
 case.
 
-The line ``solution = model.facts(DB, atoms=True)`` extracts only instances of
-the predicates that were defined in the data model. In this case it ignores the
-``working_driver/1`` instances. These facts are stored and returned in a ``DB``
-object.
+The line ``solution = model.facts(AppDB, atoms=True)`` extracts only instances
+of the predicates that were defined in the data model. In this case it ignores
+the ``working_driver/1`` instances. These gathered facts are stored and returned
+in a ``AppDB`` object.
 
 The final part of our Python program involves querying the solution to print out
-the relevant parts. To do this we call the ``DB.select()`` member function that
-returns a suitable ``Select`` object.
+the relevant facts. To do this we call the ``AppDB.select()`` member function
+that returns a suitable ``Select`` object.
 
 .. code-block:: python
 
     query=solution.select(Assignment).where(Assignment.driver == ph1_)
 
-A CLORM query can be viewed as a simplified version of a traditional database
+A ClORM query can be viewed as a simplified version of a traditional database
 query. Here we want to find ``Assignment`` instances that match the ``driver``
 field to a special placeholder object ``ph1_``. The value of ``ph1_`` will be
-provided when the query is actually executed; which allows the query to be
-re-run multiple times with different values.
+provided when the query is actually executed. Seperating query definition from
+execution allows for a query to be re-used.
 
 In particular, we now iterate over the list of drivers and execute the query for
 each driver and print the result.
@@ -223,7 +225,7 @@ each driver and print the result.
 
 Calling ``query.get(d.name)`` executes the query for the given driver. Because
 ``d.name`` is the first parameter it matches against the placeholder ``ph1_`` in
-the query definition. Currently, CLORM support up to four placeholders.
+the query definition. Currently, ClORM support up to four placeholders.
 
 Running this example produces the following results:
 
@@ -240,7 +242,7 @@ Running this example produces the following results:
              Item item3 at time 3
     Driver michael is not working today
 
-The above example shows some of the main features of CLORM and how to match the
-Python data model to the defined ASP predicates. For more details of the CLORM
+The above example shows some of the main features of ClORM and how to match the
+Python data model to the defined ASP predicates. For more details of the ClORM
 API see the documentation (**coming soon**).
 

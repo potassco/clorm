@@ -1,14 +1,21 @@
 Installation
 ============
 
-The easiest way to install CLORM is with Anaconda. Assuming you have already
+ClORM is an open-source project and can be installed from source. An `Anaconda
+<https://en.wikipedia.org/wiki/Anaconda_(Python_distribution)>`_ installation is
+provided for convenience.
+
+Anaconda installation
+---------------------
+
+The easiest way to install ClORM is with Anaconda. Assuming you have already
 installed some variant of Anaconda, first you need to install Clingo:
 
 .. code-block:: bash
 
     $ conda install -c potassco clingo
 
-Then install CLORM:
+Then install ClORM:
 
 .. code-block:: bash
 
@@ -17,7 +24,8 @@ Then install CLORM:
 Installing from source
 ----------------------
 
-The project is hosted on github at https://github.com/daveraja/clorm and can be installed using git:
+The project is hosted on github at https://github.com/daveraja/clorm and can
+also be installed using git:
 
 .. code-block:: bash
 

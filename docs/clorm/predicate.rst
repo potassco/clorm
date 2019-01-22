@@ -302,6 +302,8 @@ As well as allowing for complex terms CLORM also provides support for dealing
 with the objects created through the underlying Clingo Python API.
 
 
+.. _raw-symbol-label:
+
 Raw Clingo Symbols
 ^^^^^^^^^^^^^^^^^^
 
@@ -334,7 +336,7 @@ objects. So assuming the above python code.
 
 .. code-block:: python
 
-   address_copy = Address(raw_=raw_address)
+   address_copy = Address(raw=raw_address)
 
 Note: not every raw symbol will match (technically *unify*) with a given
 ``Predicate`` definition. It the raw constructor fails to unify a symbol with a

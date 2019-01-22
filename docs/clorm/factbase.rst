@@ -1,9 +1,9 @@
-Sets of Facts
-=============
+Dealing with Multiple Facts
+===========================
 
 
 As well as offering a higher-level interface for mapping ASP facts to Python
-objects, CLORM also provides facilities for dealing with collections of facts.
+objects, ClORM also provides facilities for dealing with collections of facts.
 Whether they are the set of facts that make up the problem instance or,
 alternatively, the facts that constitute the *model* of a problem, an ASP
 application typically does not simply deal with individual facts in isolation.
@@ -11,7 +11,7 @@ application typically does not simply deal with individual facts in isolation.
 A Container for Facts
 ---------------------
 
-CLORM provides the ``FactBase`` as a container class for storing and querying
+ClORM provides the ``FactBase`` as a container class for storing and querying
 facts. This class must be sub-classed, and each sub-class is distinguished by
 the predicates that it can store and the predicate fields for which it maintains
 an index.
@@ -78,7 +78,7 @@ A final feature of the ``FactBase`` constructors is that they implement a
 delayed initialisation feature with the constructor option
 ``delayed_init=True``. With this option the importing of a symbols list is
 delayed until the first access of the object. The usefulness of this option will
-be discussed later when we examine the integration of CLORM with the ASP solver
+be discussed later when we examine the integration of ClORM with the ASP solver
 and dealing with ASP models.
 
 A Helper for Defining Containers
@@ -90,7 +90,7 @@ definition is modified and the modification is not reflected in the fact base
 definitions.
 
 
-To help with this CLORM provides a ``FactBaseHelper`` class that instantiates a
+To help with this ClORM provides a ``FactBaseHelper`` class that instantiates a
 decorator that can be used to associate a predicate with a helper object.
 
 .. code-block:: python
@@ -141,11 +141,11 @@ predicates defined within the context.
 
 .. warning::
 
-   I am leaning towards removing the context interface from the API! It allows
+   I am leaning towards removing the context interface from the API. It allows
    for fewer lines of code by implicitly capturing the predicates that are
-   defined within the context block. This leads to two issues. Firstly, it
-   possibly breaks the *Zen of Python* directive that says that it is better to
-   be explicit than implicit. Secondly, it also means that the predicate
+   defined within the context block. However, this leads to two issues. Firstly,
+   it possibly breaks the *Zen of Python* directive that says that it is better
+   to be explicit than implicit. Secondly, it also means that the predicate
    definition process is not thread-safe; if two threads are defining predicates
    simultaneously then the context may capture both sets of definitions.
 
@@ -167,7 +167,7 @@ with the current fact; and to store it if some sort of matching needs to take
 place.
 
 However, this loop-and-test approach leads to unnecessary boilerplate code as
-well as making the purpose of the code more obscure. CLORM's ``FactBase`` is
+well as making the purpose of the code more obscure. ClORM's ``FactBase`` is
 intended to alleviate this problem by offering a database-like query mechanism
 for extracting facts from a model.
 
@@ -197,7 +197,7 @@ exactly one results and will raise a ``ValueError`` if this is not the case.
 Queries with Parameters
 ^^^^^^^^^^^^^^^^^^^^^^^
 
-To provide for more flexible queries CLORM introduces placeholders in order to
+To provide for more flexible queries ClORM introduces placeholders in order to
 parameterise queries. Placeholders are named ``ph1_`` to ``ph4_`` and correspond
 to the position of the parameter in the ``get()`` or ``get_unique()`` function
 calls.
@@ -219,11 +219,11 @@ Complex Queries and Indexing
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 In the simple case where the ``Select`` query object contains a ``where`` clause
-that corresponds to an indexed field then CLORM is able to use this index to
+that corresponds to an indexed field then ClORM is able to use this index to
 make query execution efficient.
 
 A ``where`` clause can consist of more the one clause and these are treated as a
-conjunction. Its is also possible to construct more complex clauses using CLORM
+conjunction. Its is also possible to construct more complex clauses using ClORM
 supplied ``and_``, ``or_``, and ``not_`` constructs.
 
 .. code-block:: python
@@ -253,14 +253,14 @@ the same results.
        results2 = list(query2.get("dave"))
 
 However, while both these queries do generate the same result they are not
-equivalent in behaviour. In particular, the CLORM generated functor has a
+equivalent in behaviour. In particular, the ClORM generated functor has a
 structure that the system is able to analyse and can therefore potentially use
 indexing to improve query efficiency.
 
 However, there is no mechanism to analyse the internal make up of a lambda or
 function. Consequently in these cases the query would have to examine every fact
 in the fact base of the given type and test the function against that
-fact. Hence it is usually preferable to use the CLORM generated where clauses
+fact. Hence it is usually preferable to use the ClORM generated where clauses
 possible.
 
 

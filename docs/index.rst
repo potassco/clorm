@@ -3,13 +3,21 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-CLORM: An ORM for Clingo
-========================
+ClORM: An ORM API for Clingo
+============================
 
-CLORM is a Python library that provides an Object Relational Mapping (ORM)
-interface to the Clingo Answer Set Programming (ASP) solver. The goal of this
-library is to supplement the existing Clingo API to make it easier to build and
-maintain Python application that integrate with Clingo.
+ClORM is a Python library that provides an Object Relational Mapping (ORM)
+interface to the Clingo Answer Set Programming (ASP) solver. It allows *facts*
+to be asserted to, and extracted from, the ASP solver in an intuitive and easy
+to use way. The goal of this library is to supplement the existing Clingo API to
+make it easier to build and maintain Python application that integrate with
+Clingo.
+
+When integrating an ASP program into a larger application a typical requirement
+is to model the problem domain as a statically written ASP program, but then to
+generate problem instances and process the results dynamically. ClORM makes this
+integration cleaner, both in terms of code readability but also by making it
+easier to refactor the python code as the ASP program evolves.
 
 - Currently only works with Python 3.x (developed on 3.6 and 3.7)
 - Tested with Clingo 5.3.0 and 5.3.1

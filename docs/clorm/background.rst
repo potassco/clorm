@@ -7,8 +7,8 @@ Object Relational Mapping (ORM)
 `ORM <https://en.wikipedia.org/wiki/Object-relational_mapping>`_ interfaces are
 a common way of interacting with relational databases and there are some
 well-known Python ORMs (e.g., SQLAlchemy and Peewee). Fundamentally all ORMs
-provide a way of matching rows in a database table (or view) to Python objects
-whose member variables correspond to the fields of a database table.
+provide a way of matching rows in a database table (or database view) to Python
+objects whose member variables correspond to the fields of the database table.
 
 As well as mapping table rows to program objects, ORMs also provide facilities
 for building SQL queries using high-level primitives; rather than dealing with
@@ -31,7 +31,7 @@ be run as a stand-alone executable or integrated as a library into other
 languages. It has very good support for Python with an extensive API for
 interacting with the solver.
 
-In fact Clingo supports Python in two ways:
+Clingo supports Python in two ways:
 
 * running Clingo from within a Python application.
 * calling Python functions from within an ASP program,
@@ -39,9 +39,9 @@ In fact Clingo supports Python in two ways:
 An ORM Interface to Clingo
 --------------------------
 
-However, while the Clingo Python API is both extensive and flexible it is also
-fairly low-level when it comes to getting data into, and out of, the solver. As
-a result there is typically a reasonable amount of code that needs to be written
+While the Clingo Python API is both extensive and flexible it is also fairly
+low-level when it comes to getting data into, and out of, the solver. As a
+result there is typically a reasonable amount of code that needs to be written
 in order to carry out even simple translations to and from Clingo. Furthermore
 without strong discipline such code can become interspersed throughout the
 Python code base.
