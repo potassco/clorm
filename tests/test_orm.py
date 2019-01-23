@@ -8,9 +8,6 @@ import calendar
 from clingo import Number, String, Function,  __version__ as clingo_version
 from clingo import Control
 from clorm.orm import \
-    integer_cltopy, string_cltopy, constant_cltopy, \
-    integer_pytocl, string_pytocl, constant_pytocl, \
-    integer_unifies, string_unifies, constant_unifies, \
     NonLogicalSymbol, Predicate, ComplexTerm, \
     IntegerField, StringField, ConstantField, ComplexField, RawField, \
     not_, and_, or_, _StaticComparator, _get_field_comparators, \
@@ -34,6 +31,49 @@ class ORMTestCase(unittest.TestCase):
     def tearDown(self):
         pass
 
+
+    #--------------------------------------------------------------------------
+    # Simple test to make sure the default getters and setters are correct
+    #--------------------------------------------------------------------------
+    def test_simplefields(self):
+
+        symstr = String("SYM")
+        self.assertEqual(type(StringField.cltopy(symstr)), str)
+        self.assertEqual(StringField.cltopy(symstr), "SYM")
+        self.assertEqual(StringField.pytocl("SYM"), symstr)
+
+        symstr = Function("const")
+        self.assertEqual(type(ConstantField.cltopy(symstr)), str)
+        self.assertEqual(ConstantField.cltopy(symstr), "const")
+        self.assertEqual(ConstantField.pytocl("const"), symstr)
+
+        symstr = Number(1)
+        self.assertEqual(type(IntegerField.cltopy(symstr)), int)
+        self.assertEqual(IntegerField.cltopy(symstr), 1)
+        self.assertEqual(IntegerField.pytocl(1), symstr)
+
+
+        with self.assertRaises(TypeError) as ctx:
+            class DateField(StringField, StringField):
+                pass
+
+        class DateField(StringField):
+            pytocl = lambda dt: dt.strftime("%Y%m%d")
+            cltopy = lambda s: datetime.datetime.strptime(s,"%Y%m%d").date()
+
+        symstr = String("20180101")
+        dt = datetime.date(2018,1,1)
+        self.assertEqual(DateField.cltopy(symstr), dt)
+        self.assertEqual(DateField.pytocl(dt), symstr)
+
+        class PartialField(StringField):
+            pytocl = lambda dt: dt.strftime("%Y%m%d")
+
+        with self.assertRaises(NotImplementedError) as ctx:
+            symstr = String("20180101")
+            dt = datetime.date(2018,1,1)
+            self.assertEqual(PartialField.cltopy(symstr), dt)
+
     #--------------------------------------------------------------------------
     # Simple test to make sure the default getters and setters are correct
     #--------------------------------------------------------------------------
@@ -44,21 +84,21 @@ class ORMTestCase(unittest.TestCase):
         cnum1 = Number(num1)
         cstr1 = String(str1)
         csim1 = Function(sim1,[])
-        self.assertEqual(num1, integer_cltopy(cnum1))
-        self.assertEqual(str1, string_cltopy(cstr1))
-        self.assertEqual(sim1, constant_cltopy(csim1))
+        self.assertEqual(num1, IntegerField.cltopy(cnum1))
+        self.assertEqual(str1, StringField.cltopy(cstr1))
+        self.assertEqual(sim1, ConstantField.cltopy(csim1))
 
-        self.assertEqual(cnum1, integer_pytocl(num1))
-        self.assertEqual(cstr1, string_pytocl(str1))
-        self.assertEqual(csim1, constant_pytocl(sim1))
+        self.assertEqual(cnum1, IntegerField.pytocl(num1))
+        self.assertEqual(cstr1, StringField.pytocl(str1))
+        self.assertEqual(csim1, ConstantField.pytocl(sim1))
 
-        self.assertTrue(integer_unifies(cnum1))
-        self.assertTrue(string_unifies(cstr1))
-        self.assertTrue(constant_unifies(csim1))
+        self.assertTrue(IntegerField.unifies(cnum1))
+        self.assertTrue(StringField.unifies(cstr1))
+        self.assertTrue(ConstantField.unifies(csim1))
 
-        self.assertFalse(integer_unifies(csim1))
-        self.assertFalse(string_unifies(cnum1))
-        self.assertFalse(constant_unifies(cstr1))
+        self.assertFalse(IntegerField.unifies(csim1))
+        self.assertFalse(StringField.unifies(cnum1))
+        self.assertFalse(ConstantField.unifies(cstr1))
 
         fint = IntegerField()
         fstr = StringField()
@@ -97,37 +137,6 @@ class ORMTestCase(unittest.TestCase):
     #--------------------------------------------------------------------------
     # Simple test to make sure the default getters and setters are correct
     #--------------------------------------------------------------------------
-    def test_pytocl_and_cltopy_and_unifies(self):
-        num1 = 1
-        str1 = "string"
-        sim1 = "name"
-        cnum1 = Number(num1)
-        cstr1 = String(str1)
-        csim1 = Function(sim1,[])
-        self.assertEqual(num1, integer_cltopy(cnum1))
-        self.assertEqual(str1, string_cltopy(cstr1))
-        self.assertEqual(sim1, constant_cltopy(csim1))
-
-        self.assertEqual(cnum1, integer_pytocl(num1))
-        self.assertEqual(cstr1, string_pytocl(str1))
-        self.assertEqual(csim1, constant_pytocl(sim1))
-
-        self.assertTrue(integer_unifies(cnum1))
-        self.assertTrue(string_unifies(cstr1))
-        self.assertTrue(constant_unifies(csim1))
-
-        self.assertFalse(integer_unifies(csim1))
-        self.assertFalse(string_unifies(cnum1))
-        self.assertFalse(constant_unifies(cstr1))
-
-        fint = IntegerField()
-        fstr = StringField()
-        fconst = ConstantField()
-
-        self.assertTrue(fint.unifies(cnum1))
-        self.assertTrue(fstr.unifies(cstr1))
-        self.assertTrue(fconst.unifies(csim1))
-
 
     #--------------------------------------------------------------------------
     # Test setting index for a field
@@ -240,8 +249,12 @@ class ORMTestCase(unittest.TestCase):
     # --------------------------------------------------------------------------
     def test_complex_predicate_defn(self):
 
+        class FloatApproxField(IntegerField):
+            pytocl = lambda x: int(x*100)
+            cltopy = outfunc=lambda x: x/100.0
+
         class Fun(ComplexTerm):
-            aint = IntegerField(infunc=lambda x: int(x*100), outfunc=lambda x: x/100.0)
+            aint = FloatApproxField()
             astr = StringField()
 
         class MyTuple(ComplexTerm):
@@ -1276,19 +1289,21 @@ class ORMTestCase(unittest.TestCase):
 
     def test_signature(self):
 
-        date_field = StringField(infunc=lambda dt: dt.strftime("%Y%m%d"),
-                                 outfunc=lambda s: datetime.datetime.strptime(s,"%Y%m%d").date())
-        dow_field = ConstantField(infunc=lambda dt: calendar.day_name[dt.weekday()].lower())
+        class DateField(StringField):
+            pytocl = lambda dt: dt.strftime("%Y%m%d")
+            cltopy = lambda s: datetime.datetime.strptime(s,"%Y%m%d").date()
+
+        class DowField(ConstantField):
+            pytocl = lambda dt: calendar.day_name[dt.weekday()].lower()
 
         class EDate(ComplexTerm):
             idx = IntegerField()
-            date = date_field
+            date = DateField()
             class Meta: name="edate"
 
-
-        sig1 = Signature(date_field)     # returns a single date
-        sig2 = Signature([date_field])   # returns a list of dates
-        sig3 = Signature(date_field, dow_field)  # takes a date and returns the day or week
+        sig1 = Signature(DateField)     # returns a single date
+        sig2 = Signature([DateField])   # returns a list of dates
+        sig3 = Signature(DateField, DowField)  # takes a date and returns the day or week
 
         sig4 = Signature(EDate,EDate)    # takes an EDate and returns an EDate
         date1 = datetime.date(2018,1,1)

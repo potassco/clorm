@@ -28,15 +28,6 @@ __all__ = [
     'Select',
     'FactBase',
     'FactBaseHelper',
-    'integer_cltopy',
-    'string_cltopy',
-    'constant_cltopy',
-    'integer_pytocl',
-    'string_pytocl',
-    'constant_pytocl',
-    'integer_unifies',
-    'string_unifies',
-    'constant_unifies',
     'ph_',
     'ph1_',
     'ph2_',
@@ -69,81 +60,80 @@ class _classproperty(object):
         return self.getter(owner)
 
 #------------------------------------------------------------------------------
-# Convert different clingo symbol objects to the appropriate python type
+# SimpleField class captures the definition of a term between python and clingo. It is
+# not meant to be instantiated.
+# ------------------------------------------------------------------------------
+
+def _make_pytocl(fn):
+    def _pytocl(cls, v):
+        if cls._parentclass:
+            return cls._parentclass.pytocl(fn(v))
+        return fn(v)
+    return _pytocl
+
+def _make_cltopy(fn):
+    def _cltopy(cls, v):
+        if cls._parentclass:
+            return fn(cls._parentclass.cltopy(v))
+        return fn(v)
+    return _cltopy
+
+def _sfm_constructor(self, default=None, index=False):
+    self._default = default
+    self._index = index
+
+class _SimpleFieldMeta(type):
+    def __new__(meta, name, bases, dct):
+
+        dct["__init__"] = _sfm_constructor
+
+        if name == "SimpleField":
+            dct["cltopy"] = classmethod(lambda _, x: x)
+            dct["pytocl"] = classmethod(lambda _, x: x)
+            dct["_parentclass"] = None
+            return super(_SimpleFieldMeta, meta).__new__(meta, name, bases, dct)
+
+        for key in [ "cltopy", "pytocl" ]:
+            if key in dct and not callable(dct[key]):
+                raise AttributeError("Definition of {} is not callable".format(key))
+
+        parents = [ b for b in bases if issubclass(b, SimpleField)]
+        if len(parents) == 0:
+            raise TypeError("Internal bug: number of SimpleField bases is 0!")
+        if len(parents) > 1:
+            raise TypeError("Multiple SimpleField sub-class inheritance forbidden")
+        dct["_parentclass"] = parents[0]
+
+        # When a conversion is not specified raise a NotImplementedError
+        def _raise_nie(cls,v):
+            raise NotImplementedError("No implemented conversion")
+
+        if "cltopy" in dct:
+            dct["cltopy"] = classmethod(_make_cltopy(dct["cltopy"]))
+        else:
+            dct["cltopy"] = classmethod(_raise_nie)
+
+        if "pytocl" in dct:
+            dct["pytocl"] = classmethod(_make_pytocl(dct["pytocl"]))
+        else:
+            dct["pytocl"] = classmethod(_raise_nie)
+
+        return super(_SimpleFieldMeta, meta).__new__(meta, name, bases, dct)
+
 #------------------------------------------------------------------------------
-
-def integer_cltopy(term):
-    if term.type != clingo.SymbolType.Number:
-        raise TypeError("Object {0} is not a Number term")
-    return term.number
-
-def string_cltopy(term):
-    if term.type != clingo.SymbolType.String:
-        raise TypeError("Object {0} is not a String term")
-    return term.string
-
-def constant_cltopy(term):
-    if   (term.type != clingo.SymbolType.Function or
-          not term.name or len(term.arguments) != 0):
-        raise TypeError("Object {0} is not a Simple term")
-    return term.name
-
-#------------------------------------------------------------------------------
-# Convert python object to the approproate clingo Symbol object
-#------------------------------------------------------------------------------
-
-def integer_pytocl(v):
-    return clingo.Number(v)
-
-def string_pytocl(v):
-    return clingo.String(v)
-
-def constant_pytocl(v):
-    return clingo.Function(v,[])
-
-#------------------------------------------------------------------------------
-# check that a symbol unifies with the different field types
-#------------------------------------------------------------------------------
-
-def integer_unifies(term):
-    if term.type != clingo.SymbolType.Number: return False
-    return True
-
-def string_unifies(term):
-    if term.type != clingo.SymbolType.String: return False
-    return True
-
-def constant_unifies(term):
-    if term.type != clingo.SymbolType.Function: return False
-    if not term.name or len(term.arguments) != 0: return False
-    return True
-
-#------------------------------------------------------------------------------
-# Field definitions. All fields have the functions: pytocl, cltopy, and unifies,
+# Field definitions. All field have the functions: pytocl, cltopy, and unifies,
 # and the properties: default, is_field_defn
 # ------------------------------------------------------------------------------
 
-class SimpleField(object):
-    def __init__(self, inner_cltopy, inner_pytocl, unifies,
-                 outfunc=None, infunc=None, default=None, index=False):
-        self._inner_cltopy = inner_cltopy
-        self._inner_pytocl = inner_pytocl
-        self._unifies = unifies
-        self._outfunc = outfunc
-        self._infunc = infunc
-        self._default = default
-        self._index = index
+class SimpleField(object, metaclass=_SimpleFieldMeta):
 
-    def pytocl(self, v):
-        if self._infunc: return self._inner_pytocl(self._infunc(v))
-        return self._inner_pytocl(v)
-
-    def cltopy(self, symbol):
-        if self._outfunc: return self._outfunc(self._inner_cltopy(symbol))
-        return self._inner_cltopy(symbol)
-
-    def unifies(self, symbol):
-        return self._unifies(symbol)
+    @classmethod
+    def unifies(cls, v):
+        try:
+            cls.cltopy(v)
+        except TypeError:
+            return False
+        return True
 
     @property
     def default(self):
@@ -153,35 +143,48 @@ class SimpleField(object):
     def index(self):
         return self._index
 
-    @property
+    @_classproperty
     def is_field_defn(self): return True
 
-class IntegerField(SimpleField):
-    def __init__(self, outfunc=None, infunc=None, default=None, index=False):
-        super(IntegerField,self).__init__(inner_cltopy=integer_cltopy,
-                                          inner_pytocl=integer_pytocl,
-                                          unifies=integer_unifies,
-                                          outfunc=outfunc,infunc=infunc,
-                                          default=default,
-                                          index=index)
+    @property
+    def default(self):
+        return self._default
+
+    @property
+    def index(self):
+        return self._index
+
+#------------------------------------------------------------------------------
+# The three SimpleField
+#------------------------------------------------------------------------------
 
 class StringField(SimpleField):
-    def __init__(self, outfunc=None, infunc=None, default=None, index=False):
-        super(StringField,self).__init__(inner_cltopy=string_cltopy,
-                                         inner_pytocl=string_pytocl,
-                                         unifies=string_unifies,
-                                         outfunc=outfunc,infunc=infunc,
-                                         default=default,
-                                         index=index)
+    def _string_cltopy(symbol):
+        if symbol.type != clingo.SymbolType.String:
+            raise TypeError("Object {0} is not a String symbol")
+        return symbol.string
+
+    cltopy = _string_cltopy
+    pytocl = lambda v: clingo.String(v)
+
+class IntegerField(SimpleField):
+    def _integer_cltopy(symbol):
+        if symbol.type != clingo.SymbolType.Number:
+            raise TypeError("Object {0} is not a Number symbol")
+        return symbol.number
+
+    cltopy = _integer_cltopy
+    pytocl = lambda v: clingo.Number(v)
 
 class ConstantField(SimpleField):
-    def __init__(self, outfunc=None, infunc=None, default=None, index=False):
-        super(ConstantField,self).__init__(inner_cltopy=constant_cltopy,
-                                           inner_pytocl=constant_pytocl,
-                                           unifies=constant_unifies,
-                                           outfunc=outfunc,infunc=infunc,
-                                           default=default,
-                                           index=index)
+    def _constant_cltopy(symbol):
+        if   (symbol.type != clingo.SymbolType.Function or
+              not symbol.name or len(symbol.arguments) != 0):
+            raise TypeError("Object {0} is not a Simple symbol")
+        return symbol.name
+
+    cltopy = _constant_cltopy
+    pytocl = lambda v: clingo.Function(v,[])
 
 #------------------------------------------------------------------------------
 # A ComplexField definition allows you to wrap an existing NonLogicalSymbol
@@ -1625,9 +1628,9 @@ def model_facts(model, factbase, atoms=False, terms=False, shown=False):
 class Signature(object):
     def __init__(self, *sigs):
         def _validate_basic_sig(sig):
-            if inspect.isclass(sig) and issubclass(sig, ComplexTerm): return True
-            if isinstance(sig, SimpleField): return True
-
+            if inspect.isclass(sig):
+                if issubclass(sig, SimpleField): return True
+                if issubclass(sig, ComplexTerm): return True
             raise TypeError(("Invalid signature element {}: must be a ComplexTerm "
                              "class or SimpleField object".format(s)))
 
@@ -1644,17 +1647,19 @@ class Signature(object):
             _validate_basic_sig(self._outsig)
 
     def _input(self, sig, arg):
-        # Since signature already validated we can make assumptions
-        if inspect.isclass(sig) and issubclass(sig, ComplexTerm):
-            return sig._unify(arg)
+        # Since signature has already been validated we can make assumptions
+        if issubclass(sig, ComplexTerm): return sig._unify(arg)
         return sig.cltopy(arg)
 
     def _output(self, sig, arg):
         # Since signature already validated we can make assumptions
-        if inspect.isclass(sig) and issubclass(sig, ComplexTerm) and isinstance(arg, sig):
-            return arg.raw
-        if isinstance(sig, SimpleField):
-            return sig.pytocl(arg)
+        if inspect.isclass(sig):
+            if issubclass(sig, ComplexTerm) and isinstance(arg, sig):
+                return arg.raw
+            if issubclass(sig, SimpleField):
+                return sig.pytocl(arg)
+
+        # Deal with a list
         if isinstance(sig, collections.Iterable) and isinstance(arg, collections.Iterable):
             return [ self._output(sig[0], v) for v in arg ]
         raise ValueError("Value {} does not match signature {}".format(arg, sig))
