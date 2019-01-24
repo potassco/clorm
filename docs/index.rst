@@ -33,6 +33,8 @@ easier to refactor the python code as the ASP program evolves.
    clorm/predicate
    clorm/factbase
    clorm/integration
+   clorm/embedding
+   clorm/liborm
 
 Indices and tables
 ==================
