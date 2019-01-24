@@ -1,7 +1,7 @@
 .. _liborm:
 
-Reusable ASP Complements
-========================
+Reusable ASP Components
+=======================
 
 This section highlights the library of re-usable ASP components provided by
 ClORM. The goal is to slowly build up a comprehensive set of components that
