@@ -20,7 +20,7 @@ __all__ = [
     'StringField',
     'ConstantField',
     'ComplexField',
-    'Field',
+    'FieldInstance',
     'NonLogicalSymbol',
     'Predicate',
     'ComplexTerm',
@@ -303,7 +303,7 @@ class ComplexField(object):
 # that build a query so that we can perform lazy evaluation for querying.
 #------------------------------------------------------------------------------
 
-class Field(abc.ABC):
+class FieldInstance(abc.ABC):
     """ A class for a field instance in a ``Predicate`` or ``ComplexTerm`` definition.
     """
 
@@ -342,7 +342,7 @@ class Field(abc.ABC):
 #------------------------------------------------------------------------------
 # Implementation of a Field
 # ------------------------------------------------------------------------------
-class _Field(Field):
+class _FieldInstance(FieldInstance):
     def __init__(self, field_name, field_index, field_defn, no_setter=True):
         self._no_setter=no_setter
         self._field_name = field_name
@@ -383,17 +383,17 @@ class _Field(Field):
     def __hash__(self):
         return id(self)
     def __eq__(self, other):
-        return _FieldComparator(operator.eq, self, other)
+        return _FieldInstanceComparator(operator.eq, self, other)
     def __ne__(self, other):
-        return _FieldComparator(operator.ne, self, other)
+        return _FieldInstanceComparator(operator.ne, self, other)
     def __lt__(self, other):
-        return _FieldComparator(operator.lt, self, other)
+        return _FieldInstanceComparator(operator.lt, self, other)
     def __le__(self, other):
-        return _FieldComparator(operator.le, self, other)
+        return _FieldInstanceComparator(operator.le, self, other)
     def __gt__(self, other):
-        return _FieldComparator(operator.gt, self, other)
+        return _FieldInstanceComparator(operator.gt, self, other)
     def __ge__(self, other):
-        return _FieldComparator(operator.ge, self, other)
+        return _FieldInstanceComparator(operator.ge, self, other)
 
     def __str__(self):
         return "{}.{}".format(self.parent.__name__,self.field_name)
@@ -515,7 +515,7 @@ def _make_nls_metadata(class_name, dct):
             raise ValueError(("Error: invalid field name: '{}' "
                               "is a reserved keyword").format(field_name))
 
-        field = _Field(field_name, idx, field_defn)
+        field = _FieldInstance(field_name, idx, field_defn)
         dct[field_name] = field
         fields.append(field)
         idx += 1
@@ -582,9 +582,29 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
        .. code-block:: python
 
            class Booking(Predicate):
-               date        = StringField(index = True)
-               time        = StringField(index = True)
-               description = StringField(default = "")
+               date = StringField(index = True)
+               time = StringField(index = True)
+               name = StringField(default = "relax")
+
+           b1 = Booking("20190101", "10:00")
+           b2 = Booking("20190101", "11:00", "Dinner")
+
+    Fields names can be any valid Python variable name (i.e., not be a Python
+    keyword) subject to the following restrictions:
+
+    - start with a "_", or
+    - be one of the following reserved words: "meta", "raw", "clone".
+
+    Constructor creates a predicate instance, a *fact*, or complex term. If the
+    ``raw`` parameter is used then it tries to unify the supplied Clingo.Symbol
+    with the class definition, an will raise a ValueError if it fails to unify.
+
+    Args:
+      **kwargs:
+
+      - named parameters corresponding to the field names, or
+      - a single named parameter ``raw`` that takes a Clingo.Symbol object.
+
     """
 
     #--------------------------------------------------------------------------
@@ -821,7 +841,7 @@ def _get_field_comparators(comparator):
     try:
         return comparator.field_comparators
     except:
-        if isinstance(comparator, _FieldComparator):
+        if isinstance(comparator, _FieldInstanceComparator):
             return [comparator]
         return []
 
@@ -896,10 +916,10 @@ class _StaticComparator(Comparator):
 # A fact comparator functor that tests whether a fact satisfies a comparision
 # with the value of some predicate's field.
 #
-# Note: instances of _FieldComparator are constructed by calling the comparison
+# Note: instances of _FieldInstanceComparator are constructed by calling the comparison
 # operator for Field objects.
 # ------------------------------------------------------------------------------
-class _FieldComparator(Comparator):
+class _FieldInstanceComparator(Comparator):
     def __init__(self, compop, arg1, arg2):
         self._compop = compop
         self._arg1 = arg1
@@ -913,7 +933,7 @@ class _FieldComparator(Comparator):
         if arg1 is arg2:
             self._static = True
             self._value = compop(1,1)
-        elif not isinstance(arg1, _Field) and not isinstance(arg2, _Field):
+        elif not isinstance(arg1, _FieldInstance) and not isinstance(arg2, _FieldInstance):
             self._static = True
             self._value = compop(arg1,arg2)
 
@@ -922,7 +942,7 @@ class _FieldComparator(Comparator):
 
         # Get the value of an argument (resolving placeholder)
         def getargval(arg):
-            if isinstance(arg, _Field): return arg.__get__(fact)
+            if isinstance(arg, _FieldInstance): return arg.__get__(fact)
             elif isinstance(arg, _PositionalPlaceholder):
                 if arg.posn >= len(args):
                     raise TypeError(("missing argument in {} for placeholder "
@@ -956,7 +976,7 @@ class _FieldComparator(Comparator):
 
     def indexable(self):
         if self._static: return None
-        if not isinstance(self._arg1, _Field) or isinstance(self._arg2, _Field):
+        if not isinstance(self._arg1, _FieldInstance) or isinstance(self._arg2, _FieldInstance):
             return None
         return (self._arg1, self._compop, self._arg2)
 
@@ -1190,7 +1210,7 @@ class _Select(Select):
             if indexable[0] not in self._index_priority: return None
             return indexable
 
-        if isinstance(where, _FieldComparator):
+        if isinstance(where, _FieldInstanceComparator):
             return validate_indexable(where.indexable())
         indexable = None
         if isinstance(where, _BoolComparator) and where.boolop == operator.and_:
@@ -1381,7 +1401,7 @@ class FactBaseHelper(object):
     def register_index(self, field):
         def ri():
             if field in self._indset: return    # ignore if already registered
-            if isinstance(field, Field) and field.parent in self.predicates:
+            if isinstance(field, FieldInstance) and field.parent in self.predicates:
                 self._indset.add(field)
                 self._indexes.append(field)
             else:
@@ -1515,19 +1535,19 @@ class _FactBaseMeta(type):
         # Make sure "predicates" is defined and is a non-empty list
         pset = set()
         if plistname not in dct:
-            raise TypeError("Error: class definition missing 'predicates' specification")
+            raise TypeError("Class definition missing 'predicates' specification")
         if not dct[plistname]:
-            raise TypeError("Error: class definition empty 'predicates' specification")
+            raise TypeError("Class definition empty 'predicates' specification")
         for pitem in dct[plistname]:
             pset.add(pitem)
             if not issubclass(pitem, Predicate):
-                raise TypeError("Error: non-predicate class {} in list".format(pitem))
+                raise TypeError("Non-predicate class {} in list".format(pitem))
 
         # Validate the "indexes" list (and define if if it doesn't exist)
         if ilistname not in dct: dct[ilistname] = []
         for iitem in dct[ilistname]:
             if iitem.parent not in pset:
-                raise TypeError(("Error: parent of index {} item not in the predicates "
+                raise TypeError(("Parent of index {} item not in the predicates "
                                   "list").format(iitem))
         dct["__init__"] = _fb_subclass_constructor
         dct["add"] = _fb_subclass_add
@@ -1748,7 +1768,7 @@ class Signature(object):
         for s in self._insigs: _validate_basic_sig(s)
         if isinstance(self._outsig, collections.Iterable):
             if len(self._outsig) != 1:
-                raise ValueError("Return value list signature must contain only one element")
+                raise ValueError("Return value list signature not a singleton")
             _validate_basic_sig(self._outsig[0])
         else:
             _validate_basic_sig(self._outsig)
