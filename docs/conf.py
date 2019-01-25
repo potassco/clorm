@@ -71,7 +71,7 @@ pygments_style = None
 # -- Autodoc configuration ---------------------------------------------------
 
 autodoc_member_order = 'groupwise'
-
+autodoc_mock_imports = ["clingo"]
 
 # -- Options for HTML output -------------------------------------------------
 
