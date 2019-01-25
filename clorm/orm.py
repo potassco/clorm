@@ -304,39 +304,54 @@ class ComplexField(object):
 #------------------------------------------------------------------------------
 
 class FieldInstance(abc.ABC):
-    """ A class for a field instance in a ``Predicate`` or ``ComplexTerm`` definition.
+    """Abstract class defining a field instance in a ``Predicate`` or
+    ``ComplexTerm``.
+
+    While the field definition is specified by the ComplexField or RawField (and
+    subclasses), when the ``Predicate`` or ``ComplexTerm`` class is actually
+    created a ``FieldInstance`` object is instantiated to handle extracting the
+    actual field data from the underlying ``Clingo.Symbol``.
+
     """
 
     @abc.abstractmethod
     def __get__(self, instance, owner=None):
+        """Overload of the Python *descriptor* to access the data values"""
         pass
 
     @abc.abstractmethod
     def __hash__(self):
+        """Overload of the Python hash value generation"""
         pass
 
     @abc.abstractmethod
     def __eq__(self, other):
+        """Boolean operator is overloaded to return a ``Comparator`` object"""
         pass
 
     @abc.abstractmethod
     def __ne__(self, other):
+        """Boolean operator is overloaded to return a ``Comparator`` object"""
         pass
 
     @abc.abstractmethod
     def __lt__(self, other):
+        """Boolean operator is overloaded to return a ``Comparator`` object"""
         pass
 
     @abc.abstractmethod
     def __le__(self, other):
+        """Boolean operator is overloaded to return a ``Comparator`` object"""
         pass
 
     @abc.abstractmethod
     def __gt__(self, other):
+        """Boolean operator is overloaded to return a ``Comparator`` object"""
         pass
 
     @abc.abstractmethod
     def __ge__(self, other):
+        """Boolean operator is overloaded to return a ``Comparator`` object"""
         pass
 
 #------------------------------------------------------------------------------
@@ -571,7 +586,7 @@ class _NonLogicalSymbolMeta(type):
 # ------------------------------------------------------------------------------
 
 class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
-    """Encapsulates an ASP predicate or complex term in easy to access object.
+    """Encapsulates an ASP predicate or complex term in an easy to access object.
 
     This is the heart of the ORM model. The NonLogicalSymbol is a base class
     with two sub-classes: ``Predicate`` and ``ComplexTerm``. Users should not
@@ -619,14 +634,17 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
 
         @property
         def name(self):
+            """Returns the string name of the field"""
             return self._name
 
         @property
         def field_defns(self):
+            """Returns the set of field definitions - keyed by field name"""
             return { f.field_name : f.field_defn for f in self._fields }
 
         @property
         def field_names(self):
+            """Returns the list of field names"""
             return [ f.field_name for f in self._fields ]
 
         @property
@@ -635,10 +653,12 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
 
         @property
         def arity(self):
+            """Returns the number of fields"""
             return len(self._fields)
 
         @property
         def is_tuple(self):
+            """Returns true if the definition corresponds to a tuple"""
             return self.name == ""
 
     #--------------------------------------------------------------------------
@@ -648,6 +668,7 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
     # Get the underlying clingo symbol object
     @property
     def raw(self):
+        """Returns the underlying Clingo.Symbol object"""
 #        return self._symbol
         return self._generate_symbol()
 
@@ -661,6 +682,13 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
 
     # Clone the object with some differences
     def clone(self, **kwargs):
+        """Clone the object with some differences.
+
+        For any field name that is not one of the parameter keywords the clone
+        keeps the same value. But for any field listed in the parameter keywords
+        replace with specified new value.
+        """
+
         # Sanity check
         clonekeys = set(kwargs.keys())
         objkeys = set(self.meta.field_defns.keys())
@@ -684,6 +712,7 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
     # Get the metadata for the NonLogicalSymbol definition
     @_classproperty
     def meta(cls):
+        """Returns the meta data for the object"""
         return cls._meta
 
     # Returns whether or not a Symbol can unify with this NonLogicalSymbol
@@ -711,6 +740,7 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
     # Overloaded index operator to access the values
     #--------------------------------------------------------------------------
     def __getitem__(self, idx):
+        """Allows for index based access to field elements."""
         return self.meta.fields[idx].__get__(self)
 
     def __setitem__(self, idx,v):
@@ -720,6 +750,7 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
     # Overloaded operators
     #--------------------------------------------------------------------------
     def __eq__(self, other):
+        """Overloaded boolean operator."""
         self_symbol = self.raw
         if isinstance(other, NonLogicalSymbol):
             other_symbol = other.raw
@@ -730,12 +761,14 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
             return NotImplemented
 
     def __ne__(self, other):
+        """Overloaded boolean operator."""
         result = self.__eq__(other)
         if result is NotImplemented:
             return result
         return not result
 
     def __lt__(self, other):
+        """Overloaded boolean operator."""
         self_symbol = self.raw
         if isinstance(other, NonLogicalSymbol):
             other_symbol = other.raw
@@ -746,12 +779,14 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
             return NotImplemented
 
     def __ge__(self, other):
+        """Overloaded boolean operator."""
         result = self.__lt__(other)
         if result is NotImplemented:
             return result
         return not result
 
     def __gt__(self, other):
+        """Overloaded boolean operator."""
         self_symbol = self.raw
         if isinstance(other, NonLogicalSymbol):
             other_symbol = other.raw
@@ -762,6 +797,7 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
             return NotImplemented
 
     def __le__(self, other):
+        """Overloaded boolean operator."""
         result = self.__gt__(other)
         if result is NotImplemented:
             return result
@@ -771,6 +807,9 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
         return self.raw.__hash__()
 
     def __str__(self):
+        """Returns the NonLogicalSymbol as the string representation of the raw
+        symbol.
+        """
         self_symbol = self.raw
         return str(self_symbol)
 
@@ -782,15 +821,14 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
 # aliases. This makes the FactBaseHelper's behaviour more intuitive.
 #------------------------------------------------------------------------------
 class Predicate(NonLogicalSymbol):
+    """Corresponds to an ASP predicate."""
     def __init__(self, *args, **kwargs):
         super(Predicate, self).__init__(*args, **kwargs)
 
 class ComplexTerm(NonLogicalSymbol):
+    """Corresponds to an ASP complex term (ie., function)."""
     def __init__(self, *args, **kwargs):
         super(ComplexTerm, self).__init__(*args, **kwargs)
-
-#Predicate=NonLogicalSymbol
-#ComplexTerm=NonLogicalSymbol
 
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
@@ -850,6 +888,12 @@ def _get_field_comparators(comparator):
 # an abstract class that exposes no API other than its existence.
 # ------------------------------------------------------------------------------
 class Placeholder(abc.ABC):
+    """A placeholder abstract class for defining parameterised queries.
+
+    Currently, ClORM support 4 placeholders: ph1_, ph2_, ph3_, ph4_. These
+    correspond to the positional argument positions of the query execute
+    function call.
+    """
     pass
 
 class _NamedPlaceholder(Placeholder):
