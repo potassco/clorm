@@ -15,11 +15,11 @@ import abc
 import clingo
 
 __all__ = [
+    'RawField',
     'IntegerField',
     'StringField',
     'ConstantField',
     'ComplexField',
-    'RawField',
     'Field',
     'NonLogicalSymbol',
     'Predicate',
@@ -60,7 +60,7 @@ class _classproperty(object):
         return self.getter(owner)
 
 #------------------------------------------------------------------------------
-# SimpleField class captures the definition of a term between python and clingo. It is
+# RawField class captures the definition of a term between python and clingo. It is
 # not meant to be instantiated.
 # ------------------------------------------------------------------------------
 
@@ -79,29 +79,30 @@ def _make_cltopy(fn):
     return _cltopy
 
 def _sfm_constructor(self, default=None, index=False):
+    """Default values"""
     self._default = default
     self._index = index
 
-class _SimpleFieldMeta(type):
+class _RawFieldMeta(type):
     def __new__(meta, name, bases, dct):
 
-        dct["__init__"] = _sfm_constructor
+        # Add a default initialiser if one is not already defined
+        if "__init__" not in dct:
+            dct["__init__"] = _sfm_constructor
 
-        if name == "SimpleField":
-            dct["cltopy"] = classmethod(lambda _, x: x)
-            dct["pytocl"] = classmethod(lambda _, x: x)
+        if name == "RawField":
             dct["_parentclass"] = None
-            return super(_SimpleFieldMeta, meta).__new__(meta, name, bases, dct)
+            return super(_RawFieldMeta, meta).__new__(meta, name, bases, dct)
 
         for key in [ "cltopy", "pytocl" ]:
             if key in dct and not callable(dct[key]):
                 raise AttributeError("Definition of {} is not callable".format(key))
 
-        parents = [ b for b in bases if issubclass(b, SimpleField)]
+        parents = [ b for b in bases if issubclass(b, RawField)]
         if len(parents) == 0:
-            raise TypeError("Internal bug: number of SimpleField bases is 0!")
+            raise TypeError("Internal bug: number of RawField bases is 0!")
         if len(parents) > 1:
-            raise TypeError("Multiple SimpleField sub-class inheritance forbidden")
+            raise TypeError("Multiple RawField sub-class inheritance forbidden")
         dct["_parentclass"] = parents[0]
 
         # When a conversion is not specified raise a NotImplementedError
@@ -118,17 +119,75 @@ class _SimpleFieldMeta(type):
         else:
             dct["pytocl"] = classmethod(_raise_nie)
 
-        return super(_SimpleFieldMeta, meta).__new__(meta, name, bases, dct)
+        return super(_RawFieldMeta, meta).__new__(meta, name, bases, dct)
 
 #------------------------------------------------------------------------------
 # Field definitions. All field have the functions: pytocl, cltopy, and unifies,
 # and the properties: default, is_field_defn
 # ------------------------------------------------------------------------------
 
-class SimpleField(object, metaclass=_SimpleFieldMeta):
+class RawField(object, metaclass=_RawFieldMeta):
+    """A class that represents a field definition that correspond to ASP simple terms.
+
+    A field definition is typically used as part of a ``ComplexTerm`` or
+    ``Predicate`` definition. It defines the type of data for an ASP *term* and
+    provides functions for translating the term to a more convenient Python
+    type.
+
+    `RawField` contains two class functions ``cltopy`` and ``pytocl`` that
+    represent the translation from Clingo to Python and Python to Clingo
+    respectively. For ``RawField`` these functions simply pass the values
+    straight though, however ``RawField`` can be sub-classed to build a chain of
+    translations. ``StringField``, ``IntegerField``, and ``ConstantField`` are
+    predefined sub-classes that provide translations for the ASP simple terms;
+    *string*, *integer* and *constant*.
+
+    To sub-class RawField (or one of its sub-classes) simply specify ``cltopy``
+    and ``pytocl`` functions that take an input and perform some translation
+    to an output format.
+
+    Example:
+       .. code-block:: python
+
+           import datetime
+
+           class DateField(StringField):
+                     pytocl = lambda dt: dt.strftime("%Y%m%d")
+                     cltopy = lambda s: datetime.datetime.strptime(s,"%Y%m%d").date()
+
+
+       Because ``DateField`` sub-classes ``StringField``, rather than
+       sub-classing ``RawField`` directly, it forms a longer data translation
+       chain:
+
+              ASP Symbol object -- RawField -- StringField -- date object
+
+       Here the ``DateField.cltopy`` is called at the end of the chain of
+       translations, so it expects a Python string object as input and outputs a
+       date object. ``DateField.pytocl`` does the opposite and inputs a date
+       object and is must output a Python string object.
+
+    Args:
+      default: A default value when instantiating a ``Predicate`` or
+        ``ComplexTerm`` object. Defaults to ``None``.
+      index (bool): Determine if this field should be indexed by default in a
+        ``FactBase```. Defaults to ``False``.
+
+    """
+
+    @classmethod
+    def cltopy(cls, v):
+        """Called when translating data from a Clingo to Python"""
+        return v
+
+    @classmethod
+    def pytocl(cls, v):
+        """Called when translating data from a Python to Clingo"""
+        return v
 
     @classmethod
     def unifies(cls, v):
+        """Returns whether a `Clingo.Symbol` can be unified with this type of field"""
         try:
             cls.cltopy(v)
         except TypeError:
@@ -137,28 +196,25 @@ class SimpleField(object, metaclass=_SimpleFieldMeta):
 
     @property
     def default(self):
+        """Returns the default value for the field (if set)"""
         return self._default
 
     @property
     def index(self):
+        """Returns whether this field should be indexed by default in a `FactBase`"""
         return self._index
 
     @_classproperty
     def is_field_defn(self): return True
 
-    @property
-    def default(self):
-        return self._default
-
-    @property
-    def index(self):
-        return self._index
 
 #------------------------------------------------------------------------------
-# The three SimpleField
+# The three RawField
 #------------------------------------------------------------------------------
 
-class StringField(SimpleField):
+class StringField(RawField):
+    """A field definition to convert between Clingo.String object into a Python string."""
+
     def _string_cltopy(symbol):
         if symbol.type != clingo.SymbolType.String:
             raise TypeError("Object {0} is not a String symbol")
@@ -167,7 +223,9 @@ class StringField(SimpleField):
     cltopy = _string_cltopy
     pytocl = lambda v: clingo.String(v)
 
-class IntegerField(SimpleField):
+class IntegerField(RawField):
+    """A field definition to convert between Clingo.Number object into a Python integer."""
+
     def _integer_cltopy(symbol):
         if symbol.type != clingo.SymbolType.Number:
             raise TypeError("Object {0} is not a Number symbol")
@@ -176,7 +234,11 @@ class IntegerField(SimpleField):
     cltopy = _integer_cltopy
     pytocl = lambda v: clingo.Number(v)
 
-class ConstantField(SimpleField):
+class ConstantField(RawField):
+    """A field definition to convert between a simple Clingo.Function object into a
+    Python string.
+    """
+
     def _constant_cltopy(symbol):
         if   (symbol.type != clingo.SymbolType.Function or
               not symbol.name or len(symbol.arguments) != 0):
@@ -192,6 +254,22 @@ class ConstantField(SimpleField):
 # ------------------------------------------------------------------------------
 
 class ComplexField(object):
+    """A class for defining fields that correspond to complex ASP terms.
+
+    This class provides the ``pytocl`` and ``cltopy`` functions to translate
+    between a complex Clingo.Function symbol and a ``ComplexTerm`` object.
+
+    Note:
+      ``ComplexField`` is instantiated as part of a ``Predicate`` or
+      ``ComplexTerm`` definition. It does not represent a complex term instance.
+
+    Args:
+      defn (ComplexTerm): The class that defines a complex term to match against.
+      default: A default value when instantiating a ``Predicate`` or
+        ``ComplexTerm`` object. Defaults to ``None``.
+
+    """
+
     def __init__(self, defn, default=None):
         if not issubclass(defn, ComplexTerm):
             raise TypeError("Not a subclass of ComplexTerm: {}".format(defn))
@@ -220,38 +298,14 @@ class ComplexField(object):
     @property
     def is_field_defn(self): return True
 
-
-#------------------------------------------------------------------------------
-# A RawField definition allows you to pass through a raw clingo Symbol
-# object. It will unify against any Symbol.
-# ------------------------------------------------------------------------------
-
-class RawField(object):
-    def __init__(self, default=None):
-        self._default = default
-
-    def pytocl(self, value):
-        return value
-
-    def cltopy(self, symbol):
-        return symbol
-
-    def unifies(self, symbol):
-        return True
-
-    @property
-    def default(self):
-        return self._default
-
-    @property
-    def is_field_defn(self): return True
-
 #------------------------------------------------------------------------------
 # Field - similar to a property but with overloaded comparison operator
 # that build a query so that we can perform lazy evaluation for querying.
 #------------------------------------------------------------------------------
 
 class Field(abc.ABC):
+    """ A class for a field instance in a ``Predicate`` or ``ComplexTerm`` definition.
+    """
 
     @abc.abstractmethod
     def __get__(self, instance, owner=None):
@@ -517,11 +571,28 @@ class _NonLogicalSymbolMeta(type):
 # ------------------------------------------------------------------------------
 
 class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
+    """Encapsulates an ASP predicate or complex term in easy to access object.
+
+    This is the heart of the ORM model. The NonLogicalSymbol is a base class
+    with two sub-classes: ``Predicate`` and ``ComplexTerm``. Users should not
+    deal with ``NonLogicalSymbol`` direct but should instead inherit from the
+    two subclasses.
+
+    Example:
+       .. code-block:: python
+
+           class Booking(Predicate):
+               date        = StringField(index = True)
+               time        = StringField(index = True)
+               description = StringField(default = "")
+    """
 
     #--------------------------------------------------------------------------
     # A Metadata internal object for each NonLogicalSymbol class
     #--------------------------------------------------------------------------
     class MetaData(object):
+        """Encapsulates the meta-data for a NonLogicalSymbol definition"""
+
         def __init__(self, name, fields):
             self._name = name
             self._fields = tuple(fields)
@@ -1626,13 +1697,49 @@ def model_facts(model, factbase, atoms=False, terms=False, shown=False):
 # ------------------------------------------------------------------------------
 
 class Signature(object):
+    """Defines a function signature for converting to/from Clingo data types.
+
+    Args:
+      sigs(\*sigs): A list of function signature elements.
+
+      - Inputs. Match the sub-elements [:-1] define the input signature while
+        the last element defines the output signature. Each input can be either
+        a RawField (or sub-class) or a ComplexTerm sub-class.
+
+      - Output: Must be RawField (or sub-class) or a ComplexTerm sub-class or a
+        singleton list containing a RawField definition or ComplexTerm.
+
+   Example:
+       .. code-block:: python
+
+           import datetime
+
+           class DateField(StringField):
+                     pytocl = lambda dt: dt.strftime("%Y%m%d")
+                     cltopy = lambda s: datetime.datetime.strptime(s,"%Y%m%d").date()
+
+           drsig = Signature(DateField, DateField, [DateField])
+
+           @drsig.make_clingo_wrapper
+           def date_range(start, end):
+               return [ start + timedelta(days=x) for x in range(0,end-start) ]
+
+       The function ``date_range`` that takes a start and end date and returns
+       the list of dates within that range.
+
+       When *decorated* with the signature it provides the conversion code so
+       that the decorated function expects a start and end date encoded as
+       Clingo.String objects (matching YYYYMMDD format) and returns a list of
+       Clingo.String objects corresponding to the dates in that range.
+    """
+
     def __init__(self, *sigs):
         def _validate_basic_sig(sig):
             if inspect.isclass(sig):
-                if issubclass(sig, SimpleField): return True
+                if issubclass(sig, RawField): return True
                 if issubclass(sig, ComplexTerm): return True
             raise TypeError(("Invalid signature element {}: must be a ComplexTerm "
-                             "class or SimpleField object".format(s)))
+                             "class or RawField object".format(s)))
 
         self._insigs = sigs[:-1]
         self._outsig = sigs[-1]
@@ -1656,7 +1763,7 @@ class Signature(object):
         if inspect.isclass(sig):
             if issubclass(sig, ComplexTerm) and isinstance(arg, sig):
                 return arg.raw
-            if issubclass(sig, SimpleField):
+            if issubclass(sig, RawField):
                 return sig.pytocl(arg)
 
         # Deal with a list
@@ -1666,6 +1773,12 @@ class Signature(object):
 
 
     def make_clingo_wrapper(self, fn):
+        """Function wrapper that adds data type conversions for wrapped function.
+
+        Args:
+           fn: A function satisfing the inputs and output defined by the Signature.
+        """
+
         def wrapper(*args):
             if len(args) > len(self._insigs):
                 raise ValueError("Mis-matched arguments in call of clingo wrapper")
@@ -1678,4 +1791,3 @@ class Signature(object):
 #------------------------------------------------------------------------------
 if __name__ == "__main__":
     raise RuntimeError('Cannot run modules')
-

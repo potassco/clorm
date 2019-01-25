@@ -37,6 +37,7 @@ class ORMTestCase(unittest.TestCase):
     #--------------------------------------------------------------------------
     def test_simplefields(self):
 
+
         symstr = String("SYM")
         self.assertEqual(type(StringField.cltopy(symstr)), str)
         self.assertEqual(StringField.cltopy(symstr), "SYM")
