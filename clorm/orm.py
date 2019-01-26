@@ -19,7 +19,7 @@ __all__ = [
     'IntegerField',
     'StringField',
     'ConstantField',
-    'Term',
+    'Field',
     'NonLogicalSymbol',
     'Predicate',
     'ComplexTerm',
@@ -241,21 +241,21 @@ class ConstantField(RawField):
     pytocl = lambda v: clingo.Function(v,[])
 
 #------------------------------------------------------------------------------
-# Term - a Pyton descriptor (similar to a property) but with overloaded
+# Field - a Pyton descriptor (similar to a property) but with overloaded
 # comparison operator that build a query so that we can perform lazy evaluation
 # for querying.
 # ------------------------------------------------------------------------------
 
-class Term(abc.ABC):
+class Field(abc.ABC):
     """Abstract class defining a field instance in a ``Predicate`` or
     ``ComplexTerm``.
 
     While the field is specified by the RawField sub-classes, when
-    the ``Predicate`` or ``ComplexTerm`` class is actually created a ``Term``
+    the ``Predicate`` or ``ComplexTerm`` class is actually created a ``Field``
     object is instantiated to handle extracting the actual term data from the
     underlying ``Clingo.Symbol``.
 
-    The ``Term`` object is also referenced when building queries.
+    The ``Field`` object is also referenced when building queries.
 
     """
 
@@ -300,9 +300,9 @@ class Term(abc.ABC):
         pass
 
 #------------------------------------------------------------------------------
-# Implementation of a Term
+# Implementation of a Field
 # ------------------------------------------------------------------------------
-class _Term(Term):
+class _Field(Field):
     def __init__(self, term_name, term_index, term_defn, no_setter=True):
         self._no_setter=no_setter
         self._term_name = term_name
@@ -343,17 +343,17 @@ class _Term(Term):
     def __hash__(self):
         return id(self)
     def __eq__(self, other):
-        return _TermComparator(operator.eq, self, other)
+        return _FieldComparator(operator.eq, self, other)
     def __ne__(self, other):
-        return _TermComparator(operator.ne, self, other)
+        return _FieldComparator(operator.ne, self, other)
     def __lt__(self, other):
-        return _TermComparator(operator.lt, self, other)
+        return _FieldComparator(operator.lt, self, other)
     def __le__(self, other):
-        return _TermComparator(operator.le, self, other)
+        return _FieldComparator(operator.le, self, other)
     def __gt__(self, other):
-        return _TermComparator(operator.gt, self, other)
+        return _FieldComparator(operator.gt, self, other)
     def __ge__(self, other):
-        return _TermComparator(operator.ge, self, other)
+        return _FieldComparator(operator.ge, self, other)
 
     def __str__(self):
         return "{}.{}".format(self.parent.__name__,self.term_name)
@@ -467,7 +467,7 @@ def _make_nls_metadata(class_name, dct):
             raise ValueError(("Error: invalid term name: '{}' "
                               "is a reserved keyword").format(term_name))
 
-        term = _Term(term_name, idx, term_defn)
+        term = _Field(term_name, idx, term_defn)
         dct[term_name] = term
         terms.append(term)
         idx += 1
@@ -477,7 +477,7 @@ def _make_nls_metadata(class_name, dct):
 
 #------------------------------------------------------------------------------
 #
-class _Field(object):
+class _FieldContainer(object):
     def __init__(self):
         self._defn = None
     def set_defn(self, cls):
@@ -523,7 +523,7 @@ class _NonLogicalSymbolMeta(type):
         # Set the _meta attribute and constuctor
         dct["_meta"] = md
         dct["__init__"] = _nls_constructor
-        dct["_termdefn"] = _Field()
+        dct["_termdefn"] = _FieldContainer()
 
         return super(_NonLogicalSymbolMeta, meta).__new__(meta, name, bases, dct)
 
@@ -845,7 +845,7 @@ def _get_term_comparators(comparator):
     try:
         return comparator.term_comparators
     except:
-        if isinstance(comparator, _TermComparator):
+        if isinstance(comparator, _FieldComparator):
             return [comparator]
         return []
 
@@ -926,10 +926,10 @@ class _StaticComparator(Comparator):
 # A fact comparator functor that tests whether a fact satisfies a comparision
 # with the value of some predicate's term.
 #
-# Note: instances of _TermComparator are constructed by calling the comparison
-# operator for Term objects.
+# Note: instances of _FieldComparator are constructed by calling the comparison
+# operator for Field objects.
 # ------------------------------------------------------------------------------
-class _TermComparator(Comparator):
+class _FieldComparator(Comparator):
     def __init__(self, compop, arg1, arg2):
         self._compop = compop
         self._arg1 = arg1
@@ -939,11 +939,11 @@ class _TermComparator(Comparator):
         # Comparison is trivial if:
         # 1) the objects are identical then it is a trivial comparison and
         # equivalent to checking if the operator satisfies a simple identity (eg., 1)
-        # 2) neither argument is a Term
+        # 2) neither argument is a Field
         if arg1 is arg2:
             self._static = True
             self._value = compop(1,1)
-        elif not isinstance(arg1, _Term) and not isinstance(arg2, _Term):
+        elif not isinstance(arg1, _Field) and not isinstance(arg2, _Field):
             self._static = True
             self._value = compop(arg1,arg2)
 
@@ -952,7 +952,7 @@ class _TermComparator(Comparator):
 
         # Get the value of an argument (resolving placeholder)
         def getargval(arg):
-            if isinstance(arg, _Term): return arg.__get__(fact)
+            if isinstance(arg, _Field): return arg.__get__(fact)
             elif isinstance(arg, _PositionalPlaceholder):
                 if arg.posn >= len(args):
                     raise TypeError(("missing argument in {} for placeholder "
@@ -986,7 +986,7 @@ class _TermComparator(Comparator):
 
     def indexable(self):
         if self._static: return None
-        if not isinstance(self._arg1, _Term) or isinstance(self._arg2, _Term):
+        if not isinstance(self._arg1, _Field) or isinstance(self._arg2, _Field):
             return None
         return (self._arg1, self._compop, self._arg2)
 
@@ -1220,7 +1220,7 @@ class _Select(Select):
             if indexable[0] not in self._index_priority: return None
             return indexable
 
-        if isinstance(where, _TermComparator):
+        if isinstance(where, _FieldComparator):
             return validate_indexable(where.indexable())
         indexable = None
         if isinstance(where, _BoolComparator) and where.boolop == operator.and_:
@@ -1407,7 +1407,7 @@ class FactBaseHelper(object):
 
     def register_index(self, term):
         if term in self._indset: return    # ignore if already registered
-        if isinstance(term, Term) and term.parent in self.predicates:
+        if isinstance(term, Field) and term.parent in self.predicates:
             self._indset.add(term)
             self._indexes.append(term)
         else:
