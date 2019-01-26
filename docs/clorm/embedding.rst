@@ -13,7 +13,7 @@ Python Function Signatures
 When calling Python functions from an ASP program the Python function is passed
 ``Clingo.Symbol`` objects and is expected to return either a single
 ``Clingo.Symbol`` object or a list of ``Clingo.Symbol`` objects. It is the
-responsibility of the Python function to perform the necesary data translations.
+responsibility of the programmer to perform these data type conversions.
 
 For example, consider a Python function ``range_range`` that is given two dates
 and returns a list of the dates within this range. This can be called from
@@ -23,9 +23,9 @@ Clingo by prefixing the function with the ``@`` symbol:
 
    date(@date_range("20190101", 20190201")).
 
-The corresponding Python object needs to take the two input ``String`` symbols
-turn it into dates, compute the dates in the range, and return the list of
-outputs converted back into ``String`` symbols.
+The corresponding Python object needs to take the two input ``Clingo.String``
+symbols turn them into dates, compute the dates in the range, and return the
+list of outputs converted back into ``Clingo.String`` symbols.
 
 .. code-block:: python
 
@@ -43,20 +43,20 @@ outputs converted back into ``String`` symbols.
 	   pystart += inc
        return tmp
 
-ClORM provides a way to integrate this a bit more by declaring a function
+ClORM provides a way to simplify this data translation by declaring a function
 ``Signature`` and then using the signature to generate wrapper Python code that
 performs the required conversions. The code above can be replaced with:
 
 .. code-block:: python
 
-   from clorm import StringField
+   from clorm import StringTermDefn
    from datetime import datetime, timedelta
 
-   class DateField(StringField):
+   class DateTermDefn(StringTermDefn):
        pytocl = lambda dt: dt.strftime("%Y%m%d")
        cltopy = lambda s: datetime.datetime.strptime(s,"%Y%m%d").date()
 
-   drsig = Signature(DateField, DateField, [DateField])
+   drsig = Signature(DateTermDefn, DateTermDefn, [DateTermDefn])
 
    @drsig.make_clingo_wrapper
    def date_range(start_end):
@@ -67,33 +67,37 @@ performs the required conversions. The code above can be replaced with:
 	   start += inc
        return tmp
 
-This example uses the power of ClORM to sub-class the ``StringField`` so that
-the date translation to a string is captured by a ``DateField``. The
+This example uses the power of ClORM to sub-class the ``StringTermDefn`` so that
+the date translation to a string is captured by a ``DateTermDefn``. The
 ``Signature`` object then captures the function signature which accepts two
 dates and returns a list of dates. A Python *decorator* is provided to generate
 the Python data conversion code.
 
 While the above code is arguably easier to read than the raw version it does
-require more lines of code. However, as the objects being dealt with become more
-complicated, the ClORM approach becomes more appealing. For example, if instead
-of a list of date encoded string, we want to return a range as a list of
-enumerated dates (i.e., consisting of an integer-date pair starting at 0)
-the corresponding ClORM version adds very little overhead.
+require more lines of code; although in this case it could be argued that the
+resulting simplified loop within the function can more easily be simplified by
+turning in into a list comprehension statement.  In any case, as the objects
+being dealt with become more complicated, the ClORM approach becomes more
+appealing.
+
+For example, if instead of a list of date encoded string, we want to return a
+range as a list of enumerated dates (i.e., consisting of an integer-date pair
+starting at 0) the corresponding ClORM version adds very little overhead.
 
 .. code-block:: python
 
-   from clorm import StringField, IntegerField, ComplexTerm
+   from clorm import StringTermDefn, IntegerTermDefn, ComplexTerm
    from datetime import datetime, timedelta
 
-   class DateField(StringField):
+   class DateTermDefn(StringTermDefn):
        pytocl = lambda dt: dt.strftime("%Y%m%d")
        cltopy = lambda s: datetime.datetime.strptime(s,"%Y%m%d").date()
 
    class EnumDate(ComplexTerm):
-       idx = IntegerField()
-       date = DateField()
+       idx = IntegerTermDefn()
+       date = DateTermDefn()
 
-   drsig = Signature(DateField, DateField, [EnumDate])
+   drsig = Signature(DateTermDefn, DateTermDefn, [EnumDate.TermDefn])
 
    def py_date_range(start_end):
        inc = timedelta(days=1)

@@ -15,12 +15,11 @@ import abc
 import clingo
 
 __all__ = [
-    'RawField',
-    'IntegerField',
-    'StringField',
-    'ConstantField',
-    'ComplexField',
-    'FieldInstance',
+    'RawTermDefn',
+    'IntegerTermDefn',
+    'StringTermDefn',
+    'ConstantTermDefn',
+    'Term',
     'NonLogicalSymbol',
     'Predicate',
     'ComplexTerm',
@@ -60,7 +59,7 @@ class _classproperty(object):
         return self.getter(owner)
 
 #------------------------------------------------------------------------------
-# RawField class captures the definition of a term between python and clingo. It is
+# RawTermDefn class captures the definition of a term between python and clingo. It is
 # not meant to be instantiated.
 # ------------------------------------------------------------------------------
 
@@ -83,26 +82,26 @@ def _sfm_constructor(self, default=None, index=False):
     self._default = default
     self._index = index
 
-class _RawFieldMeta(type):
+class _RawTermDefnMeta(type):
     def __new__(meta, name, bases, dct):
 
         # Add a default initialiser if one is not already defined
         if "__init__" not in dct:
             dct["__init__"] = _sfm_constructor
 
-        if name == "RawField":
+        if name == "RawTermDefn":
             dct["_parentclass"] = None
-            return super(_RawFieldMeta, meta).__new__(meta, name, bases, dct)
+            return super(_RawTermDefnMeta, meta).__new__(meta, name, bases, dct)
 
         for key in [ "cltopy", "pytocl" ]:
             if key in dct and not callable(dct[key]):
                 raise AttributeError("Definition of {} is not callable".format(key))
 
-        parents = [ b for b in bases if issubclass(b, RawField)]
+        parents = [ b for b in bases if issubclass(b, RawTermDefn)]
         if len(parents) == 0:
-            raise TypeError("Internal bug: number of RawField bases is 0!")
+            raise TypeError("Internal bug: number of RawTermDefn bases is 0!")
         if len(parents) > 1:
-            raise TypeError("Multiple RawField sub-class inheritance forbidden")
+            raise TypeError("Multiple RawTermDefn sub-class inheritance forbidden")
         dct["_parentclass"] = parents[0]
 
         # When a conversion is not specified raise a NotImplementedError
@@ -119,30 +118,31 @@ class _RawFieldMeta(type):
         else:
             dct["pytocl"] = classmethod(_raise_nie)
 
-        return super(_RawFieldMeta, meta).__new__(meta, name, bases, dct)
+        return super(_RawTermDefnMeta, meta).__new__(meta, name, bases, dct)
 
 #------------------------------------------------------------------------------
-# Field definitions. All field have the functions: pytocl, cltopy, and unifies,
-# and the properties: default, is_field_defn
+# TermDefn definitions. All term definitions have the functions: pytocl, cltopy,
+# and unifies, and the property: default
 # ------------------------------------------------------------------------------
 
-class RawField(object, metaclass=_RawFieldMeta):
-    """A class that represents a field definition that correspond to ASP simple terms.
+class RawTermDefn(object, metaclass=_RawTermDefnMeta):
+    """A class that represents a term definition that correspond to ASP simple
+    terms.
 
-    A field definition is typically used as part of a ``ComplexTerm`` or
-    ``Predicate`` definition. It defines the type of data for an ASP *term* and
+    A term definition is typically used as part of a ``ComplexTerm`` or
+    ``Predicate`` definition. It defines the data type of an ASP term and
     provides functions for translating the term to a more convenient Python
     type.
 
-    `RawField` contains two class functions ``cltopy`` and ``pytocl`` that
+    `RawTermDefn` contains two class functions ``cltopy`` and ``pytocl`` that
     represent the translation from Clingo to Python and Python to Clingo
-    respectively. For ``RawField`` these functions simply pass the values
-    straight though, however ``RawField`` can be sub-classed to build a chain of
-    translations. ``StringField``, ``IntegerField``, and ``ConstantField`` are
+    respectively. For ``RawTermDefn`` these functions simply pass the values
+    straight though, however ``RawTermDefn`` can be sub-classed to build a chain of
+    translations. ``StringTermDefn``, ``IntegerTermDefn``, and ``ConstantTermDefn`` are
     predefined sub-classes that provide translations for the ASP simple terms;
     *string*, *integer* and *constant*.
 
-    To sub-class RawField (or one of its sub-classes) simply specify ``cltopy``
+    To sub-class RawTermDefn (or one of its sub-classes) simply specify ``cltopy``
     and ``pytocl`` functions that take an input and perform some translation
     to an output format.
 
@@ -151,26 +151,26 @@ class RawField(object, metaclass=_RawFieldMeta):
 
            import datetime
 
-           class DateField(StringField):
+           class DateTermDefn(StringTermDefn):
                      pytocl = lambda dt: dt.strftime("%Y%m%d")
                      cltopy = lambda s: datetime.datetime.strptime(s,"%Y%m%d").date()
 
 
-       Because ``DateField`` sub-classes ``StringField``, rather than
-       sub-classing ``RawField`` directly, it forms a longer data translation
+       Because ``DateTermDefn`` sub-classes ``StringTermDefn``, rather than
+       sub-classing ``RawTermDefn`` directly, it forms a longer data translation
        chain:
 
-              ASP Symbol object -- RawField -- StringField -- date object
+              ASP Symbol object -- RawTermDefn -- StringTermDefn -- date object
 
-       Here the ``DateField.cltopy`` is called at the end of the chain of
+       Here the ``DateTermDefn.cltopy`` is called at the end of the chain of
        translations, so it expects a Python string object as input and outputs a
-       date object. ``DateField.pytocl`` does the opposite and inputs a date
+       date object. ``DateTermDefn.pytocl`` does the opposite and inputs a date
        object and is must output a Python string object.
 
     Args:
       default: A default value when instantiating a ``Predicate`` or
         ``ComplexTerm`` object. Defaults to ``None``.
-      index (bool): Determine if this field should be indexed by default in a
+      index (bool): Determine if this term should be indexed by default in a
         ``FactBase```. Defaults to ``False``.
 
     """
@@ -187,7 +187,7 @@ class RawField(object, metaclass=_RawFieldMeta):
 
     @classmethod
     def unifies(cls, v):
-        """Returns whether a `Clingo.Symbol` can be unified with this type of field"""
+        """Returns whether a `Clingo.Symbol` can be unified with this type of term"""
         try:
             cls.cltopy(v)
         except TypeError:
@@ -196,25 +196,23 @@ class RawField(object, metaclass=_RawFieldMeta):
 
     @property
     def default(self):
-        """Returns the default value for the field (if set)"""
+        """Returns the default value for the term (if set)"""
         return self._default
 
     @property
     def index(self):
-        """Returns whether this field should be indexed by default in a `FactBase`"""
+        """Returns whether this term should be indexed by default in a `FactBase`"""
         return self._index
 
-    @_classproperty
-    def is_field_defn(self): return True
-
-
 #------------------------------------------------------------------------------
-# The three RawField
+# The three RawTermDefn
 #------------------------------------------------------------------------------
 
-class StringField(RawField):
-    """A field definition to convert between Clingo.String object into a Python string."""
+class StringTermDefn(RawTermDefn):
+    """A term definition to convert between Clingo.String object into a Python
+    string.
 
+    """
     def _string_cltopy(symbol):
         if symbol.type != clingo.SymbolType.String:
             raise TypeError("Object {0} is not a String symbol")
@@ -223,9 +221,11 @@ class StringField(RawField):
     cltopy = _string_cltopy
     pytocl = lambda v: clingo.String(v)
 
-class IntegerField(RawField):
-    """A field definition to convert between Clingo.Number object into a Python integer."""
+class IntegerTermDefn(RawTermDefn):
+    """A term definition to convert between Clingo.Number object into a Python
+    integer.
 
+    """
     def _integer_cltopy(symbol):
         if symbol.type != clingo.SymbolType.Number:
             raise TypeError("Object {0} is not a Number symbol")
@@ -234,11 +234,11 @@ class IntegerField(RawField):
     cltopy = _integer_cltopy
     pytocl = lambda v: clingo.Number(v)
 
-class ConstantField(RawField):
-    """A field definition to convert between a simple Clingo.Function object into a
+class ConstantTermDefn(RawTermDefn):
+    """A term definition to convert between a simple Clingo.Function object into a
     Python string.
-    """
 
+    """
     def _constant_cltopy(symbol):
         if   (symbol.type != clingo.SymbolType.Function or
               not symbol.name or len(symbol.arguments) != 0):
@@ -249,68 +249,20 @@ class ConstantField(RawField):
     pytocl = lambda v: clingo.Function(v,[])
 
 #------------------------------------------------------------------------------
-# A ComplexField definition allows you to wrap an existing NonLogicalSymbol
-# definition.
-# ------------------------------------------------------------------------------
-
-class ComplexField(object):
-    """A class for defining fields that correspond to complex ASP terms.
-
-    This class provides the ``pytocl`` and ``cltopy`` functions to translate
-    between a complex Clingo.Function symbol and a ``ComplexTerm`` object.
-
-    Note:
-      ``ComplexField`` is instantiated as part of a ``Predicate`` or
-      ``ComplexTerm`` definition. It does not represent a complex term instance.
-
-    Args:
-      defn (ComplexTerm): The class that defines a complex term to match against.
-      default: A default value when instantiating a ``Predicate`` or
-        ``ComplexTerm`` object. Defaults to ``None``.
-
-    """
-
-    def __init__(self, defn, default=None):
-        if not issubclass(defn, ComplexTerm):
-            raise TypeError("Not a subclass of ComplexTerm: {}".format(defn))
-        self._defn = defn
-        self._default = default
-
-    def pytocl(self, value):
-        if not isinstance(value, self._defn):
-            raise TypeError("Value not an instance of {}".format(self._defn))
-        return value.raw
-
-    def cltopy(self, symbol):
-        return self._defn(raw=symbol)
-
-    def unifies(self, symbol):
-        try:
-            tmp = self.cltopy(symbol)
-            return True
-        except ValueError:
-            return False
-
-    @property
-    def default(self):
-        return self._default
-
-    @property
-    def is_field_defn(self): return True
-
-#------------------------------------------------------------------------------
-# Field - similar to a property but with overloaded comparison operator
+# Term - similar to a property but with overloaded comparison operator
 # that build a query so that we can perform lazy evaluation for querying.
 #------------------------------------------------------------------------------
 
-class FieldInstance(abc.ABC):
-    """Abstract class defining a field instance in a ``Predicate`` or
+class Term(abc.ABC):
+    """Abstract class defining a term instance in a ``Predicate`` or
     ``ComplexTerm``.
 
-    While the field definition is specified by the ComplexField or RawField (and
-    subclasses), when the ``Predicate`` or ``ComplexTerm`` class is actually
-    created a ``FieldInstance`` object is instantiated to handle extracting the
-    actual field data from the underlying ``Clingo.Symbol``.
+    While the term definition is specified by the RawTermDefn sub-classes, when
+    the ``Predicate`` or ``ComplexTerm`` class is actually created a ``Term``
+    object is instantiated to handle extracting the actual term data from the
+    underlying ``Clingo.Symbol``.
+
+    The ``Term`` object is also referenced when building queries.
 
     """
 
@@ -355,24 +307,24 @@ class FieldInstance(abc.ABC):
         pass
 
 #------------------------------------------------------------------------------
-# Implementation of a Field
+# Implementation of a Term
 # ------------------------------------------------------------------------------
-class _FieldInstance(FieldInstance):
-    def __init__(self, field_name, field_index, field_defn, no_setter=True):
+class _Term(Term):
+    def __init__(self, term_name, term_index, term_defn, no_setter=True):
         self._no_setter=no_setter
-        self._field_name = field_name
-        self._field_index = field_index
-        self._field_defn = field_defn
+        self._term_name = term_name
+        self._term_index = term_index
+        self._term_defn = term_defn
         self._parent_cls = None
 
     @property
-    def field_name(self): return self._field_name
+    def term_name(self): return self._term_name
 
     @property
-    def field_index(self): return self._field_index
+    def term_index(self): return self._term_index
 
     @property
-    def field_defn(self): return self._field_defn
+    def term_defn(self): return self._term_defn
 
     @property
     def parent(self): return self._parent_cls
@@ -383,35 +335,35 @@ class _FieldInstance(FieldInstance):
     def __get__(self, instance, owner=None):
         if not instance: return self
         if not isinstance(instance, self._parent_cls):
-            raise TypeError(("field {} doesn't match type "
+            raise TypeError(("term {} doesn't match type "
                              "{}").format(self, type(instance).__name__))
-        return instance._field_values[self._field_name]
-#            return field_defn.cltopy(self._symbol.arguments[idx])
+        return instance._term_values[self._term_name]
+#            return term_defn.cltopy(self._symbol.arguments[idx])
 
     def __set__(self, instance, value):
         if not self._no_setter:
             raise AttributeError("can't set attribute")
         if not isinstance(instance, self._parent_cls):
-            raise TypeError("field accessor doesn't match instance type")
-        instance._field_values[self._field_name] = value
+            raise TypeError("term accessor doesn't match instance type")
+        instance._term_values[self._term_name] = value
 
     def __hash__(self):
         return id(self)
     def __eq__(self, other):
-        return _FieldInstanceComparator(operator.eq, self, other)
+        return _TermComparator(operator.eq, self, other)
     def __ne__(self, other):
-        return _FieldInstanceComparator(operator.ne, self, other)
+        return _TermComparator(operator.ne, self, other)
     def __lt__(self, other):
-        return _FieldInstanceComparator(operator.lt, self, other)
+        return _TermComparator(operator.lt, self, other)
     def __le__(self, other):
-        return _FieldInstanceComparator(operator.le, self, other)
+        return _TermComparator(operator.le, self, other)
     def __gt__(self, other):
-        return _FieldInstanceComparator(operator.gt, self, other)
+        return _TermComparator(operator.gt, self, other)
     def __ge__(self, other):
-        return _FieldInstanceComparator(operator.ge, self, other)
+        return _TermComparator(operator.ge, self, other)
 
     def __str__(self):
-        return "{}.{}".format(self.parent.__name__,self.field_name)
+        return "{}.{}".format(self.parent.__name__,self.term_name)
 #------------------------------------------------------------------------------
 # The NonLogicalSymbol base class and supporting functions and classes
 # ------------------------------------------------------------------------------
@@ -431,44 +383,44 @@ def _nls_init_by_symbol(self, **kwargs):
         raise ValueError(("Failed to unify symbol {} with "
                           "NonLogicalSymbol class {}").format(symbol, class_name))
     self._symbol = symbol
-    for idx, (field_name, field_defn) in enumerate(self.meta.field_defns.items()):
-        self._field_values[field_name] = field_defn.cltopy(symbol.arguments[idx])
+    for idx, (term_name, term_defn) in enumerate(self.meta.term_defns.items()):
+        self._term_values[term_name] = term_defn.cltopy(symbol.arguments[idx])
 
-# Construct a NonLogicalSymbol via the field keywords
+# Construct a NonLogicalSymbol via the term keywords
 def _nls_init_by_keyword_values(self, **kwargs):
     class_name = type(self).__name__
     pred_name = self.meta.name
-    fields = set(self.meta.field_defns.keys())
+    terms = set(self.meta.term_defns.keys())
 
-    invalids = [ k for k in kwargs if k not in fields ]
+    invalids = [ k for k in kwargs if k not in terms ]
     if invalids:
-        raise ValueError(("Arguments {} are not valid fields "
+        raise ValueError(("Arguments {} are not valid terms "
                           "of {}".format(invalids,class_name)))
 
     # Construct the clingo function arguments
-    for field_name, field_defn in self.meta.field_defns.items():
-        if field_name not in kwargs:
-            if not field_defn.default:
-                raise ValueError(("Unspecified field {} has no "
-                                  "default value".format(field_name)))
-            self._field_values[field_name] = field_defn.default
+    for term_name, term_defn in self.meta.term_defns.items():
+        if term_name not in kwargs:
+            if not term_defn.default:
+                raise ValueError(("Unspecified term {} has no "
+                                  "default value".format(term_name)))
+            self._term_values[term_name] = term_defn.default
         else:
-            self._field_values[field_name] = kwargs[field_name]
+            self._term_values[term_name] = kwargs[term_name]
 
     # Create the clingo symbol object
     self._symbol = self._generate_symbol()
 
-# Construct a NonLogicalSymbol via the field keywords
+# Construct a NonLogicalSymbol via the term keywords
 def _nls_init_by_positional_values(self, *args):
     class_name = type(self).__name__
     pred_name = self.meta.name
     argc = len(args)
-    arity = len(self.meta.field_defns)
+    arity = len(self.meta.term_defns)
     if argc != arity:
         return ValueError("Expected {} arguments but {} given".format(arity,argc))
 
-    for idx, (field_name, field_defn) in enumerate(self.meta.field_defns.items()):
-        self._field_values[field_name] = args[idx]
+    for idx, (term_name, term_defn) in enumerate(self.meta.term_defns.items()):
+        self._term_values[term_name] = args[idx]
 
     # Create the clingo symbol object
     self._symbol = self._generate_symbol()
@@ -476,7 +428,7 @@ def _nls_init_by_positional_values(self, *args):
 # Constructor for every NonLogicalSymbol sub-class
 def _nls_constructor(self, *args, **kwargs):
     self._symbol = None
-    self._field_values = {}
+    self._term_values = {}
     if "raw" in kwargs:
         _nls_init_by_symbol(self, **kwargs)
     elif len(args) > 0:
@@ -486,16 +438,8 @@ def _nls_constructor(self, *args, **kwargs):
 
 
 #------------------------------------------------------------------------------
-# Metaclass constructor support functions to create the fields
+# Metaclass constructor support functions to create the terms
 #------------------------------------------------------------------------------
-
-# Function to check that an object satisfies the requirements of a field.
-# Must have functions cltopy and pytocl, and a property default
-def _is_field_defn(obj):
-    try:
-        if obj.is_field_defn: return True
-    except AttributeError:
-        return False
 
 # build the metadata for the NonLogicalSymbol
 def _make_nls_metadata(class_name, dct):
@@ -516,27 +460,52 @@ def _make_nls_metadata(class_name, dct):
                                   "'name' and 'istuple' "))
         elif istuple: name = ""
 
-    reserved = set(["meta", "raw", "clone"])
+    reserved = set(["meta", "raw", "clone", "TermDefn"])
 
-    # Generate the fields - NOTE: relies on dct being an OrderedDict()
-    fields = []
+    # Generate the terms - NOTE: relies on dct being an OrderedDict()
+    terms = []
     idx = 0
-    for field_name, field_defn in dct.items():
-        if not _is_field_defn(field_defn): continue
-        if field_name.startswith('_'):
-            raise ValueError(("Error: field name starts with an "
-                              "underscore: {}").format(field_name))
-        if field_name in reserved:
-            raise ValueError(("Error: invalid field name: '{}' "
-                              "is a reserved keyword").format(field_name))
+    for term_name, term_defn in dct.items():
+        if not isinstance(term_defn, RawTermDefn): continue
+        if term_name.startswith('_'):
+            raise ValueError(("Error: term name starts with an "
+                              "underscore: {}").format(term_name))
+        if term_name in reserved:
+            raise ValueError(("Error: invalid term name: '{}' "
+                              "is a reserved keyword").format(term_name))
 
-        field = _FieldInstance(field_name, idx, field_defn)
-        dct[field_name] = field
-        fields.append(field)
+        term = _Term(term_name, idx, term_defn)
+        dct[term_name] = term
+        terms.append(term)
         idx += 1
 
     # Now create the MetaData object
-    return NonLogicalSymbol.MetaData(name=name,fields=fields)
+    return NonLogicalSymbol.MetaData(name=name,terms=terms)
+
+#------------------------------------------------------------------------------
+#
+class _TermDefn(object):
+    def __init__(self):
+        self._defn = None
+    def set_defn(self, cls):
+        term_defn_name = "{}TermDefn".format(cls.__name__)
+        def fn_init(self, default=None):
+            self._index = False
+            self._default=default
+        def _pytocl(v):
+            if not isinstance(v, cls):
+                raise TypeError("Value not an instance of {}".format(cls))
+            return v.raw
+        def _cltopy(v):
+            return cls(raw=v)
+
+        self._defn = type(term_defn_name, (RawTermDefn,),
+                          { "__init__": fn_init,
+                            "pytocl": _pytocl,
+                            "cltopy": _cltopy })
+    @property
+    def defn(self):
+        return self._defn
 
 #------------------------------------------------------------------------------
 # A Metaclass for the NonLogicalSymbol base class
@@ -555,12 +524,13 @@ class _NonLogicalSymbolMeta(type):
         if name == "NonLogicalSymbol":
             return super(_NonLogicalSymbolMeta, meta).__new__(meta, name, bases, dct)
 
-        # Create the metadata and populate the class dict (including the fields)
+        # Create the metadata and populate the class dict (including the terms)
         md = _make_nls_metadata(name, dct)
 
         # Set the _meta attribute and constuctor
         dct["_meta"] = md
         dct["__init__"] = _nls_constructor
+        dct["_termdefn"] = _TermDefn()
 
         return super(_NonLogicalSymbolMeta, meta).__new__(meta, name, bases, dct)
 
@@ -568,43 +538,45 @@ class _NonLogicalSymbolMeta(type):
         if name == "NonLogicalSymbol":
             return super(_NonLogicalSymbolMeta, cls).__init__(name, bases, dct)
 
+        # Set this class as the term definition
+        dct["_termdefn"].set_defn(cls)
+
         md = dct["_meta"]
-        # The property attribute for each field can only be created in __new__
+        # The property attribute for each term can only be created in __new__
         # but the class itself does not get created until after __new__. Hence
-        # we have to set the pointer within the field back to the this class
+        # we have to set the pointer within the term back to the this class
         # here.
-        for field_name, field_defn in md.field_defns.items():
-            dct[field_name].set_parent(cls)
+        for term_name, term_defn in md.term_defns.items():
+            dct[term_name].set_parent(cls)
 
 #        print("CLS: {}".format(cls) + "I am still called '" + name +"'")
         return super(_NonLogicalSymbolMeta, cls).__init__(name, bases, dct)
 
 #------------------------------------------------------------------------------
 # A base non-logical symbol that all predicate/term declarations must inherit
-# from. The Metaclass creates the magic to create the fields and the underlying
+# from. The Metaclass creates the magic to create the terms and the underlying
 # clingo symbol object.
 # ------------------------------------------------------------------------------
 
 class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
     """Encapsulates an ASP predicate or complex term in an easy to access object.
 
-    This is the heart of the ORM model. The NonLogicalSymbol is a base class
-    with two sub-classes: ``Predicate`` and ``ComplexTerm``. Users should not
-    deal with ``NonLogicalSymbol`` direct but should instead inherit from the
-    two subclasses.
+    This is the heart of the ORM model for defining the mapping of a complex
+    term or predicate to a Python object. ``Predicate`` and ``ComplexTerm`` are
+    actually aliases for NonLogicalSymbol.
 
     Example:
        .. code-block:: python
 
            class Booking(Predicate):
-               date = StringField(index = True)
-               time = StringField(index = True)
-               name = StringField(default = "relax")
+               date = StringTermDefn(index = True)
+               time = StringTermDefn(index = True)
+               name = StringTermDefn(default = "relax")
 
            b1 = Booking("20190101", "10:00")
            b2 = Booking("20190101", "11:00", "Dinner")
 
-    Fields names can be any valid Python variable name (i.e., not be a Python
+    TermDefns names can be any valid Python variable name (i.e., not be a Python
     keyword) subject to the following restrictions:
 
     - start with a "_", or
@@ -617,7 +589,7 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
     Args:
       **kwargs:
 
-      - named parameters corresponding to the field names, or
+      - named parameters corresponding to the term names, or
       - a single named parameter ``raw`` that takes a Clingo.Symbol object.
 
     """
@@ -628,33 +600,33 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
     class MetaData(object):
         """Encapsulates the meta-data for a NonLogicalSymbol definition"""
 
-        def __init__(self, name, fields):
+        def __init__(self, name, terms):
             self._name = name
-            self._fields = tuple(fields)
+            self._terms = tuple(terms)
 
         @property
         def name(self):
-            """Returns the string name of the field"""
+            """Returns the string name of the term"""
             return self._name
 
         @property
-        def field_defns(self):
-            """Returns the set of field definitions - keyed by field name"""
-            return { f.field_name : f.field_defn for f in self._fields }
+        def term_defns(self):
+            """Returns the set of term definitions - keyed by term name"""
+            return { f.term_name : f.term_defn for f in self._terms }
 
         @property
-        def field_names(self):
-            """Returns the list of field names"""
-            return [ f.field_name for f in self._fields ]
+        def term_names(self):
+            """Returns the list of term names"""
+            return [ f.term_name for f in self._terms ]
 
         @property
-        def fields(self):
-            return self._fields
+        def terms(self):
+            return self._terms
 
         @property
         def arity(self):
-            """Returns the number of fields"""
-            return len(self._fields)
+            """Returns the number of terms"""
+            return len(self._terms)
 
         @property
         def is_tuple(self):
@@ -672,11 +644,16 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
 #        return self._symbol
         return self._generate_symbol()
 
-    # Recompute the symbol object from the stored field objects
+    @_classproperty
+    def TermDefn(cls):
+        """A RawTermDefn sub-class corresponding to a TermDefn for this class."""
+        return cls._termdefn.defn
+
+    # Recompute the symbol object from the stored term objects
     def _generate_symbol(self):
         pred_args = []
-        for field_name, field_defn in self.meta.field_defns.items():
-            pred_args.append(field_defn.pytocl(self._field_values[field_name]))
+        for term_name, term_defn in self.meta.term_defns.items():
+            pred_args.append(term_defn.pytocl(self._term_values[term_name]))
         # Create the clingo symbol object
         return clingo.Function(self.meta.name, pred_args)
 
@@ -684,23 +661,23 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
     def clone(self, **kwargs):
         """Clone the object with some differences.
 
-        For any field name that is not one of the parameter keywords the clone
-        keeps the same value. But for any field listed in the parameter keywords
+        For any term name that is not one of the parameter keywords the clone
+        keeps the same value. But for any term listed in the parameter keywords
         replace with specified new value.
         """
 
         # Sanity check
         clonekeys = set(kwargs.keys())
-        objkeys = set(self.meta.field_defns.keys())
+        objkeys = set(self.meta.term_defns.keys())
         diffkeys = clonekeys - objkeys
         if diffkeys:
-            raise ValueError("Unknown field names: {}".format(diffkeys))
+            raise ValueError("Unknown term names: {}".format(diffkeys))
 
         # Get the arguments for the new object
         cloneargs = {}
-        for field_name, field_defn in self.meta.field_defns.items():
-            if field_name in kwargs: cloneargs[field_name] = kwargs[field_name]
-            else: cloneargs[field_name] = kwargs[field_name] = self._field_values[field_name]
+        for term_name, term_defn in self.meta.term_defns.items():
+            if term_name in kwargs: cloneargs[term_name] = kwargs[term_name]
+            else: cloneargs[term_name] = kwargs[term_name] = self._term_values[term_name]
 
         # Create the new object
         return type(self)(**cloneargs)
@@ -721,14 +698,14 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
         if symbol.type != clingo.SymbolType.Function: return False
 
         name = cls.meta.name
-        field_defns = cls.meta.field_defns
+        term_defns = cls.meta.term_defns
 
         if symbol.name != name: return False
-        if len(symbol.arguments) != len(field_defns): return False
+        if len(symbol.arguments) != len(term_defns): return False
 
-        for idx, (field_name, field_defn) in enumerate(field_defns.items()):
+        for idx, (term_name, term_defn) in enumerate(term_defns.items()):
             term = symbol.arguments[idx]
-            if not field_defn.unifies(symbol.arguments[idx]): return False
+            if not term_defn.unifies(symbol.arguments[idx]): return False
         return True
 
     # Factory that returns a unified NonLogicalSymbol object
@@ -740,11 +717,11 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
     # Overloaded index operator to access the values
     #--------------------------------------------------------------------------
     def __getitem__(self, idx):
-        """Allows for index based access to field elements."""
-        return self.meta.fields[idx].__get__(self)
+        """Allows for index based access to term elements."""
+        return self.meta.terms[idx].__get__(self)
 
     def __setitem__(self, idx,v):
-        return self.meta.fields[idx].__set__(self,v)
+        return self.meta.terms[idx].__set__(self,v)
 
     #--------------------------------------------------------------------------
     # Overloaded operators
@@ -817,18 +794,11 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
         return self.__str__()
 
 #------------------------------------------------------------------------------
-# Predicate and ComplexTerm are now subclasses of NonLogicalSymbol rather than
-# aliases. This makes the FactBaseHelper's behaviour more intuitive.
+# Predicate and ComplexTerm are simply aliases for NonLogicalSymbol.
 #------------------------------------------------------------------------------
-class Predicate(NonLogicalSymbol):
-    """Corresponds to an ASP predicate."""
-    def __init__(self, *args, **kwargs):
-        super(Predicate, self).__init__(*args, **kwargs)
 
-class ComplexTerm(NonLogicalSymbol):
-    """Corresponds to an ASP complex term (ie., function)."""
-    def __init__(self, *args, **kwargs):
-        super(ComplexTerm, self).__init__(*args, **kwargs)
+Predicate=NonLogicalSymbol
+ComplexTerm=NonLogicalSymbol
 
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
@@ -874,12 +844,12 @@ def _simplify_fact_comparator(comparator):
         return comparator
 
 
-# A helper function to return the list of field comparators of a comparator
-def _get_field_comparators(comparator):
+# A helper function to return the list of term comparators of a comparator
+def _get_term_comparators(comparator):
     try:
-        return comparator.field_comparators
+        return comparator.term_comparators
     except:
-        if isinstance(comparator, _FieldInstanceComparator):
+        if isinstance(comparator, _TermComparator):
             return [comparator]
         return []
 
@@ -958,12 +928,12 @@ class _StaticComparator(Comparator):
 
 #------------------------------------------------------------------------------
 # A fact comparator functor that tests whether a fact satisfies a comparision
-# with the value of some predicate's field.
+# with the value of some predicate's term.
 #
-# Note: instances of _FieldInstanceComparator are constructed by calling the comparison
-# operator for Field objects.
+# Note: instances of _TermComparator are constructed by calling the comparison
+# operator for Term objects.
 # ------------------------------------------------------------------------------
-class _FieldInstanceComparator(Comparator):
+class _TermComparator(Comparator):
     def __init__(self, compop, arg1, arg2):
         self._compop = compop
         self._arg1 = arg1
@@ -973,11 +943,11 @@ class _FieldInstanceComparator(Comparator):
         # Comparison is trivial if:
         # 1) the objects are identical then it is a trivial comparison and
         # equivalent to checking if the operator satisfies a simple identity (eg., 1)
-        # 2) neither argument is a Field
+        # 2) neither argument is a Term
         if arg1 is arg2:
             self._static = True
             self._value = compop(1,1)
-        elif not isinstance(arg1, _FieldInstance) and not isinstance(arg2, _FieldInstance):
+        elif not isinstance(arg1, _Term) and not isinstance(arg2, _Term):
             self._static = True
             self._value = compop(arg1,arg2)
 
@@ -986,7 +956,7 @@ class _FieldInstanceComparator(Comparator):
 
         # Get the value of an argument (resolving placeholder)
         def getargval(arg):
-            if isinstance(arg, _FieldInstance): return arg.__get__(fact)
+            if isinstance(arg, _Term): return arg.__get__(fact)
             elif isinstance(arg, _PositionalPlaceholder):
                 if arg.posn >= len(args):
                     raise TypeError(("missing argument in {} for placeholder "
@@ -1020,7 +990,7 @@ class _FieldInstanceComparator(Comparator):
 
     def indexable(self):
         if self._static: return None
-        if not isinstance(self._arg1, _FieldInstance) or isinstance(self._arg2, _FieldInstance):
+        if not isinstance(self._arg1, _Term) or isinstance(self._arg2, _Term):
             return None
         return (self._arg1, self._compop, self._arg2)
 
@@ -1231,7 +1201,7 @@ class _Select(Select):
 
     def __init__(self, factmap):
         self._factmap = factmap
-        self._index_priority = { f:p for (p,f) in enumerate(factmap.indexed_fields()) }
+        self._index_priority = { f:p for (p,f) in enumerate(factmap.indexed_terms()) }
         self._where = None
         self._indexable = None
 
@@ -1254,7 +1224,7 @@ class _Select(Select):
             if indexable[0] not in self._index_priority: return None
             return indexable
 
-        if isinstance(where, _FieldInstanceComparator):
+        if isinstance(where, _TermComparator):
             return validate_indexable(where.indexable())
         indexable = None
         if isinstance(where, _BoolComparator) and where.boolop == operator.and_:
@@ -1322,7 +1292,7 @@ class _Delete(Delete):
 
     def __init__(self, factmap):
         self._factmap = factmap
-        self._index_prior = { f:p for (p,f) in enumerate(factmap.indexed_fields()) }
+        self._index_prior = { f:p for (p,f) in enumerate(factmap.indexed_terms()) }
         self._where = None
 
     def where(self, *expressions):
@@ -1352,9 +1322,9 @@ class _Delete(Delete):
             [ f for f in self._factmap.facts() if f not in to_delete ]
 
         # Remove the facts from each multimap
-        for fid, field in enumerate(self._factmap.indexed_fields()):
-            keys = set([ field.__get__(f) for f in to_delete ])
-            mm  = self._factmap.get_facts_multimap(field)
+        for fid, term in enumerate(self._factmap.indexed_terms()):
+            keys = set([ term.__get__(f) for f in to_delete ])
+            mm  = self._factmap.get_facts_multimap(term)
             mm.del_values(keys, to_delete)
 
         # return the number deleted
@@ -1363,7 +1333,7 @@ class _Delete(Delete):
 
 #------------------------------------------------------------------------------
 # A map for facts of the same type - Indexes can be built to allow for fast
-# lookups based on a field value. The order that the fields are specified in the
+# lookups based on a term value. The order that the terms are specified in the
 # index matters as it determines the priority of the index.
 # ------------------------------------------------------------------------------
 
@@ -1378,14 +1348,14 @@ class _FactMap(object):
     def add(self, fact):
         self._allfacts.append(fact)
         if self._mmaps:
-            for field, mmap in self._mmaps.items():
-                mmap[field.__get__(fact)] = fact
+            for term, mmap in self._mmaps.items():
+                mmap[term.__get__(fact)] = fact
 
-    def indexed_fields(self):
+    def indexed_terms(self):
         return self._mmaps.keys() if self._mmaps else []
 
-    def get_facts_multimap(self, field):
-        return self._mmaps[field]
+    def get_facts_multimap(self, term):
+        return self._mmaps[term]
 
     def facts(self):
         return self._allfacts
@@ -1393,7 +1363,7 @@ class _FactMap(object):
     def clear(self):
         self._allfacts.clear()
         if self._mmaps:
-            for field, mmap in self._mmaps.items():
+            for term, mmap in self._mmaps.items():
                 mmap.clear()
 
     def select(self):
@@ -1415,9 +1385,8 @@ class _FactMap(object):
 
 
 #------------------------------------------------------------------------------
-# FactBaseHelper offers a decorator as well as a context manager interface for
-# gathering predicate and index definitions to be used in defining a FactBase
-# subclass.
+# FactBaseHelper offers a decorator interface for gathering predicate and index
+# definitions to be used in defining a FactBase subclass.
 # ------------------------------------------------------------------------------
 class FactBaseHelper(object):
     def __init__(self, suppress_auto_index=False):
@@ -1425,8 +1394,6 @@ class FactBaseHelper(object):
         self._indexes = []
         self._predset = set()
         self._indset = set()
-        self._in_context = False
-        self._delayed_ri = []
         self._suppress_auto_index = suppress_auto_index
 
     def register_predicate(self, cls):
@@ -1437,30 +1404,25 @@ class FactBaseHelper(object):
         self._predicates.append(cls)
         if self._suppress_auto_index: return
 
-        # Register the fields that have the index flag set
-        for field in cls.meta.fields:
+        # Register the terms that have the index flag set
+        for term in cls.meta.terms:
             with contextlib.suppress(AttributeError):
-                if field.field_defn.index: self.register_index(field)
+                if term.term_defn.index: self.register_index(term)
 
-    def register_index(self, field):
-        def ri():
-            if field in self._indset: return    # ignore if already registered
-            if isinstance(field, FieldInstance) and field.parent in self.predicates:
-                self._indset.add(field)
-                self._indexes.append(field)
-            else:
-                raise TypeError("{} is not a predicate field for one of {}".format(
-                    field, [ p.__name__ for p in self.predicates ]))
-
-        # If in context manager mode then delay registration
-        if self._in_context: self._delayed_ri.append(ri)
-        else: ri()
+    def register_index(self, term):
+        if term in self._indset: return    # ignore if already registered
+        if isinstance(term, Term) and term.parent in self.predicates:
+            self._indset.add(term)
+            self._indexes.append(term)
+        else:
+            raise TypeError("{} is not a predicate term for one of {}".format(
+                term, [ p.__name__ for p in self.predicates ]))
 
     def register(self, *args):
         def wrapper(cls):
             self.register_predicate(cls)
-            fields = [ getattr(cls, fn) for fn in args ]
-            for f in fields: self.register_index(f)
+            terms = [ getattr(cls, fn) for fn in args ]
+            for f in terms: self.register_index(f)
             return cls
 
         if len(args) == 1 and inspect.isclass(args[0]):
@@ -1468,23 +1430,6 @@ class FactBaseHelper(object):
             return args[0]
         else:
             return wrapper
-
-    def __enter__(self):
-        self._in_context = True
-        self._exclude = set(Predicate.__subclasses__())
-        return self
-
-    def __exit__(self,et,ev,tb):
-        self._in_context = False
-        for sc in Predicate.__subclasses__():
-            if sc not in self._exclude:
-                self.register_predicate(sc)
-
-        # Now process any delayed index registrations
-        for ri in self._delayed_ri: ri()
-        self._delayed_ri = []
-
-        return self
 
     def create_class(self, name):
         return type(name, (FactBase,),
@@ -1610,11 +1555,11 @@ class FactBase(object, metaclass=_FactBaseMeta):
     # A special purpose initialiser so that we can do delayed initialisation
     def _init(self, facts=None, symbols=None):
 
-        # Create _FactMaps for the predicate types with indexed fields
+        # Create _FactMaps for the predicate types with indexed terms
         grouped = {}
-        for field in self.indexes:
-            if field.parent not in grouped: grouped[field.parent] = []
-            grouped[field.parent].append(field)
+        for term in self.indexes:
+            if term.parent not in grouped: grouped[term.parent] = []
+            grouped[term.parent].append(term)
         for p in self.predicates:
             if p not in grouped: grouped[p] = []
         self._factmaps = { pt : _FactMap(fs) for pt, fs in grouped.items() }
@@ -1745,8 +1690,6 @@ def model_contains(model, fact):
     return model.contains(fact)
 
 def model_facts(model, factbase, atoms=False, terms=False, shown=False):
-#    symbols=[ f for f in fact_generator(factbase.predicates,\
-#              model.symbols(atoms=atoms,terms=terms,shown=shown))]
     return factbase(symbols=model.symbols(atoms=atoms,terms=terms,shown=shown),
                     delayed_init=True)
 
@@ -1767,22 +1710,22 @@ class Signature(object):
       sigs(\*sigs): A list of function signature elements.
 
       - Inputs. Match the sub-elements [:-1] define the input signature while
-        the last element defines the output signature. Each input can be either
-        a RawField (or sub-class) or a ComplexTerm sub-class.
+        the last element defines the output signature. Each input must be a a
+        RawTermDefn (or sub-class).
 
-      - Output: Must be RawField (or sub-class) or a ComplexTerm sub-class or a
-        singleton list containing a RawField definition or ComplexTerm.
+      - Output: Must be RawTermDefn (or sub-class) or a singleton list
+        containing a RawTermDefn (or sub-class).
 
    Example:
        .. code-block:: python
 
            import datetime
 
-           class DateField(StringField):
+           class DateTermDefn(StringTermDefn):
                      pytocl = lambda dt: dt.strftime("%Y%m%d")
                      cltopy = lambda s: datetime.datetime.strptime(s,"%Y%m%d").date()
 
-           drsig = Signature(DateField, DateField, [DateField])
+           drsig = Signature(DateTermDefn, DateTermDefn, [DateTermDefn])
 
            @drsig.make_clingo_wrapper
            def date_range(start, end):
@@ -1795,15 +1738,14 @@ class Signature(object):
        that the decorated function expects a start and end date encoded as
        Clingo.String objects (matching YYYYMMDD format) and returns a list of
        Clingo.String objects corresponding to the dates in that range.
+
     """
 
     def __init__(self, *sigs):
         def _validate_basic_sig(sig):
-            if inspect.isclass(sig):
-                if issubclass(sig, RawField): return True
-                if issubclass(sig, ComplexTerm): return True
-            raise TypeError(("Invalid signature element {}: must be a ComplexTerm "
-                             "class or RawField object".format(s)))
+            if issubclass(sig, RawTermDefn): return True
+            raise TypeError(("Signature element {} must be a RawTermDefn "
+                             "subclass".format(s)))
 
         self._insigs = sigs[:-1]
         self._outsig = sigs[-1]
@@ -1818,17 +1760,12 @@ class Signature(object):
             _validate_basic_sig(self._outsig)
 
     def _input(self, sig, arg):
-        # Since signature has already been validated we can make assumptions
-        if issubclass(sig, ComplexTerm): return sig._unify(arg)
         return sig.cltopy(arg)
 
     def _output(self, sig, arg):
         # Since signature already validated we can make assumptions
-        if inspect.isclass(sig):
-            if issubclass(sig, ComplexTerm) and isinstance(arg, sig):
-                return arg.raw
-            if issubclass(sig, RawField):
-                return sig.pytocl(arg)
+        if inspect.isclass(sig) and issubclass(sig, RawTermDefn):
+            return sig.pytocl(arg)
 
         # Deal with a list
         if isinstance(sig, collections.Iterable) and isinstance(arg, collections.Iterable):

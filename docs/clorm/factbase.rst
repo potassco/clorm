@@ -13,20 +13,19 @@ A Container for Facts
 
 ClORM provides the ``FactBase`` as a container class for storing and querying
 facts. This class must be sub-classed, and each sub-class is distinguished by
-the predicates that it can store and the predicate fields for which it maintains
-an index.
+the predicates that it can store and the terms for which it maintains an index.
 
 .. code-block:: python
 
    from clorm import *
 
    class Person(Predicate):
-      person = ConstantField()
-      address = StringField()
+      person = ConstantTermDefn()
+      address = StringTermDefn()
 
    class Pet(Predicate):
-      owner = ConstantField()
-      petname = StringField()
+      owner = ConstantTermDefn()
+      petname = StringTermDefn()
 
    class AppDB(FactBase):
       predicates = [Person, Pet]
@@ -65,21 +64,21 @@ passing a named parameter ``symbols`` to the constructor.
    dave_raw = Function("person", [Function("dave",[]),String("UNSW")])
    facts = AppDB(symbols=[dave_raw])
 
-Here the ``AppDB`` object tries to unify each raw symbol with its list of
-predicates and creates a matching object for the first predicate that it unifies
-with. If there are no unifying predicates then the symbol is ignored.
+Here the ``AppDB`` object tries to unify each raw symbol with its internal list
+of predicates and creates a matching object for the first predicate that it
+unifies with. If there are no unifying predicates then the symbol is ignored.
 
 .. note:: Since a raw Clingo symbol is mapped to the first predicate that it
    unifies with, the order that the predicates are defined can change the
    behaviour of the fact base. Therefore, in general it is a good idea to avoid
    defining multiple predicates that can unify with the same symbols.
 
-A final feature of the ``FactBase`` constructors is that they implement a
-delayed initialisation feature with the constructor option
-``delayed_init=True``. With this option the importing of a symbols list is
-delayed until the first access of the object. The usefulness of this option will
-be discussed later when we examine the integration of ClORM with the ASP solver
-and dealing with ASP models.
+A final feature of the ``FactBase`` constructor is that it implements a delayed
+initialisation feature with the constructor option ``delayed_init=True``. With
+this option the importing of a symbols list is delayed until the first access of
+the object. The usefulness of this option will be discussed later when we
+examine the integration of ClORM with the ASP solver and dealing with ASP
+models.
 
 A Helper for Defining Containers
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -103,52 +102,19 @@ decorator that can be used to associate a predicate with a helper object.
    @fbh1.register
    @fbh2.register
    class Person(Predicate):
-      person = ConstantField()
-      address = StringField()
+      person = ConstantTermDefn()
+      address = StringTermDefn()
 
    @fbh1.register
    class Pet(Predicate):
-      owner = ConstantField(index=True)
-      petname = StringField()
+      owner = ConstantTermDefn(index=True)
+      petname = StringTermDefn()
 
    AppDB1 = fbh1.create_class("AppDB1")
    AppDB2 = fbh2.create_class("AppDB2")
 
 As was mentioned in the previous chapter the indexes are defined by specifying
-``index=True`` for the appropriate predicate definition, so that the above to
-sets of versions will produce identical results.
-
-
-The ``FactBaseHelper`` also offers a contex mode which is useful for when you
-want only one ``FactBase`` sub-class consisting of all the defined
-predicates. In such a case the helper can be used as a context to capture all the
-predicates defined within the context.
-
-.. code-block:: python
-
-   from clorm import *
-
-   with FactBaseHelper() as fbh:
-      class Person(Predicate):
-         person = ConstantField()
-         address = StringField()
-
-      class Pet(Predicate):
-         owner = ConstantField(index=True)
-         petname = StringField()
-
-   AppDB = fbh.create_class("AppDB")
-
-.. warning::
-
-   I am leaning towards removing the context interface from the API. It allows
-   for fewer lines of code by implicitly capturing the predicates that are
-   defined within the context block. However, this leads to two issues. Firstly,
-   it possibly breaks the *Zen of Python* directive that says that it is better
-   to be explicit than implicit. Secondly, it also means that the predicate
-   definition process is not thread-safe; if two threads are defining predicates
-   simultaneously then the context may capture both sets of definitions.
-
+``index=True`` for the appropriate predicate definition.
 
 Querying
 --------
@@ -162,15 +128,13 @@ mechanism.
 When an ASP model is returned by the solver the application developer needs to
 process the model in order to extract the relevant facts. The simplest mechanism
 to do this to loop through the facts in the model. The loop will then typically
-contains a number of conditional statements to determine what action to take
-with the current fact; and to store it if some sort of matching needs to take
-place.
+contains a number of conditional statements to determine what action to take for
+the given fact; and to store it if some sort of matching needs to take place.
 
 However, this loop-and-test approach leads to unnecessary boilerplate code as
 well as making the purpose of the code more obscure. ClORM's ``FactBase`` is
 intended to alleviate this problem by offering a database-like query mechanism
 for extracting facts from a model.
-
 
 Simple Queries
 ^^^^^^^^^^^^^^
@@ -219,8 +183,8 @@ Complex Queries and Indexing
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 In the simple case where the ``Select`` query object contains a ``where`` clause
-that corresponds to an indexed field then ClORM is able to use this index to
-make query execution efficient.
+that corresponds to a term that is indexed then ClORM is able to use this index
+to make query execution efficient.
 
 A ``where`` clause can consist of more the one clause and these are treated as a
 conjunction. Its is also possible to construct more complex clauses using ClORM

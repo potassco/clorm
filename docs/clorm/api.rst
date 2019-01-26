@@ -1,17 +1,31 @@
 API Documentation
 =================
 
-.. autoclass:: clorm.orm.RawField
+The heart of the ClORM ORM is defining the mapping from *ground predicates* to
+member variables of a Python object. There are two aspects of this: *term
+definitions* that define how *ASP terms* are mapped to Python objects, and
+*predicate* definitions that define predicate and function names, their arities
+and the term definitions for each of these parameter.
+
+Term Definitions
+-----------------
+
+.. autoclass:: clorm.orm.RawTermDefn
     :members:
 
-.. autoclass:: clorm.orm.StringField
+.. autoclass:: clorm.orm.StringTermDefn
 
-.. autoclass:: clorm.orm.ConstantField
+.. autoclass:: clorm.orm.ConstantTermDefn
 
-.. autoclass:: clorm.orm.IntegerField
+.. autoclass:: clorm.orm.IntegerTermDefn
 
-.. autoclass:: clorm.orm.ComplexField
-    :members:
+Predicates and Complex Terms
+----------------------------
+
+In logical terminology predicates and complex terms are both instances of *non
+logical symbols*. The ClORM implementation captures this in the
+``NonLogicalSymbol`` class with ``Predicate`` and ``ComplexTerm`` simply being
+aliases.
 
 .. autoclass:: clorm.orm.Signature
     :members:

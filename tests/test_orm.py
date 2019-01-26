@@ -2,6 +2,7 @@
 # Unit tests for the clorm ORM interface
 #------------------------------------------------------------------------------
 
+import inspect
 import unittest
 import datetime
 import calendar
@@ -9,8 +10,8 @@ from clingo import Number, String, Function,  __version__ as clingo_version
 from clingo import Control
 from clorm.orm import \
     NonLogicalSymbol, Predicate, ComplexTerm, \
-    IntegerField, StringField, ConstantField, ComplexField, RawField, \
-    not_, and_, or_, _StaticComparator, _get_field_comparators, \
+    IntegerTermDefn, StringTermDefn, ConstantTermDefn, RawTermDefn, \
+    not_, and_, or_, _StaticComparator, _get_term_comparators, \
     ph_, ph1_, ph2_, \
     _MultiMap, _FactMap, \
     fact_generator, FactBase, FactBaseHelper, \
@@ -35,45 +36,45 @@ class ORMTestCase(unittest.TestCase):
     #--------------------------------------------------------------------------
     # Simple test to make sure the default getters and setters are correct
     #--------------------------------------------------------------------------
-    def test_simplefields(self):
+    def test_simpleterms(self):
 
 
         symstr = String("SYM")
-        self.assertEqual(type(StringField.cltopy(symstr)), str)
-        self.assertEqual(StringField.cltopy(symstr), "SYM")
-        self.assertEqual(StringField.pytocl("SYM"), symstr)
+        self.assertEqual(type(StringTermDefn.cltopy(symstr)), str)
+        self.assertEqual(StringTermDefn.cltopy(symstr), "SYM")
+        self.assertEqual(StringTermDefn.pytocl("SYM"), symstr)
 
         symstr = Function("const")
-        self.assertEqual(type(ConstantField.cltopy(symstr)), str)
-        self.assertEqual(ConstantField.cltopy(symstr), "const")
-        self.assertEqual(ConstantField.pytocl("const"), symstr)
+        self.assertEqual(type(ConstantTermDefn.cltopy(symstr)), str)
+        self.assertEqual(ConstantTermDefn.cltopy(symstr), "const")
+        self.assertEqual(ConstantTermDefn.pytocl("const"), symstr)
 
         symstr = Number(1)
-        self.assertEqual(type(IntegerField.cltopy(symstr)), int)
-        self.assertEqual(IntegerField.cltopy(symstr), 1)
-        self.assertEqual(IntegerField.pytocl(1), symstr)
+        self.assertEqual(type(IntegerTermDefn.cltopy(symstr)), int)
+        self.assertEqual(IntegerTermDefn.cltopy(symstr), 1)
+        self.assertEqual(IntegerTermDefn.pytocl(1), symstr)
 
 
         with self.assertRaises(TypeError) as ctx:
-            class DateField(StringField, StringField):
+            class DateTermDefn(StringTermDefn, StringTermDefn):
                 pass
 
-        class DateField(StringField):
+        class DateTermDefn(StringTermDefn):
             pytocl = lambda dt: dt.strftime("%Y%m%d")
             cltopy = lambda s: datetime.datetime.strptime(s,"%Y%m%d").date()
 
         symstr = String("20180101")
         dt = datetime.date(2018,1,1)
-        self.assertEqual(DateField.cltopy(symstr), dt)
-        self.assertEqual(DateField.pytocl(dt), symstr)
+        self.assertEqual(DateTermDefn.cltopy(symstr), dt)
+        self.assertEqual(DateTermDefn.pytocl(dt), symstr)
 
-        class PartialField(StringField):
+        class PartialTermDefn(StringTermDefn):
             pytocl = lambda dt: dt.strftime("%Y%m%d")
 
         with self.assertRaises(NotImplementedError) as ctx:
             symstr = String("20180101")
             dt = datetime.date(2018,1,1)
-            self.assertEqual(PartialField.cltopy(symstr), dt)
+            self.assertEqual(PartialTermDefn.cltopy(symstr), dt)
 
     #--------------------------------------------------------------------------
     # Simple test to make sure the default getters and setters are correct
@@ -85,25 +86,25 @@ class ORMTestCase(unittest.TestCase):
         cnum1 = Number(num1)
         cstr1 = String(str1)
         csim1 = Function(sim1,[])
-        self.assertEqual(num1, IntegerField.cltopy(cnum1))
-        self.assertEqual(str1, StringField.cltopy(cstr1))
-        self.assertEqual(sim1, ConstantField.cltopy(csim1))
+        self.assertEqual(num1, IntegerTermDefn.cltopy(cnum1))
+        self.assertEqual(str1, StringTermDefn.cltopy(cstr1))
+        self.assertEqual(sim1, ConstantTermDefn.cltopy(csim1))
 
-        self.assertEqual(cnum1, IntegerField.pytocl(num1))
-        self.assertEqual(cstr1, StringField.pytocl(str1))
-        self.assertEqual(csim1, ConstantField.pytocl(sim1))
+        self.assertEqual(cnum1, IntegerTermDefn.pytocl(num1))
+        self.assertEqual(cstr1, StringTermDefn.pytocl(str1))
+        self.assertEqual(csim1, ConstantTermDefn.pytocl(sim1))
 
-        self.assertTrue(IntegerField.unifies(cnum1))
-        self.assertTrue(StringField.unifies(cstr1))
-        self.assertTrue(ConstantField.unifies(csim1))
+        self.assertTrue(IntegerTermDefn.unifies(cnum1))
+        self.assertTrue(StringTermDefn.unifies(cstr1))
+        self.assertTrue(ConstantTermDefn.unifies(csim1))
 
-        self.assertFalse(IntegerField.unifies(csim1))
-        self.assertFalse(StringField.unifies(cnum1))
-        self.assertFalse(ConstantField.unifies(cstr1))
+        self.assertFalse(IntegerTermDefn.unifies(csim1))
+        self.assertFalse(StringTermDefn.unifies(cnum1))
+        self.assertFalse(ConstantTermDefn.unifies(cstr1))
 
-        fint = IntegerField()
-        fstr = StringField()
-        fconst = ConstantField()
+        fint = IntegerTermDefn()
+        fstr = StringTermDefn()
+        fconst = ConstantTermDefn()
 
         self.assertTrue(fint.unifies(cnum1))
         self.assertTrue(fstr.unifies(cstr1))
@@ -112,19 +113,19 @@ class ORMTestCase(unittest.TestCase):
     #--------------------------------------------------------------------------
     # Simple test to make sure the default getters and setters are correct
     #--------------------------------------------------------------------------
-    def test_raw_field(self):
+    def test_raw_term(self):
 
         raw1 = Function("func",[Number(1)])
         raw2 = Function("bob",[String("no")])
-        rf1 = RawField()
-        rf2 = RawField(default=raw1)
+        rf1 = RawTermDefn()
+        rf2 = RawTermDefn(default=raw1)
         rt1 = Function("tmp", [Number(1), raw1])
         rt2 = Function("tmp", [Number(1), raw2])
         self.assertTrue(rf1.unifies(raw1))
 
         class Tmp(Predicate):
-            n1 = IntegerField()
-            r1 = RawField()
+            n1 = IntegerTermDefn()
+            r1 = RawTermDefn()
 
         self.assertTrue(Tmp._unifies(rt1))
         self.assertTrue(Tmp._unifies(rt2))
@@ -140,15 +141,15 @@ class ORMTestCase(unittest.TestCase):
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    # Test setting index for a field
+    # Test setting index for a term
     #--------------------------------------------------------------------------
-    def test_field_index(self):
-        fint1 = IntegerField()
-        fstr1 = StringField()
-        fconst1 = ConstantField()
-        fint2 = IntegerField(index=True)
-        fstr2 = StringField(index=True)
-        fconst2 = ConstantField(index=True)
+    def test_term_index(self):
+        fint1 = IntegerTermDefn()
+        fstr1 = StringTermDefn()
+        fconst1 = ConstantTermDefn()
+        fint2 = IntegerTermDefn(index=True)
+        fstr2 = StringTermDefn(index=True)
+        fconst2 = ConstantTermDefn(index=True)
 
         self.assertFalse(fint1.index)
         self.assertFalse(fstr1.index)
@@ -164,8 +165,8 @@ class ORMTestCase(unittest.TestCase):
     def test_predicate_init(self):
 
         class Fact(Predicate):
-            anum = IntegerField(default=1)
-            astr = StringField()
+            anum = IntegerTermDefn(default=1)
+            astr = StringTermDefn()
 
         func=Function("fact",[Number(1),String("test")])
         f1=Fact(astr="test")
@@ -180,26 +181,26 @@ class ORMTestCase(unittest.TestCase):
     # --------------------------------------------------------------------------
     def test_simple_predicate_defn(self):
 
-        # Test bad declaration - the field name starts with an "_"
+        # Test bad declaration - the term name starts with an "_"
         with self.assertRaises(ValueError) as ctx:
             class BadPredicate(Predicate):
-                _afield = IntegerField()
+                _aterm = IntegerTermDefn()
 
-        # Test bad declaration - the field name is "meta"
+        # Test bad declaration - the term name is "meta"
         with self.assertRaises(ValueError) as ctx:
             class BadPredicate(Predicate):
-                meta = IntegerField()
+                meta = IntegerTermDefn()
 
-        # Test bad declaration - the field name is "raw"
+        # Test bad declaration - the term name is "raw"
         with self.assertRaises(ValueError) as ctx:
             class BadPredicate(Predicate):
-                raw = IntegerField()
+                raw = IntegerTermDefn()
 
         # Test declaration of predicate with an implicit name
         class ImplicitlyNamedPredicate(Predicate):
-            afield = IntegerField()
+            aterm = IntegerTermDefn()
 
-        inp1 = ImplicitlyNamedPredicate(afield=2)
+        inp1 = ImplicitlyNamedPredicate(aterm=2)
         inp2 = Function("implicitlyNamedPredicate",[Number(2)])
         self.assertEqual(inp1.raw, inp2)
 
@@ -217,58 +218,65 @@ class ORMTestCase(unittest.TestCase):
         self.assertEqual(up1.meta.arity, 0)
         self.assertEqual(UnaryPredicate.meta.arity, 0)
 
-        # Test that default fields work and that not specifying a value raises
+        # Test that default terms work and that not specifying a value raises
         # an exception
-        class DefaultFieldPredicate(Predicate):
-            first = IntegerField()
-            second = IntegerField(default=10)
+        class DefaultTermDefnPredicate(Predicate):
+            first = IntegerTermDefn()
+            second = IntegerTermDefn(default=10)
             class Meta: name = "dfp"
 
-        dfp1 = DefaultFieldPredicate(first=15)
+        dfp1 = DefaultTermDefnPredicate(first=15)
         dfp2 = Function("dfp",[Number(15),Number(10)])
         self.assertEqual(dfp1.raw, dfp2)
 
         with self.assertRaises(ValueError) as ctx:
-            dfp3 = DefaultFieldPredicate()
+            dfp3 = DefaultTermDefnPredicate()
 
-        # Test declaration of predicates with Simple and String fields
-        class MultiFieldPredicate(Predicate):
-            afield1 = StringField()
-            afield2 = ConstantField()
+        # Test declaration of predicates with Simple and String terms
+        class MultiTermDefnPredicate(Predicate):
+            aterm1 = StringTermDefn()
+            aterm2 = ConstantTermDefn()
             class Meta: name = "mfp"
 
-        mfp1 = MultiFieldPredicate(afield1="astring", afield2="asimple")
+        mfp1 = MultiTermDefnPredicate(aterm1="astring", aterm2="asimple")
         mfp2 = Function("mfp", [String("astring"), Function("asimple",[])])
         self.assertEqual(mfp1.raw, mfp2)
 
-        # Test that the appropriate field properties are set up properly
-        self.assertEqual(mfp1.afield1, "astring")
-        self.assertEqual(mfp1.afield2, "asimple")
+        # Test that the appropriate term properties are set up properly
+        self.assertEqual(mfp1.aterm1, "astring")
+        self.assertEqual(mfp1.aterm2, "asimple")
 
     #--------------------------------------------------------------------------
-    # Test that we can define predicates with Function and Tuple fields
+    # Test that we can define predicates with Function and Tuple terms
     # --------------------------------------------------------------------------
     def test_complex_predicate_defn(self):
 
-        class FloatApproxField(IntegerField):
+        class FloatApproxTermDefn(IntegerTermDefn):
             pytocl = lambda x: int(x*100)
             cltopy = outfunc=lambda x: x/100.0
 
         class Fun(ComplexTerm):
-            aint = FloatApproxField()
-            astr = StringField()
+            aint = FloatApproxTermDefn()
+            astr = StringTermDefn()
 
         class MyTuple(ComplexTerm):
-            aint = IntegerField()
-            astr = StringField()
+            aint = IntegerTermDefn()
+            astr = StringTermDefn()
             class Meta: istuple = True
+
+        # Check the automatically generated term definition class
+        mtd = MyTuple.TermDefn
+        self.assertTrue(inspect.isclass(mtd))
+        self.assertEqual(mtd.__name__, "MyTupleTermDefn")
 
         # Alternative fact definition
         class Fact(Predicate):
-            aint = IntegerField()
+            aint = IntegerTermDefn()
             # note: don't need to specify defn keyword
-            atup = ComplexField(MyTuple,default=MyTuple(aint=2,astr="str"))
-            afunc = ComplexField(defn=Fun,default=Fun(aint=2.0,astr="str"))
+            atup = MyTuple.TermDefn(default=MyTuple(aint=2,astr="str"))
+            afunc = Fun.TermDefn(default=Fun(aint=2.0,astr="str"))
+#            atup = ComplexTermDefn(MyTuple,default=MyTuple(aint=2,astr="str"))
+#            afunc = ComplexTermDefn(defn=Fun,default=Fun(aint=2.0,astr="str"))
 
         af1=Fact(aint=1)
         af2=Fact(aint=2, atup=MyTuple(aint=4,astr="XXX"), afunc=Fun(aint=5.5,astr="YYY"))
@@ -289,8 +297,8 @@ class ORMTestCase(unittest.TestCase):
     # --------------------------------------------------------------------------
     def test_clone(self):
         class Fact(Predicate):
-            anum = IntegerField()
-            astr = StringField()
+            anum = IntegerTermDefn()
+            astr = StringTermDefn()
 
         f1 = Fact(anum=1,astr="astr")
         f2 = f1.clone(anum=2)
@@ -308,8 +316,8 @@ class ORMTestCase(unittest.TestCase):
     # --------------------------------------------------------------------------
     def test_predicate_value_by_index(self):
         class Fact(Predicate):
-            anum = IntegerField()
-            astr = StringField()
+            anum = IntegerTermDefn()
+            astr = StringTermDefn()
 
         f = Fact(1,"fun")
         self.assertEqual(f.anum, 1)
@@ -333,7 +341,7 @@ class ORMTestCase(unittest.TestCase):
         f2 = Function("fact", [Number(2)])
 
         class Fact(Predicate):
-            anum = IntegerField()
+            anum = IntegerTermDefn()
 
         af1 = Fact(anum=1)
         af2 = Fact(anum=2)
@@ -367,9 +375,9 @@ class ORMTestCase(unittest.TestCase):
     # --------------------------------------------------------------------------
     def test_unifying_symbol_and_predicate(self):
         class Fact(Predicate):
-            anum = IntegerField()
-            astr = StringField()
-            asim = ConstantField()
+            anum = IntegerTermDefn()
+            astr = StringTermDefn()
+            asim = ConstantTermDefn()
 
         gfact1_sym = Function("fact",[Number(1),String("Dave"),Function("ok",[])])
         gfact1_pred = Fact._unify(gfact1_sym)
@@ -388,10 +396,11 @@ class ORMTestCase(unittest.TestCase):
 
         class Fact(Predicate):
             class Fun(ComplexTerm):
-                aint=IntegerField()
-                astr=StringField()
+                aint=IntegerTermDefn()
+                astr=StringTermDefn()
 
-            afun = ComplexField(defn=Fun)
+#            afun = ComplexTermDefn(defn=Fun)
+            afun = Fun.TermDefn()
 
         good_fact_symbol1 = Function("fact",[Function("fun",[Number(1),String("Dave")])])
         good_fact_symbol2 = Function("fact",[Function("fun",[Number(3),String("Dave")])])
@@ -426,27 +435,28 @@ class ORMTestCase(unittest.TestCase):
             ]
 
         class Afact1(Predicate):
-            anum=IntegerField()
-            astr=StringField()
+            anum=IntegerTermDefn()
+            astr=StringTermDefn()
             class Meta: name = "afact"
 
         class Afact2(Predicate):
-            anum1=IntegerField()
-            anum2=IntegerField()
-            astr=StringField()
+            anum1=IntegerTermDefn()
+            anum2=IntegerTermDefn()
+            astr=StringTermDefn()
             class Meta: name = "afact"
 
         class Afact3(Predicate):
             class Fun(ComplexTerm):
-                fnum=IntegerField()
+                fnum=IntegerTermDefn()
 
-            anum=IntegerField()
-            afun=ComplexField(Fun)
+            anum=IntegerTermDefn()
+            afun=Fun.TermDefn()
+#            afun=ComplexTermDefn(Fun)
             class Meta: name = "afact"
 
         class Bfact(Predicate):
-            anum=IntegerField()
-            astr=StringField()
+            anum=IntegerTermDefn()
+            astr=StringTermDefn()
 
         af1_1=Afact1(anum=1,astr="test")
         af2_1=Afact2(anum1=2,anum2=3,astr="test")
@@ -474,12 +484,12 @@ class ORMTestCase(unittest.TestCase):
             return isinstance(fc, _StaticComparator)
 
         class Afact(Predicate):
-            anum1=IntegerField()
-            anum2=IntegerField()
-            astr=StringField()
+            anum1=IntegerTermDefn()
+            anum2=IntegerTermDefn()
+            astr=StringTermDefn()
         class Bfact(Predicate):
-            anum=IntegerField()
-            astr=StringField()
+            anum=IntegerTermDefn()
+            astr=StringTermDefn()
 
         af1 = Afact(1,1,"bbb")
         af2 = Afact(2,3,"aaa")
@@ -491,10 +501,10 @@ class ORMTestCase(unittest.TestCase):
         e3 = Afact.anum1 == Afact.anum1
         e4 = Bfact.astr == "aaa"
 
-        self.assertEqual(e1, _get_field_comparators(e1)[0])
-        self.assertEqual(e2, _get_field_comparators(e2)[0])
-        self.assertEqual(e3, _get_field_comparators(e3)[0])
-        self.assertEqual([], _get_field_comparators(e3.simplified()))
+        self.assertEqual(e1, _get_term_comparators(e1)[0])
+        self.assertEqual(e2, _get_term_comparators(e2)[0])
+        self.assertEqual(e3, _get_term_comparators(e3)[0])
+        self.assertEqual([], _get_term_comparators(e3.simplified()))
 
         self.assertFalse(is_static(e1.simplified()))
         self.assertFalse(is_static(e2.simplified()))
@@ -504,7 +514,7 @@ class ORMTestCase(unittest.TestCase):
         self.assertFalse(e1(af1))
         self.assertTrue(e1(af2))
 
-        # Testing the FieldComparator on the wrong fact type
+        # Testing the TermDefnComparator on the wrong fact type
         with self.assertRaises(TypeError) as ctx:
             self.assertFalse(e1(bf1))
 
@@ -565,8 +575,8 @@ class ORMTestCase(unittest.TestCase):
 
     def test_factmultimap(self):
         class Afact1(Predicate):
-            anum=IntegerField()
-            astr=StringField()
+            anum=IntegerTermDefn()
+            astr=StringTermDefn()
             class Meta: name = "afact"
 
         mymm = _MultiMap()
@@ -606,9 +616,9 @@ class ORMTestCase(unittest.TestCase):
     #--------------------------------------------------------------------------
     def test_select_over_factmap(self):
         class Afact1(Predicate):
-            num1=IntegerField()
-            num2=StringField()
-            str1=StringField()
+            num1=IntegerTermDefn()
+            num2=StringTermDefn()
+            str1=StringTermDefn()
             class Meta: name = "afact"
 
         fm1 = _FactMap([Afact1.num1,Afact1.str1])
@@ -723,8 +733,8 @@ class ORMTestCase(unittest.TestCase):
     #--------------------------------------------------------------------------
     def test_select_multi_placeholder(self):
         class Afact(Predicate):
-            num1=IntegerField()
-            num2=IntegerField()
+            num1=IntegerTermDefn()
+            num2=IntegerTermDefn()
 
         fm1 = _FactMap([Afact.num1])
         f1 = Afact(1,1)
@@ -760,8 +770,8 @@ class ORMTestCase(unittest.TestCase):
     #--------------------------------------------------------------------------
     def test_select_indexing(self):
         class Afact(Predicate):
-            num1=IntegerField()
-            num2=IntegerField()
+            num1=IntegerTermDefn()
+            num2=IntegerTermDefn()
 
         fm1 = _FactMap([Afact.num1])
         f1 = Afact(1,1)
@@ -796,9 +806,9 @@ class ORMTestCase(unittest.TestCase):
     #--------------------------------------------------------------------------
     def test_delete_over_factmap_and_factbase(self):
         class Afact(Predicate):
-            num1=IntegerField()
-            num2=StringField()
-            str1=StringField()
+            num1=IntegerTermDefn()
+            num2=StringTermDefn()
+            str1=StringTermDefn()
 
         fm1 = _FactMap([Afact.num1,Afact.str1])
         fm2 = _FactMap()
@@ -840,14 +850,14 @@ class ORMTestCase(unittest.TestCase):
     def test_factbase(self):
 
         class Afact(Predicate):
-            num1=IntegerField()
-            num2=IntegerField()
-            str1=StringField()
+            num1=IntegerTermDefn()
+            num2=IntegerTermDefn()
+            str1=StringTermDefn()
         class Bfact(Predicate):
-            num1=IntegerField()
-            str1=StringField()
+            num1=IntegerTermDefn()
+            str1=StringTermDefn()
         class Cfact(Predicate):
-            num1=IntegerField()
+            num1=IntegerTermDefn()
 
         class FactSet(FactBase):
             predicates = [Afact,Bfact,Cfact]
@@ -928,14 +938,14 @@ class ORMTestCase(unittest.TestCase):
     def test_factbase_import(self):
 
         class Afact(Predicate):
-            num1=IntegerField()
-            num2=IntegerField()
-            str1=StringField()
+            num1=IntegerTermDefn()
+            num2=IntegerTermDefn()
+            str1=StringTermDefn()
         class Bfact(Predicate):
-            num1=IntegerField()
-            str1=StringField()
+            num1=IntegerTermDefn()
+            str1=StringTermDefn()
         class Cfact(Predicate):
-            num1=IntegerField()
+            num1=IntegerTermDefn()
 
         class FactSet(FactBase):
             predicates = [Afact,Bfact]
@@ -948,86 +958,6 @@ class ORMTestCase(unittest.TestCase):
         self.assertEqual(fs1.add(facts=[af1,bf1,cf1]), 2)
         self.assertEqual(fs1.select(Afact).get_unique(), af1)
         self.assertEqual(fs1.select(Bfact).get_unique(), bf1)
-
-
-    #--------------------------------------------------------------------------
-    # Test the FactBaseHelper
-    #--------------------------------------------------------------------------
-    def test_factbasehelper(self):
-
-        # Using the FactBaseHelper as a decorator
-        fbh1 = FactBaseHelper()
-
-        # decorator with argument to specify an index
-        @fbh1.register("num1","num2")
-        class Afact(Predicate):
-            num1=IntegerField()
-            num2=IntegerField()
-            str1=StringField()
-
-        # decorator without argument
-        @fbh1.register
-        class Bfact(Predicate):
-            num1=IntegerField()
-            str1=StringField()
-
-        self.assertEqual(fbh1.predicates, [Afact,Bfact])
-        self.assertEqual(fbh1.indexes, [Afact.num1,Afact.num2])
-
-        # Test that when registering an index we only allow a field whose parent
-        # predicate is already registered.
-        with self.assertRaises(TypeError) as ctx:
-            class Tmp(Predicate):
-                num1=IntegerField()
-            fbh1.register_index(Tmp.num1)
-
-        # Using the FactBaseHelper as a ContextManager and using delayed index
-        # registration.
-        with FactBaseHelper() as fbh2:
-
-            class Cfact(Predicate):
-                num1=IntegerField()
-
-            class Dfact(Predicate):
-                num1=IntegerField()
-            fbh2.register_index(Dfact.num1)
-
-        self.assertEqual(fbh2.predicates, [Cfact,Dfact])
-        self.assertEqual(fbh2.indexes, [Dfact.num1])
-
-        # Test the field.index
-        with FactBaseHelper() as fbh3:
-
-            class Mess(ComplexTerm):
-                str1=StringField()
-                str2=StringField()
-
-            class Efact(Predicate):
-                num1=IntegerField(index=True)
-                num3=IntegerField()
-                mess=ComplexField(Mess)
-
-        self.assertEqual(fbh3.predicates, [Efact])
-        self.assertEqual(fbh3.indexes, [Efact.num1])
-
-        FactDB = fbh3.create_class("FactDB")
-        self.assertTrue(issubclass(FactDB, FactBase))
-        self.assertEqual(FactDB.predicates, [Efact])
-        self.assertEqual(FactDB.indexes, [Efact.num1])
-        fdb = FactDB()
-        ef = Efact(1,1,Mess("str1","str2"))
-        self.assertEqual(fdb.add(ef), 1)
-
-        # Test with field.index suppressed
-        fbh4 = FactBaseHelper(suppress_auto_index=True)  # alternative syntax
-        with fbh4:
-
-            class Ffact(Predicate):
-                num1=IntegerField(index=True)
-                num3=IntegerField()
-
-        self.assertEqual(fbh4.predicates, [Ffact])
-        self.assertEqual(fbh4.indexes, [])
 
     #--------------------------------------------------------------------------
     # Test the factbasehelper with double decorators
@@ -1042,15 +972,15 @@ class ORMTestCase(unittest.TestCase):
         @fbh2.register
         @fbh1.register
         class Afact(Predicate):
-            num1=IntegerField(index=True)
-            num2=IntegerField()
-            str1=StringField()
+            num1=IntegerTermDefn(index=True)
+            num2=IntegerTermDefn()
+            str1=StringTermDefn()
 
         # decorator without argument
         @fbh1.register
         class Bfact(Predicate):
-            num1=IntegerField(index=True)
-            str1=StringField()
+            num1=IntegerTermDefn(index=True)
+            str1=StringTermDefn()
 
         self.assertEqual(fbh1.predicates, [Afact,Bfact])
         self.assertEqual(fbh2.predicates, [Afact])
@@ -1064,14 +994,14 @@ class ORMTestCase(unittest.TestCase):
     def test_factbase_subclasses(self):
 
         class Afact(Predicate):
-            num1=IntegerField()
-            num2=IntegerField()
-            str1=StringField()
+            num1=IntegerTermDefn()
+            num2=IntegerTermDefn()
+            str1=StringTermDefn()
         class Bfact(Predicate):
-            num1=IntegerField()
-            str1=StringField()
+            num1=IntegerTermDefn()
+            str1=StringTermDefn()
         class Cfact(Predicate):
-            num1=IntegerField()
+            num1=IntegerTermDefn()
 
         af1 = Afact(1,10,"bbb")
         af2 = Afact(2,20,"aaa")
@@ -1172,12 +1102,12 @@ class ORMTestCase(unittest.TestCase):
     #--------------------------------------------------------------------------
     def test_control_model_integration(self):
         class Afact(Predicate):
-            num1=IntegerField()
-            num2=IntegerField()
-            str1=StringField()
+            num1=IntegerTermDefn()
+            num2=IntegerTermDefn()
+            str1=StringTermDefn()
         class Bfact(Predicate):
-            num1=IntegerField()
-            str1=StringField()
+            num1=IntegerTermDefn()
+            str1=StringTermDefn()
 
         class MyFacts(FactBase):
             predicates = [Afact,Bfact]
@@ -1226,11 +1156,11 @@ class ORMTestCase(unittest.TestCase):
     def test_factbase_subsubclasses(self):
 
         class Afact(Predicate):
-            num1=IntegerField()
-            str1=StringField()
+            num1=IntegerTermDefn()
+            str1=StringTermDefn()
         class Bfact(Predicate):
-            num1=IntegerField()
-            str1=StringField()
+            num1=IntegerTermDefn()
+            str1=StringTermDefn()
 
         af1 = Afact(1,"bbb")
         af2 = Afact(2,"aaa")
@@ -1290,23 +1220,23 @@ class ORMTestCase(unittest.TestCase):
 
     def test_signature(self):
 
-        class DateField(StringField):
+        class DateTermDefn(StringTermDefn):
             pytocl = lambda dt: dt.strftime("%Y%m%d")
             cltopy = lambda s: datetime.datetime.strptime(s,"%Y%m%d").date()
 
-        class DowField(ConstantField):
+        class DowTermDefn(ConstantTermDefn):
             pytocl = lambda dt: calendar.day_name[dt.weekday()].lower()
 
         class EDate(ComplexTerm):
-            idx = IntegerField()
-            date = DateField()
+            idx = IntegerTermDefn()
+            date = DateTermDefn()
             class Meta: name="edate"
 
-        sig1 = Signature(DateField)     # returns a single date
-        sig2 = Signature([DateField])   # returns a list of dates
-        sig3 = Signature(DateField, DowField)  # takes a date and returns the day or week
+        sig1 = Signature(DateTermDefn)     # returns a single date
+        sig2 = Signature([DateTermDefn])   # returns a list of dates
+        sig3 = Signature(DateTermDefn, DowTermDefn)  # takes a date and returns the day or week
 
-        sig4 = Signature(EDate,EDate)    # takes an EDate and returns an EDate
+        sig4 = Signature(EDate.TermDefn,EDate.TermDefn)    # takes an EDate and returns an EDate
         date1 = datetime.date(2018,1,1)
         date2 = datetime.date(2019,2,2)
 

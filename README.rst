@@ -77,7 +77,7 @@ First the relevant libraries need to be imported.
 
 
    from clorm import monkey; monkey.patch()
-   from clorm import Predicate, ConstantField, IntegerField, FactBaseHelper, ph1_
+   from clorm import Predicate, ConstantTermDefn, IntegerTermDefn, FactBaseHelper, ph1_
    from clingo import Control
 
 The first line `monkey patches <https://en.wikipedia.org/wiki/Monkey_patch>`_ a
@@ -99,17 +99,17 @@ class ``FactBaseHelper`` is provided for simplifying the construction of the
 
    @fbh.register
    class Driver(Predicate):
-       name=ConstantField()
+       name=ConstantTermDefn()
 
    @fbh.register
    class Item(Predicate):
-       name=ConstantField()
+       name=ConstantTermDefn()
 
    @fbh.register
    class Assignment(Predicate):
-       item=ConstantField()
-       driver=ConstantField(index=True)
-       time=IntegerField()
+       item=ConstantTermDefn()
+       driver=ConstantTermDefn(index=True)
+       time=IntegerTermDefn()
 
    DB = fbh.create_class("DB")
 
@@ -117,19 +117,22 @@ The above code defines three classes to match the ASP program's input and output
 predicates.
 
 ``Driver`` maps to the ``driver/1`` predicate, ``Item`` maps to ``item/1``, and
-``Assignment`` maps to ``assignment/3``. The number of the field definitions
-must match the predicate arity and the order in which the fields are defined
-must also match the position of each parameter in the predicate.
+``Assignment`` maps to ``assignment/3``. A predicate may contain zero or more
+*terms* (think of a term as a field in a database ORM). The number of the *term
+definitions* must match the predicate arity and the order in which the term
+definitions are declared must also match the position of each term in the ASP
+predicate.
 
 The ``FactBaseHelper`` provides a decorator that registers the predicate class
 with the helper. It then provides a member function for dynamically defining a
 ``FactBase`` sub-class. Here we define the class ``DB`` for storing predicate
 instance (i.e., the *facts*) for these types.
 
-You will notice that the declaration of the ``driver`` field contains the option
-``index=True``. This ensures that the ``driver`` field is indexed whenever an
-``Assignment`` object is inserted into a ``DB`` instance. As with a traditional
-database indexing improves query performance but should also be used sparingly.
+You will notice that the declaration of the ``driver`` term definition contains
+the option ``index=True``. This ensures that the ``driver`` term is indexed
+whenever an ``Assignment`` object is inserted into a ``DB`` instance. As with a
+traditional database indexing improves query performance but should also be used
+sparingly.
 
 Having defined the data model we now show how to dynamically add a problem
 instance, solve the resulting ASP program, and print the solution.
@@ -152,7 +155,7 @@ Next we generate a problem instance by generating a lists of ``Driver`` and
     instance = DB(drivers + items)
 
 The ``Driver`` and ``Item`` constructors require named parameters that match the
-declared field names; you cannot use "normal" Python list arguments.
+declared term names; you cannot use "normal" Python list arguments.
 
 Now, the facts can now be added to the control object and the combined ASP
 program grounded.
@@ -172,6 +175,7 @@ ASP program is typically called an *answer set* or simply a *model*.
     def on_model(model):
         nonlocal solution
         solution = model.facts(DB, atoms=True)
+
     ctrl.solve(on_model=on_model)
     if not solution:
         raise ValueError("No solution found")
@@ -197,7 +201,7 @@ returns a suitable ``Select`` object.
 
 A ClORM query can be viewed as a simplified version of a traditional database
 query. Here we want to find ``Assignment`` instances that match the ``driver``
-field to a special placeholder object ``ph1_``. The value of ``ph1_`` will be
+term to a special placeholder object ``ph1_``. The value of ``ph1_`` will be
 provided when the query is actually executed; which allows the query to be
 re-run multiple times with different values.
 
@@ -236,8 +240,7 @@ Running this example produces the following results:
 
 The above example shows some of the main features of ClORM and how to match the
 Python data model to the defined ASP predicates. For more details about how to
-use ClORM see the `documentation
-<https://clorm.readthedocs.io/en/latest/>`_ (**work in progress**).
+use ClORM see the `documentation <https://clorm.readthedocs.io/en/latest/>`_.
 
 Development
 -----------
@@ -246,7 +249,7 @@ Development
 
 TODO
 ----
-* add Sphinx documentation
+* complete Sphinx documentation
 * add more examples
 
 * add a library of resuable ASP integration components.
