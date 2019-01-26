@@ -53,10 +53,10 @@ as well as the following Python starter code:
    fbh = FactBaseHelper()
    with fbh:
       class Penguin(Predicate):
-         name = ConstantTermDefn()
+         name = ConstantField()
 
       class Bird(Predicate):
-         name = ConstantTermDefn()
+         name = ConstantField()
 
    AppDB = fbh.create_class("AppDB")
 

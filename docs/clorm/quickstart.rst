@@ -75,7 +75,7 @@ First the relevant libraries need to be imported.
 
 
    from clorm import monkey; monkey.patch()
-   from clorm import Predicate, ConstantTermDefn, IntegerTermDefn, FactBaseHelper, ph1_
+   from clorm import Predicate, ConstantField, IntegerField, FactBaseHelper, ph1_
    from clingo import Control
 
 The first line `monkey patches <https://en.wikipedia.org/wiki/Monkey_patch>`_ a
@@ -102,17 +102,17 @@ of the ``FactBase`` sub-class.
 
    @fbh.register
    class Driver(Predicate):
-       name=ConstantTermDefn()
+       name=ConstantField()
 
    @fbh.register
    class Item(Predicate):
-       name=ConstantTermDefn()
+       name=ConstantField()
 
    @fbh.register
    class Assignment(Predicate):
-       item=ConstantTermDefn()
-       driver=ConstantTermDefn(index=True)
-       time=IntegerTermDefn()
+       item=ConstantField()
+       driver=ConstantField(index=True)
+       time=IntegerField()
 
    AppDB = fbh.create_class("AppDB")
 
@@ -122,23 +122,24 @@ predicates.
 ``Driver`` maps to the ``driver/1`` predicate, ``Item`` maps to ``item/1``, and
 ``Assignment`` maps to ``assignment/3`` (note: the ``/n`` is a common logic
 programming notation for specifying the arity of a predicate or function). A
-predicate can contain zero or more *terms*. For those familiar with relational
-databases you can think of a term as simply a database *field*.
+predicate can contain zero or more *fields* (using database terminology). Fields
+can be thought of as *term definitions* as they define how a logical *term* is
+converted to, and from, a Python object.
 
-The number of the term definitions in the ``Predicate`` declaration must match
-the predicate arity and the order in which the term definitions are declared
-must also match the position of each term in the ASP predicate.
+The number of fields in the ``Predicate`` declaration must match the predicate
+arity and the order in which they are declared must also match the position of
+each term in the ASP predicate.
 
 The ``FactBaseHelper`` implements a decorator that registers the predicate class
 with the helper. It then provides a member function for dynamically defining a
 ``FactBase`` sub-class. Here we define the class ``AppDB`` for storing predicate
 instance (i.e., the *facts*) for these types.
 
-You will notice that the declaration of the ``driver`` term definition contains
-the option ``index=True``. This ensures that the ``driver`` term is indexed
-whenever an ``Assignment`` object is inserted into a ``AppDB`` instance. As with
-a traditional database indexing improves query performance but should also be
-used sparingly.
+You will notice that the declaration of the ``driver`` field contains the option
+``index=True``. This ensures that the ``driver`` field is indexed whenever an
+``Assignment`` object is inserted into a ``AppDB`` instance. As with a
+traditional database indexing improves query performance but should also be used
+sparingly.
 
 Using the Data Model
 --------------------
@@ -210,7 +211,7 @@ that returns a suitable ``Select`` object.
 
 A ClORM query can be viewed as a simplified version of a traditional database
 query. Here we want to find ``Assignment`` instances that match the ``driver``
-term to a special placeholder object ``ph1_``. The value of ``ph1_`` will be
+field to a special placeholder object ``ph1_``. The value of ``ph1_`` will be
 provided when the query is actually executed. Seperating query definition from
 execution allows for a query to be re-used.
 

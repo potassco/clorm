@@ -77,7 +77,7 @@ First the relevant libraries need to be imported.
 
 
    from clorm import monkey; monkey.patch()
-   from clorm import Predicate, ConstantTermDefn, IntegerTermDefn, FactBaseHelper, ph1_
+   from clorm import Predicate, ConstantField, IntegerField, FactBaseHelper, ph1_
    from clingo import Control
 
 The first line `monkey patches <https://en.wikipedia.org/wiki/Monkey_patch>`_ a
@@ -99,17 +99,17 @@ class ``FactBaseHelper`` is provided for simplifying the construction of the
 
    @fbh.register
    class Driver(Predicate):
-       name=ConstantTermDefn()
+       name=ConstantField()
 
    @fbh.register
    class Item(Predicate):
-       name=ConstantTermDefn()
+       name=ConstantField()
 
    @fbh.register
    class Assignment(Predicate):
-       item=ConstantTermDefn()
-       driver=ConstantTermDefn(index=True)
-       time=IntegerTermDefn()
+       item=ConstantField()
+       driver=ConstantField(index=True)
+       time=IntegerField()
 
    DB = fbh.create_class("DB")
 
@@ -118,9 +118,10 @@ predicates.
 
 ``Driver`` maps to the ``driver/1`` predicate, ``Item`` maps to ``item/1``, and
 ``Assignment`` maps to ``assignment/3``. A predicate may contain zero or more
-*terms* (think of a term as a field in a database ORM). The number of the *term
-definitions* must match the predicate arity and the order in which the term
-definitions are declared must also match the position of each term in the ASP
+*fields* (using database terminology). Fields can be thought of as *term
+definitions* as they define how a logical *term* is converted to, and from, a
+Python object. The number of fields must match the predicate arity and the order
+in which they are declared must also match the position of each term in the ASP
 predicate.
 
 The ``FactBaseHelper`` provides a decorator that registers the predicate class
@@ -128,11 +129,10 @@ with the helper. It then provides a member function for dynamically defining a
 ``FactBase`` sub-class. Here we define the class ``DB`` for storing predicate
 instance (i.e., the *facts*) for these types.
 
-You will notice that the declaration of the ``driver`` term definition contains
-the option ``index=True``. This ensures that the ``driver`` term is indexed
-whenever an ``Assignment`` object is inserted into a ``DB`` instance. As with a
-traditional database indexing improves query performance but should also be used
-sparingly.
+You will notice that the declaration of the ``driver`` field contains the option
+``index=True``. This ensures that the ``driver`` field is indexed whenever an
+``Assignment`` object is inserted into a ``DB`` instance. As with a traditional
+database indexing improves query performance but should also be used sparingly.
 
 Having defined the data model we now show how to dynamically add a problem
 instance, solve the resulting ASP program, and print the solution.
@@ -155,7 +155,7 @@ Next we generate a problem instance by generating a lists of ``Driver`` and
     instance = DB(drivers + items)
 
 The ``Driver`` and ``Item`` constructors require named parameters that match the
-declared term names; you cannot use "normal" Python list arguments.
+declared field names; you cannot use "normal" Python list arguments.
 
 Now, the facts can now be added to the control object and the combined ASP
 program grounded.
@@ -201,7 +201,7 @@ returns a suitable ``Select`` object.
 
 A ClORM query can be viewed as a simplified version of a traditional database
 query. Here we want to find ``Assignment`` instances that match the ``driver``
-term to a special placeholder object ``ph1_``. The value of ``ph1_`` will be
+field to a special placeholder object ``ph1_``. The value of ``ph1_`` will be
 provided when the query is actually executed; which allows the query to be
 re-run multiple times with different values.
 

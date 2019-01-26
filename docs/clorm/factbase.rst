@@ -20,12 +20,12 @@ the predicates that it can store and the terms for which it maintains an index.
    from clorm import *
 
    class Person(Predicate):
-      person = ConstantTermDefn()
-      address = StringTermDefn()
+      person = ConstantField()
+      address = StringField()
 
    class Pet(Predicate):
-      owner = ConstantTermDefn()
-      petname = StringTermDefn()
+      owner = ConstantField()
+      petname = StringField()
 
    class AppDB(FactBase):
       predicates = [Person, Pet]
@@ -102,13 +102,13 @@ decorator that can be used to associate a predicate with a helper object.
    @fbh1.register
    @fbh2.register
    class Person(Predicate):
-      person = ConstantTermDefn()
-      address = StringTermDefn()
+      person = ConstantField()
+      address = StringField()
 
    @fbh1.register
    class Pet(Predicate):
-      owner = ConstantTermDefn(index=True)
-      petname = StringTermDefn()
+      owner = ConstantField(index=True)
+      petname = StringField()
 
    AppDB1 = fbh1.create_class("AppDB1")
    AppDB2 = fbh2.create_class("AppDB2")
@@ -183,7 +183,7 @@ Complex Queries and Indexing
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 In the simple case where the ``Select`` query object contains a ``where`` clause
-that corresponds to a term that is indexed then ClORM is able to use this index
+that corresponds to a field that is indexed then ClORM is able to use this index
 to make query execution efficient.
 
 A ``where`` clause can consist of more the one clause and these are treated as a

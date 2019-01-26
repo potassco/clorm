@@ -2,7 +2,7 @@
 
 from clorm import monkey; monkey.patch() # must call this before importing clingo
 
-from clorm import Predicate, ConstantTermDefn, IntegerTermDefn, FactBase, FactBaseHelper
+from clorm import Predicate, ConstantField, IntegerField, FactBase, FactBaseHelper
 from clorm import ph1_
 
 from clingo import Control
@@ -19,17 +19,17 @@ fbh = FactBaseHelper()
 
 @fbh.register
 class Driver(Predicate):
-    name=ConstantTermDefn()
+    name=ConstantField()
 
 @fbh.register
 class Item(Predicate):
-    name=ConstantTermDefn()
+    name=ConstantField()
 
 @fbh.register
 class Assignment(Predicate):
-    item=ConstantTermDefn()
-    driver=ConstantTermDefn(index=True)
-    time=IntegerTermDefn()
+    item=ConstantField()
+    driver=ConstantField(index=True)
+    time=IntegerField()
 
 DB = fbh.create_class("DB")
 

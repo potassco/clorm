@@ -15,10 +15,10 @@ import abc
 import clingo
 
 __all__ = [
-    'RawTermDefn',
-    'IntegerTermDefn',
-    'StringTermDefn',
-    'ConstantTermDefn',
+    'RawField',
+    'IntegerField',
+    'StringField',
+    'ConstantField',
     'Term',
     'NonLogicalSymbol',
     'Predicate',
@@ -59,7 +59,7 @@ class _classproperty(object):
         return self.getter(owner)
 
 #------------------------------------------------------------------------------
-# RawTermDefn class captures the definition of a term between python and clingo. It is
+# RawField class captures the definition of a term between python and clingo. It is
 # not meant to be instantiated.
 # ------------------------------------------------------------------------------
 
@@ -82,26 +82,26 @@ def _sfm_constructor(self, default=None, index=False):
     self._default = default
     self._index = index
 
-class _RawTermDefnMeta(type):
+class _RawFieldMeta(type):
     def __new__(meta, name, bases, dct):
 
         # Add a default initialiser if one is not already defined
         if "__init__" not in dct:
             dct["__init__"] = _sfm_constructor
 
-        if name == "RawTermDefn":
+        if name == "RawField":
             dct["_parentclass"] = None
-            return super(_RawTermDefnMeta, meta).__new__(meta, name, bases, dct)
+            return super(_RawFieldMeta, meta).__new__(meta, name, bases, dct)
 
         for key in [ "cltopy", "pytocl" ]:
             if key in dct and not callable(dct[key]):
                 raise AttributeError("Definition of {} is not callable".format(key))
 
-        parents = [ b for b in bases if issubclass(b, RawTermDefn)]
+        parents = [ b for b in bases if issubclass(b, RawField)]
         if len(parents) == 0:
-            raise TypeError("Internal bug: number of RawTermDefn bases is 0!")
+            raise TypeError("Internal bug: number of RawField bases is 0!")
         if len(parents) > 1:
-            raise TypeError("Multiple RawTermDefn sub-class inheritance forbidden")
+            raise TypeError("Multiple RawField sub-class inheritance forbidden")
         dct["_parentclass"] = parents[0]
 
         # When a conversion is not specified raise a NotImplementedError
@@ -118,58 +118,57 @@ class _RawTermDefnMeta(type):
         else:
             dct["pytocl"] = classmethod(_raise_nie)
 
-        return super(_RawTermDefnMeta, meta).__new__(meta, name, bases, dct)
+        return super(_RawFieldMeta, meta).__new__(meta, name, bases, dct)
 
 #------------------------------------------------------------------------------
-# TermDefn definitions. All term definitions have the functions: pytocl, cltopy,
+# Field definitions. All fields have the functions: pytocl, cltopy,
 # and unifies, and the property: default
 # ------------------------------------------------------------------------------
 
-class RawTermDefn(object, metaclass=_RawTermDefnMeta):
-    """A class that represents a term definition that correspond to ASP terms.
+class RawField(object, metaclass=_RawFieldMeta):
+    """A class that represents a field that correspond to logical terms.
 
-    A term definition is typically used as part of a ``ComplexTerm`` or
-    ``Predicate`` definition. It defines the data type of an ASP term and
-    provides functions for translating the term to a more convenient Python
-    type.
+    A field is typically used as part of a ``ComplexTerm`` or ``Predicate``
+    definition. It defines the data type of an ASP term and provides functions
+    for translating the term to a more convenient Python type.
 
     It contains two class functions ``cltopy`` and ``pytocl`` that implement the
     translation from Clingo to Python and Python to Clingo respectively. For
-    ``RawTermDefn`` these functions simply pass the values straight though,
-    however ``RawTermDefn`` can be sub-classed to build a chain of
-    translations. ``StringTermDefn``, ``IntegerTermDefn``, and
-    ``ConstantTermDefn`` are predefined sub-classes that provide translations
-    for the ASP simple terms; *string*, *integer* and *constant*.
+    ``RawField`` these functions simply pass the values straight though, however
+    ``RawField`` can be sub-classed to build a chain of
+    translations. ``StringField``, ``IntegerField``, and ``ConstantField`` are
+    predefined sub-classes that provide translations for the ASP simple terms;
+    *string*, *integer* and *constant*.
 
-    To sub-class RawTermDefn (or one of its sub-classes) simply specify ``cltopy``
-    and ``pytocl`` functions that take an input and perform some translation
-    to an output format.
+    To sub-class RawField (or one of its sub-classes) simply specify ``cltopy``
+    and ``pytocl`` functions that take an input and perform some translation to
+    an output format.
 
     Example:
        .. code-block:: python
 
            import datetime
 
-           class DateTermDefn(StringTermDefn):
+           class DateField(StringField):
                      pytocl = lambda dt: dt.strftime("%Y%m%d")
                      cltopy = lambda s: datetime.datetime.strptime(s,"%Y%m%d").date()
 
 
-       Because ``DateTermDefn`` sub-classes ``StringTermDefn``, rather than
-       sub-classing ``RawTermDefn`` directly, it forms a longer data translation
+       Because ``DateField`` sub-classes ``StringField``, rather than
+       sub-classing ``RawField`` directly, it forms a longer data translation
        chain:
 
-              ASP Symbol object -- RawTermDefn -- StringTermDefn -- date object
+              ASP Symbol object -- RawField -- StringField -- date object
 
-       Here the ``DateTermDefn.cltopy`` is called at the end of the chain of
+       Here the ``DateField.cltopy`` is called at the end of the chain of
        translations, so it expects a Python string object as input and outputs a
-       date object. ``DateTermDefn.pytocl`` does the opposite and inputs a date
+       date object. ``DateField.pytocl`` does the opposite and inputs a date
        object and is must output a Python string object.
 
     Args:
       default: A default value when instantiating a ``Predicate`` or
         ``ComplexTerm`` object. Defaults to ``None``.
-      index (bool): Determine if this term should be indexed by default in a
+      index (bool): Determine if this field should be indexed by default in a
         ``FactBase```. Defaults to ``False``.
 
     """
@@ -200,18 +199,15 @@ class RawTermDefn(object, metaclass=_RawTermDefnMeta):
 
     @property
     def index(self):
-        """Returns whether this term should be indexed by default in a `FactBase`"""
+        """Returns whether this field should be indexed by default in a `FactBase`"""
         return self._index
 
 #------------------------------------------------------------------------------
-# The three RawTermDefn
+# The three RawField
 #------------------------------------------------------------------------------
 
-class StringTermDefn(RawTermDefn):
-    """A term definition to convert between a Clingo.String object and a Python
-    string.
-
-    """
+class StringField(RawField):
+    """A field to convert between a Clingo.String object and a Python string."""
     def _string_cltopy(symbol):
         if symbol.type != clingo.SymbolType.String:
             raise TypeError("Object {0} is not a String symbol")
@@ -220,11 +216,8 @@ class StringTermDefn(RawTermDefn):
     cltopy = _string_cltopy
     pytocl = lambda v: clingo.String(v)
 
-class IntegerTermDefn(RawTermDefn):
-    """A term definition to convert between a Clingo.Number object and a Python
-    integer.
-
-    """
+class IntegerField(RawField):
+    """A field to convert between a Clingo.Number object and a Python integer."""
     def _integer_cltopy(symbol):
         if symbol.type != clingo.SymbolType.Number:
             raise TypeError("Object {0} is not a Number symbol")
@@ -233,9 +226,9 @@ class IntegerTermDefn(RawTermDefn):
     cltopy = _integer_cltopy
     pytocl = lambda v: clingo.Number(v)
 
-class ConstantTermDefn(RawTermDefn):
-    """A term definition to convert between a simple Clingo.Function object and a
-    Python string.
+class ConstantField(RawField):
+    """A field to convert between a simple Clingo.Function object and a Python
+    string.
 
     """
     def _constant_cltopy(symbol):
@@ -248,15 +241,16 @@ class ConstantTermDefn(RawTermDefn):
     pytocl = lambda v: clingo.Function(v,[])
 
 #------------------------------------------------------------------------------
-# Term - similar to a property but with overloaded comparison operator
-# that build a query so that we can perform lazy evaluation for querying.
-#------------------------------------------------------------------------------
+# Term - a Pyton descriptor (similar to a property) but with overloaded
+# comparison operator that build a query so that we can perform lazy evaluation
+# for querying.
+# ------------------------------------------------------------------------------
 
 class Term(abc.ABC):
-    """Abstract class defining a term instance in a ``Predicate`` or
+    """Abstract class defining a field instance in a ``Predicate`` or
     ``ComplexTerm``.
 
-    While the term definition is specified by the RawTermDefn sub-classes, when
+    While the field is specified by the RawField sub-classes, when
     the ``Predicate`` or ``ComplexTerm`` class is actually created a ``Term``
     object is instantiated to handle extracting the actual term data from the
     underlying ``Clingo.Symbol``.
@@ -459,13 +453,13 @@ def _make_nls_metadata(class_name, dct):
                                   "'name' and 'istuple' "))
         elif istuple: name = ""
 
-    reserved = set(["meta", "raw", "clone", "TermDefn"])
+    reserved = set(["meta", "raw", "clone", "Field"])
 
     # Generate the terms - NOTE: relies on dct being an OrderedDict()
     terms = []
     idx = 0
     for term_name, term_defn in dct.items():
-        if not isinstance(term_defn, RawTermDefn): continue
+        if not isinstance(term_defn, RawField): continue
         if term_name.startswith('_'):
             raise ValueError(("Error: term name starts with an "
                               "underscore: {}").format(term_name))
@@ -483,11 +477,11 @@ def _make_nls_metadata(class_name, dct):
 
 #------------------------------------------------------------------------------
 #
-class _TermDefn(object):
+class _Field(object):
     def __init__(self):
         self._defn = None
     def set_defn(self, cls):
-        term_defn_name = "{}TermDefn".format(cls.__name__)
+        term_defn_name = "{}Field".format(cls.__name__)
         def fn_init(self, default=None):
             self._index = False
             self._default=default
@@ -498,7 +492,7 @@ class _TermDefn(object):
         def _cltopy(v):
             return cls(raw=v)
 
-        self._defn = type(term_defn_name, (RawTermDefn,),
+        self._defn = type(term_defn_name, (RawField,),
                           { "__init__": fn_init,
                             "pytocl": _pytocl,
                             "cltopy": _cltopy })
@@ -529,7 +523,7 @@ class _NonLogicalSymbolMeta(type):
         # Set the _meta attribute and constuctor
         dct["_meta"] = md
         dct["__init__"] = _nls_constructor
-        dct["_termdefn"] = _TermDefn()
+        dct["_termdefn"] = _Field()
 
         return super(_NonLogicalSymbolMeta, meta).__new__(meta, name, bases, dct)
 
@@ -537,7 +531,7 @@ class _NonLogicalSymbolMeta(type):
         if name == "NonLogicalSymbol":
             return super(_NonLogicalSymbolMeta, cls).__init__(name, bases, dct)
 
-        # Set this class as the term definition
+        # Set this class as the field
         dct["_termdefn"].set_defn(cls)
 
         md = dct["_meta"]
@@ -568,18 +562,18 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
        .. code-block:: python
 
            class Booking(Predicate):
-               date = StringTermDefn(index = True)
-               time = StringTermDefn(index = True)
-               name = StringTermDefn(default = "relax")
+               date = StringField(index = True)
+               time = StringField(index = True)
+               name = StringField(default = "relax")
 
            b1 = Booking("20190101", "10:00")
            b2 = Booking("20190101", "11:00", "Dinner")
 
-    TermDefns names can be any valid Python variable name (i.e., not be a Python
+    Fields names can be any valid Python variable name (i.e., not be a Python
     keyword) subject to the following restrictions:
 
     - start with a "_", or
-    - be one of the following reserved words: "meta", "raw", "clone", "TermDefn".
+    - be one of the following reserved words: "meta", "raw", "clone", "Field".
 
     The constructor creates a predicate instance (i.e., a *fact*) or complex
     term. If the ``raw`` parameter is used then it tries to unify the supplied
@@ -599,7 +593,8 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
     # A Metadata internal object for each NonLogicalSymbol class
     #--------------------------------------------------------------------------
     class MetaData(object):
-        """Encapsulates the meta-data for a NonLogicalSymbol definition"""
+        """Internal class that encapsulates the meta-data for a NonLogicalSymbol
+        definition"""
 
         def __init__(self, name, terms):
             self._name = name
@@ -612,7 +607,7 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
 
         @property
         def term_defns(self):
-            """Returns the set of term definitions - keyed by term name"""
+            """Returns the set of fields - keyed by term name"""
             return { f.term_name : f.term_defn for f in self._terms }
 
         @property
@@ -646,8 +641,8 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
         return self._generate_symbol()
 
     @_classproperty
-    def TermDefn(cls):
-        """A RawTermDefn sub-class corresponding to a TermDefn for this class."""
+    def Field(cls):
+        """A RawField sub-class corresponding to a Field for this class."""
         return cls._termdefn.defn
 
     # Recompute the symbol object from the stored term objects
@@ -1712,21 +1707,21 @@ class Signature(object):
 
       - Inputs. Match the sub-elements [:-1] define the input signature while
         the last element defines the output signature. Each input must be a a
-        RawTermDefn (or sub-class).
+        RawField (or sub-class).
 
-      - Output: Must be RawTermDefn (or sub-class) or a singleton list
-        containing a RawTermDefn (or sub-class).
+      - Output: Must be RawField (or sub-class) or a singleton list
+        containing a RawField (or sub-class).
 
    Example:
        .. code-block:: python
 
            import datetime
 
-           class DateTermDefn(StringTermDefn):
+           class DateField(StringField):
                      pytocl = lambda dt: dt.strftime("%Y%m%d")
                      cltopy = lambda s: datetime.datetime.strptime(s,"%Y%m%d").date()
 
-           drsig = Signature(DateTermDefn, DateTermDefn, [DateTermDefn])
+           drsig = Signature(DateField, DateField, [DateField])
 
            @drsig.make_clingo_wrapper
            def date_range(start, end):
@@ -1744,8 +1739,8 @@ class Signature(object):
 
     def __init__(self, *sigs):
         def _validate_basic_sig(sig):
-            if issubclass(sig, RawTermDefn): return True
-            raise TypeError(("Signature element {} must be a RawTermDefn "
+            if issubclass(sig, RawField): return True
+            raise TypeError(("Signature element {} must be a RawField "
                              "subclass".format(s)))
 
         self._insigs = sigs[:-1]
@@ -1765,7 +1760,7 @@ class Signature(object):
 
     def _output(self, sig, arg):
         # Since signature already validated we can make assumptions
-        if inspect.isclass(sig) and issubclass(sig, RawTermDefn):
+        if inspect.isclass(sig) and issubclass(sig, RawField):
             return sig.pytocl(arg)
 
         # Deal with a list

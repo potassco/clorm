@@ -6,7 +6,7 @@ import unittest
 from clorm import monkey; monkey.patch() # must call this before importing clingo
 
 from clingo import Number, String, Function, Control
-from clorm import Predicate, IntegerTermDefn, StringTermDefn, FactBase, ph1_
+from clorm import Predicate, IntegerField, StringField, FactBase, ph1_
 
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
@@ -27,11 +27,11 @@ class MonkeyTestCase(unittest.TestCase):
     #--------------------------------------------------------------------------
     def test_monkey(self):
         class Afact(Predicate):
-            num1=IntegerTermDefn()
-            str1=StringTermDefn()
+            num1=IntegerField()
+            str1=StringField()
         class Bfact(Predicate):
-            num1=IntegerTermDefn()
-            str1=StringTermDefn()
+            num1=IntegerField()
+            str1=StringField()
 
         af1 = Afact(1,"aaa")
         af2 = Afact(2,"bbb")

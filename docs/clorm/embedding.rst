@@ -49,14 +49,14 @@ performs the required conversions. The code above can be replaced with:
 
 .. code-block:: python
 
-   from clorm import StringTermDefn
+   from clorm import StringField
    from datetime import datetime, timedelta
 
-   class DateTermDefn(StringTermDefn):
+   class DateField(StringField):
        pytocl = lambda dt: dt.strftime("%Y%m%d")
        cltopy = lambda s: datetime.datetime.strptime(s,"%Y%m%d").date()
 
-   drsig = Signature(DateTermDefn, DateTermDefn, [DateTermDefn])
+   drsig = Signature(DateField, DateField, [DateField])
 
    @drsig.make_clingo_wrapper
    def date_range(start_end):
@@ -67,8 +67,8 @@ performs the required conversions. The code above can be replaced with:
 	   start += inc
        return tmp
 
-This example uses the power of ClORM to sub-class the ``StringTermDefn`` so that
-the date translation to a string is captured by a ``DateTermDefn``. The
+This example uses the power of ClORM to sub-class the ``StringField`` so that
+the date translation to a string is captured by a ``DateField``. The
 ``Signature`` object then captures the function signature which accepts two
 dates and returns a list of dates. A Python *decorator* is provided to generate
 the Python data conversion code.
@@ -86,18 +86,18 @@ starting at 0) the corresponding ClORM version adds very little overhead.
 
 .. code-block:: python
 
-   from clorm import StringTermDefn, IntegerTermDefn, ComplexTerm
+   from clorm import StringField, IntegerField, ComplexTerm
    from datetime import datetime, timedelta
 
-   class DateTermDefn(StringTermDefn):
+   class DateField(StringField):
        pytocl = lambda dt: dt.strftime("%Y%m%d")
        cltopy = lambda s: datetime.datetime.strptime(s,"%Y%m%d").date()
 
    class EnumDate(ComplexTerm):
-       idx = IntegerTermDefn()
-       date = DateTermDefn()
+       idx = IntegerField()
+       date = DateField()
 
-   drsig = Signature(DateTermDefn, DateTermDefn, [EnumDate.TermDefn])
+   drsig = Signature(DateField, DateField, [EnumDate.Field])
 
    def py_date_range(start_end):
        inc = timedelta(days=1)

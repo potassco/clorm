@@ -2,25 +2,25 @@ API Documentation
 =================
 
 The heart of the ClORM ORM is defining the mapping from *ground predicates* to
-member variables of a Python object. There are two aspects of this: *term
-definitions* that define how *ASP terms* are mapped to Python objects, and
-*predicate* definitions that define predicate and function names, their arities
-and the term definitions for each of these parameter.
+member variables of a Python object. There are two aspects of this: *fields*
+that define how *logical terms* are mapped to Python objects, and *predicate*
+definitions that define predicate and function names, their arities and the
+field for each of these parameter.
 
-Term Definitions
------------------
+Fields
+------
 
-Term definitions provide a specification for how do convert ``Clingo.Symbol``
-objects into more intuitive Python objects.
+Fields provide a specification for how do convert ``Clingo.Symbol`` objects into
+more intuitive Python objects.
 
-.. autoclass:: clorm.orm.RawTermDefn
+.. autoclass:: clorm.orm.RawField
     :members:
 
-.. autoclass:: clorm.orm.StringTermDefn
+.. autoclass:: clorm.orm.StringField
 
-.. autoclass:: clorm.orm.ConstantTermDefn
+.. autoclass:: clorm.orm.ConstantField
 
-.. autoclass:: clorm.orm.IntegerTermDefn
+.. autoclass:: clorm.orm.IntegerField
 
 Predicates and Complex Terms
 ----------------------------
@@ -33,13 +33,14 @@ aliases.
 .. autoclass:: clorm.orm.NonLogicalSymbol
     :members:
 
+    .. autoattribute:: Field
+
 .. autoclass:: clorm.orm.Predicate
     :members:
 
 .. autoclass:: clorm.orm.ComplexTerm
     :members:
-       
-    ..autoattribute:: meta
+
 
 Calling Python From an ASP Program
 ----------------------------------
