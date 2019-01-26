@@ -126,21 +126,20 @@ class _RawTermDefnMeta(type):
 # ------------------------------------------------------------------------------
 
 class RawTermDefn(object, metaclass=_RawTermDefnMeta):
-    """A class that represents a term definition that correspond to ASP simple
-    terms.
+    """A class that represents a term definition that correspond to ASP terms.
 
     A term definition is typically used as part of a ``ComplexTerm`` or
     ``Predicate`` definition. It defines the data type of an ASP term and
     provides functions for translating the term to a more convenient Python
     type.
 
-    `RawTermDefn` contains two class functions ``cltopy`` and ``pytocl`` that
-    represent the translation from Clingo to Python and Python to Clingo
-    respectively. For ``RawTermDefn`` these functions simply pass the values
-    straight though, however ``RawTermDefn`` can be sub-classed to build a chain of
-    translations. ``StringTermDefn``, ``IntegerTermDefn``, and ``ConstantTermDefn`` are
-    predefined sub-classes that provide translations for the ASP simple terms;
-    *string*, *integer* and *constant*.
+    It contains two class functions ``cltopy`` and ``pytocl`` that implement the
+    translation from Clingo to Python and Python to Clingo respectively. For
+    ``RawTermDefn`` these functions simply pass the values straight though,
+    however ``RawTermDefn`` can be sub-classed to build a chain of
+    translations. ``StringTermDefn``, ``IntegerTermDefn``, and
+    ``ConstantTermDefn`` are predefined sub-classes that provide translations
+    for the ASP simple terms; *string*, *integer* and *constant*.
 
     To sub-class RawTermDefn (or one of its sub-classes) simply specify ``cltopy``
     and ``pytocl`` functions that take an input and perform some translation
@@ -196,7 +195,7 @@ class RawTermDefn(object, metaclass=_RawTermDefnMeta):
 
     @property
     def default(self):
-        """Returns the default value for the term (if set)"""
+        """Returns the specified default value for the term (or None)"""
         return self._default
 
     @property
@@ -209,7 +208,7 @@ class RawTermDefn(object, metaclass=_RawTermDefnMeta):
 #------------------------------------------------------------------------------
 
 class StringTermDefn(RawTermDefn):
-    """A term definition to convert between Clingo.String object into a Python
+    """A term definition to convert between a Clingo.String object and a Python
     string.
 
     """
@@ -222,7 +221,7 @@ class StringTermDefn(RawTermDefn):
     pytocl = lambda v: clingo.String(v)
 
 class IntegerTermDefn(RawTermDefn):
-    """A term definition to convert between Clingo.Number object into a Python
+    """A term definition to convert between a Clingo.Number object and a Python
     integer.
 
     """
@@ -235,7 +234,7 @@ class IntegerTermDefn(RawTermDefn):
     pytocl = lambda v: clingo.Number(v)
 
 class ConstantTermDefn(RawTermDefn):
-    """A term definition to convert between a simple Clingo.Function object into a
+    """A term definition to convert between a simple Clingo.Function object and a
     Python string.
 
     """
@@ -580,17 +579,19 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
     keyword) subject to the following restrictions:
 
     - start with a "_", or
-    - be one of the following reserved words: "meta", "raw", "clone".
+    - be one of the following reserved words: "meta", "raw", "clone", "TermDefn".
 
-    Constructor creates a predicate instance, a *fact*, or complex term. If the
-    ``raw`` parameter is used then it tries to unify the supplied Clingo.Symbol
-    with the class definition, an will raise a ValueError if it fails to unify.
+    The constructor creates a predicate instance (i.e., a *fact*) or complex
+    term. If the ``raw`` parameter is used then it tries to unify the supplied
+    Clingo.Symbol with the class definition, and will raise a ValueError if it
+    fails to unify.
 
     Args:
       **kwargs:
 
-      - named parameters corresponding to the term names, or
-      - a single named parameter ``raw`` that takes a Clingo.Symbol object.
+         - if a single named parameter ``raw`` is specified then it will try to
+           unify the parameter with the specification, or
+         - named parameters corresponding to the term names.
 
     """
 
