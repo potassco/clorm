@@ -10,17 +10,17 @@ field for each of these parameter.
 Fields
 ------
 
-Fields provide a specification for how do convert ``Clingo.Symbol`` objects into
+Fields provide a specification for how to convert ``Clingo.Symbol`` objects into
 more intuitive Python objects.
 
-.. autoclass:: clorm.orm.RawField
+.. autoclass:: clorm.RawField
     :members:
 
-.. autoclass:: clorm.orm.StringField
+.. autoclass:: clorm.StringField
 
-.. autoclass:: clorm.orm.ConstantField
+.. autoclass:: clorm.ConstantField
 
-.. autoclass:: clorm.orm.IntegerField
+.. autoclass:: clorm.IntegerField
 
 Predicates and Complex Terms
 ----------------------------
@@ -30,23 +30,43 @@ logical symbols*. The ClORM implementation captures this in the
 ``NonLogicalSymbol`` class with ``Predicate`` and ``ComplexTerm`` simply being
 aliases.
 
-.. autoclass:: clorm.orm.NonLogicalSymbol
+.. autoclass:: clorm.NonLogicalSymbol
     :members:
 
     .. autoattribute:: Field
 
-.. autoclass:: clorm.orm.Predicate
+.. autoclass:: clorm.Predicate
     :members:
 
-.. autoclass:: clorm.orm.ComplexTerm
+.. autoclass:: clorm.ComplexTerm
+    :members:
+
+
+Fact Bases and Queries
+------------------------
+
+``Predicate`` instances correspond to facts. A ``FactBase`` provides a container
+for storing facts. It allows predicate fields to be indexed and provides a basic
+query mechanism for accessing elements.
+
+.. autoclass:: clorm.FactBase
+    :members:
+
+.. autoclass:: clorm.Placeholder
+
+.. autoclass:: clorm.Select
+    :members:
+
+.. autoclass:: clorm.Delete
     :members:
 
 
 Calling Python From an ASP Program
 ----------------------------------
 
-.. autoclass:: clorm.orm.Signature
+.. autoclass:: clorm.Signature
     :members:
+
 
 Integration with Clingo
 -----------------------

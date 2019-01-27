@@ -20,11 +20,13 @@ __all__ = [
     'StringField',
     'ConstantField',
     'Field',
+    'Placeholder',
     'NonLogicalSymbol',
     'Predicate',
     'ComplexTerm',
     'Comparator',
     'Select',
+    'Delete',
     'FactBase',
     'FactBaseHelper',
     'ph_',
@@ -594,7 +596,13 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
     #--------------------------------------------------------------------------
     class MetaData(object):
         """Internal class that encapsulates the meta-data for a NonLogicalSymbol
-        definition"""
+        definition
+
+        .. warning:: Deprecated interface
+
+           Thing remove these details from the external interface.
+
+        """
 
         def __init__(self, name, terms):
             self._name = name
@@ -602,17 +610,17 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
 
         @property
         def name(self):
-            """Returns the string name of the term"""
+            """Returns the string name of the predicate or complex term"""
             return self._name
 
         @property
         def term_defns(self):
-            """Returns the set of fields - keyed by term name"""
+#            """Returns the set of fields - keyed by field name"""
             return { f.term_name : f.term_defn for f in self._terms }
 
         @property
         def term_names(self):
-            """Returns the list of term names"""
+#            """Returns the list of term names"""
             return [ f.term_name for f in self._terms ]
 
         @property
@@ -621,7 +629,7 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
 
         @property
         def arity(self):
-            """Returns the number of terms"""
+            """Returns the number of fields"""
             return len(self._terms)
 
         @property
@@ -716,8 +724,10 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
         """Allows for index based access to term elements."""
         return self.meta.terms[idx].__get__(self)
 
-    def __setitem__(self, idx,v):
-        return self.meta.terms[idx].__set__(self,v)
+#------------------------------------------------------------------------
+# Removed so don't allow value to be changed.
+#    def __setitem__(self, idx,v):
+#        return self.meta.terms[idx].__set__(self,v)
 
     #--------------------------------------------------------------------------
     # Overloaded operators
@@ -854,11 +864,11 @@ def _get_term_comparators(comparator):
 # an abstract class that exposes no API other than its existence.
 # ------------------------------------------------------------------------------
 class Placeholder(abc.ABC):
-    """A placeholder abstract class for defining parameterised queries.
+    """An abstract class for defining parameterised queries.
 
-    Currently, ClORM support 4 placeholders: ph1_, ph2_, ph3_, ph4_. These
-    correspond to the positional argument positions of the query execute
-    function call.
+    Currently, ClORM supports 4 placeholders: ph1\_, ph2\_, ph3\_, ph4\_. These
+    correspond to the positional arguments of the query execute function call.
+
     """
     pass
 
@@ -1543,10 +1553,46 @@ class _FactBaseMeta(type):
 #------------------------------------------------------------------------------
 
 class FactBase(object, metaclass=_FactBaseMeta):
+    """A fact base is a container for facts that must be subclassed.
 
-    #--------------------------------------------------------------------------
-    # Internal member functions
-    #--------------------------------------------------------------------------
+    ``FactBase`` can be thought of as a minimalist database. It stores facts for
+    a given set of ``Predicate`` types (where a predicate type loosely
+    corresponding to a *table* in a database) and allows for certain fields to
+    be indexed in order to perform more efficient queries.
+
+    Subclassing ``FactBase`` is done by specifying a ``predicates`` and
+    ``indexes`` variables; cntaining a list of ``Predicate`` sub-classes to
+    include and a list ``indexes`` of fields to index (respectively).
+
+    .. code-block:: python
+
+          class Predicate1(Predicate):
+              anum = IntegerField(index=1)
+              astr = String()
+
+          class Predicate2(Predicate):
+              # ...
+
+         class MyFactBase(FactBase):
+              predicates = [Predicate1, Predicate2]
+              indexes = [Predicate1.anum]
+
+    See the ``FactBaseHelper`` for a helper class to simplify the process of
+    creating a ``FactBase`` sub-class.
+
+    Args:
+      facts(Predicate): a list of facts (predicate instances) to add to the fact
+          base. Default None.
+      symbols(Clingo.Symbol): a list of symbols which are unified against the
+         given Predicate types. Symbols that fail to unify are ignored. Default
+         None.
+      delayed_init(bool): whether to perform delayed intialisation. Default
+         False.
+
+    The ``facts`` and ``symbols`` parameters in the constructor are mutually
+    exclusive.
+
+    """
 
     # A special purpose initialiser so that we can do delayed initialisation
     def _init(self, facts=None, symbols=None):
@@ -1565,6 +1611,10 @@ class FactBase(object, metaclass=_FactBaseMeta):
 
         # flag that initialisation has taken place
         self._delayed_init = None
+
+    #--------------------------------------------------------------------------
+    # Internal member functions
+    #--------------------------------------------------------------------------
 
     def _add(self, fact=None,facts=None,symbols=None):
         count = 0
@@ -1593,33 +1643,41 @@ class FactBase(object, metaclass=_FactBaseMeta):
     #--------------------------------------------------------------------------
 
     def select(self, predicate_cls):
+        """Create a Select query for a predicate type."""
+
         # Always check if we have delayed initialisation
         if self._delayed_init: self._delayed_init()
 
         return self._factmaps[predicate_cls].select()
 
     def delete(self, predicate_cls):
+        """Create a Select query for a predicate type."""
+
         # Always check if we have delayed initialisation
         if self._delayed_init: self._delayed_init()
 
         return self._factmaps[predicate_cls].delete()
 
     def predicate_types(self):
+        """Return the list of predicate types that this fact base can deal with."""
+
         # Always check if we have delayed initialisation
         if self._delayed_init: self._delayed_init()
-
         return set(self._factmaps.keys())
 
     def clear(self):
+        """Clear the fact base of all facts."""
+
         # Always check if we have delayed initialisation
         if self._delayed_init: self._delayed_init()
-
         self._symbols = None
 
         for pt, fm in self._factmaps.items():
             fm.clear()
 
     def facts(self):
+        """Return all facts."""
+
         # Always check if we have delayed initialisation
         if self._delayed_init: self._delayed_init()
         fcts = []
@@ -1628,6 +1686,11 @@ class FactBase(object, metaclass=_FactBaseMeta):
         return fcts
 
     def asp_str(self):
+        """Return a string representation of the fact base that is suitable for adding
+        to an ASP program
+
+        """
+
         # Always check if we have delayed initialisation
         if self._delayed_init: self._delayed_init()
 
@@ -1735,7 +1798,7 @@ class Signature(object):
        Clingo.String objects (matching YYYYMMDD format) and returns a list of
        Clingo.String objects corresponding to the dates in that range.
 
-    """
+        """
 
     def __init__(self, *sigs):
         def _validate_basic_sig(sig):
