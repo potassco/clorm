@@ -1,6 +1,8 @@
-'''
-Provides a wrapper around the key clingo objects to integrate Predicate and
-FactBase interfaces.
+'''A plugin replacement for the ``clingo`` modules that wraps the key clingo
+objects to integrate Clorm ``Predicate`` and ``FactBase`` interfaces. See the
+`Clingo API <https://potassco.org/clingo/python-api/current/clingo.html#Model>`_
+for more details.
+
 '''
 
 import io
@@ -267,8 +269,10 @@ class Control(object, metaclass=_ControlMetaClass):
 
 
 #------------------------------------------------------------------------------
-# Modify the original clingo docstrings.
-#------------------------------------------------------------------------------
+# This is probably bad practice... Modify the original clingo docstrings so that
+# when I generate the autodoc with clingo being mocked it installs a reference
+# to the original clingo docs.
+# ------------------------------------------------------------------------------
 
 if oclingo.Model.__doc__ != "Used by autodoc_mock_imports.":
     Control.__doc__ += oclingo.Control.__doc__
