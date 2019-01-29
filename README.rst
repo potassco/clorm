@@ -79,7 +79,7 @@ First the relevant libraries need to be imported.
    from clorm import Predicate, ConstantField, IntegerField, FactBaseHelper, ph1_
    from clorm.clingo import Control
 
-.. note:: Importing from ``clorm.clingo`` instead of ``clingo``.
+Note: Importing from ``clorm.clingo`` instead of ``clingo``.
 
    While it is possible to use ClORM with the raw clingo library, a wrapper
    library is provided to make the integration seemless. This wrapper (should)
