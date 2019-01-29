@@ -196,7 +196,7 @@ class Control(object, metaclass=_ControlMetaClass):
             self._ctrl.assign_external(fact, truth)
 
     # Overide release_external to deal with NonLogicalSymbol object and a Clingo Symbol
-    def release_external(ctrl, fact):
+    def release_external(self, fact):
         '''Release an external atom represented by the given symbol, program literal, or
         clorm fact.
 

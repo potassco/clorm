@@ -1,5 +1,5 @@
-Dealing with Multiple Facts
-===========================
+Fact Bases and Querying
+=======================
 
 
 As well as offering a higher-level interface for mapping ASP facts to Python
