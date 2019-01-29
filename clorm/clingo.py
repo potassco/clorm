@@ -14,18 +14,18 @@ from .orm import *
 # 'Control', 'Model', 'SolveHandle' ]. The following seems to work but I'm not
 # sure if this is bad.
 
-from clingo import *
-import clingo as oclingo
-__all__ = list(oclingo.__dict__.keys())
-__version__ = oclingo.__version__
-
 #------------------------------------------------------------------------------
 # Reference to the original clingo objects so that when we replace them our
 # references point to the originals.
 #------------------------------------------------------------------------------
+import clingo as oclingo
 OModel=oclingo.Model
 OSolveHandle=oclingo.SolveHandle
 OControl=oclingo.Control
+
+from clingo import *
+__all__ = list([ k for k in oclingo.__dict__.keys() if k[0] != '_'])
+__version__ = oclingo.__version__
 
 # ------------------------------------------------------------------------------
 # Wrap clingo.Model and override some functions
@@ -155,7 +155,10 @@ class Control(object, metaclass=_ControlMetaClass):
     '''
 
     def __init__(self, *args, **kwargs):
-        self._ctrl = OControl(*args, **kwargs)
+        if len(args) == 0 and len(kwargs) == 1 and "control_" in kwargs:
+            self._ctrl = kwargs["control_"]
+        else:
+            self._ctrl = OControl(*args, **kwargs)
 
     # A new function to add facts from a factbase or a list of facts
     def add_facts(self, facts):

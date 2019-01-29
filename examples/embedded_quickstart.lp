@@ -1,14 +1,27 @@
-#!/usr/bin/env python
+%----------------------------------------------------------------------------------
+% Domain encoding for a simple scheduling problem. Drivers need to make
+% deliveries.  Every driver has a fixed base cost and every delivery has a
+% cost. We also need deliveries within a time limit.
+% ----------------------------------------------------------------------------------
 
-from clorm import monkey; monkey.patch() # must call this before importing clingo
 
+time(1..4).
+
+1 { assignment(I, D, T) : driver(D), time(T) } 1 :- item(I).
+:- assignment(I1, D, T), assignment(I2, D, T), I1 != I2.
+
+working_driver(D) :- assignment(_,D,_).
+
+#minimize { 1@2,D : working_driver(D) }.
+#minimize { T@1,D : assignment(_,D,T) }.
+
+
+#script(python).
+
+from clorm.clingo import Control
 from clorm import Predicate, ConstantField, IntegerField, FactBase, FactBaseHelper
 from clorm import ph1_
 
-from clingo import Control
-
-
-ASP_PROGRAM="quickstart.lp"
 
 #--------------------------------------------------------------------------
 # Define a data model - we only care about defining the input and output
@@ -34,15 +47,13 @@ class Assignment(Predicate):
 AppDB = fbh.create_class("AppDB")
 
 #--------------------------------------------------------------------------
-#
+# main
 #--------------------------------------------------------------------------
 
-def main():
-    # Create and load asp file that encodes the problem domain
-    ctrl = Control()
-    ctrl.load(ASP_PROGRAM)
+def main(ctrl_):
+    ctrl = Control(control_=ctrl_)
 
-    # Dynamically generate the instance data
+        # Dynamically generate the instance data
     drivers = [ Driver(name=n) for n in ["dave", "morri", "michael" ] ]
     items = [ Item(name="item{}".format(i)) for i in range(1,6) ]
     instance = AppDB(drivers + items)
@@ -73,9 +84,4 @@ def main():
             for a in assignments:
                 print("\t Item {} at time {}".format(a.item, a.time))
 
-#------------------------------------------------------------------------------
-# main
-#------------------------------------------------------------------------------
-if __name__ == "__main__":
-    main()
-
+#end.

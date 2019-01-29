@@ -3,8 +3,10 @@
 #------------------------------------------------------------------------------
 import unittest
 
-from clorm.clingo import *
-#from clorm.clingo import Number, String, Function, parse_program
+import clingo as oclingo
+import clorm.clingo as nclingo
+#from clorm.clingo import *
+from clorm.clingo import Number, String, Function, parse_program, Control
 
 from clorm import Predicate, IntegerField, StringField, FactBase, ph1_
 
@@ -52,7 +54,9 @@ class ClingoTestCase(unittest.TestCase):
             self.assertTrue(model.contains(af1))
             fb2 = model.facts(MyFacts, atoms=True)
 
-        ctrl = Control()
+        # Use the orignal clingo.Control object so that we can test the wrapper call
+        ctrlX_ = oclingo.Control()
+        ctrl = nclingo.Control(control_ = ctrlX_)
         ctrl.add_facts(fb1)
         ctrl.ground([("base",[])])
         ctrl.solve(on_model=on_model)
