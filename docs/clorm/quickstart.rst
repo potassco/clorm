@@ -14,14 +14,15 @@ ASP program is ``quickstart.lp`` and the Python program is ``quickstart.py``.
 
 This document is about the Clingo ORM API and we therefore assume that the
 reader is reasonably familiar with ASP syntax and how to write an ASP
-program. However, if this is not the case it is worth going to the `Clingo docs <https://potassco.org/doc/start>`_ for links to some good reference material.
+program. However, if this is not the case it is worth going to the `Clingo docs
+<https://potassco.org/doc/start>`_ for links to some good reference material.
 
 While we assume that the reader is familiar with ASP, we do not assume that the
 reader is necessarily familiar with the official Clingo Python API. Since ClORM
 is designed to be used with the Clingo API we therefore provide some basic
 explanations of the relevant steps necessary to run the Clingo solver. However,
-for more detailed documentation see the `Clingo API <https://potassco.org/clingo/python-api/current/clingo.html>`_.
-
+for more detailed documentation see the `Clingo API
+<https://potassco.org/clingo/python-api/current/clingo.html>`_.
 
 An Example Scenario
 -------------------
@@ -66,8 +67,7 @@ Unlike the ASP encoding of the *problem domain*, which is largely static and
 changes only if the requirements change, the problem instance changes
 daily. Hence it cannot be a simple static encoding but must instead be generated
 as part of the Python application that calls the ASP solver and processes the
-solution; which consists here of an assignment of drivers to items for a time
-slot.
+solution.
 
 First the relevant libraries need to be imported.
 
@@ -78,21 +78,18 @@ First the relevant libraries need to be imported.
 
 .. note:: Importing from ``clorm.clingo`` instead of ``clingo``.
 
-   ClORM provides a wrapper around key Clingo classes and will behave
-   identically to the original module, except that it extends the functionality
-   to offer seemless integration with ClORM objects. It is also possible to
-   `monkey patch <https://en.wikipedia.org/wiki/Monkey_patch>`_ Clingo to make
-   this integration even more seemless (see :ref:`api_clingo_integration`).
+   While it is possible to use ClORM with the raw clingo library, a wrapper
+   library is provided to make the integration seemless. This wrapper (should)
+   behave identically to the original module, except that it extends the
+   functionality to offer integration with ClORM objects. It is also possible to
+   `monkey patch <https://en.wikipedia.org/wiki/Monkey_patch>`_ Clingo if this
+   is your preferred approach (see :ref:`api_clingo_integration`).
 
-number of Clingo classes
-by creating wrappers that make the integration with ClORM seemless. While you
-can use ClORM without monkey patching Clingo the interaction requires a bit more
-cumbersome.
 
 Defining the Data Model
 -----------------------
 
-The most important setp is to define a data model that maps the Clingo
+The most important step is to define a data model that maps the Clingo
 predicates to Python classes. ClORM introduces two basic concepts for defining
 the data model: ``Predicate`` and ``FactBase``. ``Predicate`` maps the ASP
 predicates to Python classes, while ``FactBase`` provides a container for
@@ -162,7 +159,7 @@ First we create the Clingo ``Control`` object and load the ASP program.
 
 
 Next we generate a problem instance by generating a lists of ``Driver`` and
-``Item`` objects. These items are added to a ``AppDB`` instance.
+``Item`` objects. These items are added to an ``AppDB`` instance.
 
 .. code-block:: python
 
@@ -171,10 +168,10 @@ Next we generate a problem instance by generating a lists of ``Driver`` and
     instance = AppDB(drivers + items)
 
 The ``Driver`` and ``Item`` constructors require named parameters that match the
-declared term names; you cannot use "normal" Python list arguments.
+declared term names; you cannot use "normal" Python positional arguments.
 
-Now, the facts can now be added to the control object and the combined ASP
-program grounded.
+The facts can now be added to the control object and the combined ASP program
+grounded.
 
 .. code-block:: python
 
@@ -182,8 +179,7 @@ program grounded.
     ctrl.ground([("base",[])])
 
 Next we run the solver to generate solutions. The solver is run with a callback
-function that is called each time a solution is found. Note: the solution of an
-ASP program is typically called an *answer set* or simply a *model*.
+function that is called each time a solution (i.e., *model*) is found.
 
 .. code-block:: python
 
@@ -209,7 +205,7 @@ in a ``AppDB`` object.
 
 The final part of our Python program involves querying the solution to print out
 the relevant facts. To do this we call the ``AppDB.select()`` member function
-that returns a suitable ``Select`` object.
+that returns a suitable fact base query object.
 
 .. code-block:: python
 
@@ -218,11 +214,13 @@ that returns a suitable ``Select`` object.
 A ClORM query can be viewed as a simplified version of a traditional database
 query. Here we want to find ``Assignment`` instances that match the ``driver``
 field to a special placeholder object ``ph1_``. The value of ``ph1_`` will be
-provided when the query is actually executed. Seperating query definition from
-execution allows for a query to be re-used.
+provided when the query is executed. Note: seperating query definition from
+query execution allows for a query to be re-used.
 
 In particular, we now iterate over the list of drivers and execute the query for
-each driver and print the result.
+each driver and print the result. Because the ``Assignment.driver`` field is
+indexed for the ``AppDB`` class these repeat queries will be relatively
+efficient.
 
 .. code-block:: python
 
@@ -255,6 +253,4 @@ Running this example produces the following results:
     Driver michael is not working today
 
 The above example shows some of the main features of ClORM and how to match the
-Python data model to the defined ASP predicates. For more details of the ClORM
-API see the documentation.
-
+Python data model to the defined ASP predicates.

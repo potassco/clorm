@@ -15,7 +15,7 @@ When calling Python functions from an ASP program the Python function is passed
 ``Clingo.Symbol`` object or a list of ``Clingo.Symbol`` objects. It is the
 responsibility of the programmer to perform these data type conversions.
 
-For example, consider a Python function ``range_range`` that is given two dates
+For example, consider a Python function ``date_range`` that is given two dates
 and returns a list of the dates within this range. This can be called from
 Clingo by prefixing the function with the ``@`` symbol:
 
@@ -128,7 +128,7 @@ a library of re-usable ASP components, we would argue that using such components
 can make ASP programs easier to use and easier to debug. For example, a library
 containing enumerated dates allows the ASP code to deal with the index (since it
 establishes the ordering), but also make the inputs and outputs of the program
-understablable because it explicitly include the date represented in a human
+more readable because it explicitly includes the date represented in a human
 readable form.
 
 For details of the available libraries see :ref:`liborm`.

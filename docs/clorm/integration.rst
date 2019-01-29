@@ -20,15 +20,18 @@ module fully integrates ClORM objects into the Clingo API. It does this by
 providing wrapper classes around the key Clingo classes:
 
 * ``Control`` is the heart of the interface to the reasoner and determines when
-  and how the reasoner is called. The ``Control.solve`` function is starts the
-  solving process. Depending on the mode it provides a callback that is called
-  with ``Model`` ojects and can return a ``SolveHandle``.
+  and how the reasoner is called. The ``Control.solve`` function starts the
+  solving process. Depending on the parameters it can operate in different
+  modes; for example it can use a callback that is called with ``Model`` ojects
+  and can also return a ``SolveHandle``.
 
 * ``Model`` is the class that contains the facts (and other meta-data)
   associated with an ASP model. This class should not be instantiated explicitly
   and is instead passed within the ``Control.solve`` callback.
 
-* ``SolveHandle`` provides a mechanism to iterate over the models.
+* ``SolveHandle`` provides a mechanism to iterate over the models. Similarly to
+  the ``Model`` class it should not be instantiated explicitly and is instead
+  returned from the ``Control.solve`` function.
 
 Clingo ``Control``
 ^^^^^^^^^^^^^^^^^^
@@ -44,7 +47,7 @@ only highlight the changes that ClORM introduces.
 
 ClORM add, or overloads, the following member functions:
 
-* ``__init__()``. ClORM adds an optional ``control_`` parameter that it mutually
+* ``__init__()``. ClORM adds an optional ``control_`` parameter that is mutually
   exclusive with all other parameters. This allows a ``clingo.Control`` object
   to be passed to the wrapper and is a mechanism to allow ClORM to be used even
   when Python is embedded within Clingo. See the example
@@ -92,10 +95,10 @@ ClORM add, or overloads, the following member functions:
     function is a ``clorm.clingo.SolveHandle`` object. This object iterates over
     ``clorm.clingo.Model`` objects.
 
-* ``assign_external()`` is modified so that ``fact`` parameter can take a
+* ``assign_external()`` is modified so that the ``fact`` parameter can take a
   ``clorm.Predicate`` object.
 
-* ``release_external()`` is modified so that ``fact`` parameter can take a
+* ``release_external()`` is modified so that the ``fact`` parameter can take a
   ``clorm.Predicate`` object.
 
 Clingo ``Model``
@@ -124,7 +127,8 @@ The `Clingo SolveHandle
 <https://potassco.org/clingo/python-api/current/clingo.html#Model>`_ object
 provides a mechanism for iterating over the models when the ``yield_=True``
 options is specified to the ``Control.solve`` function. The various iterator
-functions but its operations should be transparent to the user.
+functions are modified by ClORM, but its operations should be transparent to the
+user.
 
 Monkey-patching
 ---------------

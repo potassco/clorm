@@ -10,27 +10,31 @@ The Basics
 
 It is easiest to explain this mapping by way of a simple example. Consider the
 following ground atoms for the predicates ``address/2`` and ``pets/2``. This
-specifies that the address of the entity ``dave`` is ``UNSW Sydney`` and
-``date`` has 1 pet.
+specifies that the address of the entity ``dave`` is ``"UNSW Sydney"`` and
+``dave`` has 1 pet.
 
 .. code-block:: prolog
 
    address(dave, "UNSW Sydney").
    pets(dave, 1).
 
-First, it is worth highlighting a few points about ASP syntax. All predicates
-must start with a lower-case letter and consist of only alphanumeric
-characters. ASP supports three basic types of *terms* (i.e., the parameters of a
-predicate); a *constant*, a *string*, and an *integer*. Like the predicate name
-requirements, constants consist of only alphanumeric characters with a starting
-lower-case character, a string occurs in quotes and can contain arbitrary
-characters.
 
-ASP syntax also supports *complex terms* which we will discuss later.
+.. note:: ASP syntax.
 
-Note: ASP does not support real number values.
+   All predicates must start with a lower-case letter and consist of only
+   alphanumeric characters (and underscore). ASP supports three basic types of
+   *terms* (i.e., the parameters of a predicate); a *constant*, a *string*, and
+   an *integer*. Like the predicate names, constants consist of only
+   alphanumeric characters (and underscore) with a starting lower-case
+   character. This is different to a string, which is quoted and can contain
+   arbitrary characters including spaces.
 
-The following Python code provides the mapping to the ASP predicates:
+   ASP syntax also supports *complex terms* (also called *functions* but we will
+   avoid this usage to prevent confusion with Python functions) which we will
+   discuss later. Note however that ASP does not support real number values.
+
+Getting back to the example, the following Python code provides the mapping to
+the ASP predicates:
 
 .. code-block:: python
 
@@ -52,8 +56,11 @@ With the above class definitions we can instantiate some objects:
    fact2 = Pets(entity="bob")
    fact3 = Pets(entity="bill", num=2)
 
+When instantiating a predicate all field values must be specified, unless the
+field has a default value, such as with ``fact2`` above.
+
 When this Python code is imported into the Clingo solver it will correspond to
-the following two *ground atoms* (i.e., facts):
+the following *ground atoms* (i.e., facts):
 
 .. code-block:: prolog
 
@@ -71,10 +78,10 @@ There are some things to note here:
   reserved words: ``raw``, ``meta``, ``clone``, ``Field`` as these are used as
   properties or functions of a ``Predicate`` object.
 * Constant vs string: ``"bob"`` and ``"Sydney uni"`` are both Python strings but
-  because of the declaration of ``entity`` as a ``ConstantField`` this
-  ensures that the Python string ``"bob"`` is treated as an ASP constant. Note
-  however that currently it is the users responsibility to ensure that the
-  Python string passed to a constant term satisfies the syntactic restriction.
+  because of the declaration of ``entity`` as a ``ConstantField`` this ensures
+  that the Python string ``"bob"`` is treated as an ASP constant. Note,
+  currently it is the users' responsibility to ensure that the Python string
+  passed to a constant term satisfies the syntactic restriction.
 * The use of a default value: all term types support the specification of a
   default value.
 
@@ -85,7 +92,7 @@ Overriding the Predicate Name
 There are many reasons why you might not want to use the default predicate name
 mapping. For example, the Python class name that would produce the desired
 predicate name may already be taken. Alternatively, you might want to
-distinguish between predicates which the same name but different arities; having
+distinguish between predicates with the same name but different arities; having
 predicates with the same name but a different arity is a legitimate and common
 practice with ASP programming.
 
@@ -215,7 +222,7 @@ definition:
    from clorm import *
 
    class Booking(Predicate):
-      date = IntegerField()
+      date = StringField()
       description = StringField()
 
 It is now up to the user of the ``Booking`` class to perform the necessary
@@ -231,7 +238,7 @@ Here the Python ``nyeparty`` variable corresponds to the encoded ASP event, with
 the ``date`` term capturing the string encoding of the date.
 
 In the opposite direction to extract the date it is necessary to turn the date
-encoded string into an action ``datetime.date`` object:
+encoded string into an actual ``datetime.date`` object:
 
 .. code-block:: python
 
@@ -267,9 +274,9 @@ opposite direction, ``cltopy`` must be passed a Python string object and
 performs the desired conversion, in this case producing a ``datetime.date``
 object.
 
-Importantly, by using the sub-classed ``DateField`` the conversion functions
-are all captured within the one class definition and interacting with the
-objects can be done in a more natural manner.
+With the newly defined ``DateField`` the conversion functions are all captured
+within the one class definition and interacting with the objects can be done in
+a more natural manner.
 
 .. code-block:: python
 
@@ -290,8 +297,7 @@ Dealing with Complex Terms
 
 So far we have shown how to create Python definitions that match predicates with
 simple terms or some sub-class that reduces to a simple term. However, in ASP it
-is common to also use complex terms (also called *functions*) within a
-predicate.
+is common to also use complex terms within a predicate.
 
 .. code-block:: none
 
@@ -304,31 +310,22 @@ or a tuple
     booking2(20181231, ("Sydney", "Australia)).
 
 To support this flexibility ClORM introduces a ``ComplexTerm`` class.  A complex
-term is defined identically to a predicate, but in this case ``ComplexTerm``
-needs to be sub-classed.
+term is defined identically to a predicate, and similarly needs to be
+sub-classed.
 
 Just like with simple terms, when specifying a field as part of a predicate (or
-within another complex term) it is necessary to specify the term's field. This
-field then encodes the translation from a ``Clingo.Symbol`` object to the
-``ComplexTerm`` object.
+within another complex term) it is necessary to specify the term's field
+definiton. This field then encodes the translation from a ``Clingo.Symbol``
+object to the ``ComplexTerm`` object.
 
-While it is possible to manually specify this translation by sub-classing
-``RawField`` and specifying the translation functions, fortunately it is
-possible to generate such a class automatically from a ``ComplexTerm``
-sub-class. This class is exposed as the ``Field`` property.
+While it is possible to specify this translation manually by sub-classing
+``RawField`` and specifying the translation functions, fortunately ClORM is able
+generate such a class automatically from any complex term definition. This class
+is exposed as the class ``Field`` property.
 
 .. code-block:: python
 
    from clorm import *
-
-   class Location(ComplexTerm):
-      city = StringField()
-      country = StringField()
-
-   class Booking(Predicate):
-       date=IntegerField()
-       location=Location.Field()
-
 
    class LocationTuple(ComplexTerm):
       city = StringField()
@@ -337,7 +334,7 @@ sub-class. This class is exposed as the ``Field`` property.
          istuple = True
 
    class Booking2(Predicate):
-       date=IntegerField()
+       date=DateField()
        location=LocationTuple.Field(
 		default=LocationTuple(city="Sydney", country="Australia"))
 
@@ -345,7 +342,7 @@ The ``Booking`` and ``Booking2`` Python classes correspond to the
 signature of the above example predicates ``booking/2`` and ``booking2/2``.
 
 Note: as with the simple term definitions it is possible to provide an optional
-``default`` parameter. However, currently, the ``index`` parameter is not
+``default`` parameter, however, currently, the ``index`` parameter is not
 supported.
 
 
@@ -365,7 +362,7 @@ are a number of functions for creating the appropriate type of symbol objects
 (i.e., ``clingo.Function()``, ``clingo.Number()``, ``clingo.String()``).
 
 In essence the ClORM ``Predicate`` and ``ComplexTerm`` classes simply provide a
-more convenient and intuitive way for constructing and dealing with these
+more convenient and intuitive way of constructing and dealing with these
 ``clingo.Symbol`` objects. In fact the underlying symbols can be accessed using
 the ``raw`` property of a ``Predicate`` or ``ComplexTerm`` object.
 
@@ -391,9 +388,11 @@ objects. So assuming the above python code.
 
    address_copy = Address(raw=raw_address)
 
-Note: not every raw symbol will *unify* with a given ``Predicate`` or
-``ComplexTerm`` class. If the raw constructor fails to unify a symbol with a
-predicate definition then a ``ValueError`` exception will be raised.
+.. note:: Unification.
+
+   Not every raw symbol will *unify* with a given ``Predicate`` or
+   ``ComplexTerm`` class. If the raw constructor fails to unify a symbol with a
+   predicate definition then a ``ValueError`` exception will be raised.
 
 Integrating Clingo Symbols into a Predicate Definition
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

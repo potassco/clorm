@@ -63,7 +63,10 @@ def main():
 
     # Do something with the solution - create a query so we can print out the
     # assignments for each driver.
+
+    #    query=solution.select(Assignment).where(lambda x,o: x.driver == o)
     query=solution.select(Assignment).where(Assignment.driver == ph1_)
+
     for d in drivers:
         assignments = list(query.get(d.name))
         if not assignments:

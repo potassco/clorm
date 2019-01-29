@@ -148,9 +148,10 @@ objects. From a query object a ``where`` clause can also be set.
        query1=facts.select(Person).where(Person.person == "dave")
        query2=facts.select(Pet).where(Pet.owner == "dave")
 
-A query object needs to be executed in order to return the results. There two
-functions ``get()`` and ``get_unique()``. The ``get_unique()`` function expects
-exactly one results and will raise a ``ValueError`` if this is not the case.
+A query object needs to be executed in order to return the results. There are
+two member functions to execute a query: ``get()`` and ``get_unique()``. The
+``get_unique()`` function expects exactly one results and will raise a
+``ValueError`` if this is not the case.
 
 .. code-block:: python
 
@@ -170,7 +171,7 @@ A placeholder can be used in order to query each person and the pets that they o
 
 .. code-block:: python
 
-       query1=facts.select(Person).where()
+       query1=facts.select(Person)
        query2=facts.select(Pet).where(Pet.owner == "dave")
 
        for person in query1.get():
@@ -179,23 +180,23 @@ A placeholder can be used in order to query each person and the pets that they o
 	      print("\t pet named {}".format(pet.petname))
 
 
-Complex Queries and Indexing
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Complex Query Expressions and Indexing
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 In the simple case where the ``Select`` query object contains a ``where`` clause
 that corresponds to a field that is indexed then ClORM is able to use this index
 to make query execution efficient.
 
-A ``where`` clause can consist of more the one clause and these are treated as a
-conjunction. Its is also possible to construct more complex clauses using ClORM
-supplied ``and_``, ``or_``, and ``not_`` constructs.
+However, a ``where`` clause can consist of more the one clause and these are
+treated as a conjunction. Its is also possible to construct more complex clauses
+using ClORM supplied ``and_``, ``or_``, and ``not_`` constructs.
 
 .. code-block:: python
 
        query1=facts.select(Person).where(or_(Person.person == "dave", Person.address == "UNSW"))
 
 Here when ``query1`` is execute it will return any person who is either
-``"dave""`` or or based at ``"UNSW"``.
+``"dave""`` or based at ``"UNSW"``.
 
 Functors and Lambdas
 ^^^^^^^^^^^^^^^^^^^^
@@ -211,7 +212,7 @@ the same results.
 .. code-block:: python
 
        query1=facts.select(Pet).where(Pet.owner == ph1_)
-       query2=facts.select(Pet).where(lambda x, o: return x.owner == o))
+       query2=facts.select(Pet).where(lambda x, o: x.owner == o))
 
        results1 = list(query1.get("dave"))
        results2 = list(query2.get("dave"))
@@ -224,7 +225,7 @@ indexing to improve query efficiency.
 However, there is no mechanism to analyse the internal make up of a lambda or
 function. Consequently in these cases the query would have to examine every fact
 in the fact base of the given type and test the function against that
-fact. Hence it is usually preferable to use the ClORM generated where clauses
+fact. Hence it is usually preferable to use the ClORM generated clauses where
 possible.
 
 

@@ -81,11 +81,12 @@ First the relevant libraries need to be imported.
 
 .. note:: Importing from ``clorm.clingo`` instead of ``clingo``.
 
-   ClORM provides a wrapper around key Clingo classes and will behave
-   identically to the original module, except that it extends the functionality
-   to offer seemless integration with ClORM objects. It is also possible to
-   `monkey patch <https://en.wikipedia.org/wiki/Monkey_patch>`_ Clingo to make
-   this integration even more seemless (see the `documentation
+   While it is possible to use ClORM with the raw clingo library, a wrapper
+   library is provided to make the integration seemless. This wrapper (should)
+   behave identically to the original module, except that it extends the
+   functionality to offer integration with ClORM objects. It is also possible to
+   `monkey patch <https://en.wikipedia.org/wiki/Monkey_patch>`_ Clingo if this
+   is your preferred approach (see the `documentation
    <https://clorm.readthedocs.io/en/latest/>`_).
 
 The next step is to define a data model that maps the Clingo predicates to
