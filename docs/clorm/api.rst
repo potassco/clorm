@@ -1,11 +1,11 @@
 API Documentation
 =================
 
-The heart of the ClORM ORM is defining the mapping from *ground predicates* to
-member variables of a Python object. There are two aspects of this: *fields*
-that define how *logical terms* are mapped to Python objects, and *predicate*
-definitions that define predicate and function names, their arities and the
-field for each of these parameter.
+The heart of the ClORM ORM involves defining the mapping from *ground
+predicates* to member variables of a Python object. There are two aspects to
+this: *fields*, that define how *logical terms* are mapped to Python objects,
+and *predicate* definitions, that define predicate and function names, their
+arities and the field for each of the parameter.
 
 Fields
 ------
@@ -72,8 +72,8 @@ ClORM can help when trying to call Python from within an ASP program.
 
 .. _api_clingo_integration:
 
-Integration with Clingo
------------------------
+Integration with the Solver
+---------------------------
 
 To simplify the interaction with the Clingo solver, ClORM provides a ``clingo``
 replacement module that offers better integration with ClORM facts and fact
