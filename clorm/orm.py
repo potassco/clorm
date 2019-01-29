@@ -37,12 +37,6 @@ __all__ = [
     'not_',
     'and_',
     'or_',
-    'fact_generator',
-    'control_add_facts',
-    'control_assign_external',
-    'control_release_external',
-    'model_contains',
-    'model_facts',
     'Signature'
     ]
 
@@ -815,7 +809,7 @@ ComplexTerm=NonLogicalSymbol
 # symbols contains the list of raw clingo.Symbol objects.
 # ------------------------------------------------------------------------------
 
-def fact_generator(unifiers, symbols):
+def _fact_generator(unifiers, symbols):
     def unify(cls, r):
         try:
             return cls._unify(r)
@@ -1623,7 +1617,7 @@ class FactBase(object, metaclass=_FactBaseMeta):
             for f in facts:
                 count += self._add_fact(f)
         elif symbols is not None:
-            for f in fact_generator(self.predicates, symbols):
+            for f in _fact_generator(self.predicates, symbols):
                 count += self._add_fact(f)
         return count
 
@@ -1707,54 +1701,6 @@ class FactBase(object, metaclass=_FactBaseMeta):
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
 
-#------------------------------------------------------------------------------
-# Functions that operate on a clingo Control object
-#------------------------------------------------------------------------------
-
-# Add the facts in a FactBase
-def control_add_facts(ctrl, facts):
-    # Facts can be a FactBase or a list of facts
-    if isinstance(facts, FactBase):
-        asp_str = facts.asp_str()
-    else:
-        out = io.StringIO()
-        for f in facts:
-            print("{}.".format(f), file=out)
-        asp_str = out.getvalue()
-        out.close()
-    # Parse and add the facts
-    with ctrl.builder() as b:
-        clingo.parse_program(asp_str, lambda stmt: b.add(stmt))
-
-# assign/release externals for a NonLogicalSymbol object or a Clingo Symbol
-def control_assign_external(ctrl, fact, truth):
-    if isinstance(fact, NonLogicalSymbol):
-        ctrl.assign_external(fact.raw, truth)
-    else:
-        ctrl.assign_external(fact, truth)
-
-def control_release_external(ctrl, fact):
-    if isinstance(fact, NonLogicalSymbol):
-        ctrl.release_external(fact.raw)
-    else:
-        ctrl.release_external(fact)
-
-#------------------------------------------------------------------------------
-# Functions that operator on a clingo Model object
-#------------------------------------------------------------------------------
-
-def model_contains(model, fact):
-    if isinstance(fact, NonLogicalSymbol):
-        return model.contains(fact.raw)
-    return model.contains(fact)
-
-def model_facts(model, factbase, atoms=False, terms=False, shown=False):
-    return factbase(symbols=model.symbols(atoms=atoms,terms=terms,shown=shown),
-                    delayed_init=True)
-
-
-#------------------------------------------------------------------------------
-#------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 # When calling Python functions from ASP you need to do some type

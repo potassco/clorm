@@ -1,0 +1,81 @@
+#------------------------------------------------------------------------------
+# Unit tests for the clorm monkey patching
+#------------------------------------------------------------------------------
+import unittest
+
+from clorm.clingo import *
+#from clorm.clingo import Number, String, Function, parse_program
+
+from clorm import Predicate, IntegerField, StringField, FactBase, ph1_
+
+#------------------------------------------------------------------------------
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+#
+#------------------------------------------------------------------------------
+
+class ClingoTestCase(unittest.TestCase):
+    def setUp(self):
+        pass
+
+    def tearDown(self):
+        pass
+
+    #--------------------------------------------------------------------------
+    # Test processing clingo Model
+    #--------------------------------------------------------------------------
+    def test_control_model_integration(self):
+        class Afact(Predicate):
+            num1=IntegerField()
+            num2=IntegerField()
+            str1=StringField()
+        class Bfact(Predicate):
+            num1=IntegerField()
+            str1=StringField()
+
+        class MyFacts(FactBase):
+            predicates = [Afact,Bfact]
+
+        af1 = Afact(1,10,"bbb")
+        af2 = Afact(2,20,"aaa")
+        af3 = Afact(3,20,"aaa")
+        bf1 = Bfact(1,"aaa")
+        bf2 = Bfact(2,"bbb")
+
+        fb1 = MyFacts()
+        fb1.add(facts= [af1,af2,af3,bf1,bf2])
+
+        fb2 = None
+        def on_model(model):
+            nonlocal fb2
+            self.assertTrue(model.contains(af1))
+            fb2 = model.facts(MyFacts, atoms=True)
+
+        ctrl = Control()
+        ctrl.add_facts(fb1)
+        ctrl.ground([("base",[])])
+        ctrl.solve(on_model=on_model)
+
+        # _control_add_facts works with both a list of facts and a FactBase
+        ctrl2 = Control()
+        ctrl2.add_facts([af1,af2,af3,bf1,bf2])
+
+        safact1 = fb2.select(Afact).where(Afact.num1 == ph1_)
+        safact2 = fb2.select(Afact).where(Afact.num1 < ph1_)
+        self.assertEqual(safact1.get_unique(1), af1)
+        self.assertEqual(safact1.get_unique(2), af2)
+        self.assertEqual(safact1.get_unique(3), af3)
+        self.assertEqual(set(list(safact2.get(1))), set([]))
+        self.assertEqual(set(list(safact2.get(2))), set([af1]))
+        self.assertEqual(set(list(safact2.get(3))), set([af1,af2]))
+        self.assertEqual(fb2.select(Bfact).where(Bfact.str1 == "aaa").get_unique(), bf1)
+        self.assertEqual(fb2.select(Bfact).where(Bfact.str1 == "bbb").get_unique(), bf2)
+
+        # Now test a select
+
+#------------------------------------------------------------------------------
+# main
+#------------------------------------------------------------------------------
+if __name__ == "__main__":
+    raise RuntimeError('Cannot run modules')

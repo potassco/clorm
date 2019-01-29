@@ -73,15 +73,21 @@ First the relevant libraries need to be imported.
 
 .. code-block:: python
 
-
-   from clorm import monkey; monkey.patch()
    from clorm import Predicate, ConstantField, IntegerField, FactBaseHelper, ph1_
-   from clingo import Control
+   from clorm.clingo import Control
 
-The first line `monkey patches <https://en.wikipedia.org/wiki/Monkey_patch>`_ a
-number of Clingo classes by creating wrappers that make the integration with
-ClORM seemless. While you can use ClORM without monkey patching Clingo the
-interaction requires a bit more cumbersome.
+.. note:: Importing from ``clorm.clingo`` instead of ``clingo``.
+
+   ClORM provides a wrapper around key Clingo classes and will behave
+   identically to the original module, except that it extends the functionality
+   to offer seemless integration with ClORM objects. It is also possible to
+   `monkey patch <https://en.wikipedia.org/wiki/Monkey_patch>`_ Clingo to make
+   this integration even more seemless (see :ref:`api_clingo_integration`).
+
+number of Clingo classes
+by creating wrappers that make the integration with ClORM seemless. While you
+can use ClORM without monkey patching Clingo the interaction requires a bit more
+cumbersome.
 
 Defining the Data Model
 -----------------------

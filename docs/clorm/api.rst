@@ -14,7 +14,7 @@ Fields provide a specification for how to convert ``Clingo.Symbol`` objects into
 more intuitive Python objects.
 
 .. autoclass:: clorm.RawField
-    :members:
+   :members:
 
 .. autoclass:: clorm.StringField
 
@@ -31,15 +31,15 @@ logical symbols*. The ClORM implementation captures this in the
 aliases.
 
 .. autoclass:: clorm.NonLogicalSymbol
-    :members:
+   :members:
 
-    .. autoattribute:: Field
+   .. autoattribute:: Field
 
 .. autoclass:: clorm.Predicate
-    :members:
+   :members:
 
 .. autoclass:: clorm.ComplexTerm
-    :members:
+   :members:
 
 
 Fact Bases and Queries
@@ -50,26 +50,65 @@ for storing facts. It allows predicate fields to be indexed and provides a basic
 query mechanism for accessing elements.
 
 .. autoclass:: clorm.FactBase
-    :members:
+   :members:
 
 .. autoclass:: clorm.Placeholder
 
 .. autoclass:: clorm.Select
-    :members:
+   :members:
 
 .. autoclass:: clorm.Delete
-    :members:
+   :members:
 
 
 Calling Python From an ASP Program
 ----------------------------------
 
-.. autoclass:: clorm.Signature
-    :members:
+ClORM can help when trying to call Python from within an ASP program.
 
+.. autoclass:: clorm.Signature
+   :members:
+
+
+.. _api_clingo_integration:
 
 Integration with Clingo
 -----------------------
 
-.. automodule:: clorm.monkey
-    :members:
+To simplify the interaction with the Clingo solver, ClORM provides a ``clingo``
+replacement module that offers better integration with ClORM facts and fact
+bases. This module simply wraps and extends a few key Clingo classes.
+
+Instead of:
+
+.. code-block:: python
+
+   import clingo
+
+use:
+
+.. code-block:: python
+
+   import clorm.clingo
+
+For convenience the ``clingo.Control`` class can also be `monkey patched
+<https://en.wikipedia.org/wiki/Monkey_patch>`_ so that it can used seemlessly
+with existing code bases.
+
+.. code-block:: python
+
+   from clorm import monkey; monkey.patch()
+   import clingo
+
+Here we document only the extended classes and the user is referred to the
+`Clingo API <https://potassco.org/clingo/python-api/current/clingo.html>`_
+documentation for more details.
+
+.. autoclass:: clorm.clingo.Control
+   :members:
+
+.. autoclass:: clorm.clingo.Model
+   :members:
+
+.. autoclass:: clorm.clingo.SolveHandle
+   :members:

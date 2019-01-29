@@ -14,8 +14,7 @@ from clorm.orm import \
     not_, and_, or_, _StaticComparator, _get_term_comparators, \
     ph_, ph1_, ph2_, \
     _MultiMap, _FactMap, \
-    fact_generator, FactBase, FactBaseHelper, \
-    control_add_facts, model_facts, model_contains, \
+    _fact_generator, FactBase, FactBaseHelper, \
     Signature
 
 #------------------------------------------------------------------------------
@@ -132,7 +131,7 @@ class ORMTestCase(unittest.TestCase):
         t1 = Tmp(1,raw1)
         t2 = Tmp(1,raw2)
 
-        self.assertEqual(set([f for f in fact_generator([Tmp], [rt1,rt2])]),set([t1,t2]))
+        self.assertEqual(set([f for f in _fact_generator([Tmp], [rt1,rt2])]),set([t1,t2]))
         self.assertEqual(t1.r1, raw1)
         self.assertEqual(t2.r1, raw2)
 
@@ -463,11 +462,11 @@ class ORMTestCase(unittest.TestCase):
         af3_1=Afact3(anum=1,afun=Afact3.Fun(fnum=1))
         bf_1=Bfact(anum=3,astr="test")
 
-        g1=list(fact_generator([Afact1],raws))
-        g2=list(fact_generator([Afact2],raws))
-        g3=list(fact_generator([Afact3],raws))
-        g4=list(fact_generator([Bfact],raws))
-        g5=list(fact_generator([Afact1,Bfact],raws))
+        g1=list(_fact_generator([Afact1],raws))
+        g2=list(_fact_generator([Afact2],raws))
+        g3=list(_fact_generator([Afact3],raws))
+        g4=list(_fact_generator([Bfact],raws))
+        g5=list(_fact_generator([Afact1,Bfact],raws))
         self.assertEqual([af1_1], g1)
         self.assertEqual([af2_1], g2)
         self.assertEqual([af3_1], g3)
@@ -1097,57 +1096,6 @@ class ORMTestCase(unittest.TestCase):
         s = fb.select(Bfact).where(Bfact.num1 == 1)
         self.assertEqual(s.get_unique(), bf1)
 
-    #--------------------------------------------------------------------------
-    # Test processing clingo Model
-    #--------------------------------------------------------------------------
-    def test_control_model_integration(self):
-        class Afact(Predicate):
-            num1=IntegerField()
-            num2=IntegerField()
-            str1=StringField()
-        class Bfact(Predicate):
-            num1=IntegerField()
-            str1=StringField()
-
-        class MyFacts(FactBase):
-            predicates = [Afact,Bfact]
-
-        af1 = Afact(1,10,"bbb")
-        af2 = Afact(2,20,"aaa")
-        af3 = Afact(3,20,"aaa")
-        bf1 = Bfact(1,"aaa")
-        bf2 = Bfact(2,"bbb")
-
-        fb1 = MyFacts()
-        fb1.add(facts= [af1,af2,af3,bf1,bf2])
-
-        fb2 = None
-        def on_model(model):
-            nonlocal fb2
-            self.assertTrue(model_contains(model, af1))
-            fb2 = model_facts(model, MyFacts, atoms=True)
-
-        ctrl = Control()
-        control_add_facts(ctrl,fb1)
-        ctrl.ground([("base",[])])
-        ctrl.solve(on_model=on_model)
-
-        # control_add_facts works with both a list of facts and a FactBase
-        ctrl2 = Control()
-        control_add_facts(ctrl2,[af1,af2,af3,bf1,bf2])
-
-        safact1 = fb2.select(Afact).where(Afact.num1 == ph_("num1"))
-        safact2 = fb2.select(Afact).where(Afact.num1 < ph_("num1"))
-        self.assertEqual(safact1.get_unique(num1=1), af1)
-        self.assertEqual(safact1.get_unique(num1=2), af2)
-        self.assertEqual(safact1.get_unique(num1=3), af3)
-        self.assertEqual(set(list(safact2.get(num1=1))), set([]))
-        self.assertEqual(set(list(safact2.get(num1=2))), set([af1]))
-        self.assertEqual(set(list(safact2.get(num1=3))), set([af1,af2]))
-        self.assertEqual(fb2.select(Bfact).where(Bfact.str1 == "aaa").get_unique(), bf1)
-        self.assertEqual(fb2.select(Bfact).where(Bfact.str1 == "bbb").get_unique(), bf2)
-
-        # Now test a select
 
     #--------------------------------------------------------------------------
     # Test that subclass factbase works and we can specify indexes
