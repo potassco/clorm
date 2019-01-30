@@ -87,7 +87,6 @@ class EnumDate(ComplexTerm):
 #------------------------------------------------------------------------------
 
 class EnumDateRange(object):
-
     '''A class to generate and query dates within a range.
 
     Like the python range() function - it generates from a starting date to a
@@ -132,15 +131,19 @@ class EnumDateRange(object):
     # --------------------------------------------------------------------------
 
     def first(self):
+        '''Return the first enumerated date in the range'''
         return self._dates[0]
 
     def last(self):
+        '''Return the last enumerated date in the range'''
         return self._dates[-1]
 
     def enumdate_range(self):
+        '''Return the list of all the enumerated dates in the range'''
         return list(self._dates)
 
     def dow(self, ed):
+        '''Return the day of the week for an enumerated date'''
         if not isinstance(ed, EnumDate):
             raise ValueError("Not an EnumDate")
         return calendar.day_name[ed.date.weekday()].lower()

@@ -110,6 +110,18 @@ class LibDateTestCase(unittest.TestCase):
         self.assertEqual(edr1.cl_dow(rawdates1[0]), clingo.Function("monday",[]))
 
 
+    #--------------------------------------------------------------------------
+    # Check that the docstring are the same
+    #--------------------------------------------------------------------------
+    def test_docstrings(self):
+        self.assertEqual(dow.__doc__, cl_dow.__doc__)
+        self.assertEqual(date_range.__doc__, cl_date_range.__doc__)
+
+        Edr = EnumDateRange
+        self.assertEqual(Edr.dow.__doc__, Edr.cl_dow.__doc__)
+        self.assertEqual(Edr.enumdate_range.__doc__, Edr.cl_enumdate_range.__doc__)
+
+
 #------------------------------------------------------------------------------
 # main
 #------------------------------------------------------------------------------

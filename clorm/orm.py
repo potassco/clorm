@@ -12,6 +12,7 @@ import operator
 import collections
 import bisect
 import abc
+import functools
 import clingo
 
 __all__ = [
@@ -1785,6 +1786,7 @@ class Signature(object):
            fn: A function satisfing the inputs and output defined by the Signature.
         """
 
+        @functools.wraps(fn)
         def wrapper(*args):
             if len(args) > len(self._insigs):
                 raise ValueError("Mis-matched arguments in call of clingo wrapper")
@@ -1802,6 +1804,7 @@ class Signature(object):
 
         """
 
+        @functools.wraps(fn)
         def wrapper(self_, *args):
             if len(args) > len(self._insigs):
                 raise ValueError("Mis-matched arguments in call of clingo wrapper")
