@@ -1196,24 +1196,38 @@ class ORMTestCase(unittest.TestCase):
         def getdate1() : return date1
         def getdates() : return [date1, date2]
 
-        cl_getdate1 = sig1.make_clingo_wrapper(getdate1)
-        cl_getdates = sig2.make_clingo_wrapper(getdates)
+        cl_getdate1 = sig1.wrap_function(getdate1)
+        cl_getdates = sig2.wrap_function(getdates)
         self.assertEqual(cl_getdate1(), String("20180101"))
         self.assertEqual(cl_getdates(), [String("20180101"), String("20190202")])
 
         # Use decoractor mode
 
-        @sig3.make_clingo_wrapper
+        @sig3.wrap_function
         def getdow(dt) : return dt
         result = getdow(String("20180101"))
         self.assertEqual(result, Function("monday",[]))
 
         # Test a ComplexTerm input and output
-        @sig4.make_clingo_wrapper
+        @sig4.wrap_function
         def getedate(indate): return indate
         self.assertEqual(getedate(edate1.raw), edate1.raw)
         self.assertEqual(getedate(edate2.raw), edate2.raw)
 
+
+        # Now test the method wrapper
+        class Tmp(object):
+            def __init__(self,x,y):
+                self._x = x
+                self._y = y
+
+            def get_pair(self):
+                return [self._x, self._y]
+
+            cl_get_pair = sig2.wrap_method(get_pair)
+
+        t = Tmp(date1,date2)
+        self.assertEqual(t.cl_get_pair(), [String("20180101"), String("20190202")])
 #------------------------------------------------------------------------------
 # main
 #------------------------------------------------------------------------------

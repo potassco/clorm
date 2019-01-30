@@ -1778,7 +1778,7 @@ class Signature(object):
         raise ValueError("Value {} does not match signature {}".format(arg, sig))
 
 
-    def make_clingo_wrapper(self, fn):
+    def wrap_function(self, fn):
         """Function wrapper that adds data type conversions for wrapped function.
 
         Args:
@@ -1790,6 +1790,23 @@ class Signature(object):
                 raise ValueError("Mis-matched arguments in call of clingo wrapper")
             newargs = [ self._input(self._insigs[i], arg) for i,arg in enumerate(args) ]
             return self._output(self._outsig, fn(*newargs))
+        return wrapper
+
+
+    def wrap_method(self, fn):
+        """Member function wrapper that adds data type conversions for wrapped member
+        functions.
+
+        Args:
+           fn: A function satisfing the inputs and output defined by the Signature.
+
+        """
+
+        def wrapper(self_, *args):
+            if len(args) > len(self._insigs):
+                raise ValueError("Mis-matched arguments in call of clingo wrapper")
+            newargs = [ self._input(self._insigs[i], arg) for i,arg in enumerate(args) ]
+            return self._output(self._outsig, fn(self_, *newargs))
         return wrapper
 
 #------------------------------------------------------------------------------

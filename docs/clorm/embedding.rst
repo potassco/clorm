@@ -58,7 +58,7 @@ performs the required conversions. The code above can be replaced with:
 
    drsig = Signature(DateField, DateField, [DateField])
 
-   @drsig.make_clingo_wrapper
+   @drsig.wrap_function
    def date_range(start_end):
        inc = timedelta(days=1)
        tmp = []
@@ -72,6 +72,14 @@ the date translation to a string is captured by a ``DateField``. The
 ``Signature`` object then captures the function signature which accepts two
 dates and returns a list of dates. A Python *decorator* is provided to generate
 the Python data conversion code.
+
+The ``Signature`` object provides two types of wrappers:
+
+* ``wrap_function``: Wraps a normal function. Every function parameter is
+  converted to and from the clingo equivalent.
+* ``wrap_method``: Wraps a member function. The first paramater is the object's
+  ``self`` parameter so is passed through and only the remaining parameters are
+  converted to their clingo equivalents.
 
 While the above code is arguably easier to read than the raw version it does
 require more lines of code; although in this case it could be argued that the
@@ -107,14 +115,14 @@ starting at 0) the corresponding ClORM version adds very little overhead.
 	   start += inc
        return list(enumerate(tmp))
 
-   date_range = drsig.make_clingo_wrapper(py_date_range)
+   date_range = drsig.wrap_function(py_date_range)
 
 The above example shows that even with relatively complex data structures the
 corresponding Python code remains compact and readable. It also highlights how
-the ``Signature.make_clingo_wrapper()`` function doesn't need to be called as a
-decorator but can be called as a normal function. This makes it extremely easy
-to maintain two versions of the function; one to be called from Python code and
-another to be called from within Clingo.
+``Signature.wrap_function`` and ``Signature.wrap_method`` functions don't need
+to be called as a decorator but can be called as a normal function. This makes
+it extremely easy to maintain two versions of the function; one to be called
+from Python code and another to be called from within Clingo.
 
 Re-usable Components
 --------------------
