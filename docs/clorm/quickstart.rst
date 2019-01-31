@@ -225,7 +225,7 @@ efficient.
 .. code-block:: python
 
     for d in drivers:
-        assignments = list(query.get(d.name))
+        assignments = query.get(d.name)
         if not assignments:
             print("Driver {} is not working today".format(d.name))
         else:

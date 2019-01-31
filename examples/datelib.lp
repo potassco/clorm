@@ -51,7 +51,7 @@ def on_model(model):
     q1 = solution.select(Assignment).where(Assignment.ed == ph1_)
 
     for ed in dr.enumdate_range():
-        print("{} => {}".format(ed.date, [a.res for a in list(q1.get(ed))]))
+        print("{} => {}".format(ed.date, [a.res for a in q1.get(ed)]))
 
 
 def main(ctrl_):

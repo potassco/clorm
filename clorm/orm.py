@@ -1261,15 +1261,18 @@ class _Select(Select):
             else: return arg
 
         # If there is no index test all instances else use the index
+        result = []
         if not self._indexable:
             for f in self._factmap.facts():
-                if not self._where: yield f
-                elif self._where and self._where(f,*args,**kwargs): yield(f)
+                if not self._where: result.append(f)
+                elif self._where and self._where(f,*args,**kwargs): result.append(f)
         else:
             mmap=self._factmap.get_facts_multimap(self._indexable[0])
             for key in mmap.keys_op(self._indexable[1], get_value(self._indexable[2])):
                 for f in mmap[key]:
-                    if self._where(f,*args,**kwargs): yield f
+                    if self._where(f,*args,**kwargs): result.append(f)
+        # Return the results
+        return result
 
     def get_unique(self, *args, **kwargs):
         count=0

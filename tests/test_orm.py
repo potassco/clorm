@@ -714,7 +714,7 @@ class ORMTestCase(unittest.TestCase):
         # Test select with placeholders
         s1_ph1 = fm1.select().where(Afact1.num1 == ph_("num1"))
         s1_ph2 = fm1.select().where(Afact1.str1 == ph_("str1","42"), Afact1.num1 == ph_("num1"))
-        self.assertEqual(set(list(s1_ph1.get(num1=4))), set([f4,f42]))
+        self.assertEqual(set(s1_ph1.get(num1=4)), set([f4,f42]))
         self.assertEqual(set(list(s1_ph1.get(num1=3))), set([f3]))
         self.assertEqual(set(list(s1_ph1.get(num1=2))), set([]))
         self.assertEqual(s1_ph2.get_unique(num1=4), f42)

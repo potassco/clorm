@@ -68,7 +68,7 @@ def main():
     query=solution.select(Assignment).where(Assignment.driver == ph1_)
 
     for d in drivers:
-        assignments = list(query.get(d.name))
+        assignments = query.get(d.name)
         if not assignments:
             print("Driver {} is not working today".format(d.name))
         else:

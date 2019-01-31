@@ -127,8 +127,8 @@ mechanism.
 
 When an ASP model is returned by the solver the application developer needs to
 process the model in order to extract the relevant facts. The simplest mechanism
-to do this to loop through the facts in the model. The loop will then typically
-contains a number of conditional statements to determine what action to take for
+to do this to loop through the facts in the model. This loop will typically
+contain a number of conditional statements to determine what action to take for
 the given fact; and to store it if some sort of matching needs to take place.
 
 However, this loop-and-test approach leads to unnecessary boilerplate code as
