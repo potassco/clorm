@@ -111,11 +111,20 @@ encapsulates an ASP model and the associated meta-data. It is passed to the
 provide a mechanism to extract ClORM facts from the model. The added and
 modified functions are:
 
-* ``facts(self, factbase, atoms=False, terms=False, shown=False)``. This
-  function requires a ``FactBase`` sub-class to be specified as the first
-  argument, as well as allowing for the same options as the ``Model.symbols()``
-  function. It creates a fact base object from the passed class and populates it
-  with the selected symbols that are able to unify with the class.
+* ``facts(self, factbase, atoms=False, terms=False, shown=False,
+  raise_on_empty=True)``. This function requires a ``FactBase`` sub-class to be
+  specified as the first argument, as well as allowing for the ``atoms``,
+  ``terms``, and ``shown`` options from the ``Model.symbols()`` function. It
+  creates a fact base object from the passed class and populates it with the
+  selected symbols that are able to unify with the class.
+
+  The ``raise_on_empty`` parameters that a ``ValueError`` will be raised if the
+  resulting factbase is empty. This can happen for two reasons: there were no
+  selected elements in the model or there were elements from the model but none
+  of them was able to unify with the factbase. While these can be legimate
+  expectations for some applications, however in many cases this would indicate a
+  problem; either in the ASP program or in the declaration of the predicates to
+  unify against.
 
 * ``contains(self,fact)``. Extends ``clingo.Model.contains`` to allow for a
   clorm facts as well as a clingo symbols.

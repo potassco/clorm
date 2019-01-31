@@ -1451,13 +1451,15 @@ def _fb_base_constructor(self, *args, **kwargs):
 #def _fb_base_constructor(self, facts=[], delayed_init=False):
 #    _fb_subclass_constructor(self, facts=facts, delayed_init=delayed_init)
 
-def _fb_subclass_constructor(self, facts=None, symbols=None, delayed_init=False):
+def _fb_subclass_constructor(self, facts=None, symbols=None,
+                             raise_on_empty=False, delayed_init=False):
     if facts is not None and symbols is not None:
         raise ValueError("'facts' and 'symbols' are mutually exclusive arguments")
     if not delayed_init:
-        self._init(facts=facts, symbols=symbols)
+        self._init(facts=facts, symbols=symbols, raise_on_empty=raise_on_empty)
     else:
-        self._delayed_init = lambda : self._init(facts=facts, symbols=symbols)
+        self._delayed_init = lambda : self._init(facts=facts, symbols=symbols,
+                                                 raise_on_empty=raise_on_empty)
 
 
 def _fb_base_add(self, fact=None,facts=None):
@@ -1590,7 +1592,7 @@ class FactBase(object, metaclass=_FactBaseMeta):
     """
 
     # A special purpose initialiser so that we can do delayed initialisation
-    def _init(self, facts=None, symbols=None):
+    def _init(self, facts=None, symbols=None, raise_on_empty=False):
 
         # Create _FactMaps for the predicate types with indexed terms
         grouped = {}
@@ -1601,8 +1603,19 @@ class FactBase(object, metaclass=_FactBaseMeta):
             if p not in grouped: grouped[p] = []
         self._factmaps = { pt : _FactMap(fs) for pt, fs in grouped.items() }
 
-        # add the facts
-        self._add(facts=facts, symbols=symbols)
+        # Check the symbols list and raise an error if it is empty
+        if raise_on_empty:
+            if facts is not None and not facts:
+                raise ValueError("FactBase empty set of input facts")
+            if symbols is not None and not symbols:
+                raise ValueError("FactBase empty set of input symbols")
+
+        # try to add the facts or symbols
+        if facts or symbols:
+            count = self._add(facts=facts, symbols=symbols)
+            # Check that something was added
+            if raise_on_empty and count == 0:
+                raise ValueError("FactBase failed to import any facts or symbols")
 
         # flag that initialisation has taken place
         self._delayed_init = None
@@ -1611,7 +1624,7 @@ class FactBase(object, metaclass=_FactBaseMeta):
     # Internal member functions
     #--------------------------------------------------------------------------
 
-    def _add(self, fact=None,facts=None,symbols=None):
+    def _add(self, fact=None, facts=None, symbols=None):
         count = 0
         if fact is not None: return self._add_fact(fact)
         elif facts is not None:

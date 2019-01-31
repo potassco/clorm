@@ -47,7 +47,7 @@ end_date(D) :- date(D), not middle_date(D).
 #script(python).
 
 def on_model(model):
-    solution = model.facts(AppDB, atoms=True)
+    solution = model.facts(AppDB, atoms=True, raise_on_empty=True)
     q1 = solution.select(Assignment).where(Assignment.ed == ph1_)
 
     for ed in dr.enumdate_range():

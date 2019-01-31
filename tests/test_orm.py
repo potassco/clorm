@@ -871,7 +871,7 @@ class ORMTestCase(unittest.TestCase):
 #        fb = FactBase([Afact.num1, Afact.num2, Afact.str1])
         fb = FactSet()
         facts=[af1,af2,af3,bf1,bf2,cf1]
-        fb.add(facts=facts)
+        self.assertEqual(fb.add(facts=facts), 6)
 
         self.assertEqual(set(fb.facts()), set(facts))
         self.assertEqual(fb.predicate_types(), set([Afact,Bfact,Cfact]))
@@ -911,7 +911,7 @@ class ORMTestCase(unittest.TestCase):
         # Test select with placeholders
 #        fb3 = FactBase([Afact.num1])
         fb3 = FactSet()
-        fb3.add(facts=[af1,af2,af3])
+        self.assertEqual(fb3.add(facts=[af1,af2,af3]),3)
         s3 = fb3.select(Afact).where(Afact.num1 == ph_("num1"))
         self.assertEqual(s3.get_unique(num1=1), af1)
         self.assertEqual(s3.get_unique(num1=2), af2)
@@ -929,6 +929,49 @@ class ORMTestCase(unittest.TestCase):
 
         with self.assertRaises(TypeError) as ctx:
             self.assertEqual(set(list(s5.get(1))), set([]))
+
+        # Test that the factbase
+
+    #--------------------------------------------------------------------------
+    # Test that
+    #--------------------------------------------------------------------------
+    def test_factbase_empty_import(self):
+
+        class Afact(Predicate):
+            num1=IntegerField()
+        class Bfact(Predicate):
+            num1=IntegerField()
+
+        class FB(FactBase):
+            predicates = [Afact]
+
+        af1 = Afact(1)
+        af2 = Afact(2)
+        af3 = Afact(3)
+        bf1 = Bfact(1)
+        bf2 = Bfact(2)
+        raf1 = Function("afact",[Number(1)])
+        raf2 = Function("afact",[Number(2)])
+        raf3 = Function("afact",[Number(3)])
+        rbf1 = Function("bfact",[Number(1)])
+        rbf2 = Function("bfact",[Number(2)])
+
+        self.assertEqual(af1.raw, raf1)
+        fb = FB(facts=[af1,af2,af3,bf1,bf2], raise_on_empty=True)
+        self.assertEqual(len(fb.facts()), 3)
+
+        fb = FB(symbols=[raf1,raf2,raf3,rbf1,rbf2], raise_on_empty=True)
+        self.assertEqual(len(fb.facts()), 3)
+
+        with self.assertRaises(ValueError) as ctx:
+            fb = FB(facts=[bf1,bf2], raise_on_empty=True)
+
+        with self.assertRaises(ValueError) as ctx:
+            fb = FB(symbols=[rbf1,rbf2], raise_on_empty=True)
+
+        # this is ok because we didn't pass any facts or symbols
+        fb = FB(raise_on_empty=True)
+        self.assertEqual(len(fb.facts()), 0)
 
     #--------------------------------------------------------------------------
     # Test that a factbase only imports from the specified predicates
@@ -1035,17 +1078,19 @@ class ORMTestCase(unittest.TestCase):
         self.assertEqual(set(s_af_all.get()), set([af1,af2,af3]))
 
         fb = MyFactBase()
-        fb.add(symbols=raws)
+        self.assertEqual(fb.add(symbols=raws), 6)
         s_af_all = fb.select(Afact)
         self.assertEqual(set(s_af_all.get()), set([af1,af2,af3]))
 
         fb = MyFactBase()
-        fb.add(facts=[af1,af2, af3])
+        self.assertEqual(fb.add(facts=[af1,af2,af3]),3)
         s_af_all = fb.select(Afact)
         self.assertEqual(set(s_af_all.get()), set([af1,af2,af3]))
 
         fb = MyFactBase()
-        fb.add(af1); fb.add(af2); fb.add(af3);
+        self.assertEqual(fb.add(af1),1)
+        self.assertEqual(fb.add(af2),1)
+        self.assertEqual(fb.add(af3),1)
         s_af_all = fb.select(Afact)
         self.assertEqual(set(s_af_all.get()), set([af1,af2,af3]))
 
@@ -1089,7 +1134,7 @@ class ORMTestCase(unittest.TestCase):
             indexes = [Afact.num1, Bfact.num1]
 
         fb = MyFactBase3()
-        fb.add(symbols=raws)
+        self.assertEqual(fb.add(symbols=raws), 5)
 
         s = fb.select(Afact).where(Afact.num1 == 1)
         self.assertEqual(s.get_unique(), af1)

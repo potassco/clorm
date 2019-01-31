@@ -78,6 +78,51 @@ class ClingoTestCase(unittest.TestCase):
 
         # Now test a select
 
+
+    #--------------------------------------------------------------------------
+    # Test processing clingo Model
+    #--------------------------------------------------------------------------
+    def test_model_facts(self):
+        class Afact(Predicate):
+            num1=IntegerField()
+            num2=IntegerField()
+            str1=StringField()
+        class Bfact(Predicate):
+            num1=IntegerField()
+            str1=StringField()
+
+        class AppDB(FactBase):
+            predicates = [Afact]
+
+        af1 = Afact(1,10,"bbb")
+        af2 = Afact(2,20,"aaa")
+        af3 = Afact(3,20,"aaa")
+        bf1 = Bfact(1,"aaa")
+        bf2 = Bfact(2,"bbb")
+
+
+        def on_model1(model):
+            fb = model.facts(AppDB, atoms=True, raise_on_empty=True)
+            self.assertEqual(len(fb.facts()), 3)  # AppDB only imports Afact
+
+        ctrl = nclingo.Control()
+        ctrl.add_facts([af1,af2,af3,bf1,bf2])
+        ctrl.ground([("base",[])])
+        ctrl.solve(on_model=on_model1)
+
+        def on_model2(model):
+            # Note: because of the delayed initialisation you have to do
+            # something with the factbase to get it to raise the error.
+            with self.assertRaises(ValueError) as ctx:
+                fb = model.facts(AppDB, atoms=True, raise_on_empty=True)
+                self.assertEqual(len(fb.facts()),0)
+
+        ctrl = nclingo.Control()
+        ctrl.add_facts([bf1,bf2])
+        ctrl.ground([("base",[])])
+        ctrl.solve(on_model=on_model2)
+
+
 #------------------------------------------------------------------------------
 # main
 #------------------------------------------------------------------------------
