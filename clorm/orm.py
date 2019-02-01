@@ -955,10 +955,12 @@ def ph_(value,default=None):
         idx = int(value)
     except ValueError:
         return _NamedPlaceholder(value,default)
+    if default is not None:
+        raise ValueError("Positional placeholders don't support default values")
     idx -= 1
     if idx < 0:
         raise ValueError("Index {} is not a positional argument".format(idx+1))
-    return _PositionalPlaceholder(value)
+    return _PositionalPlaceholder(idx)
 
 ph1_ = _PositionalPlaceholder(0)
 ph2_ = _PositionalPlaceholder(1)

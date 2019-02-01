@@ -798,6 +798,10 @@ class ORMTestCase(unittest.TestCase):
         self.assertTrue(set([f for f in s3.get(a=1)]), set([f2]))
         self.assertTrue(set([f for f in s3.get(a=1,b=3)]), set([f3]))
 
+        # Test manually created positional placeholders
+        s1 = fm1.select().where(Afact.num1 == ph1_, Afact.num2 == ph_(1))
+        self.assertTrue(set([f for f in s1.get(1)]), set([f1]))
+        self.assertTrue(set([f for f in s1.get(2)]), set([f5]))
 
     #--------------------------------------------------------------------------
     #   Test that select works with order_by

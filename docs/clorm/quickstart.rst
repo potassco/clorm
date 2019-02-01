@@ -239,7 +239,8 @@ efficient.
 
 Calling ``query.get(d.name)`` executes the query for the given driver. Because
 ``d.name`` is the first parameter it matches against the placeholder ``ph1_`` in
-the query definition. Currently, ClORM support up to four placeholders.
+the query definition. ClORM has four predefined placeholders ``ph1_``,... ,
+``ph4_``, but more can be created using the ``ph_`` function.
 
 Running this example produces the following results:
 

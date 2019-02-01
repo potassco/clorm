@@ -168,17 +168,39 @@ parameterise queries. Placeholders are named ``ph1_`` to ``ph4_`` and correspond
 to the position of the parameter in the ``get()`` or ``get_unique()`` function
 calls.
 
-A placeholder can be used in order to query each person and the pets that they own.
-
 .. code-block:: python
 
        query1=facts.select(Person)
-       query2=facts.select(Pet).where(Pet.owner == "dave")
+       query2=facts.select(Pet).where(Pet.owner == ph1_)
 
        for person in query1.get():
           print("Pets owned by: {}".format(person.person))
           for pet in query2.get(person.owner):
 	      print("\t pet named {}".format(pet.petname))
+
+
+Additional placeholders can be defined using the ``ph_`` function:
+``ph_(5)`` will create a placeholder for the 5th positional argument.
+
+ClORM also supports **named placeholders**, which may be preferable if there are
+a larger number of parameters. A named placeholder is created using the ``ph_``
+function with a non-numeric first parameter, and are referenced in the query
+execution using a keyword function parameter. Named placeholders also allow for
+a default value.
+
+.. code-block:: python
+
+   query2=facts.select(Pet).where(Pet.owner == ph_("owner", "dave")
+
+   # Find pets owned by "morri"
+   for pet in query2.get(owner="morri"):
+       print("\t pet named {}".format(pet.petname))
+
+   # Find pets owned by "dave" (using the default value)
+   for pet in query2.get():
+       print("\t pet named {}".format(pet.petname))
+
+
 
 
 Ordering Queries
