@@ -1,5 +1,5 @@
 include README.rst
 include LICENSE
 include runtests.py
-include tests/*.py
 include clorm/*.py
+include clorm/lib/*.py
