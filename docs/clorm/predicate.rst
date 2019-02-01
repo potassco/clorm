@@ -342,8 +342,7 @@ The ``Booking`` and ``Booking2`` Python classes correspond to the
 signature of the above example predicates ``booking/2`` and ``booking2/2``.
 
 Note: as with the simple term definitions it is possible to provide an optional
-``default`` parameter, however, currently, the ``index`` parameter is not
-supported.
+``default`` or ``index`` parameter.
 
 
 Dealing with Raw Clingo Symbols

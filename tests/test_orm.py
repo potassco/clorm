@@ -370,6 +370,40 @@ class ORMTestCase(unittest.TestCase):
             self.assertTrue(f2 >=  af1)
 
     #--------------------------------------------------------------------------
+    # Test predicate equality
+    # --------------------------------------------------------------------------
+    def test_comparison_operator_overloads_complex(self):
+
+        class SwapField(IntegerField):
+            pytocl = lambda x: 100 - x
+            cltopy = lambda x: 100 - x
+
+        class AComplex(ComplexTerm):
+            swap=SwapField()
+            norm=IntegerField()
+
+        f1 = AComplex(swap=99,norm=1)
+        f2 = AComplex(swap=98,norm=2)
+        f3 = AComplex(swap=97,norm=3)
+        f4 = AComplex(swap=97,norm=3)
+
+        rf1 = f1.raw
+        rf2 = f2.raw
+        rf3 = f3.raw
+        for rf in [rf1,rf2,rf3]:
+            self.assertEqual(rf.arguments[0],rf.arguments[1])
+
+        # Test the the comparison operator for the complex term is using the
+        # swapped values so that the comparison is opposite to what the raw
+        # field says.
+        self.assertTrue(rf1 < rf2)
+        self.assertTrue(rf2 < rf3)
+        self.assertTrue(f1 > f2)
+        self.assertTrue(f2 > f3)
+        self.assertTrue(f2 < f1)
+        self.assertTrue(f3 < f2)
+        self.assertEqual(f3,f4)
+    #--------------------------------------------------------------------------
     # Test unifying a symbol with a predicate
     # --------------------------------------------------------------------------
     def test_unifying_symbol_and_predicate(self):
@@ -804,6 +838,55 @@ class ORMTestCase(unittest.TestCase):
 
         q = fb.select(Afact).order_by(desc(Afact.str1), Afact.num1)
         self.assertEqual([f3,f2,f4,f1,f5], q.get())
+
+        # FIXUP - FACTBASE SHOULDN'T ALLOW DUPLICATES
+        # In an ASP model you can't get a two identical facts - but factbase
+        # doesn't test for multiple identical objects.
+        f6 = Afact(num1=5,str1="1",str2="1")
+        fb.add(f6)
+        q = fb.select(Afact).order_by(desc(Afact.str1), Afact.num1)
+        self.assertEqual([f3,f2,f4,f1,f5,f6], q.get())
+
+    #--------------------------------------------------------------------------
+    #   Test that select works with order_by for complex term
+    #--------------------------------------------------------------------------
+    def test_select_order_by_complex_term(self):
+
+        class SwapField(IntegerField):
+            pytocl = lambda x: 100 - x
+            cltopy = lambda x: 100 - x
+
+        class AComplex(ComplexTerm):
+            swap=SwapField(index=True)
+            norm=IntegerField(index=True)
+
+        class AFact(Predicate):
+            astr = StringField(index=True)
+            cmplx = AComplex.Field(index=True)
+
+        class AppDB(FactBase):
+            predicates = [AFact]
+            indexes = [AFact.astr, AFact.cmplx]
+
+        cmplx1 = AComplex(swap=99,norm=1)
+        cmplx2 = AComplex(swap=98,norm=2)
+        cmplx3 = AComplex(swap=97,norm=3)
+
+        f1 = AFact(astr="aaa", cmplx=cmplx1)
+        f2 = AFact(astr="bbb", cmplx=cmplx2)
+        f3 = AFact(astr="ccc", cmplx=cmplx3)
+        f4 = AFact(astr="ddd", cmplx=cmplx3)
+
+        fb = AppDB(facts=[f1,f2,f3,f4])
+
+        q = fb.select(AFact).order_by(AFact.astr)
+        self.assertEqual([f1,f2,f3,f4], q.get())
+
+        q = fb.select(AFact).order_by(AFact.cmplx, AFact.astr)
+        self.assertEqual([f3,f4,f2,f1], q.get())
+
+        q = fb.select(AFact).where(AFact.cmplx <= ph1_).order_by(AFact.cmplx, AFact.astr)
+        self.assertEqual([f3,f4,f2], q.get(cmplx2))
 
 
     #--------------------------------------------------------------------------

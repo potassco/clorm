@@ -521,9 +521,6 @@ class _FieldContainer(object):
         self._defn = None
     def set_defn(self, cls):
         term_defn_name = "{}Field".format(cls.__name__)
-        def fn_init(self, default=None):
-            self._index = False
-            self._default=default
         def _pytocl(v):
             if not isinstance(v, cls):
                 raise TypeError("Value not an instance of {}".format(cls))
@@ -532,8 +529,7 @@ class _FieldContainer(object):
             return cls(raw=v)
 
         self._defn = type(term_defn_name, (RawField,),
-                          { "__init__": fn_init,
-                            "pytocl": _pytocl,
+                          { "pytocl": _pytocl,
                             "cltopy": _cltopy })
     @property
     def defn(self):
@@ -791,8 +787,17 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
         """Overloaded boolean operator."""
         self_symbol = self.raw
         if isinstance(other, NonLogicalSymbol):
-            other_symbol = other.raw
-            return self_symbol < other_symbol
+            if type(self) != type(other):
+                other_symbol = other.raw
+                return self_symbol < other_symbol
+            else:
+                # the same type so compare each field in order
+                for idx in range(0,self._meta.arity):
+                    selfv = self[idx]
+                    otherv = other[idx]
+                    if selfv == otherv: continue
+                    return selfv < otherv
+                return False
         elif type(other) == clingo.Symbol:
             return self_symbol < other
         else:
@@ -809,8 +814,17 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
         """Overloaded boolean operator."""
         self_symbol = self.raw
         if isinstance(other, NonLogicalSymbol):
-            other_symbol = other.raw
-            return self_symbol > other_symbol
+            if type(self) != type(other):
+                other_symbol = other.raw
+                return self_symbol > other_symbol
+            else:
+                # the same type so compare each field in order
+                for idx in range(0,self._meta.arity):
+                    selfv = self[idx]
+                    otherv = other[idx]
+                    if selfv == otherv: continue
+                    return selfv > otherv
+                return False
         elif type(other) == clingo.Symbol:
             return self_symbol > other
         else:
@@ -1314,6 +1328,8 @@ class _Select(Select):
                 value = ford.compare(a,b)
                 if value == 0: continue
                 return value
+            return 0
+
         self._key = functools.cmp_to_key(mycmp)
         return self
 
