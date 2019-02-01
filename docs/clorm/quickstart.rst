@@ -209,13 +209,17 @@ that returns a suitable fact base query object.
 
 .. code-block:: python
 
-    query=solution.select(Assignment).where(Assignment.driver == ph1_)
+    query=solution.select(Assignment).where(Assignment.driver == ph1_).order_by(Assignment.time)
 
 A ClORM query can be viewed as a simplified version of a traditional database
-query. Here we want to find ``Assignment`` instances that match the ``driver``
-field to a special placeholder object ``ph1_``. The value of ``ph1_`` will be
-provided when the query is executed. Note: seperating query definition from
-query execution allows for a query to be re-used.
+query, and the function call syntax will be familiar to users of Python ORM's
+such as SQLAlchemy or Peewee.
+
+Here we want to find ``Assignment`` instances that match the ``driver`` field to
+a special placeholder object ``ph1_`` and to return the results sorted by the
+assignment time. The value of ``ph1_`` will be provided when the query is
+executed. Note: seperating query definition from query execution allows for a
+query to be re-used.
 
 In particular, we now iterate over the list of drivers and execute the query for
 each driver and print the result. Because the ``Assignment.driver`` field is

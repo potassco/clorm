@@ -149,9 +149,10 @@ objects. From a query object a ``where`` clause can also be set.
        query2=facts.select(Pet).where(Pet.owner == "dave")
 
 A query object needs to be executed in order to return the results. There are
-two member functions to execute a query: ``get()`` and ``get_unique()``. The
-``get_unique()`` function expects exactly one results and will raise a
-``ValueError`` if this is not the case.
+two member functions to execute a query: ``get()`` and
+``get_unique()``. ``get()`` returns a list of results, while ``get_unique()``
+returns exactly one results and will raise a ``ValueError`` if there is not
+exactly one result.
 
 .. code-block:: python
 
@@ -178,6 +179,31 @@ A placeholder can be used in order to query each person and the pets that they o
           print("Pets owned by: {}".format(person.person))
           for pet in query2.get(person.owner):
 	      print("\t pet named {}".format(pet.petname))
+
+
+Ordering Queries
+^^^^^^^^^^^^^^^^
+
+Queries allow for ordering the result by setting order options using the
+``order_by`` member function. Multiple fields can be listed as well as being
+able to specify ascending or descending sort order (with ascending order being
+the default).
+
+.. code-block:: python
+
+       query2=facts.select(Pet).order_by(Pet.owner, Pet.petname.desc())
+
+The above will list all pets first sorted by the owner's name and then sorted in
+descending order by the pet's name.
+
+There is also a ``desc`` helper function for those that find the syntax more
+intuitive. So the above could equally be written as:
+
+.. code-block:: python
+
+	from clorm import desc
+
+	query2=facts.select(Pet).order_by(Pet.owner, desc(Pet.petname))
 
 
 Complex Query Expressions and Indexing

@@ -74,7 +74,7 @@ def main(ctrl_):
 
     # Do something with the solution - create a query so we can print out the
     # assignments for each driver.
-    query=solution.select(Assignment).where(Assignment.driver == ph1_)
+    query=solution.select(Assignment).where(Assignment.driver == ph1_).order_by(Assignment.time)
     for d in drivers:
         assignments = query.get(d.name)
         if not assignments:

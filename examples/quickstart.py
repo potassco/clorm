@@ -65,7 +65,7 @@ def main():
     # assignments for each driver.
 
     #    query=solution.select(Assignment).where(lambda x,o: x.driver == o)
-    query=solution.select(Assignment).where(Assignment.driver == ph1_)
+    query=solution.select(Assignment).where(Assignment.driver == ph1_).order_by(Assignment.time)
 
     for d in drivers:
         assignments = query.get(d.name)

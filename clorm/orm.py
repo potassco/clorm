@@ -1212,6 +1212,29 @@ class Select(abc.ABC):
 
     @abc.abstractmethod
     def where(self, *expressions):
+        """Set the select statement's where clause.
+
+        The where clause consists of a set of comparison expressions. A
+        comparison expression is simply a test functor that takes a predicate
+        instance and returns whether or not that instance satisfies some
+        requirement. Hence any lambda or function with this signature can be
+        passed.
+
+        Such test functors can also be generated using a more natural syntax,
+        simply by making a boolean comparison between a field and a some other
+        object. This is acheived by overloading the field boolean comparison
+        operators to return a functor.
+
+        The second parameter can point to an arbitrary value or a special
+        placeholder value that issubstituted when the query is actually
+        executed. These placeholders are named ``ph1_``, ``ph2_``, ``ph3_``, and
+        ``ph4_`` and correspond to the 1st to 4th arguments of the ``get`` or
+        ``get_unique`` function call.
+
+        Args:
+          expressions: one or more comparison expressions.
+
+        """
         pass
 
     @abc.abstractmethod
