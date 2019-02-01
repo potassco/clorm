@@ -14,7 +14,7 @@ from clorm.orm import \
     not_, and_, or_, _StaticComparator, _get_term_comparators, \
     ph_, ph1_, ph2_, \
     _MultiMap, _FactMap, \
-    _fact_generator, FactBase, FactBaseHelper, \
+    _fact_generator, desc, FactBase, FactBaseHelper, \
     Signature
 
 #------------------------------------------------------------------------------
@@ -763,6 +763,48 @@ class ORMTestCase(unittest.TestCase):
 
         self.assertTrue(set([f for f in s3.get(a=1)]), set([f2]))
         self.assertTrue(set([f for f in s3.get(a=1,b=3)]), set([f3]))
+
+
+    #--------------------------------------------------------------------------
+    #   Test that select works with order_by
+    #--------------------------------------------------------------------------
+    def test_select_order_by(self):
+        class Afact(Predicate):
+            num1=IntegerField()
+            str1=StringField()
+            str2=ConstantField()
+
+        class AppDB(FactBase):
+            predicates = [Afact]
+
+        f1 = Afact(num1=1,str1="1",str2="5")
+        f2 = Afact(num1=2,str1="3",str2="4")
+        f3 = Afact(num1=3,str1="5",str2="3")
+        f4 = Afact(num1=4,str1="3",str2="2")
+        f5 = Afact(num1=5,str1="1",str2="1")
+        fb = AppDB(facts=[f1,f2,f3,f4,f5])
+
+        q = fb.select(Afact).order_by(Afact.num1)
+        self.assertEqual([f1,f2,f3,f4,f5], q.get())
+
+        q = fb.select(Afact).order_by(Afact.num1.asc())
+        self.assertEqual([f1,f2,f3,f4,f5], q.get())
+
+        q = fb.select(Afact).order_by(Afact.num1.desc())
+        self.assertEqual([f5,f4,f3,f2,f1], q.get())
+
+        q = fb.select(Afact).order_by(Afact.str2)
+        self.assertEqual([f5,f4,f3,f2,f1], q.get())
+
+        q = fb.select(Afact).order_by(Afact.str2.desc())
+        self.assertEqual([f1,f2,f3,f4,f5], q.get())
+
+        q = fb.select(Afact).order_by(Afact.str1.desc(), Afact.num1)
+        self.assertEqual([f3,f2,f4,f1,f5], q.get())
+
+        q = fb.select(Afact).order_by(desc(Afact.str1), Afact.num1)
+        self.assertEqual([f3,f2,f4,f1,f5], q.get())
+
 
     #--------------------------------------------------------------------------
     #   Test that the indexing works

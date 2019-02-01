@@ -26,6 +26,7 @@ __all__ = [
     'Predicate',
     'ComplexTerm',
     'Comparator',
+    'desc',
     'Select',
     'Delete',
     'FactBase',
@@ -262,6 +263,16 @@ class Field(abc.ABC):
         pass
 
     @abc.abstractmethod
+    def desc(self):
+        """Set descending sort order"""
+        pass
+
+    @abc.abstractmethod
+    def asc(self):
+        """Set descending sort order"""
+        pass
+
+    @abc.abstractmethod
     def __hash__(self):
         """Overload of the Python hash value generation"""
         pass
@@ -296,6 +307,31 @@ class Field(abc.ABC):
         """Boolean operator is overloaded to return a ``Comparator`` object"""
         pass
 
+
+#------------------------------------------------------------------------------
+#
+#------------------------------------------------------------------------------
+class _FieldOrderBy(object):
+    def __init__(self, field, asc):
+        self.field = field
+        self.asc = asc
+    def compare(self, a,b):
+        va = self.field.__get__(a)
+        vb = self.field.__get__(b)
+        if  va == vb: return 0
+        if self.asc and va < vb: return -1
+        if not self.asc and va > vb: return -1
+        return 1
+
+    def __str__(self):
+        return "_FieldOrderBy(field={},asc={})".format(self.field, self.asc)
+
+#------------------------------------------------------------------------------
+# A helper function to return a _FieldOrderBy descending object
+#------------------------------------------------------------------------------
+def desc(field):
+    return field.desc()
+
 #------------------------------------------------------------------------------
 # Implementation of a Field
 # ------------------------------------------------------------------------------
@@ -321,6 +357,12 @@ class _Field(Field):
 
     def set_parent(self, parent_cls):
         self._parent_cls = parent_cls
+
+    def asc(self):
+        return _FieldOrderBy(self, asc=True)
+
+    def desc(self):
+        return _FieldOrderBy(self, asc=False)
 
     def __get__(self, instance, owner=None):
         if not instance: return self
@@ -1173,6 +1215,10 @@ class Select(abc.ABC):
         pass
 
     @abc.abstractmethod
+    def order_by(self, *fieldorder):
+        pass
+
+    @abc.abstractmethod
     def get(self, *args, **kwargs):
         pass
 
@@ -1205,18 +1251,39 @@ class _Select(Select):
         self._index_priority = { f:p for (p,f) in enumerate(factmap.indexed_terms()) }
         self._where = None
         self._indexable = None
+        self._key = None
 
     def where(self, *expressions):
         if self._where:
-            raise ValueError("trying to specify multiple where clauses")
+            raise ValueError("cannot specify 'where' multiple times")
         if not expressions:
-            self._where = None
+            raise ValueError("empty 'where' expression")
         elif len(expressions) == 1:
             self._where = _simplify_fact_comparator(expressions[0])
         else:
             self._where = _simplify_fact_comparator(and_(*expressions))
 
         self._indexable = self._primary_search(self._where)
+        return self
+
+    def order_by(self, *expressions):
+        if self._key:
+            raise ValueError("cannot specify 'order_by' multiple times")
+        if not expressions:
+            raise ValueError("empty 'order_by' expression")
+        field_orders = []
+        for exp in expressions:
+            if isinstance(exp, _FieldOrderBy): field_orders.append(exp)
+            elif isinstance(exp, _Field): field_orders.append(exp.asc())
+            else: raise ValueError("Invalid field order expression: {}".format(exp))
+
+        # Create a comparator function
+        def mycmp(a, b):
+            for ford in field_orders:
+                value = ford.compare(a,b)
+                if value == 0: continue
+                return value
+        self._key = functools.cmp_to_key(mycmp)
         return self
 
     def _primary_search(self, where):
@@ -1271,7 +1338,9 @@ class _Select(Select):
             for key in mmap.keys_op(self._indexable[1], get_value(self._indexable[2])):
                 for f in mmap[key]:
                     if self._where(f,*args,**kwargs): result.append(f)
-        # Return the results
+
+        # Return the results - sorted if necessary
+        if self._key: result.sort(key=self._key)
         return result
 
     def get_unique(self, *args, **kwargs):
