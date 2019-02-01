@@ -936,8 +936,16 @@ class _PositionalPlaceholder(Placeholder):
     def __str__(self):
         return "ph{}_".format(self._posn+1)
 
-def ph_(name,default=None):
-    return _NamedPlaceholder(name,default)
+def ph_(value,default=None):
+    try:
+        idx = int(value)
+    except ValueError:
+        return _NamedPlaceholder(value,default)
+    idx -= 1
+    if idx < 0:
+        raise ValueError("Index {} is not a positional argument".format(idx+1))
+    return _PositionalPlaceholder(value)
+
 ph1_ = _PositionalPlaceholder(0)
 ph2_ = _PositionalPlaceholder(1)
 ph3_ = _PositionalPlaceholder(2)
