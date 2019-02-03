@@ -261,6 +261,19 @@ TODO
 * complete Sphinx documentation
 * add more examples
 
-* add a library of resuable ASP integration components.
+* add a library of resuable ASP integration components (started).
 * add a debug library -- my ideas on this are still vague.
+
+Alternatives
+------------
+
+I think an ORM interface provides a natural fit for getting data into and out of
+the Clingo solver. However, there will be other opinions on this. Also, data IO
+is only one aspect of how you might want to interact with the ASP solver.
+
+So, here are some other projects for using Python and Clingo:
+
+* `PyASP <https://github.com/sthiele/pyasp>`_
+* `Clyngor <https://github.com/aluriak/clyngor>`_
+
 
