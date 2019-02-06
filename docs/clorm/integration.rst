@@ -6,7 +6,7 @@ queries over fact bases. However, we have not discussed in detail how these
 objects are integrated and interact with the Clingo ASP solver.
 
 As detailed in :ref:`raw-symbol-label`, at its most basic level a Clingo
-``Symbol`` object can be extracted from a ClORM ``Predicate`` object using the
+``Symbol`` object can be extracted from a Clorm ``Predicate`` object using the
 ``raw`` property and conversely a ``Symbol`` object can be passed as the ``raw``
 parameter in the ``Predicate`` constructor.
 
@@ -14,9 +14,9 @@ Wrapper classes
 ---------------
 
 While extracting ``Symbol`` objects from ``Predicates`` is sufficient to use
-ClORM with the Clingo solver it is still not a particularly clean interface and
+Clorm with the Clingo solver it is still not a particularly clean interface and
 can result in unnecessary boilerplate code. To avoid this the ``clorm.clingo``
-module fully integrates ClORM objects into the Clingo API. It does this by
+module fully integrates Clorm objects into the Clingo API. It does this by
 providing wrapper classes around the key Clingo classes:
 
 * ``Control`` is the heart of the interface to the reasoner and determines when
@@ -43,13 +43,13 @@ returned. It also allows for incremental solving, where a ground program can be
 extended and solved repeatedly, as well as both synchronous and asynchronous
 solving modes. These featuers are documented in the `Clingo Control API
 <https://potassco.org/clingo/python-api/current/clingo.html#Control>`_ so we
-only highlight the changes that ClORM introduces.
+only highlight the changes that Clorm introduces.
 
-ClORM add, or overloads, the following member functions:
+Clorm add, or overloads, the following member functions:
 
-* ``__init__()``. ClORM adds an optional ``control_`` parameter that is mutually
+* ``__init__()``. Clorm adds an optional ``control_`` parameter that is mutually
   exclusive with all other parameters. This allows a ``clingo.Control`` object
-  to be passed to the wrapper and is a mechanism to allow ClORM to be used even
+  to be passed to the wrapper and is a mechanism to allow Clorm to be used even
   when Python is embedded within Clingo. See the example
   ``embedded_quickstart.lp`` for a more detailed example, but the basics are
   that a Control object is passed to the embedded ``main`` function which is
@@ -84,12 +84,12 @@ ClORM add, or overloads, the following member functions:
 
 * ``solve()``. This function provides a rich set of options for calling the
   solver and returning the results. These parameters are documented in the
-  Clingo API. ClORM modifies this interface in three ways:
+  Clingo API. Clorm modifies this interface in three ways:
 
   - ``assumptions`` parameter. As well as taking a list of ``clingo.Symbol``
-    objects, ClORM also allows the assumptions to be specified as a list of
+    objects, Clorm also allows the assumptions to be specified as a list of
     ``clorm.Predicate`` objects or a single ``clorm.FactBase`` object.
-  - ``on_model`` callback parameter. ClORM modifies this interface so that a
+  - ``on_model`` callback parameter. Clorm modifies this interface so that a
     ``clorm.clingo.Model`` is pass to the callback function.
   - If the parameter ``yield_=True`` is specified then the return value of the
     function is a ``clorm.clingo.SolveHandle`` object. This object iterates over
@@ -107,8 +107,8 @@ Clingo ``Model``
 The `Clingo Model
 <https://potassco.org/clingo/python-api/current/clingo.html#Model>`_ object
 encapsulates an ASP model and the associated meta-data. It is passed to the
-``Clingo.solve(on_model=on_model)`` callback. ClORM wraps the ``Model`` class to
-provide a mechanism to extract ClORM facts from the model. The added and
+``Clingo.solve(on_model=on_model)`` callback. Clorm wraps the ``Model`` class to
+provide a mechanism to extract Clorm facts from the model. The added and
 modified functions are:
 
 * ``facts(self, factbase, atoms=False, terms=False, shown=False,
@@ -136,14 +136,14 @@ The `Clingo SolveHandle
 <https://potassco.org/clingo/python-api/current/clingo.html#Model>`_ object
 provides a mechanism for iterating over the models when the ``yield_=True``
 options is specified to the ``Control.solve`` function. The various iterator
-functions are modified by ClORM, but its operations should be transparent to the
+functions are modified by Clorm, but its operations should be transparent to the
 user.
 
 Monkey-patching
 ---------------
 
-ClORM provides `monkey patching <https://en.wikipedia.org/wiki/Monkey_patch>`_
-of the ``Control`` class so that ClORM can be integrated into an existing code
+Clorm provides `monkey patching <https://en.wikipedia.org/wiki/Monkey_patch>`_
+of the ``Control`` class so that Clorm can be integrated into an existing code
 base with minimal effort.
 
 .. code-block:: python

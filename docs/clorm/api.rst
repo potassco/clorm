@@ -1,7 +1,7 @@
 API Documentation
 =================
 
-The heart of the ClORM ORM involves defining the mapping from *ground
+The heart of the Clorm ORM involves defining the mapping from *ground
 predicates* to member variables of a Python object. There are two aspects to
 this: *fields*, that define how *logical terms* are mapped to Python objects,
 and *predicate* definitions, that define predicate and function names, their
@@ -26,7 +26,7 @@ Predicates and Complex Terms
 ----------------------------
 
 In logical terminology predicates and complex terms are both instances of *non
-logical symbols*. The ClORM implementation captures this in the
+logical symbols*. The Clorm implementation captures this in the
 ``NonLogicalSymbol`` class with ``Predicate`` and ``ComplexTerm`` simply being
 aliases.
 
@@ -64,7 +64,7 @@ query mechanism for accessing elements.
 Calling Python From an ASP Program
 ----------------------------------
 
-ClORM provides two decorator functions that make it easy to call Python from
+Clorm provides two decorator functions that make it easy to call Python from
 within an ASP program. These decorators wrap a function (or method) with some
 type conversion code that takes care of converting from intutive Python types to
 Clingo acceptable types.
@@ -84,8 +84,8 @@ It may also be useful to deal with a predeclared type cast signature.
 Integration with the Solver
 ---------------------------
 
-To simplify the interaction with the Clingo solver, ClORM provides a ``clingo``
-replacement module that offers better integration with ClORM facts and fact
+To simplify the interaction with the Clingo solver, Clorm provides a ``clingo``
+replacement module that offers better integration with Clorm facts and fact
 bases. This module simply wraps and extends a few key Clingo classes.
 
 Instead of:

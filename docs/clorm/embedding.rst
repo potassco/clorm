@@ -2,7 +2,7 @@ Embedding Python into ASP
 =========================
 
 As well as providing an API for calling the Clingo solver from Python, Clingo
-also supports embedding Python function calls into an ASP program. ClORM
+also supports embedding Python function calls into an ASP program. Clorm
 supports calling Python from an ASP program in two ways: it can generate
 templates to perform type conversion between Python and ASP data, and it
 provides a library of re-usable components.
@@ -43,7 +43,7 @@ list of outputs converted back into ``Clingo.String`` symbols.
 	   pystart += inc
        return tmp
 
-ClORM provides a way to simplify this data translation by declaring a function
+Clorm provides a way to simplify this data translation by declaring a function
 *type case signature* and using the signature to generate wrapper Python code
 that performs the required conversions. The code above can be replaced with:
 
@@ -83,12 +83,12 @@ While the above code is arguably easier to read than the raw version it does
 require more lines of code; although in this case it could be argued that the
 resulting simplified loop within the function can more easily be simplified by
 turning in into a list comprehension statement.  In any case, as the objects
-being dealt with become more complicated, the ClORM approach becomes more
+being dealt with become more complicated, the Clorm approach becomes more
 appealing.
 
 For example, if instead of a list of date encoded string, we want to return a
 range as a list of enumerated dates (i.e., consisting of an integer-date pair
-starting at 0) the corresponding ClORM version adds very little overhead.
+starting at 0) the corresponding Clorm version adds very little overhead.
 
 .. code-block:: python
 
@@ -141,7 +141,7 @@ Re-usable Components
 --------------------
 
 Building on the easy with which predicates and complex terms can be defined
-using ClORM, a second goal of this project is to maintain a library of re-usable
+using Clorm, a second goal of this project is to maintain a library of re-usable
 ASP components.
 
 While it remains to be seen whether or not there is a genuine need or desire for

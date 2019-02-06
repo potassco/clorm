@@ -920,7 +920,7 @@ def _get_term_comparators(comparator):
 class Placeholder(abc.ABC):
     """An abstract class for defining parameterised queries.
 
-    Currently, ClORM supports 4 placeholders: ph1\_, ph2\_, ph3\_, ph4\_. These
+    Currently, Clorm supports 4 placeholders: ph1\_, ph2\_, ph3\_, ph4\_. These
     correspond to the positional arguments of the query execute function call.
 
     """

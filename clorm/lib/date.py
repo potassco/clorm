@@ -1,5 +1,5 @@
 '''A library of Python date functions and terms for use within an ASP
-   program. Some ClORM fields and complex terms are defined as well as functions
+   program. Some Clorm fields and complex terms are defined as well as functions
    to use them.
 
    Any function that is to be called from within an ASP program will be prefixed
@@ -27,7 +27,7 @@ import calendar
 #
 #------------------------------------------------------------------------------
 class DateField(StringField):
-    '''A ClORM DateField that converts to and from a Python date and a clingo string
+    '''A Clorm DateField that converts to and from a Python date and a clingo string
     encoded date.
 
     '''

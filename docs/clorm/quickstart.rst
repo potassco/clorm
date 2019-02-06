@@ -1,7 +1,7 @@
 Quick Start
 ===========
 
-We now highlight the basic features of ClORM by way of a simple example. This
+We now highlight the basic features of Clorm by way of a simple example. This
 example covers:
 
 * defining a simple data model
@@ -18,7 +18,7 @@ program. However, if this is not the case it is worth going to the `Clingo docs
 <https://potassco.org/doc/start>`_ for links to some good reference material.
 
 While we assume that the reader is familiar with ASP, we do not assume that the
-reader is necessarily familiar with the official Clingo Python API. Since ClORM
+reader is necessarily familiar with the official Clingo Python API. Since Clorm
 is designed to be used with the Clingo API we therefore provide some basic
 explanations of the relevant steps necessary to run the Clingo solver. However,
 for more detailed documentation see the `Clingo API
@@ -78,10 +78,10 @@ First the relevant libraries need to be imported.
 
 .. note:: Importing from ``clorm.clingo`` instead of ``clingo``.
 
-   While it is possible to use ClORM with the raw clingo library, a wrapper
+   While it is possible to use Clorm with the raw clingo library, a wrapper
    library is provided to make the integration seemless. This wrapper (should)
    behave identically to the original module, except that it extends the
-   functionality to offer integration with ClORM objects. It is also possible to
+   functionality to offer integration with Clorm objects. It is also possible to
    `monkey patch <https://en.wikipedia.org/wiki/Monkey_patch>`_ Clingo if this
    is your preferred approach (see :ref:`api_clingo_integration`).
 
@@ -90,7 +90,7 @@ Defining the Data Model
 -----------------------
 
 The most important step is to define a data model that maps the Clingo
-predicates to Python classes. ClORM introduces two basic concepts for defining
+predicates to Python classes. Clorm introduces two basic concepts for defining
 the data model: ``Predicate`` and ``FactBase``. ``Predicate`` maps the ASP
 predicates to Python classes, while ``FactBase`` provides a container for
 storing facts of these types.  Both classes must be sub-classed when defining
@@ -211,7 +211,7 @@ that returns a suitable fact base query object.
 
     query=solution.select(Assignment).where(Assignment.driver == ph1_).order_by(Assignment.time)
 
-A ClORM query can be viewed as a simplified version of a traditional database
+A Clorm query can be viewed as a simplified version of a traditional database
 query, and the function call syntax will be familiar to users of Python ORM's
 such as SQLAlchemy or Peewee.
 
@@ -239,7 +239,7 @@ efficient.
 
 Calling ``query.get(d.name)`` executes the query for the given driver. Because
 ``d.name`` is the first parameter it matches against the placeholder ``ph1_`` in
-the query definition. ClORM has four predefined placeholders ``ph1_``,... ,
+the query definition. Clorm has four predefined placeholders ``ph1_``,... ,
 ``ph4_``, but more can be created using the ``ph_`` function.
 
 Running this example produces the following results:
@@ -257,5 +257,5 @@ Running this example produces the following results:
              Item item3 at time 3
     Driver michael is not working today
 
-The above example shows some of the main features of ClORM and how to match the
+The above example shows some of the main features of Clorm and how to match the
 Python data model to the defined ASP predicates.

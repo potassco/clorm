@@ -162,7 +162,7 @@ class _ControlMetaClass(type):
 class Control(object, metaclass=_ControlMetaClass):
     '''Control object for the grounding/solving process.
 
-    Behaves like ``clingo.Control`` but with modifications to deal with ClORM
+    Behaves like ``clingo.Control`` but with modifications to deal with Clorm
     facts and fact bases.
 
     '''

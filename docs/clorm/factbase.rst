@@ -3,7 +3,7 @@ Fact Bases and Querying
 
 
 As well as offering a higher-level interface for mapping ASP facts to Python
-objects, ClORM also provides facilities for dealing with collections of facts.
+objects, Clorm also provides facilities for dealing with collections of facts.
 Whether they are the set of facts that make up the problem instance or,
 alternatively, the facts that constitute the *model* of a problem, an ASP
 application typically does not simply deal with individual facts in isolation.
@@ -11,7 +11,7 @@ application typically does not simply deal with individual facts in isolation.
 A Container for Facts
 ---------------------
 
-ClORM provides the ``FactBase`` as a container class for storing and querying
+Clorm provides the ``FactBase`` as a container class for storing and querying
 facts. This class must be sub-classed, and each sub-class is distinguished by
 the predicates that it can store and the terms for which it maintains an index.
 
@@ -77,7 +77,7 @@ A final feature of the ``FactBase`` constructor is that it implements a delayed
 initialisation feature with the constructor option ``delayed_init=True``. With
 this option the importing of a symbols list is delayed until the first access of
 the object. The usefulness of this option will be discussed later when we
-examine the integration of ClORM with the ASP solver and dealing with ASP
+examine the integration of Clorm with the ASP solver and dealing with ASP
 models.
 
 A Helper for Defining Containers
@@ -89,7 +89,7 @@ definition is modified and the modification is not reflected in the fact base
 definitions.
 
 
-To help with this ClORM provides a ``FactBaseHelper`` class that instantiates a
+To help with this Clorm provides a ``FactBaseHelper`` class that instantiates a
 decorator that can be used to associate a predicate with a helper object.
 
 .. code-block:: python
@@ -132,7 +132,7 @@ contain a number of conditional statements to determine what action to take for
 the given fact; and to store it if some sort of matching needs to take place.
 
 However, this loop-and-test approach leads to unnecessary boilerplate code as
-well as making the purpose of the code more obscure. ClORM's ``FactBase`` is
+well as making the purpose of the code more obscure. Clorm's ``FactBase`` is
 intended to alleviate this problem by offering a database-like query mechanism
 for extracting facts from a model.
 
@@ -163,7 +163,7 @@ exactly one result.
 Queries with Parameters
 ^^^^^^^^^^^^^^^^^^^^^^^
 
-To provide for more flexible queries ClORM introduces placeholders in order to
+To provide for more flexible queries Clorm introduces placeholders in order to
 parameterise queries. Placeholders are named ``ph1_`` to ``ph4_`` and correspond
 to the position of the parameter in the ``get()`` or ``get_unique()`` function
 calls.
@@ -182,7 +182,7 @@ calls.
 Additional placeholders can be defined using the ``ph_`` function:
 ``ph_(5)`` will create a placeholder for the 5th positional argument.
 
-ClORM also supports **named placeholders**, which may be preferable if there are
+Clorm also supports **named placeholders**, which may be preferable if there are
 a larger number of parameters. A named placeholder is created using the ``ph_``
 function with a non-numeric first parameter, and are referenced in the query
 execution using a keyword function parameter. Named placeholders also allow for
@@ -232,12 +232,12 @@ Complex Query Expressions and Indexing
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 In the simple case where the ``Select`` query object contains a ``where`` clause
-that corresponds to a field that is indexed then ClORM is able to use this index
+that corresponds to a field that is indexed then Clorm is able to use this index
 to make query execution efficient.
 
 However, a ``where`` clause can consist of more the one clause and these are
 treated as a conjunction. Its is also possible to construct more complex clauses
-using ClORM supplied ``and_``, ``or_``, and ``not_`` constructs.
+using Clorm supplied ``and_``, ``or_``, and ``not_`` constructs.
 
 .. code-block:: python
 
@@ -266,14 +266,14 @@ the same results.
        results2 = list(query2.get("dave"))
 
 However, while both these queries do generate the same result they are not
-equivalent in behaviour. In particular, the ClORM generated functor has a
+equivalent in behaviour. In particular, the Clorm generated functor has a
 structure that the system is able to analyse and can therefore potentially use
 indexing to improve query efficiency.
 
 However, there is no mechanism to analyse the internal make up of a lambda or
 function. Consequently in these cases the query would have to examine every fact
 in the fact base of the given type and test the function against that
-fact. Hence it is usually preferable to use the ClORM generated clauses where
+fact. Hence it is usually preferable to use the Clorm generated clauses where
 possible.
 
 

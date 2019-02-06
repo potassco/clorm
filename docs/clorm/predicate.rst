@@ -2,7 +2,7 @@ Mapping Predicates
 ==================
 
 The heart of an ORM is defining the mapping between the predicates and Python
-objects. In ClORM this is acheived by sub-classing the ``Predicate`` class and
+objects. In Clorm this is acheived by sub-classing the ``Predicate`` class and
 specifying fields that map to the ASP predicate parameters.
 
 The Basics
@@ -74,7 +74,7 @@ There are some things to note here:
   class name with the first letter translated to lower-case.
 * Field order: the order of declared term defintions in the predicate
   class is important.
-* Field names: besides the Python keywords, ClORM also disallows the following
+* Field names: besides the Python keywords, Clorm also disallows the following
   reserved words: ``raw``, ``meta``, ``clone``, ``Field`` as these are used as
   properties or functions of a ``Predicate`` object.
 * Constant vs string: ``"bob"`` and ``"Sydney uni"`` are both Python strings but
@@ -157,10 +157,10 @@ Here every instantiation of ``AUnary`` corresponds to the ASP fact:
 Field Definitions
 -----------------
 
-ClORM provides a number of standard definitions that specify the mapping between
+Clorm provides a number of standard definitions that specify the mapping between
 Clingo's internal representation (some form of ``Clingo.Symbol``) to more
 natural Python representations.  ASP has three *simple terms*: *integer*,
-*string*, and *constant*, and ClORM provides three definition classes to provide
+*string*, and *constant*, and Clorm provides three definition classes to provide
 a mapping to these fields: ``IntegerField``, ``StringField``, and
 ``ConstantField``.
 
@@ -309,7 +309,7 @@ or a tuple
 
     booking2(20181231, ("Sydney", "Australia)).
 
-To support this flexibility ClORM introduces a ``ComplexTerm`` class.  A complex
+To support this flexibility Clorm introduces a ``ComplexTerm`` class.  A complex
 term is defined identically to a predicate, and similarly needs to be
 sub-classed.
 
@@ -319,7 +319,7 @@ definiton. This field then encodes the translation from a ``Clingo.Symbol``
 object to the ``ComplexTerm`` object.
 
 While it is possible to specify this translation manually by sub-classing
-``RawField`` and specifying the translation functions, fortunately ClORM is able
+``RawField`` and specifying the translation functions, fortunately Clorm is able
 generate such a class automatically from any complex term definition. This class
 is exposed as the class ``Field`` property.
 
@@ -360,7 +360,7 @@ The Clingo API uses ``clingo.Symbol`` objects for dealing with facts; and there
 are a number of functions for creating the appropriate type of symbol objects
 (i.e., ``clingo.Function()``, ``clingo.Number()``, ``clingo.String()``).
 
-In essence the ClORM ``Predicate`` and ``ComplexTerm`` classes simply provide a
+In essence the Clorm ``Predicate`` and ``ComplexTerm`` classes simply provide a
 more convenient and intuitive way of constructing and dealing with these
 ``clingo.Symbol`` objects. In fact the underlying symbols can be accessed using
 the ``raw`` property of a ``Predicate`` or ``ComplexTerm`` object.
@@ -380,7 +380,7 @@ the ``raw`` property of a ``Predicate`` or ``ComplexTerm`` object.
 
    assert address.raw == raw_address
 
-ClORM ``Predicate`` objects can also be constructed from the raw symbol
+Clorm ``Predicate`` objects can also be constructed from the raw symbol
 objects. So assuming the above python code.
 
 .. code-block:: python
@@ -397,7 +397,7 @@ Integrating Clingo Symbols into a Predicate Definition
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 There are some cases when it might be convenient to combine the simplicity and
-the structure of the ClORM predicate interface with the flexibility of the
+the structure of the Clorm predicate interface with the flexibility of the
 underlying Clingo symbol API. For this it is possible to use the
 ``RawField`` base class itself.
 

@@ -4,7 +4,7 @@ Reusable ASP Components
 =======================
 
 This section highlights the library of re-usable ASP components provided by
-ClORM. The goal is to slowly build up a comprehensive set of components that
+Clorm. The goal is to slowly build up a comprehensive set of components that
 could be used to build readable ASP programs that can be easily integrated into
 Python applications.
 
