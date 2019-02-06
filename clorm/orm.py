@@ -14,6 +14,7 @@ import bisect
 import abc
 import functools
 import clingo
+import typing
 
 __all__ = [
     'RawField',
@@ -39,7 +40,9 @@ __all__ = [
     'not_',
     'and_',
     'or_',
-    'Signature'
+    'TypeCastSignature',
+    'make_function_asp_callable',
+    'make_method_asp_callable'
     ]
 
 #------------------------------------------------------------------------------
@@ -1839,15 +1842,15 @@ class FactBase(object, metaclass=_FactBaseMeta):
 
 #------------------------------------------------------------------------------
 # When calling Python functions from ASP you need to do some type
-# conversions. The Signature class can be used to generate a wrapper function
-# that does the type conversion for you.
+# conversions. The TypeCastSignature class can be used to generate a wrapper
+# function that does the type conversion for you.
 # ------------------------------------------------------------------------------
 
-class Signature(object):
-    """Defines a function signature for converting to/from Clingo data types.
+class TypeCastSignature(object):
+    """Defines a signature for converting to/from Clingo data types.
 
     Args:
-      sigs(\*sigs): A list of function signature elements.
+      sigs(\*sigs): A list of signature elements.
 
       - Inputs. Match the sub-elements [:-1] define the input signature while
         the last element defines the output signature. Each input must be a a
@@ -1865,7 +1868,7 @@ class Signature(object):
                      pytocl = lambda dt: dt.strftime("%Y%m%d")
                      cltopy = lambda s: datetime.datetime.strptime(s,"%Y%m%d").date()
 
-           drsig = Signature(DateField, DateField, [DateField])
+           drsig = TypeCastSignature(DateField, DateField, [DateField])
 
            @drsig.make_clingo_wrapper
            def date_range(start, end):
@@ -1881,11 +1884,24 @@ class Signature(object):
 
         """
 
+    @staticmethod
+    def is_input_element(se):
+        '''An input element must be a subclass of RawField'''
+        return inspect.isclass(se) and issubclass(se, RawField)
+
+    @staticmethod
+    def is_return_element(se):
+        '''An output element must be a subclass of RawField or a singleton containing'''
+        if isinstance(se, collections.Iterable):
+            if len(se) != 1: return False
+            return TypeCastSignature.is_input_element(se[0])
+        return TypeCastSignature.is_input_element(se)
+
     def __init__(self, *sigs):
         def _validate_basic_sig(sig):
-            if issubclass(sig, RawField): return True
-            raise TypeError(("Signature element {} must be a RawField "
-                             "subclass".format(s)))
+            if TypeCastSignature.is_input_element(sig): return True
+            raise TypeError(("TypeCastSignature element {} must be a RawField "
+                             "subclass".format(sig)))
 
         self._insigs = sigs[:-1]
         self._outsig = sigs[-1]
@@ -1894,7 +1910,7 @@ class Signature(object):
         for s in self._insigs: _validate_basic_sig(s)
         if isinstance(self._outsig, collections.Iterable):
             if len(self._outsig) != 1:
-                raise ValueError("Return value list signature not a singleton")
+                raise TypeError("Return value list signature not a singleton")
             _validate_basic_sig(self._outsig[0])
         else:
             _validate_basic_sig(self._outsig)
@@ -1917,7 +1933,7 @@ class Signature(object):
         """Function wrapper that adds data type conversions for wrapped function.
 
         Args:
-           fn: A function satisfing the inputs and output defined by the Signature.
+           fn: A function satisfing the inputs and output defined by the TypeCastSignature.
         """
 
         @functools.wraps(fn)
@@ -1934,7 +1950,7 @@ class Signature(object):
         functions.
 
         Args:
-           fn: A function satisfing the inputs and output defined by the Signature.
+           fn: A function satisfing the inputs and output defined by the TypeCastSignature.
 
         """
 
@@ -1945,6 +1961,129 @@ class Signature(object):
             newargs = [ self._input(self._insigs[i], arg) for i,arg in enumerate(args) ]
             return self._output(self._outsig, fn(self_, *newargs))
         return wrapper
+
+#------------------------------------------------------------------------------
+# return and check that function has complete signature
+# annotations. ignore_first is useful when dealing with member functions.
+#------------------------------------------------------------------------------
+
+def _get_annotations(fn, ignore_first=False):
+    fsig = inspect.signature(fn)
+    fsigparam = fsig.parameters
+    annotations = [fsigparam[s].annotation for s in fsigparam]
+    if not annotations and ignore_first:
+        raise TypeError("Empty function signature - cannot ignore first element")
+    annotations.append(fsig.return_annotation)
+    if ignore_first: annotations.pop(0)
+    if inspect.Signature.empty in annotations:
+        raise TypeError("Failed to extract all annotations from {} ".format(fn))
+    return annotations
+
+
+#------------------------------------------------------------------------------
+#------------------------------------------------------------------------------
+
+def make_function_asp_callable(*args):
+    '''A decorator for making a function callable from within an ASP program.
+
+    Can be called in a number of ways. Can be called as a decorator with or
+    without arguments. If called with arguments then the arguments must
+    correspond to a *type cast signature*.
+
+    A *type cast signature* specifies the type conversions required between a
+    python function that is called from within an ASP program and a set of
+    corresponding Python types.
+
+    A type cast signature is specified in terms of the fields that are used to
+    define a predicate.  It is a list of elements where the first n-1 elements
+    correspond to type conversions for a functions inputs and the last element
+    corresponds to the type conversion for a functions output.
+
+    Args:
+      sigs(\*sigs): A list of function signature elements.
+
+      - Inputs. Match the sub-elements [:-1] define the input signature while
+        the last element defines the output signature. Each input must be a a
+        RawField (or sub-class).
+
+      - Output: Must be RawField (or sub-class) or a singleton list
+        containing a RawField (or sub-class).
+
+    If no arguments are provided then the function signature is derived from the
+    function annotations. The function annotations must conform to the signature
+    above.
+
+    If called as a normal function with arguments then the last element must be
+    the function to be wrapped and the previous elements conform to the
+    signature profile.
+
+    '''
+    if len(args) == 0: raise ValueError("Invalid call to decorator")
+    fn = None ; sigs = None
+
+    # If the last element is not a function to be wrapped then a signature has
+    # been specified.
+    if TypeCastSignature.is_return_element(args[-1]):
+        sigs = args
+    else:
+        # Last element needs to be a function
+        fn = args[-1]
+        if not callable(fn): raise ValueError("Invalid call to decorator")
+
+        # if exactly one element then use function annonations
+        if len(args) == 1:
+            sigs = _get_annotations(fn)
+        else:
+            sigs = args[:-1]
+
+    # A decorator function that adjusts for the given signature
+    def _sig_decorate(func):
+        s = TypeCastSignature(*sigs)
+        return s.wrap_function(func)
+
+    # If no function and sig then called as a decorator with arguments
+    if not fn and sigs: return _sig_decorate
+
+    return _sig_decorate(fn)
+
+#------------------------------------------------------------------------------
+#------------------------------------------------------------------------------
+
+def make_method_asp_callable(*args):
+    '''A decorator for making a member function callable from within an ASP program.
+
+    See ``make_function_asp_callable`` for details. The only difference is that
+    the first element of the function is ignore as it is assumed to be the
+    ``self`` or ``cls`` parameter.
+
+    '''
+    if len(args) == 0: raise ValueError("Invalid call to decorator")
+    fn = None ; sigs = None
+
+    # If the last element is not a function to be wrapped then a signature has
+    # been specified.
+    if TypeCastSignature.is_return_element(args[-1]):
+        sigs = args
+    else:
+        # Last element needs to be a function
+        fn = args[-1]
+        if not callable(fn): raise ValueError("Invalid call to decorator")
+
+        # if exactly one element then use function annonations
+        if len(args) == 1:
+            sigs = _get_annotations(fn,True)
+        else:
+            sigs = args[:-1]
+
+    # A decorator function that adjusts for the given signature
+    def _sig_decorate(func):
+        s = TypeCastSignature(*sigs)
+        return s.wrap_method(func)
+
+    # If no function and sig then called as a decorator with arguments
+    if not fn and sigs: return _sig_decorate
+
+    return _sig_decorate(fn)
 
 #------------------------------------------------------------------------------
 # main

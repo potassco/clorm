@@ -19,7 +19,7 @@
 #------------------------------------------------------------------------------
 
 from ..orm import ComplexTerm, IntegerField, StringField,\
-    ConstantField, Signature
+    ConstantField, make_function_asp_callable, make_method_asp_callable
 import datetime
 import calendar
 
@@ -58,16 +58,14 @@ def dow(dt):
 # Function signatures to generate ASP callable functions
 #------------------------------------------------------------------------------
 
-_sig_date_range = Signature(DateField, DateField,
-                           IntegerField, [DateField])
-_sig_dow = Signature(DateField, ConstantField)
-
 #------------------------------------------------------------------------------
 # Generate some wrapper functions
 #------------------------------------------------------------------------------
 
-cl_date_range = _sig_date_range.wrap_function(date_range)
-cl_dow = _sig_dow.wrap_function(dow)
+cl_date_range = make_function_asp_callable(DateField, DateField,
+                                  IntegerField, [DateField],
+                                  date_range)
+cl_dow = make_function_asp_callable(DateField, ConstantField, dow)
 
 #------------------------------------------------------------------------------
 # Enumerated Date is a tuple containing an index and a date.
@@ -149,16 +147,9 @@ class EnumDateRange(object):
         return calendar.day_name[ed.date.weekday()].lower()
 
     # --------------------------------------------------------------------------
-    # Function signatures to generate ASP callable
-    # --------------------------------------------------------------------------
-    _sig_enumdate = Signature(EnumDate.Field)
-    _sig_range = Signature([EnumDate.Field])
-    _sig_dow = Signature(EnumDate.Field, ConstantField)
-
-    # --------------------------------------------------------------------------
     # Generate some wrapper functions
     # --------------------------------------------------------------------------
-    cl_first = _sig_enumdate.wrap_method(first)
-    cl_last = _sig_enumdate.wrap_method(last)
-    cl_enumdate_range = _sig_range.wrap_method(enumdate_range)
-    cl_dow = _sig_dow.wrap_method(dow)
+    cl_first = make_method_asp_callable(EnumDate.Field, first)
+    cl_last = make_method_asp_callable(EnumDate.Field, last)
+    cl_enumdate_range = make_method_asp_callable([EnumDate.Field], enumdate_range)
+    cl_dow = make_method_asp_callable(EnumDate.Field, ConstantField, dow)

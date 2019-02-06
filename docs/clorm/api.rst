@@ -64,9 +64,18 @@ query mechanism for accessing elements.
 Calling Python From an ASP Program
 ----------------------------------
 
-ClORM can help when trying to call Python from within an ASP program.
+ClORM provides two decorator functions that make it easy to call Python from
+within an ASP program. These decorators wrap a function (or method) with some
+type conversion code that takes care of converting from intutive Python types to
+Clingo acceptable types.
 
-.. autoclass:: clorm.Signature
+.. autofunction:: clorm.make_function_asp_callable
+
+.. autofunction:: clorm.make_method_asp_callable
+
+It may also be useful to deal with a predeclared type cast signature.
+
+.. autoclass:: clorm.TypeCastSignature
    :members:
 
 

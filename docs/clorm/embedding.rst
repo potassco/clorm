@@ -7,13 +7,13 @@ supports calling Python from an ASP program in two ways: it can generate
 templates to perform type conversion between Python and ASP data, and it
 provides a library of re-usable components.
 
-Python Function Signatures
---------------------------
+Specifying Type Cast Signatures
+-------------------------------
 
 When calling Python functions from an ASP program the Python function is passed
 ``Clingo.Symbol`` objects and is expected to return either a single
-``Clingo.Symbol`` object or a list of ``Clingo.Symbol`` objects. It is the
-responsibility of the programmer to perform these data type conversions.
+``Clingo.Symbol`` object or a list of ``Clingo.Symbol`` objects. It is then the
+responsibility of the programmer to perform the necessary data type conversions.
 
 For example, consider a Python function ``date_range`` that is given two dates
 and returns a list of the dates within this range. This can be called from
@@ -44,8 +44,8 @@ list of outputs converted back into ``Clingo.String`` symbols.
        return tmp
 
 ClORM provides a way to simplify this data translation by declaring a function
-``Signature`` and then using the signature to generate wrapper Python code that
-performs the required conversions. The code above can be replaced with:
+*type case signature* and using the signature to generate wrapper Python code
+that performs the required conversions. The code above can be replaced with:
 
 .. code-block:: python
 
@@ -56,10 +56,8 @@ performs the required conversions. The code above can be replaced with:
        pytocl = lambda dt: dt.strftime("%Y%m%d")
        cltopy = lambda s: datetime.datetime.strptime(s,"%Y%m%d").date()
 
-   drsig = Signature(DateField, DateField, [DateField])
-
-   @drsig.wrap_function
-   def date_range(start_end):
+   @make_function_asp_callable(DateField, DateField, [DateField])
+   def date_range(start, end):
        inc = timedelta(days=1)
        tmp = []
        while start < end:
@@ -67,19 +65,19 @@ performs the required conversions. The code above can be replaced with:
 	   start += inc
        return tmp
 
-This example uses the power of ClORM to sub-class the ``StringField`` so that
-the date translation to a string is captured by a ``DateField``. The
-``Signature`` object then captures the function signature which accepts two
-dates and returns a list of dates. A Python *decorator* is provided to generate
-the Python data conversion code.
+This example uses the ability to sub-class the ``StringField`` so that the date
+translation to a string is captured by a ``DateField``. The type cast signature
+then captures the function's IO which accepts two dates and returns a list of
+dates. A Python *decorator* is provided to generate the Python data conversion
+code.
 
-The ``Signature`` object provides two types of wrappers:
+Two wrapper functions are provided:
 
-* ``wrap_function``: Wraps a normal function. Every function parameter is
-  converted to and from the clingo equivalent.
-* ``wrap_method``: Wraps a member function. The first paramater is the object's
-  ``self`` parameter so is passed through and only the remaining parameters are
-  converted to their clingo equivalents.
+* ``make_function_asp_callable``: Wraps a normal function. Every function
+  parameter is converted to and from the clingo equivalent.
+* ``make_method_asp_callable``: Wraps a member function. The first paramater is
+  the object's ``self`` parameter so is passed through and only the remaining
+  parameters are converted to their clingo equivalents.
 
 While the above code is arguably easier to read than the raw version it does
 require more lines of code; although in this case it could be argued that the
@@ -105,9 +103,7 @@ starting at 0) the corresponding ClORM version adds very little overhead.
        idx = IntegerField()
        date = DateField()
 
-   drsig = Signature(DateField, DateField, [EnumDate.Field])
-
-   def py_date_range(start_end):
+   def py_date_range(start, end):
        inc = timedelta(days=1)
        tmp = []
        while start < end:
@@ -115,14 +111,31 @@ starting at 0) the corresponding ClORM version adds very little overhead.
 	   start += inc
        return list(enumerate(tmp))
 
-   date_range = drsig.wrap_function(py_date_range)
+   date_range = make_function_asp_callable(DateField, DateField, [EnumDate.Field],
+                                           py_date_range)
 
 The above example shows that even with relatively complex data structures the
 corresponding Python code remains compact and readable. It also highlights how
-``Signature.wrap_function`` and ``Signature.wrap_method`` functions don't need
-to be called as a decorator but can be called as a normal function. This makes
-it extremely easy to maintain two versions of the function; one to be called
-from Python code and another to be called from within Clingo.
+``make_function_asp_callable`` and ``make_method_asp_callable`` don't need to be
+called as a decorator but can be called as a normal function. This makes it
+extremely easy to maintain two versions of the function; one to be called from
+Python code and another to be called from within the ASP program.
+
+These decorators also support the specification of the *type cast signature* as
+part of the function's annotations (Python 3). With annotations a neater
+decoration is possible:
+
+.. code-block:: python
+
+   @make_function_asp_callable
+   def date_range(start : DateField, end : DateField) -> [EnumDate.Field]:
+       inc = timedelta(days=1)
+       tmp = []
+       while start < end:
+           tmp.append(start)
+	   start += inc
+       return list(enumerate(tmp))
+
 
 Re-usable Components
 --------------------

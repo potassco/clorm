@@ -15,7 +15,7 @@ from clorm.orm import \
     ph_, ph1_, ph2_, \
     _MultiMap, _FactMap, \
     _fact_generator, desc, FactBase, FactBaseHelper, \
-    Signature
+    TypeCastSignature, make_function_asp_callable, make_method_asp_callable
 
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
@@ -1354,11 +1354,22 @@ class ORMTestCase(unittest.TestCase):
             date = DateField()
             class Meta: name="edate"
 
-        sig1 = Signature(DateField)     # returns a single date
-        sig2 = Signature([DateField])   # returns a list of dates
-        sig3 = Signature(DateField, DowField)  # takes a date and returns the day or week
+        sig1 = TypeCastSignature(DateField)     # returns a single date
+        sig2 = TypeCastSignature([DateField])   # returns a list of dates
+        sig3 = TypeCastSignature(DateField, DowField)  # takes a date and returns the day or week
 
-        sig4 = Signature(EDate.Field,EDate.Field)    # takes an EDate and returns an EDate
+        sig4 = TypeCastSignature(EDate.Field,EDate.Field)    # takes an EDate and returns an EDate
+
+        # Some bad declarations
+        with self.assertRaises(TypeError) as ctx:
+            sig5 = TypeCastSignature(int)
+        with self.assertRaises(TypeError) as ctx:
+            sig5 = TypeCastSignature(DateField, int)
+        with self.assertRaises(TypeError) as ctx:
+            sig5 = TypeCastSignature(DateField, [int])
+        with self.assertRaises(TypeError) as ctx:
+            sig5 = TypeCastSignature(DateField, [DateField, DateField])
+
         date1 = datetime.date(2018,1,1)
         date2 = datetime.date(2019,2,2)
 
@@ -1388,7 +1399,6 @@ class ORMTestCase(unittest.TestCase):
         self.assertEqual(getedate(edate1.raw), edate1.raw)
         self.assertEqual(getedate(edate2.raw), edate2.raw)
 
-
         # Now test the method wrapper
         class Tmp(object):
             def __init__(self,x,y):
@@ -1402,6 +1412,86 @@ class ORMTestCase(unittest.TestCase):
 
         t = Tmp(date1,date2)
         self.assertEqual(t.cl_get_pair(), [String("20180101"), String("20190202")])
+
+    #--------------------------------------------------------------------------
+    # Test the signature generation for writing python functions that can be
+    # called from ASP.
+    # --------------------------------------------------------------------------
+
+    def test_make_function_asp_callable(self):
+
+        class DateField(StringField):
+            pytocl = lambda dt: dt.strftime("%Y%m%d")
+            cltopy = lambda s: datetime.datetime.strptime(s,"%Y%m%d").date()
+
+        class DowField(ConstantField):
+            pytocl = lambda dt: calendar.day_name[dt.weekday()].lower()
+
+        class EDate(ComplexTerm):
+            idx = IntegerField()
+            date = DateField()
+            class Meta: name="edate"
+
+        date1 = datetime.date(2018,1,1)
+        date2 = datetime.date(2019,2,2)
+
+        edate1 = EDate(idx=1, date=date1)
+        edate2 = EDate(idx=2, date=date2)
+
+        def getdate1() : return date1
+        def getdates() : return [date1, date2]
+
+        # Test wrapper as a normal function and specifying a signature
+        cl_getdate1 = make_function_asp_callable(DateField, getdate1)
+        self.assertEqual(cl_getdate1(), String("20180101"))
+
+        cl_getdates = make_function_asp_callable([DateField], getdates)
+        self.assertEqual(cl_getdates(), [String("20180101"), String("20190202")])
+
+        # Test wrapper as a decorator and specifying a signature
+        @make_function_asp_callable(DateField)
+        def getdate1() : return date1
+        self.assertEqual(getdate1(), String("20180101"))
+
+        @make_function_asp_callable([DateField])
+        def getdates() : return [date1, date2]
+        self.assertEqual(getdates(), [String("20180101"), String("20190202")])
+
+        @make_function_asp_callable
+        def getdates2(x: DateField, y : EDate.Field) -> [DateField]:
+            '''GETDATES2'''
+            return [date1,date2]
+        self.assertEqual(getdates2(String("20180101"), edate1.raw),
+                         [String("20180101"), String("20190202")])
+        self.assertEqual(getdates2.__doc__, '''GETDATES2''')
+
+        with self.assertRaises(TypeError) as ctx:
+            @make_function_asp_callable
+            def getdates3(x,y): return [date1,date2]
+
+        with self.assertRaises(TypeError) as ctx:
+            @make_function_asp_callable
+            def getdates4(x : DateField, y : DateField): return [date1,date2]
+
+        # Now test the method wrapper
+        class Tmp(object):
+            def __init__(self,x,y):
+                self._x = x
+                self._y = y
+
+            def get_pair(self):
+                return [self._x, self._y]
+
+            cl_get_pair = make_method_asp_callable([DateField], get_pair)
+
+            @make_method_asp_callable
+            def get_pair2(self) -> [DateField]:
+                return [self._x, self._y]
+
+        t = Tmp(date1,date2)
+        self.assertEqual(t.cl_get_pair(), [String("20180101"), String("20190202")])
+        self.assertEqual(t.get_pair2(), [String("20180101"), String("20190202")])
+
 #------------------------------------------------------------------------------
 # main
 #------------------------------------------------------------------------------
