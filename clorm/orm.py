@@ -1567,9 +1567,6 @@ class FactBaseHelper(object):
 def _fb_base_constructor(self, *args, **kwargs):
     raise TypeError("{} must be sub-classed ".format(self.__class__.__name__))
 
-#def _fb_base_constructor(self, facts=[], delayed_init=False):
-#    _fb_subclass_constructor(self, facts=facts, delayed_init=delayed_init)
-
 def _fb_subclass_constructor(self, facts=None, symbols=None,
                              raise_on_empty=False, delayed_init=False):
     if facts is not None and symbols is not None:
@@ -1579,19 +1576,6 @@ def _fb_subclass_constructor(self, facts=None, symbols=None,
     else:
         self._delayed_init = lambda : self._init(facts=facts, symbols=symbols,
                                                  raise_on_empty=raise_on_empty)
-
-
-def _fb_base_add(self, fact=None,facts=None):
-    # Always check if we have delayed initialisation
-    if self._delayed_init: self.delayed_init()
-
-    count = 0
-    if fact is not None: count += 1
-    if facts is not None: count += 1
-    if count != 1:
-        raise ValueError(("Must specify exactly one of a "
-                          "'facts' list, or a 'symbols' list"))
-    self._add(fact=fact,facts=facts)
 
 def _fb_subclass_add(self, fact=None,facts=None,symbols=None):
     # Always check if we have delayed initialisation
@@ -1626,7 +1610,6 @@ class _FactBaseMeta(type):
             dct["__init__"] = _fb_base_constructor
             dct[plistname] = []
             dct[ilistname] = []
-#            dct["add"] = _fb_base_add
             return super(_FactBaseMeta, meta).__new__(meta, name, bases, dct)
 
         # Cumulatively inherits the predicates and indexes from the FactBase
