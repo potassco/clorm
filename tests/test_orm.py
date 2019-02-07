@@ -445,12 +445,10 @@ class ORMTestCase(unittest.TestCase):
         with self.assertRaises(ValueError) as ctx:
             bad_fact_pred1 = Fact._unify(bad_fact_symbol1)
 
-        good_fact_pred1.afun.aint = 3
-        self.assertEqual(good_fact_pred1.raw, good_fact_symbol2)
+        # A field value can only be set at construction
+        with self.assertRaises(AttributeError) as ctx:
+            good_fact_pred1.afun.aint = 3
 
-#        ct = Fact.Fun(4,"Bob")
-#        good_fact_pred1.afun = ct
-#        self.assertEqual(good_fact_pred1.raw, good_fact_symbol3)
 
 
     #--------------------------------------------------------------------------

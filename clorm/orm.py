@@ -339,8 +339,7 @@ def desc(field):
 # Implementation of a Field
 # ------------------------------------------------------------------------------
 class _Field(Field):
-    def __init__(self, term_name, term_index, term_defn, no_setter=True):
-        self._no_setter=no_setter
+    def __init__(self, term_name, term_index, term_defn):
         self._term_name = term_name
         self._term_index = term_index
         self._term_defn = term_defn
@@ -376,11 +375,7 @@ class _Field(Field):
 #            return term_defn.cltopy(self._symbol.arguments[idx])
 
     def __set__(self, instance, value):
-        if not self._no_setter:
-            raise AttributeError("can't set attribute")
-        if not isinstance(instance, self._parent_cls):
-            raise TypeError("term accessor doesn't match instance type")
-        instance._term_values[self._term_name] = value
+        raise AttributeError("field is a read-only data descriptor")
 
     def __hash__(self):
         return id(self)
@@ -681,8 +676,8 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
     @property
     def raw(self):
         """Returns the underlying Clingo.Symbol object"""
-#        return self._symbol
-        return self._generate_symbol()
+        return self._symbol
+#        return self._generate_symbol()
 
     @_classproperty
     def Field(cls):
