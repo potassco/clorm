@@ -1577,21 +1577,6 @@ def _fb_subclass_constructor(self, facts=None, symbols=None,
         self._delayed_init = lambda : self._init(facts=facts, symbols=symbols,
                                                  raise_on_empty=raise_on_empty)
 
-def _fb_subclass_add(self, fact=None,facts=None,symbols=None):
-    # Always check if we have delayed initialisation
-    if self._delayed_init: self.delayed_init()
-
-    count = 0
-    if fact is not None: count += 1
-    if facts is not None: count += 1
-    if symbols is not None: count += 1
-    if count != 1:
-        raise ValueError(("Must specify exactly one of a fact argument, a "
-                          "'facts' list, or a 'symbols' list"))
-
-    return self._add(fact=fact,facts=facts,symbols=symbols)
-
-
 
 #------------------------------------------------------------------------------
 # A Metaclass for FactBase
@@ -1644,7 +1629,6 @@ class _FactBaseMeta(type):
                 raise TypeError(("Parent of index {} item not in the predicates "
                                   "list").format(iitem))
         dct["__init__"] = _fb_subclass_constructor
-        dct["add"] = _fb_subclass_add
         return super(_FactBaseMeta, meta).__new__(meta, name, bases, dct)
 
 #------------------------------------------------------------------------------
@@ -1751,6 +1735,20 @@ class FactBase(object, metaclass=_FactBaseMeta):
     #--------------------------------------------------------------------------
     # External member functions
     #--------------------------------------------------------------------------
+    def add(self, fact=None,facts=None,symbols=None):
+        # Always check if we have delayed initialisation
+        if self._delayed_init: self.delayed_init()
+
+        count = 0
+        if fact is not None: count += 1
+        if facts is not None: count += 1
+        if symbols is not None: count += 1
+        if count != 1:
+            raise ValueError(("Must specify exactly one of a fact argument, a "
+                              "'facts' list, or a 'symbols' list"))
+
+        return self._add(fact=fact,facts=facts,symbols=symbols)
+
 
     def select(self, predicate_cls):
         """Create a Select query for a predicate type."""
