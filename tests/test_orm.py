@@ -334,7 +334,7 @@ class ORMTestCase(unittest.TestCase):
     #--------------------------------------------------------------------------
     # Test predicate equality
     # --------------------------------------------------------------------------
-    def test_comparison_operator_overloads(self):
+    def test_predicate_comparison_operator_overloads(self):
 
         f1 = Function("fact", [Number(1)])
         f2 = Function("fact", [Number(2)])
@@ -347,9 +347,23 @@ class ORMTestCase(unittest.TestCase):
         af1_c = Fact(anum=1)
 
         self.assertEqual(f1, af1.raw)
-        self.assertEqual(af1,af1_c)
+        self.assertEqual(af1, af1_c)
         self.assertNotEqual(af1, af2)
         self.assertEqual(str(f1), str(af1))
+
+        # comparing predicates of different types or to a raw should return
+        # false even if the underlying raw symbol is identical
+        class Fact2(Predicate):
+            anum = IntegerField()
+            class Meta: name = "fact"
+        ag1 = Fact2(anum=1)
+
+        self.assertEqual(f1, af1.raw)
+        self.assertEqual(af1.raw, f1)
+        self.assertEqual(af1.raw, ag1.raw)
+        self.assertNotEqual(af1, ag1)
+        self.assertNotEqual(af1, f1)
+        self.assertNotEqual(f1, af1)
 
         self.assertTrue(af1 <  af2)
         self.assertTrue(af1 <=  af2)

@@ -765,74 +765,49 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
     #--------------------------------------------------------------------------
     def __eq__(self, other):
         """Overloaded boolean operator."""
-        self_symbol = self.raw
-        if isinstance(other, NonLogicalSymbol):
-            other_symbol = other.raw
-            return self_symbol == other_symbol
-        elif type(other) == clingo.Symbol:
-            return self_symbol == other
-        else:
-            return NotImplemented
+        if not isinstance(other, self.__class__): return NotImplemented
+        return self.raw == other.raw
 
     def __ne__(self, other):
         """Overloaded boolean operator."""
         result = self.__eq__(other)
-        if result is NotImplemented:
-            return result
+        if result is NotImplemented: return NotImplemented
         return not result
 
     def __lt__(self, other):
         """Overloaded boolean operator."""
-        self_symbol = self.raw
-        if isinstance(other, NonLogicalSymbol):
-            if type(self) != type(other):
-                other_symbol = other.raw
-                return self_symbol < other_symbol
-            else:
-                # the same type so compare each field in order
-                for idx in range(0,self._meta.arity):
-                    selfv = self[idx]
-                    otherv = other[idx]
-                    if selfv == otherv: continue
-                    return selfv < otherv
-                return False
-        elif type(other) == clingo.Symbol:
-            return self_symbol < other
-        else:
-            return NotImplemented
+        if not isinstance(other, self.__class__): return NotImplemented
+
+        # compare each field in order
+        for idx in range(0,self._meta.arity):
+            selfv = self[idx]
+            otherv = other[idx]
+            if selfv == otherv: continue
+            return selfv < otherv
+        return False
 
     def __ge__(self, other):
         """Overloaded boolean operator."""
         result = self.__lt__(other)
-        if result is NotImplemented:
-            return result
+        if result is NotImplemented: return NotImplemented
         return not result
 
     def __gt__(self, other):
         """Overloaded boolean operator."""
-        self_symbol = self.raw
-        if isinstance(other, NonLogicalSymbol):
-            if type(self) != type(other):
-                other_symbol = other.raw
-                return self_symbol > other_symbol
-            else:
-                # the same type so compare each field in order
-                for idx in range(0,self._meta.arity):
-                    selfv = self[idx]
-                    otherv = other[idx]
-                    if selfv == otherv: continue
-                    return selfv > otherv
-                return False
-        elif type(other) == clingo.Symbol:
-            return self_symbol > other
-        else:
-            return NotImplemented
+        if not isinstance(other, self.__class__): return NotImplemented
+
+        # compare each field in order
+        for idx in range(0,self._meta.arity):
+            selfv = self[idx]
+            otherv = other[idx]
+            if selfv == otherv: continue
+            return selfv > otherv
+        return False
 
     def __le__(self, other):
         """Overloaded boolean operator."""
         result = self.__gt__(other)
-        if result is NotImplemented:
-            return result
+        if result is NotImplemented: return NotImplemented
         return not result
 
     def __hash__(self):
