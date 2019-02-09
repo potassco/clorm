@@ -1167,7 +1167,7 @@ class _MultiMap(object):
     def del_values(self, keys, valueset):
         for k in keys:
             vs = self._key2values[k]
-            newvs = [ f for f in vs if f not in valueset ]
+            newvs = set([ f for f in vs if f not in valueset ])
             if not newvs:
                 del self._key2values[k]
                 del self._keylist[bisect.bisect_left(self._keylist, k)]
@@ -1184,8 +1184,8 @@ class _MultiMap(object):
         return self._key2values[key]
 
     def __setitem__(self, key,v):
-        if key not in self._key2values: self._key2values[key] = []
-        self._key2values[key].append(v)
+        if key not in self._key2values: self._key2values[key] = set()
+        self._key2values[key].add(v)
         posn = bisect.bisect_left(self._keylist, key)
         if len(self._keylist) > posn and self._keylist[posn] == key: return
         bisect.insort_left(self._keylist, key)
@@ -1434,14 +1434,14 @@ class _Delete(Delete):
 
 class _FactMap(object):
     def __init__(self, index=[]):
-        self._allfacts = []
+        self._allfacts = set()
         if len(index) == 0:
             self._mmaps = None
         else:
             self._mmaps = collections.OrderedDict( (f, _MultiMap()) for f in index )
 
     def add(self, fact):
-        self._allfacts.append(fact)
+        self._allfacts.add(fact)
         if self._mmaps:
             for term, mmap in self._mmaps.items():
                 mmap[term.__get__(fact)] = fact

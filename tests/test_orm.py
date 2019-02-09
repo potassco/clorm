@@ -855,13 +855,11 @@ class ORMTestCase(unittest.TestCase):
         q = fb.select(Afact).order_by(desc(Afact.str1), Afact.num1)
         self.assertEqual([f3,f2,f4,f1,f5], q.get())
 
-        # FIXUP - FACTBASE SHOULDN'T ALLOW DUPLICATES
-        # In an ASP model you can't get a two identical facts - but factbase
-        # doesn't test for multiple identical objects.
+        # Adding a duplicate object to a factbase shouldn't do anything
         f6 = Afact(num1=5,str1="1",str2="1")
         fb.add(f6)
         q = fb.select(Afact).order_by(desc(Afact.str1), Afact.num1)
-        self.assertEqual([f3,f2,f4,f1,f5,f6], q.get())
+        self.assertEqual([f3,f2,f4,f1,f5], q.get())
 
     #--------------------------------------------------------------------------
     #   Test that select works with order_by for complex term
