@@ -28,6 +28,7 @@ __all__ = [
     'ComplexTerm',
     'Comparator',
     'desc',
+    'unify',
     'Select',
     'Delete',
     'FactBase',
@@ -839,8 +840,19 @@ ComplexTerm=NonLogicalSymbol
 # symbols contains the list of raw clingo.Symbol objects.
 # ------------------------------------------------------------------------------
 
-def _fact_generator(unifiers, symbols):
-    def unify(cls, r):
+def unify(unifiers, symbols):
+    '''Unify a collection of symbols against a list of predicate types.
+
+    Symbols are tested against each unifier until a match is found. Since it is
+    possible to define multiple predicate types that can unify with the same
+    symbol, the order the unifiers differently can produce different results.
+
+    Args:
+      unifiers: a list of predicate classes to unify against
+      symbols: the symbols to unify
+
+    '''
+    def unify_single(cls, r):
         try:
             return cls._unify(r)
         except ValueError:
@@ -850,7 +862,7 @@ def _fact_generator(unifiers, symbols):
     for raw in symbols:
         cls = types.get((raw.name, len(raw.arguments)))
         if not cls: continue
-        f = unify(cls,raw)
+        f = unify_single(cls,raw)
         if f: yield f
 
 
@@ -1692,7 +1704,7 @@ class FactBase(object, metaclass=_FactBaseMeta):
             for f in facts:
                 count += self._add_fact(f)
         elif symbols is not None:
-            for f in _fact_generator(self.predicates, symbols):
+            for f in unify(self.predicates, symbols):
                 count += self._add_fact(f)
         return count
 

@@ -14,7 +14,7 @@ from clorm.orm import \
     not_, and_, or_, _StaticComparator, _get_term_comparators, \
     ph_, ph1_, ph2_, \
     _MultiMap, _FactMap, \
-    _fact_generator, desc, FactBase, FactBaseHelper, \
+    unify, desc, FactBase, FactBaseHelper, \
     TypeCastSignature, make_function_asp_callable, make_method_asp_callable
 
 #------------------------------------------------------------------------------
@@ -131,7 +131,7 @@ class ORMTestCase(unittest.TestCase):
         t1 = Tmp(1,raw1)
         t2 = Tmp(1,raw2)
 
-        self.assertEqual(set([f for f in _fact_generator([Tmp], [rt1,rt2])]),set([t1,t2]))
+        self.assertEqual(set([f for f in unify([Tmp], [rt1,rt2])]),set([t1,t2]))
         self.assertEqual(t1.r1, raw1)
         self.assertEqual(t2.r1, raw2)
 
@@ -471,7 +471,7 @@ class ORMTestCase(unittest.TestCase):
     #  predicate types.
     #  --------------------------------------------------------------------------
 
-    def test_fact_generator(self):
+    def testunify(self):
         raws = [
             Function("afact",[Number(1),String("test")]),
             Function("afact",[Number(2),Number(3),String("test")]),
@@ -508,11 +508,11 @@ class ORMTestCase(unittest.TestCase):
         af3_1=Afact3(anum=1,afun=Afact3.Fun(fnum=1))
         bf_1=Bfact(anum=3,astr="test")
 
-        g1=list(_fact_generator([Afact1],raws))
-        g2=list(_fact_generator([Afact2],raws))
-        g3=list(_fact_generator([Afact3],raws))
-        g4=list(_fact_generator([Bfact],raws))
-        g5=list(_fact_generator([Afact1,Bfact],raws))
+        g1=list(unify([Afact1],raws))
+        g2=list(unify([Afact2],raws))
+        g3=list(unify([Afact3],raws))
+        g4=list(unify([Bfact],raws))
+        g5=list(unify([Afact1,Bfact],raws))
         self.assertEqual([af1_1], g1)
         self.assertEqual([af2_1], g2)
         self.assertEqual([af3_1], g3)
