@@ -14,7 +14,7 @@ from clorm.orm import \
     not_, and_, or_, _StaticComparator, _get_term_comparators, \
     ph_, ph1_, ph2_, \
     _MultiMap, _FactMap, \
-    unify, desc, FactBase, FactBaseHelper, \
+    unify, desc, FactBase, FactBaseBuilder, \
     TypeCastSignature, make_function_asp_callable, make_method_asp_callable
 
 #------------------------------------------------------------------------------
@@ -824,15 +824,12 @@ class ORMTestCase(unittest.TestCase):
             str1=StringField()
             str2=ConstantField()
 
-        class AppDB(FactBase):
-            predicates = [Afact]
-
         f1 = Afact(num1=1,str1="1",str2="5")
         f2 = Afact(num1=2,str1="3",str2="4")
         f3 = Afact(num1=3,str1="5",str2="3")
         f4 = Afact(num1=4,str1="3",str2="2")
         f5 = Afact(num1=5,str1="1",str2="1")
-        fb = AppDB(facts=[f1,f2,f3,f4,f5])
+        fb = FactBase(facts=[f1,f2,f3,f4,f5])
 
         q = fb.select(Afact).order_by(Afact.num1)
         self.assertEqual([f1,f2,f3,f4,f5], q.get())
@@ -878,10 +875,6 @@ class ORMTestCase(unittest.TestCase):
             astr = StringField(index=True)
             cmplx = AComplex.Field(index=True)
 
-        class AppDB(FactBase):
-            predicates = [AFact]
-            indexes = [AFact.astr, AFact.cmplx]
-
         cmplx1 = AComplex(swap=99,norm=1)
         cmplx2 = AComplex(swap=98,norm=2)
         cmplx3 = AComplex(swap=97,norm=3)
@@ -891,7 +884,7 @@ class ORMTestCase(unittest.TestCase):
         f3 = AFact(astr="ccc", cmplx=cmplx3)
         f4 = AFact(astr="ddd", cmplx=cmplx3)
 
-        fb = AppDB(facts=[f1,f2,f3,f4])
+        fb = FactBase(facts=[f1,f2,f3,f4], indexes = [AFact.astr, AFact.cmplx])
 
         q = fb.select(AFact).order_by(AFact.astr)
         self.assertEqual([f1,f2,f3,f4], q.get())
@@ -970,11 +963,7 @@ class ORMTestCase(unittest.TestCase):
         self.assertEqual(d1_num1.execute(4), 2)
         self.assertEqual(set([f for f in s1_num1.get(4)]), set([]))
 
-        class FB(FactBase) :
-            predicates = [Afact]
-            indexes = [Afact.num1, Afact.num2]
-
-        fb1 = FB(facts=[f1,f3, f4,f42,f10])
+        fb1 = FactBase(facts=[f1,f3, f4,f42,f10], indexes = [Afact.num1, Afact.num2])
         d1_num1 = fb1.delete(Afact).where(Afact.num1 == ph1_)
         s1_num1 = fb1.select(Afact).where(Afact.num1 == ph1_)
         self.assertEqual(set([f for f in s1_num1.get(4)]), set([f4,f42]))
@@ -997,9 +986,6 @@ class ORMTestCase(unittest.TestCase):
         class Cfact(Predicate):
             num1=IntegerField()
 
-        class FactSet(FactBase):
-            predicates = [Afact,Bfact,Cfact]
-
         af1 = Afact(1,10,"bbb")
         af2 = Afact(2,20,"aaa")
         af3 = Afact(3,20,"aaa")
@@ -1008,12 +994,12 @@ class ORMTestCase(unittest.TestCase):
         cf1 = Cfact(1)
 
 #        fb = FactBase([Afact.num1, Afact.num2, Afact.str1])
-        fb = FactSet()
+        fb = FactBase()
         facts=[af1,af2,af3,bf1,bf2,cf1]
-        self.assertEqual(fb.add(facts=facts), 6)
+        self.assertEqual(fb.add(facts), 6)
 
         self.assertEqual(set(fb.facts()), set(facts))
-        self.assertEqual(fb.predicate_types(), set([Afact,Bfact,Cfact]))
+        self.assertEqual(fb.predicates, set([Afact,Bfact,Cfact]))
 
         s_af_all = fb.select(Afact)
         s_af_num1_eq_1 = fb.select(Afact).where(Afact.num1 == 1)
@@ -1041,16 +1027,16 @@ class ORMTestCase(unittest.TestCase):
         self.assertEqual(set(s_cf_num1_eq_1.get()), set())
 
         # Test that the select can work with an initially empty factbase
-        fb2 = FactSet()
+        fb2 = FactBase()
         s2 = fb2.select(Afact).where(Afact.num1 == 1)
         self.assertEqual(set(s2.get()), set())
-        fb2.add(facts=[af1,af2])
+        fb2.add([af1,af2])
         self.assertEqual(set(s2.get()), set([af1]))
 
         # Test select with placeholders
 #        fb3 = FactBase([Afact.num1])
-        fb3 = FactSet()
-        self.assertEqual(fb3.add(facts=[af1,af2,af3]),3)
+        fb3 = FactBase()
+        self.assertEqual(fb3.add([af1,af2,af3]),3)
         s3 = fb3.select(Afact).where(Afact.num1 == ph_("num1"))
         self.assertEqual(s3.get_unique(num1=1), af1)
         self.assertEqual(s3.get_unique(num1=2), af2)
@@ -1072,47 +1058,6 @@ class ORMTestCase(unittest.TestCase):
         # Test that the factbase
 
     #--------------------------------------------------------------------------
-    # Test that
-    #--------------------------------------------------------------------------
-    def test_factbase_empty_import(self):
-
-        class Afact(Predicate):
-            num1=IntegerField()
-        class Bfact(Predicate):
-            num1=IntegerField()
-
-        class FB(FactBase):
-            predicates = [Afact]
-
-        af1 = Afact(1)
-        af2 = Afact(2)
-        af3 = Afact(3)
-        bf1 = Bfact(1)
-        bf2 = Bfact(2)
-        raf1 = Function("afact",[Number(1)])
-        raf2 = Function("afact",[Number(2)])
-        raf3 = Function("afact",[Number(3)])
-        rbf1 = Function("bfact",[Number(1)])
-        rbf2 = Function("bfact",[Number(2)])
-
-        self.assertEqual(af1.raw, raf1)
-        fb = FB(facts=[af1,af2,af3,bf1,bf2], raise_on_empty=True)
-        self.assertEqual(len(fb.facts()), 3)
-
-        fb = FB(symbols=[raf1,raf2,raf3,rbf1,rbf2], raise_on_empty=True)
-        self.assertEqual(len(fb.facts()), 3)
-
-        with self.assertRaises(ValueError) as ctx:
-            fb = FB(facts=[bf1,bf2], raise_on_empty=True)
-
-        with self.assertRaises(ValueError) as ctx:
-            fb = FB(symbols=[rbf1,rbf2], raise_on_empty=True)
-
-        # this is ok because we didn't pass any facts or symbols
-        fb = FB(raise_on_empty=True)
-        self.assertEqual(len(fb.facts()), 0)
-
-    #--------------------------------------------------------------------------
     # Test that a factbase only imports from the specified predicates
     #--------------------------------------------------------------------------
 
@@ -1128,51 +1073,56 @@ class ORMTestCase(unittest.TestCase):
         class Cfact(Predicate):
             num1=IntegerField()
 
-        class FactSet(FactBase):
-            predicates = [Afact,Bfact]
-
         af1 = Afact(1,10,"bbb")
         bf1 = Bfact(1,"aaa")
         cf1 = Cfact(1)
 
-        fs1 = FactSet()
-        self.assertEqual(fs1.add(facts=[af1,bf1,cf1]), 2)
+        fs1 = FactBase()
+        self.assertEqual(fs1.add([af1,bf1,cf1]), 3)
         self.assertEqual(fs1.select(Afact).get_unique(), af1)
         self.assertEqual(fs1.select(Bfact).get_unique(), bf1)
+
+        fs2 = FactBase(facts=lambda: [af1,bf1,cf1])
+        self.assertEqual(fs2.select(Afact).get_unique(), af1)
+        self.assertEqual(fs2.select(Bfact).get_unique(), bf1)
 
     #--------------------------------------------------------------------------
     # Test the factbasehelper with double decorators
     #--------------------------------------------------------------------------
-    def test_factbasehelper(self):
+    def test_factbasebuilder(self):
 
-        # Using the FactBaseHelper as a decorator
-        fbh1 = FactBaseHelper()
-        fbh2 = FactBaseHelper()
+        # Using the FactBaseBuilder as a decorator
+        fbb1 = FactBaseBuilder()
+        fbb2 = FactBaseBuilder()
+        fbb3 = FactBaseBuilder(suppress_auto_index=True)
 
         # decorator both
-        @fbh2.register
-        @fbh1.register
+        @fbb3.register
+        @fbb2.register
+        @fbb1.register
         class Afact(Predicate):
             num1=IntegerField(index=True)
             num2=IntegerField()
             str1=StringField()
 
         # decorator without argument
-        @fbh1.register
+        @fbb1.register
         class Bfact(Predicate):
             num1=IntegerField(index=True)
             str1=StringField()
 
-        self.assertEqual(fbh1.predicates, [Afact,Bfact])
-        self.assertEqual(fbh2.predicates, [Afact])
-        self.assertEqual(fbh1.indexes, [Afact.num1,Afact.num1])
-        self.assertEqual(fbh2.indexes, [Afact.num1])
+        self.assertEqual(fbb1.predicates, [Afact,Bfact])
+        self.assertEqual(fbb2.predicates, [Afact])
+        self.assertEqual(fbb3.predicates, [Afact])
+        self.assertEqual(fbb1.indexes, [Afact.num1,Afact.num1])
+        self.assertEqual(fbb2.indexes, [Afact.num1])
+        self.assertEqual(fbb3.indexes, [])
 
     #--------------------------------------------------------------------------
     # Test that subclass factbase works and we can specify indexes
     #--------------------------------------------------------------------------
 
-    def test_factbase_subclasses(self):
+    def test_factbasebuilder_symbols(self):
 
         class Afact(Predicate):
             num1=IntegerField()
@@ -1199,34 +1149,27 @@ class ORMTestCase(unittest.TestCase):
             Function("bfact",[Number(2),String("bbb")]),
             Function("cfact",[Number(1)])
             ]
-
-        class MyFactBase(FactBase):
-            predicates = [Afact, Bfact,Cfact]
+        fbb = FactBaseBuilder(predicates=[Afact,Bfact,Cfact])
 
         # Test the different ways that facts can be added
-        fb = MyFactBase(symbols=raws)
+        fb = fbb.new(symbols=raws)
         self.assertFalse(fb._delayed_init)
-        self.assertEqual(fb.predicate_types(), set([Afact,Bfact,Cfact]))
+        self.assertEqual(fb.predicates, set([Afact,Bfact,Cfact]))
         s_af_all = fb.select(Afact)
         self.assertEqual(set(s_af_all.get()), set([af1,af2,af3]))
 
-        fb = MyFactBase(symbols=raws, delayed_init=True)
+        fb = fbb.new(symbols=raws, delayed_init=True)
         self.assertTrue(fb._delayed_init)
-        self.assertEqual(fb.predicate_types(), set([Afact,Bfact,Cfact]))
+        self.assertEqual(fb.predicates, set([Afact,Bfact,Cfact]))
         s_af_all = fb.select(Afact)
         self.assertEqual(set(s_af_all.get()), set([af1,af2,af3]))
 
-        fb = MyFactBase()
-        self.assertEqual(fb.add(symbols=raws), 6)
+        fb = FactBase()
+        self.assertEqual(fb.add([af1,af2,af3]),3)
         s_af_all = fb.select(Afact)
         self.assertEqual(set(s_af_all.get()), set([af1,af2,af3]))
 
-        fb = MyFactBase()
-        self.assertEqual(fb.add(facts=[af1,af2,af3]),3)
-        s_af_all = fb.select(Afact)
-        self.assertEqual(set(s_af_all.get()), set([af1,af2,af3]))
-
-        fb = MyFactBase()
+        fb = FactBase()
         self.assertEqual(fb.add(af1),1)
         self.assertEqual(fb.add(af2),1)
         self.assertEqual(fb.add(af3),1)
@@ -1234,116 +1177,24 @@ class ORMTestCase(unittest.TestCase):
         self.assertEqual(set(s_af_all.get()), set([af1,af2,af3]))
 
         # Test that adding symbols can handle symbols that don't unify
-        class MyFactBase2(FactBase):
-            predicates = [Afact]
-
-        fb = MyFactBase2(symbols=raws)
-        self.assertEqual(fb.predicate_types(), set([Afact]))
+        fb = fbb.new(symbols=raws)
         s_af_all = fb.select(Afact)
         self.assertEqual(set(s_af_all.get()), set([af1,af2,af3]))
 
-        # Change of behaviour - this should fail because Cfact is not part of
-        # MyFactBase2
-        with self.assertRaises(KeyError) as ctx:
-            s_cf_num1_eq_1 = fb.select(Cfact).where(Cfact.num1 == 1)
-            self.assertEqual(set(s_cf_num1_eq_1.get()), set([]))
-
-        # Test badly specified FactBase subclasses
-        with self.assertRaises(TypeError) as ctx:
-            class BadFactBase(FactBase):
-                pass
-        with self.assertRaises(TypeError) as ctx:
-            class BadFactBase(FactBase):
-                predicates = [Afact]
-                indexes = [Afact.num1, Bfact.num1]
-
-        with self.assertRaises(TypeError) as ctx:
-            class BadFactBase(FactBase):
-                predicates = None
-
-        with self.assertRaises(TypeError) as ctx:
-            class BadFactBase(FactBase):
-                predicates = [Afact]
-                indexes = None
-
+        return
 
         # Test the specification of indexes
         class MyFactBase3(FactBase):
             predicates = [Afact, Bfact]
-            indexes = [Afact.num1, Bfact.num1]
 
-        fb = MyFactBase3()
-        self.assertEqual(fb.add(symbols=raws), 5)
+        fbb = FactBaseBuilder(predicates=[Afact,Bfact,Cfact],
+                              indexes=[Afact.num1, Bfact.num1])
 
+        fb = fbb.new(symbols=raws)
         s = fb.select(Afact).where(Afact.num1 == 1)
         self.assertEqual(s.get_unique(), af1)
         s = fb.select(Bfact).where(Bfact.num1 == 1)
         self.assertEqual(s.get_unique(), bf1)
-
-
-    #--------------------------------------------------------------------------
-    # Test that subclass factbase works and we can specify indexes
-    #--------------------------------------------------------------------------
-
-    def test_factbase_subsubclasses(self):
-
-        class Afact(Predicate):
-            num1=IntegerField()
-            str1=StringField()
-        class Bfact(Predicate):
-            num1=IntegerField()
-            str1=StringField()
-
-        af1 = Afact(1,"bbb")
-        af2 = Afact(2,"aaa")
-        bf1 = Bfact(1,"bbb")
-        bf2 = Bfact(2,"aaa")
-
-        facts = [af1,af2,bf1,bf2]
-        raws = [
-            Function("afact",[Number(1), String("bbb")]),
-            Function("afact",[Number(2), String("aaa")]),
-            Function("bfact",[Number(1),String("bbb")]),
-            Function("bfact",[Number(2),String("aaa")]),
-            ]
-
-        class FBA(FactBase):
-            predicates = [Afact]
-
-        class FBB(FactBase):
-            predicates = [Bfact]
-
-        self.assertEqual(FBA.predicates, [Afact])
-        self.assertEqual(FBB.predicates, [Bfact])
-        self.assertEqual(FBA.indexes,[])
-        self.assertEqual(FBB.indexes,[])
-
-        # NOTE: I don't think there is a good reason for multiple inheritence
-        # but still test that it does actually work as expected.
-        class FBAB(FBA,FBB):
-            pass
-
-        self.assertEqual(FBAB.predicates, [Afact,Bfact])
-        self.assertEqual(FBAB.indexes,[])
-
-        class FBAIdx(FBA):
-            indexes=[Afact.num1]
-
-        self.assertEqual(FBAIdx.predicates, [Afact])
-        self.assertEqual(FBAIdx.indexes,[Afact.num1])
-
-        class FBBIdx(FBB):
-            indexes=[Bfact.num1]
-
-        self.assertEqual(FBBIdx.predicates, [Bfact])
-        self.assertEqual(FBBIdx.indexes,[Bfact.num1])
-
-        class FBABIdx(FBAIdx,FBBIdx):
-            pass
-
-        self.assertEqual(FBABIdx.predicates, [Afact,Bfact])
-        self.assertEqual(FBABIdx.indexes,[Afact.num1,Bfact.num1])
-
 
     #--------------------------------------------------------------------------
     # Test the signature generation for writing python functions that can be

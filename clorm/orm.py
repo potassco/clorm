@@ -32,7 +32,7 @@ __all__ = [
     'Select',
     'Delete',
     'FactBase',
-    'FactBaseHelper',
+    'FactBaseBuilder',
     'ph_',
     'ph1_',
     'ph2_',
@@ -1492,18 +1492,20 @@ class _FactMap(object):
 
 
 #------------------------------------------------------------------------------
-# FactBaseHelper offers a decorator interface for gathering predicate and index
+# FactBaseBuilder offers a decorator interface for gathering predicate and index
 # definitions to be used in defining a FactBase subclass.
 # ------------------------------------------------------------------------------
-class FactBaseHelper(object):
-    def __init__(self, suppress_auto_index=False):
+class FactBaseBuilder(object):
+    def __init__(self, predicates=[], indexes=[], suppress_auto_index=False):
         self._predicates = []
         self._indexes = []
         self._predset = set()
         self._indset = set()
         self._suppress_auto_index = suppress_auto_index
+        for pred in predicates: self._register_predicate(pred)
+        for field in indexes: self._register_index(field)
 
-    def register_predicate(self, cls):
+    def _register_predicate(self, cls):
         if cls in self._predset: return    # ignore if already registered
         if not issubclass(cls, Predicate):
             raise TypeError("{} is not a Predicate sub-class".format(cls))
@@ -1511,36 +1513,42 @@ class FactBaseHelper(object):
         self._predicates.append(cls)
         if self._suppress_auto_index: return
 
-        # Register the terms that have the index flag set
-        for term in cls.meta.terms:
+        # Register the fields that have the index flag set
+        for field in cls.meta.terms:
             with contextlib.suppress(AttributeError):
-                if term.term_defn.index: self.register_index(term)
+                if field.term_defn.index: self._register_index(field)
 
-    def register_index(self, term):
-        if term in self._indset: return    # ignore if already registered
-        if isinstance(term, Field) and term.parent in self.predicates:
-            self._indset.add(term)
-            self._indexes.append(term)
+    def _register_index(self, field):
+        if field in self._indset: return    # ignore if already registered
+        if isinstance(field, Field) and field.parent in self.predicates:
+            self._indset.add(field)
+            self._indexes.append(field)
         else:
-            raise TypeError("{} is not a predicate term for one of {}".format(
-                term, [ p.__name__ for p in self.predicates ]))
+            raise TypeError("{} is not a predicate field for one of {}".format(
+                field, [ p.__name__ for p in self.predicates ]))
 
-    def register(self, *args):
-        def wrapper(cls):
-            self.register_predicate(cls)
-            terms = [ getattr(cls, fn) for fn in args ]
-            for f in terms: self.register_index(f)
-            return cls
+    def register(self, cls):
+        self._register_predicate(cls)
+        return cls
 
-        if len(args) == 1 and inspect.isclass(args[0]):
-            self.register_predicate(args[0])
-            return args[0]
+    def new(self, facts=None, symbols=None, delayed_init=False, raise_on_empty=False):
+        if not symbols and (delayed_init or raise_on_empty):
+            raise ValueError("'delayed_init' and 'raise_on_empty' only valid for symbols")
+        if symbols and facts:
+            raise ValueError("'symbols' and 'facts' options are mutually exclusive")
+
+        def _populate():
+            facts=unify(self.predicates, symbols)
+            if not facts and raise_on_empty:
+                raise ValueError("FactBase creation: failed to unify any symbols")
+            return facts
+
+        if delayed_init:
+            return FactBase(facts=_populate, indexes=self.indexes)
+        if symbols:
+            return FactBase(facts=_populate(), indexes=self._indexes)
         else:
-            return wrapper
-
-    def create_class(self, name):
-        return type(name, (FactBase,),
-                    { "predicates" : self.predicates, "indexes" : self.indexes })
+            return FactBase(facts=facts, indexes=self._indexes)
 
     @property
     def predicates(self): return self._predicates
@@ -1548,164 +1556,52 @@ class FactBaseHelper(object):
     def indexes(self): return self._indexes
 
 #------------------------------------------------------------------------------
-# Functions to be added to FactBase class or sub-class definitions
-#------------------------------------------------------------------------------
-
-def _fb_base_constructor(self, *args, **kwargs):
-    raise TypeError("{} must be sub-classed ".format(self.__class__.__name__))
-
-def _fb_subclass_constructor(self, facts=None, symbols=None,
-                             raise_on_empty=False, delayed_init=False):
-    if facts is not None and symbols is not None:
-        raise ValueError("'facts' and 'symbols' are mutually exclusive arguments")
-    if not delayed_init:
-        self._init(facts=facts, symbols=symbols, raise_on_empty=raise_on_empty)
-    else:
-        self._delayed_init = lambda : self._init(facts=facts, symbols=symbols,
-                                                 raise_on_empty=raise_on_empty)
-
-
-#------------------------------------------------------------------------------
-# A Metaclass for FactBase
-#------------------------------------------------------------------------------
-
-class _FactBaseMeta(type):
-    #--------------------------------------------------------------------------
-    # Allocate the new metaclass
-    #--------------------------------------------------------------------------
-    def __new__(meta, name, bases, dct):
-        plistname = "predicates"
-        ilistname = "indexes"
-
-        # Creating the FactBase class itself
-        if name == "FactBase":
-            dct["__init__"] = _fb_base_constructor
-            dct[plistname] = []
-            dct[ilistname] = []
-            return super(_FactBaseMeta, meta).__new__(meta, name, bases, dct)
-
-        # Cumulatively inherits the predicates and indexes from the FactBase
-        # base classes - which we can then override.  Use ordered dict to
-        # preserve ordering
-        p_oset = collections.OrderedDict()
-        i_oset = collections.OrderedDict()
-        for bc in bases:
-            if not issubclass(bc, FactBase): continue
-            for p in bc.predicates: p_oset[p] = p
-            for i in bc.indexes: i_oset[i] = i
-        if plistname not in dct:
-            dct[plistname] = [ p for p,_ in p_oset.items() ]
-        if ilistname not in dct:
-            dct[ilistname] = [ i for i,_ in i_oset.items() ]
-
-        # Make sure "predicates" is defined and is a non-empty list
-        pset = set()
-        if plistname not in dct:
-            raise TypeError("Class definition missing 'predicates' specification")
-        if not dct[plistname]:
-            raise TypeError("Class definition empty 'predicates' specification")
-        for pitem in dct[plistname]:
-            pset.add(pitem)
-            if not issubclass(pitem, Predicate):
-                raise TypeError("Non-predicate class {} in list".format(pitem))
-
-        # Validate the "indexes" list (and define if if it doesn't exist)
-        if ilistname not in dct: dct[ilistname] = []
-        for iitem in dct[ilistname]:
-            if iitem.parent not in pset:
-                raise TypeError(("Parent of index {} item not in the predicates "
-                                  "list").format(iitem))
-        dct["__init__"] = _fb_subclass_constructor
-        return super(_FactBaseMeta, meta).__new__(meta, name, bases, dct)
-
-#------------------------------------------------------------------------------
 # A FactBase consisting of facts of different types
 #------------------------------------------------------------------------------
 
-class FactBase(object, metaclass=_FactBaseMeta):
+class FactBase(object):
     """A fact base is a container for facts that must be subclassed.
 
     ``FactBase`` can be thought of as a minimalist database. It stores facts for
-    a given set of ``Predicate`` types (where a predicate type loosely
-    corresponding to a *table* in a database) and allows for certain fields to
-    be indexed in order to perform more efficient queries.
-
-    Subclassing ``FactBase`` is done by specifying a ``predicates`` and
-    ``indexes`` variables; cntaining a list of ``Predicate`` sub-classes to
-    include and a list ``indexes`` of fields to index (respectively).
-
-    .. code-block:: python
-
-          class Predicate1(Predicate):
-              anum = IntegerField(index=1)
-              astr = String()
-
-          class Predicate2(Predicate):
-              # ...
-
-         class MyFactBase(FactBase):
-              predicates = [Predicate1, Predicate2]
-              indexes = [Predicate1.anum]
-
-    See the ``FactBaseHelper`` for a helper class to simplify the process of
-    creating a ``FactBase`` sub-class.
+    ``Predicate`` types (where a predicate type loosely corresponding to a
+    *table* in a database) and allows for certain fields to be indexed in order
+    to perform more efficient queries.
 
     Args:
       facts(Predicate): a list of facts (predicate instances) to add to the fact
           base. Default None.
-      symbols(Clingo.Symbol): a list of symbols which are unified against the
-         given Predicate types. Symbols that fail to unify are ignored. Default
-         None.
-      delayed_init(bool): whether to perform delayed intialisation. Default
-         False.
-
-    The ``facts`` and ``symbols`` parameters in the constructor are mutually
-    exclusive.
+      indexes(Field): a list of fields that are to be indexed.
 
     """
-
-    # A special purpose initialiser so that we can do delayed initialisation
-    def _init(self, facts=None, symbols=None, raise_on_empty=False):
-
-        # Create _FactMaps for the predicate types with indexed terms
-        grouped = {}
-        for term in self.indexes:
-            if term.parent not in grouped: grouped[term.parent] = []
-            grouped[term.parent].append(term)
-        for p in self.predicates:
-            if p not in grouped: grouped[p] = []
-        self._factmaps = { pt : _FactMap(fs) for pt, fs in grouped.items() }
-
-        # Check the symbols list and raise an error if it is empty
-        if raise_on_empty:
-            if facts is not None and not facts:
-                raise ValueError("FactBase empty set of input facts")
-            if symbols is not None and not symbols:
-                raise ValueError("FactBase empty set of input symbols")
-
-        # try to add the facts or symbols
-        if facts or symbols:
-            count = self._add(facts=facts, symbols=symbols)
-            # Check that something was added
-            if raise_on_empty and count == 0:
-                raise ValueError("FactBase failed to import any facts or symbols")
-
-        # flag that initialisation has taken place
-        self._delayed_init = None
 
     #--------------------------------------------------------------------------
     # Internal member functions
     #--------------------------------------------------------------------------
 
-    def _add(self, fact=None, facts=None, symbols=None):
+    # A special purpose initialiser so that we can do delayed initialisation
+    def _init(self, facts=None, indexes=[]):
+        # Create _FactMaps for the predicate types with indexed terms
+        grouped = {}
+        for field in indexes:
+            if field.parent not in grouped: grouped[field.parent] = []
+            grouped[field.parent].append(field)
+        self._factmaps = { pt : _FactMap(fields) for pt, fields in grouped.items() }
+
+        # flag that initialisation has taken place
+        self._delayed_init = None
+
+        if facts is None: return
+
+        # If it is delayed initialisation
+        if callable(facts): facts = facts()
+
+        self._add(facts)
+
+
+    def _add(self, arg):
+        if isinstance(arg, Predicate): return self._add_fact(arg)
         count = 0
-        if fact is not None: return self._add_fact(fact)
-        elif facts is not None:
-            for f in facts:
-                count += self._add_fact(f)
-        elif symbols is not None:
-            for f in unify(self.predicates, symbols):
-                count += self._add_fact(f)
+        for f in arg: count += self._add_fact(f)
         return count
 
     def _add_fact(self, fact):
@@ -1713,28 +1609,28 @@ class FactBase(object, metaclass=_FactBaseMeta):
         if not issubclass(predicate_cls,Predicate):
             raise TypeError(("type of object {} is not a Predicate "
                              "subclass").format(fact))
-        if predicate_cls not in self._factmaps: return 0
-#            self._factmaps[predicate_cls] = _FactMap()
+        if predicate_cls not in self._factmaps:
+            self._factmaps[predicate_cls] = _FactMap()
         self._factmaps[predicate_cls].add(fact)
         return 1
-
 
     #--------------------------------------------------------------------------
     # External member functions
     #--------------------------------------------------------------------------
-    def add(self, fact=None,facts=None,symbols=None):
+    def __init__(self, facts=None, indexes=[]):
+        self._delayed_init=None
+        if callable(facts):
+            def delayed_init():
+                self._init(facts, indexes)
+            self._delayed_init=delayed_init
+        else:
+            self._init(facts, indexes)
+
+
+    def add(self, arg):
         # Always check if we have delayed initialisation
         if self._delayed_init: self.delayed_init()
-
-        count = 0
-        if fact is not None: count += 1
-        if facts is not None: count += 1
-        if symbols is not None: count += 1
-        if count != 1:
-            raise ValueError(("Must specify exactly one of a fact argument, a "
-                              "'facts' list, or a 'symbols' list"))
-
-        return self._add(fact=fact,facts=facts,symbols=symbols)
+        return self._add(arg)
 
 
     def select(self, predicate_cls):
@@ -1743,6 +1639,8 @@ class FactBase(object, metaclass=_FactBaseMeta):
         # Always check if we have delayed initialisation
         if self._delayed_init: self._delayed_init()
 
+        if predicate_cls not in self._factmaps:
+            self._factmaps[predicate_cls] = _FactMap()
         return self._factmaps[predicate_cls].select()
 
     def delete(self, predicate_cls):
@@ -1751,14 +1649,16 @@ class FactBase(object, metaclass=_FactBaseMeta):
         # Always check if we have delayed initialisation
         if self._delayed_init: self._delayed_init()
 
+        if predicate_cls not in self._factmaps:
+            self._factmaps[predicate_cls] = _FactMap()
         return self._factmaps[predicate_cls].delete()
 
-    def predicate_types(self):
-        """Return the list of predicate types that this fact base can deal with."""
-
+    @property
+    def predicates(self):
+        """Return the list of predicate types that this fact base contains."""
         # Always check if we have delayed initialisation
         if self._delayed_init: self._delayed_init()
-        return set(self._factmaps.keys())
+        return set([pt for pt, fm in self._factmaps.items() if fm.facts()])
 
     def clear(self):
         """Clear the fact base of all facts."""
