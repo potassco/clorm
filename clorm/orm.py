@@ -859,11 +859,13 @@ def unify(unifiers, symbols):
             return None
 
     types = {(cls.meta.name, cls.meta.arity) : cls for cls in unifiers}
+    facts = []
     for raw in symbols:
         cls = types.get((raw.name, len(raw.arguments)))
         if not cls: continue
         f = unify_single(cls,raw)
-        if f: yield f
+        if f: facts.append(f)
+    return facts
 
 
 #------------------------------------------------------------------------------

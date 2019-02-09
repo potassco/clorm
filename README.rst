@@ -76,7 +76,7 @@ First the relevant libraries need to be imported.
 
 .. code-block:: python
 
-   from clorm import Predicate, ConstantField, IntegerField, FactBaseHelper, ph1_
+   from clorm import Predicate, ConstantField, IntegerField, FactBaseBuilder, ph1_
    from clorm.clingo import Control
 
 Note: Importing from ``clorm.clingo`` instead of ``clingo``.
@@ -92,30 +92,30 @@ Note: Importing from ``clorm.clingo`` instead of ``clingo``.
 The next step is to define a data model that maps the Clingo predicates to
 Python classes. Clorm introduces two basic concepts for defining the data model:
 ``Predicate`` and ``FactBase``. ``Predicate`` maps the ASP predicates to Python
-classes, while ``FactBase`` provides a container for storing facts of these
-types.  Both classes must be sub-classed when defining the data model. A helper
-class ``FactBaseHelper`` is provided for simplifying the construction of the
-``FactBase`` sub-class.
+classes and must be sub-classed, while ``FactBase`` provides a container for
+storing facts.
+
+A helper class ``FactBaseBuilder`` is provided for alternative ways of creating
+FactBases (e.g., building a fact base from raw Clingo ``Symbol`` objects).
+
 
 .. code-block:: python
 
-   fbh = FactBaseHelper()
+   fbb = FactBaseBuilder()
 
-   @fbh.register
+   @fbb.register
    class Driver(Predicate):
        name=ConstantField()
 
-   @fbh.register
+   @fbb.register
    class Item(Predicate):
        name=ConstantField()
 
-   @fbh.register
+   @fbb.register
    class Assignment(Predicate):
        item=ConstantField()
        driver=ConstantField(index=True)
        time=IntegerField()
-
-   DB = fbh.create_class("DB")
 
 The above code defines three classes to match the ASP program's input and output
 predicates.
@@ -128,15 +128,13 @@ Python object. The number of fields must match the predicate arity and the order
 in which they are declared must also match the position of each term in the ASP
 predicate.
 
-The ``FactBaseHelper`` provides a decorator that registers the predicate class
-with the helper. It then provides a member function for dynamically defining a
-``FactBase`` sub-class. Here we define the class ``DB`` for storing predicate
-instance (i.e., the *facts*) for these types.
-
-You will notice that the declaration of the ``driver`` field contains the option
-``index=True``. This ensures that the ``driver`` field is indexed whenever an
-``Assignment`` object is inserted into a ``DB`` instance. As with a traditional
-database indexing improves query performance but should also be used sparingly.
+The ``FactBaseBulider`` provides a decorator that registers the predicate class
+with the builder. Once a predicate class is registered the builder will use this
+class to try and unify against Clingo symbols. It also ensures that the fact
+base is built with the appropriate indexes as specified by ``index=True`` for
+the field. The the example, the ``driver`` field is indexed allowing for faster
+queries when searching for specific drivers. As with a traditional database
+indexing improves query performance but should be used sparingly.
 
 Having defined the data model we now show how to dynamically add a problem
 instance, solve the resulting ASP program, and print the solution.
@@ -150,13 +148,13 @@ First we create the Clingo ``Control`` object and load the ASP program.
 
 
 Next we generate a problem instance by generating a lists of ``Driver`` and
-``Item`` objects. These items are added to a ``DB`` instance.
+``Item`` objects. These items are added to an input fact base.
 
 .. code-block:: python
 
     drivers = [ Driver(name=n) for n in ["dave", "morri", "michael" ] ]
     items = [ Item(name="item{}".format(i)) for i in range(1,6) ]
-    instance = DB(drivers + items)
+    instance = FactBase(drivers + items)
 
 The ``Driver`` and ``Item`` constructors require named parameters that match the
 declared field names; you cannot use "normal" Python list arguments.
@@ -178,7 +176,7 @@ ASP program is typically called an *answer set* or simply a *model*.
     solution=None
     def on_model(model):
         nonlocal solution
-        solution = model.facts(DB, atoms=True)
+        solution = model.facts(fbb, atoms=True)
 
     ctrl.solve(on_model=on_model)
     if not solution:
@@ -190,14 +188,14 @@ before an optimal model is found. Also, note that if the problem is
 unsatisfiable then it will never be called and you should always check for this
 case.
 
-The line ``solution = model.facts(DB, atoms=True)`` extracts only instances of
-the predicates that were defined in the data model. In this case it ignores the
-``working_driver/1`` instances. These facts are stored and returned in a ``DB``
-object.
+The line ``solution = model.facts(fbb, atoms=True)`` extracts only instances of
+the predicates that were registered with the ``FactBaseBuilder``. In this case
+it ignores the ``working_driver/1`` instances. These facts are stored and
+returned in a fact base.
 
 The final part of our Python program involves querying the solution to print out
-the relevant parts. To do this we call the ``DB.select()`` member function that
-returns a suitable ``Select`` object.
+the relevant parts. To do this we call the ``FactBase.select()`` member function
+that returns a suitable ``Select`` object.
 
 .. code-block:: python
 

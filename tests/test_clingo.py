@@ -8,7 +8,8 @@ import clorm.clingo as nclingo
 #from clorm.clingo import *
 from clorm.clingo import Number, String, Function, parse_program, Control
 
-from clorm import Predicate, IntegerField, StringField, FactBase, ph1_
+from clorm import Predicate, IntegerField, StringField, FactBase,\
+    FactBaseBuilder, ph1_
 
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
@@ -28,16 +29,16 @@ class ClingoTestCase(unittest.TestCase):
     # Test processing clingo Model
     #--------------------------------------------------------------------------
     def test_control_model_integration(self):
+        fbb=FactBaseBuilder()
+        @fbb.register
         class Afact(Predicate):
             num1=IntegerField()
             num2=IntegerField()
             str1=StringField()
+        @fbb.register
         class Bfact(Predicate):
             num1=IntegerField()
             str1=StringField()
-
-        class MyFacts(FactBase):
-            predicates = [Afact,Bfact]
 
         af1 = Afact(1,10,"bbb")
         af2 = Afact(2,20,"aaa")
@@ -45,14 +46,14 @@ class ClingoTestCase(unittest.TestCase):
         bf1 = Bfact(1,"aaa")
         bf2 = Bfact(2,"bbb")
 
-        fb1 = MyFacts()
-        fb1.add(facts= [af1,af2,af3,bf1,bf2])
+        fb1 = FactBase()
+        fb1.add([af1,af2,af3,bf1,bf2])
 
         fb2 = None
         def on_model(model):
             nonlocal fb2
             self.assertTrue(model.contains(af1))
-            fb2 = model.facts(MyFacts, atoms=True)
+            fb2 = model.facts(fbb, atoms=True)
 
         # Use the orignal clingo.Control object so that we can test the wrapper call
         ctrlX_ = oclingo.Control()
@@ -83,6 +84,8 @@ class ClingoTestCase(unittest.TestCase):
     # Test processing clingo Model
     #--------------------------------------------------------------------------
     def test_model_facts(self):
+        fbb=FactBaseBuilder()
+        @fbb.register
         class Afact(Predicate):
             num1=IntegerField()
             num2=IntegerField()
@@ -91,30 +94,27 @@ class ClingoTestCase(unittest.TestCase):
             num1=IntegerField()
             str1=StringField()
 
-        class AppDB(FactBase):
-            predicates = [Afact]
-
         af1 = Afact(1,10,"bbb")
         af2 = Afact(2,20,"aaa")
         af3 = Afact(3,20,"aaa")
         bf1 = Bfact(1,"aaa")
         bf2 = Bfact(2,"bbb")
 
-
         def on_model1(model):
-            fb = model.facts(AppDB, atoms=True, raise_on_empty=True)
-            self.assertEqual(len(fb.facts()), 3)  # AppDB only imports Afact
+            fb = model.facts(fbb, atoms=True, raise_on_empty=True)
+            self.assertEqual(len(fb.facts()), 3)  # fbb only imports Afact
 
         ctrl = nclingo.Control()
         ctrl.add_facts([af1,af2,af3,bf1,bf2])
         ctrl.ground([("base",[])])
         ctrl.solve(on_model=on_model1)
 
+        fbb2=FactBaseBuilder()
         def on_model2(model):
             # Note: because of the delayed initialisation you have to do
             # something with the factbase to get it to raise the error.
             with self.assertRaises(ValueError) as ctx:
-                fb = model.facts(AppDB, atoms=True, raise_on_empty=True)
+                fb = model.facts(fbb2, atoms=True, raise_on_empty=True)
                 self.assertEqual(len(fb.facts()),0)
 
         ctrl = nclingo.Control()

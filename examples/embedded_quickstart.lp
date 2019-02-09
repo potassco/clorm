@@ -19,7 +19,7 @@ working_driver(D) :- assignment(_,D,_).
 #script(python).
 
 from clorm.clingo import Control
-from clorm import Predicate, ConstantField, IntegerField, FactBase, FactBaseHelper
+from clorm import Predicate, ConstantField, IntegerField, FactBase, FactBaseBuilder
 from clorm import ph1_
 
 
@@ -28,23 +28,21 @@ from clorm import ph1_
 # predicates.
 #--------------------------------------------------------------------------
 
-fbh = FactBaseHelper()
+fbb = FactBaseBuilder()
 
-@fbh.register
+@fbb.register
 class Driver(Predicate):
     name=ConstantField()
 
-@fbh.register
+@fbb.register
 class Item(Predicate):
     name=ConstantField()
 
-@fbh.register
+@fbb.register
 class Assignment(Predicate):
     item=ConstantField()
     driver=ConstantField(index=True)
     time=IntegerField()
-
-AppDB = fbh.create_class("AppDB")
 
 #--------------------------------------------------------------------------
 # main
@@ -56,7 +54,7 @@ def main(ctrl_):
         # Dynamically generate the instance data
     drivers = [ Driver(name=n) for n in ["dave", "morri", "michael" ] ]
     items = [ Item(name="item{}".format(i)) for i in range(1,6) ]
-    instance = AppDB(drivers + items)
+    instance = FactBase(drivers + items)
 
     # Add the instance data and ground the ASP program
     ctrl.add_facts(instance)
@@ -66,7 +64,7 @@ def main(ctrl_):
     solution=None
     def on_model(model):
         nonlocal solution
-        solution = model.facts(AppDB, atoms=True)
+        solution = model.facts(fbb, atoms=True)
 
     ctrl.solve(on_model=on_model)
     if not solution:

@@ -64,16 +64,17 @@ class Model(object, metaclass=_ModelMetaClass):
     # A new function to return a list of facts - similar to symbols
     #------------------------------------------------------------------------------
 
-    def facts(self, factbase, atoms=False, terms=False, shown=False, raise_on_empty=False):
+    def facts(self, factbasebuilder, atoms=False, terms=False, shown=False,
+              raise_on_empty=False):
         '''Returns a FactBase containing the facts in the model that unify with the
-        FactBase class.
+        FactBaseBuilder.
 
         This function provides a wrapper around the ``clingo.Model.symbols``
         functions, but instead of returning a list of symbols it returns a
         FactBase.
 
         Args:
-           factbase(FactBase): a ``FactBase`` sub-class to unify against and instantiate
+           factbasebuilder(FactBaseBuilder): used to unify and instantiate FactBase
            atoms: select all atoms in the model (Default: False)
            terms: select all terms displayed with #show statements (Default: False)
            shown: select all atoms and terms (Default: False)
@@ -81,7 +82,7 @@ class Model(object, metaclass=_ModelMetaClass):
                            (Default: False)
 
         '''
-        return factbase(
+        return factbasebuilder.new(
             symbols=self._model.symbols(atoms=atoms,terms=terms,shown=shown),
             raise_on_empty=raise_on_empty,
             delayed_init=True)

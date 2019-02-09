@@ -1,6 +1,11 @@
 Fact Bases and Querying
 =======================
 
+.. warning:: Out of date documentation
+
+   This part needs to be modified. FactBase works differently and is no longer
+   sub-classed.
+
 
 As well as offering a higher-level interface for mapping ASP facts to Python
 objects, Clorm also provides facilities for dealing with collections of facts.
