@@ -1282,7 +1282,7 @@ class _Select(Select):
 
     def __init__(self, factmap):
         self._factmap = factmap
-        self._index_priority = { f:p for (p,f) in enumerate(factmap.indexed_terms()) }
+        self._index_priority = { f:p for (p,f) in enumerate(factmap.indexes) }
         self._where = None
         self._indexable = None
         self._key = None
@@ -1401,7 +1401,7 @@ class _Delete(Delete):
 
     def __init__(self, factmap):
         self._factmap = factmap
-        self._index_prior = { f:p for (p,f) in enumerate(factmap.indexed_terms()) }
+        self._index_prior = { f:p for (p,f) in enumerate(factmap.indexes) }
         self._where = None
 
     def where(self, *expressions):
@@ -1431,7 +1431,7 @@ class _Delete(Delete):
             [ f for f in self._factmap.facts() if f not in to_delete ]
 
         # Remove the facts from each multimap
-        for fid, term in enumerate(self._factmap.indexed_terms()):
+        for fid, term in enumerate(self._factmap.indexes):
             keys = set([ term.__get__(f) for f in to_delete ])
             mm  = self._factmap.get_facts_multimap(term)
             mm.del_values(keys, to_delete)
@@ -1460,7 +1460,8 @@ class _FactMap(object):
             for term, mmap in self._mmaps.items():
                 mmap[term.__get__(fact)] = fact
 
-    def indexed_terms(self):
+    @property
+    def indexes(self):
         return self._mmaps.keys() if self._mmaps else []
 
     def get_facts_multimap(self, term):
@@ -1546,7 +1547,7 @@ class FactBaseBuilder(object):
             return facts
 
         if delayed_init:
-            return FactBase(facts=_populate, indexes=self.indexes)
+            return FactBase(facts=_populate, indexes=self._indexes)
         if symbols:
             return FactBase(facts=_populate(), indexes=self._indexes)
         else:
@@ -1570,8 +1571,9 @@ class FactBase(object):
     to perform more efficient queries.
 
     Args:
-      facts(Predicate): a list of facts (predicate instances) to add to the fact
-          base. Default None.
+      facts([Predicate]|callable): a list of facts (predicate instances), or a
+         functor that generates. If a functor is passed then the factbase
+         performs a delayed initialisation.
       indexes(Field): a list of fields that are to be indexed.
 
     """
@@ -1582,6 +1584,19 @@ class FactBase(object):
 
     # A special purpose initialiser so that we can do delayed initialisation
     def _init(self, facts=None, indexes=[]):
+
+####        # Creates: 1) a set to store all facts, 2) a mapping by each predicate
+####        # type, 3) a MultiMap for every indexed field
+####        self._allfacts = set()
+####        self._ptype2facts = dict()
+####        self._field2mmap = { fld : _MultiMap() for fld in indexes }
+
+        # flag that initialisation has taken place
+        self._delayed_init = None
+
+        # If it is delayed initialisation then get the facts
+        if facts and callable(facts): facts = facts()
+
         # Create _FactMaps for the predicate types with indexed terms
         grouped = {}
         for field in indexes:
@@ -1589,16 +1604,8 @@ class FactBase(object):
             grouped[field.parent].append(field)
         self._factmaps = { pt : _FactMap(fields) for pt, fields in grouped.items() }
 
-        # flag that initialisation has taken place
-        self._delayed_init = None
-
         if facts is None: return
-
-        # If it is delayed initialisation
-        if callable(facts): facts = facts()
-
         self._add(facts)
-
 
     def _add(self, arg):
         if isinstance(arg, Predicate): return self._add_fact(arg)
@@ -1617,6 +1624,19 @@ class FactBase(object):
         return 1
 
     #--------------------------------------------------------------------------
+    # Special functions to support set container operations
+    #--------------------------------------------------------------------------
+
+    def __contains__(self, fact):
+        # Always check if we have delayed initialisation
+        if self._delayed_init: self._delayed_init()
+
+        if not isinstance(fact,Predicate): return False
+        ptype = type(fact)
+        if ptype not in self._factmaps: return False
+        return fact in self._factmaps[ptype].facts()
+
+    #--------------------------------------------------------------------------
     # External member functions
     #--------------------------------------------------------------------------
     def __init__(self, facts=None, indexes=[]):
@@ -1631,7 +1651,7 @@ class FactBase(object):
 
     def add(self, arg):
         # Always check if we have delayed initialisation
-        if self._delayed_init: self.delayed_init()
+        if self._delayed_init: self._delayed_init()
         return self._add(arg)
 
 
@@ -1660,7 +1680,15 @@ class FactBase(object):
         """Return the list of predicate types that this fact base contains."""
         # Always check if we have delayed initialisation
         if self._delayed_init: self._delayed_init()
-        return set([pt for pt, fm in self._factmaps.items() if fm.facts()])
+        return [pt for pt, fm in self._factmaps.items() if fm.facts()]
+
+    @property
+    def indexes(self):
+        if self._delayed_init: self._delayed_init()
+        tmp = []
+        for fm in self._factmaps.values():
+            tmp.extend(fm.indexes)
+        return tmp
 
     def clear(self):
         """Clear the fact base of all facts."""

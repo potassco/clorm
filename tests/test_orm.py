@@ -999,7 +999,7 @@ class ORMTestCase(unittest.TestCase):
         self.assertEqual(fb.add(facts), 6)
 
         self.assertEqual(set(fb.facts()), set(facts))
-        self.assertEqual(fb.predicates, set([Afact,Bfact,Cfact]))
+        self.assertEqual(set(fb.predicates), set([Afact,Bfact,Cfact]))
 
         s_af_all = fb.select(Afact)
         s_af_num1_eq_1 = fb.select(Afact).where(Afact.num1 == 1)
@@ -1055,36 +1055,9 @@ class ORMTestCase(unittest.TestCase):
         with self.assertRaises(TypeError) as ctx:
             self.assertEqual(set(list(s5.get(1))), set([]))
 
-        # Test that the factbase
-
-    #--------------------------------------------------------------------------
-    # Test that a factbase only imports from the specified predicates
-    #--------------------------------------------------------------------------
-
-    def test_factbase_import(self):
-
-        class Afact(Predicate):
-            num1=IntegerField()
-            num2=IntegerField()
-            str1=StringField()
-        class Bfact(Predicate):
-            num1=IntegerField()
-            str1=StringField()
-        class Cfact(Predicate):
-            num1=IntegerField()
-
-        af1 = Afact(1,10,"bbb")
-        bf1 = Bfact(1,"aaa")
-        cf1 = Cfact(1)
-
-        fs1 = FactBase()
-        self.assertEqual(fs1.add([af1,bf1,cf1]), 3)
-        self.assertEqual(fs1.select(Afact).get_unique(), af1)
-        self.assertEqual(fs1.select(Bfact).get_unique(), bf1)
-
-        fs2 = FactBase(facts=lambda: [af1,bf1,cf1])
-        self.assertEqual(fs2.select(Afact).get_unique(), af1)
-        self.assertEqual(fs2.select(Bfact).get_unique(), bf1)
+        # Test that the fact base index
+        fb = FactBase(indexes=[Afact.num2, Bfact.str1])
+        self.assertEqual(set(fb.indexes), set([Afact.num2, Bfact.str1]))
 
     #--------------------------------------------------------------------------
     # Test the factbasehelper with double decorators
@@ -1154,13 +1127,13 @@ class ORMTestCase(unittest.TestCase):
         # Test the different ways that facts can be added
         fb = fbb.new(symbols=raws)
         self.assertFalse(fb._delayed_init)
-        self.assertEqual(fb.predicates, set([Afact,Bfact,Cfact]))
+        self.assertEqual(set(fb.predicates), set([Afact,Bfact,Cfact]))
         s_af_all = fb.select(Afact)
         self.assertEqual(set(s_af_all.get()), set([af1,af2,af3]))
 
         fb = fbb.new(symbols=raws, delayed_init=True)
         self.assertTrue(fb._delayed_init)
-        self.assertEqual(fb.predicates, set([Afact,Bfact,Cfact]))
+        self.assertEqual(set(fb.predicates), set([Afact,Bfact,Cfact]))
         s_af_all = fb.select(Afact)
         self.assertEqual(set(s_af_all.get()), set([af1,af2,af3]))
 
@@ -1352,6 +1325,99 @@ class ORMTestCase(unittest.TestCase):
         t = Tmp(date1,date2)
         self.assertEqual(t.cl_get_pair(), [String("20180101"), String("20190202")])
         self.assertEqual(t.get_pair2(), [String("20180101"), String("20190202")])
+
+#------------------------------------------------------------------------------
+# Test the FactBase
+#------------------------------------------------------------------------------
+class FactBaseTestCase(unittest.TestCase):
+    def setUp(self):
+
+        class Afact(Predicate):
+            num1=IntegerField()
+            str1=StringField()
+            str2=ConstantField()
+
+        class Bfact(Predicate):
+            num1=IntegerField()
+            str1=StringField()
+            str2=ConstantField()
+
+        class Cfact(Predicate):
+            num1=IntegerField()
+
+        self._Afact = Afact
+        self._Bfact = Bfact
+        self._Cfact = Cfact
+
+    def tearDown(self):
+        pass
+
+    #--------------------------------------------------------------------------
+    #
+    #--------------------------------------------------------------------------
+    def test_factbase_normal_init(self):
+
+        Afact = self._Afact
+        Bfact = self._Bfact
+        Cfact = self._Cfact
+
+        af1 = Afact(1,10,"bbb")
+        bf1 = Bfact(1,"aaa")
+        cf1 = Cfact(1)
+
+        fs1 = FactBase([af1,bf1,cf1])
+        self.assertTrue(af1 in fs1)
+        self.assertTrue(bf1 in fs1)
+        self.assertTrue(cf1 in fs1)
+
+        fs2 = FactBase()
+        self.assertEqual(fs2.add([af1,bf1,cf1]), 3)
+        self.assertTrue(af1 in fs2)
+        self.assertTrue(bf1 in fs2)
+        self.assertTrue(cf1 in fs2)
+
+    #--------------------------------------------------------------------------
+    #
+    #--------------------------------------------------------------------------
+    def test_delayed_init(self):
+
+        Afact = self._Afact
+        Bfact = self._Bfact
+        Cfact = self._Cfact
+
+        af1 = Afact(1,10,"bbb")
+        bf1 = Bfact(1,"aaa")
+        cf1 = Cfact(1)
+
+        fs1 = FactBase(lambda: [af1,bf1])
+        self.assertTrue(fs1._delayed_init)
+        self.assertTrue(af1 in fs1)
+        self.assertFalse(cf1 in fs1)
+        fs1.add(cf1)
+        self.assertTrue(bf1 in fs1)
+        self.assertTrue(cf1 in fs1)
+
+        fs2 = FactBase([af1,bf1])
+        self.assertFalse(fs2._delayed_init)
+
+
+    #--------------------------------------------------------------------------
+    #
+    #--------------------------------------------------------------------------
+    def test_contains(self):
+
+        Afact = self._Afact
+        Bfact = self._Bfact
+
+        af1 = Afact(num1=1, str1="1", str2="a")
+        af2 = Afact(num1=1, str1="1", str2="b")
+        bf1 = Bfact(num1=1, str1="1", str2="a")
+
+        fb = FactBase([af1])
+        self.assertTrue(af1 in fb)
+        self.assertFalse(af2 in fb)
+        self.assertFalse(bf1 in fb)
+
 
 #------------------------------------------------------------------------------
 # main
