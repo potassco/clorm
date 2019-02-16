@@ -1593,12 +1593,6 @@ class FactBase(object):
     # A special purpose initialiser so that we can do delayed initialisation
     def _init(self, facts=None, indexes=[]):
 
-####        # Creates: 1) a set to store all facts, 2) a mapping by each predicate
-####        # type, 3) a MultiMap for every indexed field
-####        self._allfacts = set()
-####        self._ptype2facts = dict()
-####        self._field2mmap = { fld : _MultiMap() for fld in indexes }
-
         # flag that initialisation has taken place
         self._delayed_init = None
 
