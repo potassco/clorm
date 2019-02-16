@@ -1125,22 +1125,72 @@ def or_(*conditions):
     return _BoolComparator(operator.or_,*conditions)
 
 #------------------------------------------------------------------------------
-# A multimap
+# _FactIndex indexes facts by a given field
 #------------------------------------------------------------------------------
 
-class _MultiMap(object):
-    def __init__(self):
+class _FactIndex(object):
+    def __init__(self, field):
+        if not isinstance(field, _Field):
+            raise TypeError("{} is not a _Field instance".format(field))
+        self._field = field
         self._keylist = []
         self._key2values = {}
 
-    def keys(self):
-        return list(self._keylist)
+    def add(self, fact):
+        if not isinstance(fact, self._field.parent):
+            raise TypeError("{} is not a {}".format(fact, self._field.parent))
+        key = self._field.__get__(fact)
 
-    def keys_eq(self, key):
+        # Index the fact by the key
+        if key not in self._key2values: self._key2values[key] = set()
+        self._key2values[key].add(fact)
+
+        # Maintain the sorted list of keys
+        posn = bisect.bisect_left(self._keylist, key)
+        if len(self._keylist) > posn and self._keylist[posn] == key: return
+        bisect.insort_left(self._keylist, key)
+
+    def discard(self, fact):
+        self.remove(fact, False)
+
+    def remove(self, fact, raise_on_missing=True):
+        if not isinstance(fact, self._field.parent):
+            raise TypeError("{} is not a {}".format(fact, self._field.parent))
+        key = self._field.__get__(fact)
+
+        # Remove the value
+        if key not in self._key2values:
+            if raise_on_missing:
+                raise KeyError("{} is not in the FactIndex".format(fact))
+            return
+        values = self._key2values[key]
+        if raise_on_missing: values.remove(fact)
+        else: values.discard(fact)
+
+        # If still have values then we're done
+        if values: return
+
+        # remove the key
+        del self._key2values[key]
+        posn = bisect.bisect_left(self._keylist, key)
+        del self._keylist[posn]
+
+    def clear(self):
+        self._keylist = []
+        self._key2values = {}
+
+    @property
+    def keys(self): return self._keylist
+
+    #--------------------------------------------------------------------------
+    # Internal functions to get keys matching some boolean operator
+    #--------------------------------------------------------------------------
+
+    def _keys_eq(self, key):
         if key in self._key2values: return [key]
         return []
 
-    def keys_ne(self, key):
+    def _keys_ne(self, key):
         posn1 = bisect.bisect_left(self._keylist, key)
         if posn1: left =  self._keylist[:posn1]
         else: left = []
@@ -1149,71 +1199,42 @@ class _MultiMap(object):
         else: right = []
         return left + right
 
-    def keys_lt(self, key):
+    def _keys_lt(self, key):
         posn = bisect.bisect_left(self._keylist, key)
         if posn: return self._keylist[:posn]
         return []
 
-    def keys_le(self, key):
+    def _keys_le(self, key):
         posn = bisect.bisect_right(self._keylist, key)
         if posn: return self._keylist[:posn]
         return []
 
-    def keys_gt(self, key):
+    def _keys_gt(self, key):
         posn = bisect.bisect_right(self._keylist, key)
         if posn: return self._keylist[posn:]
         return []
 
-    def keys_ge(self, key):
+    def _keys_ge(self, key):
         posn = bisect.bisect_left(self._keylist, key)
         if posn: return self._keylist[posn:]
         return []
 
-    def keys_op(self, op, key):
-        if op == operator.eq: return self.keys_eq(key)
-        elif op == operator.ne: return self.keys_ne(key)
-        elif op == operator.lt: return self.keys_lt(key)
-        elif op == operator.le: return self.keys_le(key)
-        elif op == operator.gt: return self.keys_gt(key)
-        elif op == operator.ge: return self.keys_ge(key)
-        raise ValueError("unsupported operator")
-
-    def del_values(self, keys, valueset):
-        for k in keys:
-            vs = self._key2values[k]
-            newvs = set([ f for f in vs if f not in valueset ])
-            if not newvs:
-                del self._key2values[k]
-                del self._keylist[bisect.bisect_left(self._keylist, k)]
-            else: self._key2values[k] = newvs
-
-    def clear(self):
-        self._keylist = []
-        self._key2values = {}
-
     #--------------------------------------------------------------------------
-    # Overloaded index operator to access the values
+    # Find elements based on boolean match to a key
     #--------------------------------------------------------------------------
-    def __getitem__(self, key):
-        return self._key2values[key]
+    def find(self, op, key):
+        keys = []
+        if op == operator.eq: keys = self._keys_eq(key)
+        elif op == operator.ne: keys = self._keys_ne(key)
+        elif op == operator.lt: keys = self._keys_lt(key)
+        elif op == operator.le: keys = self._keys_le(key)
+        elif op == operator.gt: keys = self._keys_gt(key)
+        elif op == operator.ge: keys = self._keys_ge(key)
+        else: raise ValueError("unsupported operator {}".format(op))
 
-    def __setitem__(self, key,v):
-        if key not in self._key2values: self._key2values[key] = set()
-        self._key2values[key].add(v)
-        posn = bisect.bisect_left(self._keylist, key)
-        if len(self._keylist) > posn and self._keylist[posn] == key: return
-        bisect.insort_left(self._keylist, key)
-
-    def __delitem__(self, key):
-        del self._key2values[key]
-        posn = bisect.bisect_left(self._keylist, key)
-        del self._keylist[posn]
-
-    def __str__(self):
-        tmp = ", ".join(["{} : {}".format(
-            key, self._key2values[key]) for key in self._keylist])
-        return "{{ {} }}".format(tmp)
-
+        sets = [ self._key2values[k] for k in keys ]
+        if not sets: return set()
+        return set.union(*sets)
 
 #------------------------------------------------------------------------------
 # Select is an interface query over a FactBase.
@@ -1300,6 +1321,10 @@ class _Select(Select):
         self._indexable = self._primary_search(self._where)
         return self
 
+    @property
+    def has_where(self):
+        return bool(self._where)
+
     def order_by(self, *expressions):
         if self._key:
             raise ValueError("cannot specify 'order_by' multiple times")
@@ -1370,10 +1395,9 @@ class _Select(Select):
                 if not self._where: result.append(f)
                 elif self._where and self._where(f,*args,**kwargs): result.append(f)
         else:
-            mmap=self._factmap.get_facts_multimap(self._indexable[0])
-            for key in mmap.keys_op(self._indexable[1], get_value(self._indexable[2])):
-                for f in mmap[key]:
-                    if self._where(f,*args,**kwargs): result.append(f)
+            findex = self._factmap.get_factindex(self._indexable[0])
+            for f in findex.find(self._indexable[1], get_value(self._indexable[2])):
+                if self._where(f,*args,**kwargs): result.append(f)
 
         # Return the results - sorted if necessary
         if self._key: result.sort(key=self._key)
@@ -1401,42 +1425,22 @@ class _Delete(Delete):
 
     def __init__(self, factmap):
         self._factmap = factmap
-        self._index_prior = { f:p for (p,f) in enumerate(factmap.indexes) }
-        self._where = None
+        self._select = _Select(factmap)
 
     def where(self, *expressions):
-        if self._where:
-            raise ValueError("trying to specify multiple where clauses")
-        if not expressions:
-            self._where = None
-        elif len(expressions) == 1:
-            self._where = _simplify_fact_comparator(expressions[0])
-        else:
-            self._where = _simplify_fact_comparator(and_(*expressions))
+        self._select.where(*expressions)
         return self
 
     def execute(self, *args, **kwargs):
         # If there is no where clause then delete everything
-        if not self._where:
+        if not self._select.has_where:
             num_deleted = len(self._factmap.facts())
             self._factmap.clear()
             return num_deleted
 
-        # Gather all the facts to delete
-        to_delete = \
-            set([ f for f in self._factmap.facts() if self._where(f,*args,**kwargs) ])
-
-        # Replace the all facts by a new list with the matching facts removed
-        self._factmap._allfacts = \
-            [ f for f in self._factmap.facts() if f not in to_delete ]
-
-        # Remove the facts from each multimap
-        for fid, term in enumerate(self._factmap.indexes):
-            keys = set([ term.__get__(f) for f in to_delete ])
-            mm  = self._factmap.get_facts_multimap(term)
-            mm.del_values(keys, to_delete)
-
-        # return the number deleted
+        # Gather all the facts to delete and remove them
+        to_delete = [ f for f in self._select.get(*args, **kwargs) ]
+        for fact in to_delete: self._factmap.remove(fact)
         return len(to_delete)
 
 
@@ -1449,32 +1453,36 @@ class _Delete(Delete):
 class _FactMap(object):
     def __init__(self, index=[]):
         self._allfacts = set()
-        if len(index) == 0:
-            self._mmaps = None
-        else:
-            self._mmaps = collections.OrderedDict( (f, _MultiMap()) for f in index )
+        self._findexes = None
+        if index:
+            self._findexes = collections.OrderedDict( (f, _FactIndex(f)) for f in index )
 
     def add(self, fact):
         self._allfacts.add(fact)
-        if self._mmaps:
-            for term, mmap in self._mmaps.items():
-                mmap[term.__get__(fact)] = fact
+        if self._findexes:
+            for findex in self._findexes.values(): findex.add(fact)
+
+    def remove(self, fact, raise_on_missing=True):
+        if raise_on_missing: self._allfacts.remove(fact)
+        else: self._allfacts.discard(fact)
+        if self._findexes:
+            for findex in self._findexes.values(): findex.remove(fact,raise_on_missing)
+
 
     @property
     def indexes(self):
-        return self._mmaps.keys() if self._mmaps else []
+        return self._findexes.keys() if self._findexes else []
 
-    def get_facts_multimap(self, term):
-        return self._mmaps[term]
+    def get_factindex(self, field):
+        return self._findexes[field]
 
     def facts(self):
         return self._allfacts
 
     def clear(self):
         self._allfacts.clear()
-        if self._mmaps:
-            for term, mmap in self._mmaps.items():
-                mmap.clear()
+        if self._findexes:
+            for f, findex in self._findexes.items(): findex.clear()
 
     def select(self):
         return _Select(self)
@@ -1607,21 +1615,30 @@ class FactBase(object):
         if facts is None: return
         self._add(facts)
 
+    #--------------------------------------------------------------------------
+    #
+    #--------------------------------------------------------------------------
+
     def _add(self, arg):
         if isinstance(arg, Predicate): return self._add_fact(arg)
-        count = 0
-        for f in arg: count += self._add_fact(f)
-        return count
+        for f in arg: self._add_fact(f)
 
+    # Helper for _add
     def _add_fact(self, fact):
-        predicate_cls = type(fact)
-        if not issubclass(predicate_cls,Predicate):
+        ptype = type(fact)
+        if not issubclass(ptype,Predicate):
             raise TypeError(("type of object {} is not a Predicate "
                              "subclass").format(fact))
-        if predicate_cls not in self._factmaps:
-            self._factmaps[predicate_cls] = _FactMap()
-        self._factmaps[predicate_cls].add(fact)
-        return 1
+        if ptype not in self._factmaps:
+            self._factmaps[ptype] = _FactMap()
+        self._factmaps[ptype].add(fact)
+
+    def _remove(self, fact, raise_on_missing):
+        ptype = type(fact)
+        if not isinstance(arg, Predicate) or ptype not in self._factmaps:
+            raise KeyError("{} not in factbase".format(arg))
+
+        return self._factmaps[ptype].delete()
 
     #--------------------------------------------------------------------------
     # Special functions to support set container operations
@@ -1637,7 +1654,7 @@ class FactBase(object):
         return fact in self._factmaps[ptype].facts()
 
     #--------------------------------------------------------------------------
-    # External member functions
+    # Initiliser
     #--------------------------------------------------------------------------
     def __init__(self, facts=None, indexes=[]):
         self._delayed_init=None
@@ -1649,31 +1666,53 @@ class FactBase(object):
             self._init(facts, indexes)
 
 
+    #--------------------------------------------------------------------------
+    # Set member functions
+    #--------------------------------------------------------------------------
     def add(self, arg):
         # Always check if we have delayed initialisation
         if self._delayed_init: self._delayed_init()
         return self._add(arg)
 
+    def remove(self, arg):
+        # Always check if we have delayed initialisation
+        if self._delayed_init: self._delayed_init()
+        return self._remove(arg, raise_on_missing=True)
 
-    def select(self, predicate_cls):
+    def discard(self, arg):
+        # Always check if we have delayed initialisation
+        if self._delayed_init: self._delayed_init()
+        return self._remove(arg, raise_on_missing=False)
+
+    def clear(self):
+        """Clear the fact base of all facts."""
+
+        # Always check if we have delayed initialisation
+        if self._delayed_init: self._delayed_init()
+        for pt, fm in self._factmaps.items(): fm.clear()
+
+    #--------------------------------------------------------------------------
+    # Special FactBase member functions
+    #--------------------------------------------------------------------------
+    def select(self, ptype):
         """Create a Select query for a predicate type."""
 
         # Always check if we have delayed initialisation
         if self._delayed_init: self._delayed_init()
 
-        if predicate_cls not in self._factmaps:
-            self._factmaps[predicate_cls] = _FactMap()
-        return self._factmaps[predicate_cls].select()
+        if ptype not in self._factmaps:
+            self._factmaps[ptype] = _FactMap()
+        return self._factmaps[ptype].select()
 
-    def delete(self, predicate_cls):
+    def delete(self, ptype):
         """Create a Select query for a predicate type."""
 
         # Always check if we have delayed initialisation
         if self._delayed_init: self._delayed_init()
 
-        if predicate_cls not in self._factmaps:
-            self._factmaps[predicate_cls] = _FactMap()
-        return self._factmaps[predicate_cls].delete()
+        if ptype not in self._factmaps:
+            self._factmaps[ptype] = _FactMap()
+        return self._factmaps[ptype].delete()
 
     @property
     def predicates(self):
@@ -1689,16 +1728,6 @@ class FactBase(object):
         for fm in self._factmaps.values():
             tmp.extend(fm.indexes)
         return tmp
-
-    def clear(self):
-        """Clear the fact base of all facts."""
-
-        # Always check if we have delayed initialisation
-        if self._delayed_init: self._delayed_init()
-        self._symbols = None
-
-        for pt, fm in self._factmaps.items():
-            fm.clear()
 
     def facts(self):
         """Return all facts."""

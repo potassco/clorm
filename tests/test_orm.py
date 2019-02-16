@@ -6,6 +6,7 @@ import inspect
 import unittest
 import datetime
 import calendar
+import operator
 from clingo import Number, String, Function,  __version__ as clingo_version
 from clingo import Control
 from clorm.orm import \
@@ -13,12 +14,18 @@ from clorm.orm import \
     IntegerField, StringField, ConstantField, RawField, \
     not_, and_, or_, _StaticComparator, _get_term_comparators, \
     ph_, ph1_, ph2_, \
-    _MultiMap, _FactMap, \
+    _FactIndex, _FactMap, \
     unify, desc, FactBase, FactBaseBuilder, \
     TypeCastSignature, make_function_asp_callable, make_method_asp_callable
 
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
+
+__all__ = [
+    'ORMTestCase',
+    'FactBaseTestCase',
+    'FactIndexTestCase'
+    ]
 
 #------------------------------------------------------------------------------
 #
@@ -615,48 +622,6 @@ class ORMTestCase(unittest.TestCase):
         self.assertFalse(is_static(ac4.simplified()))
 
     #--------------------------------------------------------------------------
-    #  Test that the fact comparators work
-    #--------------------------------------------------------------------------
-
-    def test_factmultimap(self):
-        class Afact1(Predicate):
-            anum=IntegerField()
-            astr=StringField()
-            class Meta: name = "afact"
-
-        mymm = _MultiMap()
-        mymm[4] = Afact1(4,"4")
-        mymm[4] = Afact1(4,"42")
-        mymm[3] = Afact1(3,"3")
-        mymm[1] = Afact1(1,"1")
-        mymm[10] = Afact1(10,"10")
-
-        self.assertEqual(set([Afact1(4,"4"), Afact1(4,"42")]), set(mymm[4]))
-        self.assertEqual(set([Afact1(10,"10")]), set(mymm[10]))
-        self.assertEqual(set([Afact1(1,"1")]), set(mymm[1]))
-        self.assertEqual(mymm.keys(), [1,3,4,10])
-        self.assertEqual(mymm.keys_lt(4), [1,3])
-        self.assertEqual(mymm.keys_le(4), [1,3,4])
-        self.assertEqual(mymm.keys_gt(3), [4,10])
-        self.assertEqual(mymm.keys_ge(3), [3,4,10])
-        self.assertEqual(mymm.keys_ge(2), [3,4,10])
-        self.assertEqual(mymm.keys_lt(1), [])
-        self.assertEqual(mymm.keys_le(0), [])
-        self.assertEqual(mymm.keys_gt(10), [])
-        self.assertEqual(mymm.keys_ge(11), [])
-
-        del mymm[10]
-        self.assertEqual(mymm.keys(), [1,3,4])
-
-        with self.assertRaises(KeyError) as ctx:
-            tmp = mymm[10]
-        with self.assertRaises(KeyError) as ctx:
-            del mymm[10]
-
-        mymm.clear()
-        self.assertEqual(mymm.keys(), [])
-
-    #--------------------------------------------------------------------------
     #   Test that the select works
     #--------------------------------------------------------------------------
     def test_select_over_factmap(self):
@@ -963,6 +928,8 @@ class ORMTestCase(unittest.TestCase):
         self.assertEqual(d1_num1.execute(4), 2)
         self.assertEqual(set([f for f in s1_num1.get(4)]), set([]))
 
+#        return
+
         fb1 = FactBase(facts=[f1,f3, f4,f42,f10], indexes = [Afact.num1, Afact.num2])
         d1_num1 = fb1.delete(Afact).where(Afact.num1 == ph1_)
         s1_num1 = fb1.select(Afact).where(Afact.num1 == ph1_)
@@ -996,7 +963,8 @@ class ORMTestCase(unittest.TestCase):
 #        fb = FactBase([Afact.num1, Afact.num2, Afact.str1])
         fb = FactBase()
         facts=[af1,af2,af3,bf1,bf2,cf1]
-        self.assertEqual(fb.add(facts), 6)
+        fb.add(facts)
+#####        self.assertEqual(fb.add(facts), 6)
 
         self.assertEqual(set(fb.facts()), set(facts))
         self.assertEqual(set(fb.predicates), set([Afact,Bfact,Cfact]))
@@ -1036,7 +1004,8 @@ class ORMTestCase(unittest.TestCase):
         # Test select with placeholders
 #        fb3 = FactBase([Afact.num1])
         fb3 = FactBase()
-        self.assertEqual(fb3.add([af1,af2,af3]),3)
+        fb3.add([af1,af2,af3])
+####        self.assertEqual(fb3.add([af1,af2,af3]),3)
         s3 = fb3.select(Afact).where(Afact.num1 == ph_("num1"))
         self.assertEqual(s3.get_unique(num1=1), af1)
         self.assertEqual(s3.get_unique(num1=2), af2)
@@ -1138,14 +1107,18 @@ class ORMTestCase(unittest.TestCase):
         self.assertEqual(set(s_af_all.get()), set([af1,af2,af3]))
 
         fb = FactBase()
-        self.assertEqual(fb.add([af1,af2,af3]),3)
+        fb.add([af1,af2,af3])
+####        self.assertEqual(fb.add([af1,af2,af3]),3)
         s_af_all = fb.select(Afact)
         self.assertEqual(set(s_af_all.get()), set([af1,af2,af3]))
 
         fb = FactBase()
-        self.assertEqual(fb.add(af1),1)
-        self.assertEqual(fb.add(af2),1)
-        self.assertEqual(fb.add(af3),1)
+        fb.add(af1)
+        fb.add(af2)
+        fb.add(af3)
+####        self.assertEqual(fb.add(af1),1)
+####        self.assertEqual(fb.add(af2),1)
+####        self.assertEqual(fb.add(af3),1)
         s_af_all = fb.select(Afact)
         self.assertEqual(set(s_af_all.get()), set([af1,af2,af3]))
 
@@ -1326,6 +1299,121 @@ class ORMTestCase(unittest.TestCase):
         self.assertEqual(t.cl_get_pair(), [String("20180101"), String("20190202")])
         self.assertEqual(t.get_pair2(), [String("20180101"), String("20190202")])
 
+
+#------------------------------------------------------------------------------
+# Test the _FactIndex class
+#------------------------------------------------------------------------------
+
+class FactIndexTestCase(unittest.TestCase):
+    def setUp(self):
+        class Afact(Predicate):
+            num1=IntegerField()
+            str1=StringField()
+
+        class Bfact(Predicate):
+            num1=IntegerField()
+            str1=StringField()
+
+        self.Afact = Afact
+        self.Bfact = Bfact
+
+    def test_create(self):
+        Afact = self.Afact
+        fi1 = _FactIndex(Afact.num1)
+        self.assertTrue(fi1)
+
+        # Should only accept fields
+        with self.assertRaises(TypeError) as ctx:
+            f2 = _FactIndex(1)
+        with self.assertRaises(TypeError) as ctx:
+            f2 = _FactIndex(Afact)
+
+    def test_add(self):
+        Afact = self.Afact
+        Bfact = self.Bfact
+        fi1 = _FactIndex(Afact.num1)
+        fi2 = _FactIndex(Afact.str1)
+        self.assertEqual(fi1.keys, [])
+
+        fi1.add(Afact(num1=1, str1="c"))
+        fi2.add(Afact(num1=1, str1="c"))
+        self.assertEqual(fi1.keys, [1])
+        self.assertEqual(fi2.keys, ["c"])
+
+        fi1.add(Afact(num1=2, str1="b"))
+        fi2.add(Afact(num1=2, str1="b"))
+        self.assertEqual(fi1.keys, [1,2])
+        self.assertEqual(fi2.keys, ["b","c"])
+
+        fi1.add(Afact(num1=3, str1="b"))
+        fi2.add(Afact(num1=3, str1="b"))
+        self.assertEqual(fi1.keys, [1,2,3])
+        self.assertEqual(fi2.keys, ["b","c"])
+
+    def test_remove(self):
+        Afact = self.Afact
+        Bfact = self.Bfact
+
+        af1a = Afact(num1=1, str1="a")
+        af2a = Afact(num1=2, str1="a")
+        af2b = Afact(num1=2, str1="b")
+        af3a = Afact(num1=3, str1="a")
+        af3b = Afact(num1=3, str1="b")
+
+        fi = _FactIndex(Afact.num1)
+        for f in [ af1a, af2a, af2b, af3a, af3b ]: fi.add(f)
+        self.assertEqual(fi.keys, [1,2,3])
+
+        fi.remove(af1a)
+        self.assertEqual(fi.keys, [2,3])
+
+        fi.discard(af1a)
+        with self.assertRaises(KeyError) as ctx:
+            fi.remove(af1a)
+
+        fi.remove(af2a)
+        self.assertEqual(fi.keys, [2,3])
+
+        fi.remove(af3a)
+        self.assertEqual(fi.keys, [2,3])
+
+        fi.remove(af2b)
+        self.assertEqual(fi.keys, [3])
+
+        fi.remove(af3b)
+        self.assertEqual(fi.keys, [])
+
+    def test_find(self):
+        Afact = self.Afact
+
+        af1a = Afact(num1=1, str1="a")
+        af2a = Afact(num1=2, str1="a")
+        af2b = Afact(num1=2, str1="b")
+        af3a = Afact(num1=3, str1="a")
+        af3b = Afact(num1=3, str1="b")
+
+        fi = _FactIndex(Afact.num1)
+        allfacts = [ af1a, af2a, af2b, af3a, af3b ]
+        for f in allfacts: fi.add(f)
+
+        self.assertEqual(fi.find(operator.eq, 1), set([af1a]))
+        self.assertEqual(fi.find(operator.eq, 2), set([af2a, af2b]))
+        self.assertEqual(fi.find(operator.ne, 5), set(allfacts))
+        self.assertEqual(fi.find(operator.eq, 5), set([]))
+        self.assertEqual(fi.find(operator.lt, 1), set([]))
+        self.assertEqual(fi.find(operator.lt, 2), set([af1a]))
+        self.assertEqual(fi.find(operator.le, 2), set([af1a, af2a, af2b]))
+        self.assertEqual(fi.find(operator.gt, 2), set([af3a, af3b]))
+        self.assertEqual(fi.find(operator.ge, 3), set([af3a, af3b]))
+        self.assertEqual(fi.find(operator.gt, 3), set([]))
+
+    def test_clear(self):
+        Afact = self.Afact
+        fi = _FactIndex(Afact.num1)
+        fi.add(Afact(num1=1, str1="a"))
+        fi.clear()
+        self.assertEqual(fi.keys,[])
+
 #------------------------------------------------------------------------------
 # Test the FactBase
 #------------------------------------------------------------------------------
@@ -1371,7 +1459,8 @@ class FactBaseTestCase(unittest.TestCase):
         self.assertTrue(cf1 in fs1)
 
         fs2 = FactBase()
-        self.assertEqual(fs2.add([af1,bf1,cf1]), 3)
+        fs2.add([af1,bf1,cf1])
+#####        self.assertEqual(fs2.add([af1,bf1,cf1]), 3)
         self.assertTrue(af1 in fs2)
         self.assertTrue(bf1 in fs2)
         self.assertTrue(cf1 in fs2)
