@@ -1434,12 +1434,15 @@ class FactMapTestCase(unittest.TestCase):
 
         self.Afact = Afact
         self.Bfact = Bfact
-        pass
 
-    def test_(self):
+    def test_init(self):
+        Afact = self.Afact
+        Bfact = self.Bfact
 
-        
-        pass
+        fm1 = _FactMap(Afact)
+        self.assertTrue(fm1)
+
+
 #------------------------------------------------------------------------------
 # Test the FactBase
 #------------------------------------------------------------------------------
