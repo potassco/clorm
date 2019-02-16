@@ -1459,6 +1459,9 @@ class _FactMap(object):
             raise TypeError("{} is not a subclass of Predicate".format(ptype))
         if index:
             self._findexes = collections.OrderedDict( (f, _FactIndex(f)) for f in index )
+            prts = set([f.parent for f in index])
+            if len(prts) != 1 and parent != ptype:
+                raise TypeError("Fields in {} do not belong to {}".format(index,prts)
 
     def add(self, fact):
         self._allfacts.add(fact)
