@@ -1440,10 +1440,10 @@ class FactMapTestCase(unittest.TestCase):
         Bfact = self.Bfact
 
         fm1 = _FactMap(Afact)
-        self.assertTrue(fm1)
+        self.assertEqual(fm1.indexes, [])
 
         fm1 = _FactMap(Afact, [Afact.num1, Afact.str1])
-        self.assertTrue(fm1)
+        self.assertEqual(fm1.indexes, [Afact.num1, Afact.str1])
 
         with self.assertRaises(TypeError) as ctx:
             fm = _FactMap(1)
@@ -1454,7 +1454,37 @@ class FactMapTestCase(unittest.TestCase):
         with self.assertRaises(TypeError) as ctx:
             fm = _FactMap(Afact, [Bfact.num1])
 
-    def test_add(self):
+    def test_add_and_container_ops(self):
+        Afact = self.Afact
+        fm = _FactMap(Afact, [Afact.num1, Afact.str1])
+
+        af1a = Afact(num1=1, str1="a", str2="a")
+        af2a = Afact(num1=2, str1="a", str2="a")
+        af2b = Afact(num1=2, str1="b", str2="a")
+        af3a = Afact(num1=3, str1="a", str2="c")
+        af3b = Afact(num1=3, str1="b", str2="c")
+
+        # Test add() and  __contains__()
+        allfacts = [ af1a, af2a, af2b, af3a, af3b ]
+        for f in allfacts: fm.add(f)
+        self.assertTrue(af2b in fm)
+        self.assertTrue(af2a in fm)
+        self.assertFalse(Afact(num1=1, str1="a", str2="b") in fm)
+        for f in allfacts: fm.add(f)
+        self.assertTrue(af2b in fm)
+
+        # Test __bool__ and __len__
+        fm2 = _FactMap(Afact, [Afact.num1, Afact.str1])
+        self.assertTrue(bool(fm))
+        self.assertFalse(fm2)
+        self.assertEqual(len(fm), 5)
+        self.assertEqual(len(fm2), 0)
+
+        # Test __iter__
+        self.assertEqual(set(fm), set(allfacts))
+        self.assertEqual(set(fm2), set())
+
+    def test_remove_discard_clear(self):
         Afact = self.Afact
         fm = _FactMap(Afact, [Afact.num1, Afact.str1])
 
@@ -1466,9 +1496,18 @@ class FactMapTestCase(unittest.TestCase):
 
         allfacts = [ af1a, af2a, af2b, af3a, af3b ]
         for f in allfacts: fm.add(f)
-        self.assertTrue(af2b in fm)
-        self.assertFalse(Afact(num1=1, str1="a", str2="b") in fm)
 
+        fm.remove(af1a)
+        fm.discard(af1a)
+        with self.assertRaises(KeyError) as ctx:
+            fm.remove(af1a)
+
+        fm.clear()
+        self.assertFalse(af1a in fm)
+        self.assertFalse(af2a in fm)
+        self.assertFalse(af2b in fm)
+        self.assertFalse(af3a in fm)
+        self.assertFalse(af3b in fm)
 
 #------------------------------------------------------------------------------
 # Test the FactBase
@@ -1548,7 +1587,7 @@ class FactBaseTestCase(unittest.TestCase):
     #--------------------------------------------------------------------------
     #
     #--------------------------------------------------------------------------
-    def test_contains(self):
+    def test_container_ops(self):
 
         Afact = self._Afact
         Bfact = self._Bfact
@@ -1562,6 +1601,26 @@ class FactBaseTestCase(unittest.TestCase):
         self.assertFalse(af2 in fb)
         self.assertFalse(bf1 in fb)
 
+        # Test __bool__
+        fb2 = FactBase()
+        self.assertTrue(fb)
+        self.assertFalse(fb2)
+
+        # Test __len__
+        self.assertEqual(len(fb2), 0)
+        self.assertEqual(len(fb), 1)
+        self.assertEqual(len(FactBase([af1,af2])),2)
+        self.assertEqual(len(FactBase([af1,af2, bf1])), 3)
+
+        # Test __iter__
+        input = set([])
+        self.assertEqual(set(FactBase(input)), input)
+        input = set([af1])
+        self.assertEqual(set(FactBase(input)), input)
+        input = set([af1,af2])
+        self.assertEqual(set(FactBase(input)), input)
+        input = set([af1,af2,bf1])
+        self.assertEqual(set(FactBase(input)), input)
 
 #------------------------------------------------------------------------------
 # main

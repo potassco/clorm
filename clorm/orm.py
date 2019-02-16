@@ -1479,8 +1479,8 @@ class _FactMap(object):
 
     @property
     def indexes(self):
-        return self._findexes.keys() if self._findexes else []
-
+        if not self._findexes: return []
+        return [ f for f, vs in self._findexes.items() ]
 
     def get_factindex(self, field):
         return self._findexes[field]
@@ -1508,15 +1508,24 @@ class _FactMap(object):
         return data
 
     def __str__(self):
-        self.asp_str()
+        return self.asp_str()
 
     #--------------------------------------------------------------------------
-    # Special functions to support set container operations
+    # Special functions to support container operations
     #--------------------------------------------------------------------------
 
     def __contains__(self, fact):
         if not isinstance(fact, self._ptype): return False
         return fact in self._allfacts
+
+    def __bool__(self):
+        return bool(self._allfacts)
+
+    def __len__(self):
+        return len(self._allfacts)
+
+    def __iter__(self):
+        return iter(self._allfacts)
 
 #------------------------------------------------------------------------------
 # FactBaseBuilder offers a decorator interface for gathering predicate and index
@@ -1651,7 +1660,7 @@ class FactBase(object):
         return self._factmaps[ptype].delete()
 
     #--------------------------------------------------------------------------
-    # Special functions to support set container operations
+    # Special functions to support container operations
     #--------------------------------------------------------------------------
 
     def __contains__(self, fact):
@@ -1662,6 +1671,18 @@ class FactBase(object):
         ptype = type(fact)
         if ptype not in self._factmaps: return False
         return fact in self._factmaps[ptype].facts()
+
+    def __bool__(self):
+        for fm in self._factmaps.values():
+            if fm: return True
+        return False
+
+    def __len__(self):
+        return sum([len(fm) for fm in self._factmaps.values()])
+
+    def __iter__(self):
+        for fm in self._factmaps.values():
+            for f in fm: yield f
 
     #--------------------------------------------------------------------------
     # Initiliser
