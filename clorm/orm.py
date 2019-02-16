@@ -1460,7 +1460,7 @@ class _FactMap(object):
         if index:
             self._findexes = collections.OrderedDict( (f, _FactIndex(f)) for f in index )
             prts = set([f.parent for f in index])
-            if len(prts) != 1 and parent != ptype:
+            if len(prts) != 1 or prts != set([ptype]):
                 raise TypeError("Fields in {} do not belong to {}".format(index,prts))
 
     def add(self, fact):
@@ -1515,10 +1515,8 @@ class _FactMap(object):
     #--------------------------------------------------------------------------
 
     def __contains__(self, fact):
-        if not isinstance(fact, Predicate): return False
-        ptype = type(fact)
-        if ptype not in self._factmaps: return False
-        return fact in self._factmaps[ptype].facts()
+        if not isinstance(fact, self._ptype): return False
+        return fact in self._allfacts
 
 #------------------------------------------------------------------------------
 # FactBaseBuilder offers a decorator interface for gathering predicate and index

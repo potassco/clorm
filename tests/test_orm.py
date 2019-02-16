@@ -1442,6 +1442,33 @@ class FactMapTestCase(unittest.TestCase):
         fm1 = _FactMap(Afact)
         self.assertTrue(fm1)
 
+        fm1 = _FactMap(Afact, [Afact.num1, Afact.str1])
+        self.assertTrue(fm1)
+
+        with self.assertRaises(TypeError) as ctx:
+            fm = _FactMap(1)
+
+        with self.assertRaises(TypeError) as ctx:
+            fm = _FactMap(Afact.num1)
+
+        with self.assertRaises(TypeError) as ctx:
+            fm = _FactMap(Afact, [Bfact.num1])
+
+    def test_add(self):
+        Afact = self.Afact
+        fm = _FactMap(Afact, [Afact.num1, Afact.str1])
+
+        af1a = Afact(num1=1, str1="a", str2="a")
+        af2a = Afact(num1=2, str1="a", str2="a")
+        af2b = Afact(num1=2, str1="b", str2="a")
+        af3a = Afact(num1=3, str1="a", str2="c")
+        af3b = Afact(num1=3, str1="b", str2="c")
+
+        allfacts = [ af1a, af2a, af2b, af3a, af3b ]
+        for f in allfacts: fm.add(f)
+        self.assertTrue(af2b in fm)
+        self.assertFalse(Afact(num1=1, str1="a", str2="b") in fm)
+
 
 #------------------------------------------------------------------------------
 # Test the FactBase
@@ -1489,7 +1516,6 @@ class FactBaseTestCase(unittest.TestCase):
 
         fs2 = FactBase()
         fs2.add([af1,bf1,cf1])
-#####        self.assertEqual(fs2.add([af1,bf1,cf1]), 3)
         self.assertTrue(af1 in fs2)
         self.assertTrue(bf1 in fs2)
         self.assertTrue(cf1 in fs2)
