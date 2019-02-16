@@ -23,8 +23,9 @@ from clorm.orm import \
 
 __all__ = [
     'ORMTestCase',
+    'FactIndexTestCase',
+    'FactMapTestCase',
     'FactBaseTestCase',
-    'FactIndexTestCase'
     ]
 
 #------------------------------------------------------------------------------
@@ -478,7 +479,7 @@ class ORMTestCase(unittest.TestCase):
     #  predicate types.
     #  --------------------------------------------------------------------------
 
-    def testunify(self):
+    def test_unify(self):
         raws = [
             Function("afact",[Number(1),String("test")]),
             Function("afact",[Number(2),Number(3),String("test")]),
@@ -631,8 +632,8 @@ class ORMTestCase(unittest.TestCase):
             str1=StringField()
             class Meta: name = "afact"
 
-        fm1 = _FactMap([Afact1.num1,Afact1.str1])
-        fm2 = _FactMap()
+        fm1 = _FactMap(Afact1, [Afact1.num1,Afact1.str1])
+        fm2 = _FactMap(Afact1)
         f1 = Afact1(1,1,"1")
         f3 = Afact1(3,3,"3")
         f4 = Afact1(4,4,"4")
@@ -746,7 +747,7 @@ class ORMTestCase(unittest.TestCase):
             num1=IntegerField()
             num2=IntegerField()
 
-        fm1 = _FactMap([Afact.num1])
+        fm1 = _FactMap(Afact, [Afact.num1])
         f1 = Afact(1,1)
         f2 = Afact(1,2)
         f3 = Afact(1,3)
@@ -869,7 +870,7 @@ class ORMTestCase(unittest.TestCase):
             num1=IntegerField()
             num2=IntegerField()
 
-        fm1 = _FactMap([Afact.num1])
+        fm1 = _FactMap(Afact, [Afact.num1])
         f1 = Afact(1,1)
         f2 = Afact(1,2)
         f3 = Afact(1,3)
@@ -906,8 +907,8 @@ class ORMTestCase(unittest.TestCase):
             num2=StringField()
             str1=StringField()
 
-        fm1 = _FactMap([Afact.num1,Afact.str1])
-        fm2 = _FactMap()
+        fm1 = _FactMap(Afact, [Afact.num1,Afact.str1])
+        fm2 = _FactMap(Afact)
         f1 = Afact(1,1,"1")
         f3 = Afact(3,3,"3")
         f4 = Afact(4,4,"4")
@@ -1414,6 +1415,31 @@ class FactIndexTestCase(unittest.TestCase):
         fi.clear()
         self.assertEqual(fi.keys,[])
 
+#------------------------------------------------------------------------------
+# Test the _FactMap and _Select _Delete class
+#------------------------------------------------------------------------------
+
+class FactMapTestCase(unittest.TestCase):
+    def setUp(self):
+
+        class Afact(Predicate):
+            num1=IntegerField()
+            str1=StringField()
+            str2=ConstantField()
+
+        class Bfact(Predicate):
+            num1=IntegerField()
+            str1=StringField()
+            str2=ConstantField()
+
+        self.Afact = Afact
+        self.Bfact = Bfact
+        pass
+
+    def test_(self):
+
+        
+        pass
 #------------------------------------------------------------------------------
 # Test the FactBase
 #------------------------------------------------------------------------------

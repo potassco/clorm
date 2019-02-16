@@ -1451,9 +1451,12 @@ class _Delete(Delete):
 # ------------------------------------------------------------------------------
 
 class _FactMap(object):
-    def __init__(self, index=[]):
+    def __init__(self, ptype, index=[]):
+        self._ptype = ptype
         self._allfacts = set()
         self._findexes = None
+        if not issubclass(ptype, Predicate):
+            raise TypeError("{} is not a subclass of Predicate".format(ptype))
         if index:
             self._findexes = collections.OrderedDict( (f, _FactIndex(f)) for f in index )
 
@@ -1462,16 +1465,19 @@ class _FactMap(object):
         if self._findexes:
             for findex in self._findexes.values(): findex.add(fact)
 
+    def discard(self, fact):
+        self.remove(fact, False)
+
     def remove(self, fact, raise_on_missing=True):
         if raise_on_missing: self._allfacts.remove(fact)
         else: self._allfacts.discard(fact)
         if self._findexes:
             for findex in self._findexes.values(): findex.remove(fact,raise_on_missing)
 
-
     @property
     def indexes(self):
         return self._findexes.keys() if self._findexes else []
+
 
     def get_factindex(self, field):
         return self._findexes[field]
@@ -1501,6 +1507,15 @@ class _FactMap(object):
     def __str__(self):
         self.asp_str()
 
+    #--------------------------------------------------------------------------
+    # Special functions to support set container operations
+    #--------------------------------------------------------------------------
+
+    def __contains__(self, fact):
+        if not isinstance(fact, Predicate): return False
+        ptype = type(fact)
+        if ptype not in self._factmaps: return False
+        return fact in self._factmaps[ptype].facts()
 
 #------------------------------------------------------------------------------
 # FactBaseBuilder offers a decorator interface for gathering predicate and index
@@ -1604,7 +1619,7 @@ class FactBase(object):
         for field in indexes:
             if field.parent not in grouped: grouped[field.parent] = []
             grouped[field.parent].append(field)
-        self._factmaps = { pt : _FactMap(fields) for pt, fields in grouped.items() }
+        self._factmaps = { pt : _FactMap(pt, fields) for pt, fields in grouped.items() }
 
         if facts is None: return
         self._add(facts)
@@ -1624,7 +1639,7 @@ class FactBase(object):
             raise TypeError(("type of object {} is not a Predicate "
                              "subclass").format(fact))
         if ptype not in self._factmaps:
-            self._factmaps[ptype] = _FactMap()
+            self._factmaps[ptype] = _FactMap(ptype)
         self._factmaps[ptype].add(fact)
 
     def _remove(self, fact, raise_on_missing):
@@ -1695,7 +1710,7 @@ class FactBase(object):
         if self._delayed_init: self._delayed_init()
 
         if ptype not in self._factmaps:
-            self._factmaps[ptype] = _FactMap()
+            self._factmaps[ptype] = _FactMap(ptype)
         return self._factmaps[ptype].select()
 
     def delete(self, ptype):
@@ -1705,7 +1720,7 @@ class FactBase(object):
         if self._delayed_init: self._delayed_init()
 
         if ptype not in self._factmaps:
-            self._factmaps[ptype] = _FactMap()
+            self._factmaps[ptype] = _FactMap(ptype)
         return self._factmaps[ptype].delete()
 
     @property
