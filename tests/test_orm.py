@@ -1592,25 +1592,31 @@ class FactBaseTestCase(unittest.TestCase):
         Afact = self._Afact
         Bfact = self._Bfact
 
+        delayed_init=lambda: []
+
         af1 = Afact(num1=1, str1="1", str2="a")
         af2 = Afact(num1=1, str1="1", str2="b")
         bf1 = Bfact(num1=1, str1="1", str2="a")
 
         fb = FactBase([af1])
+        fb3 = FactBase(facts=lambda: [])
         self.assertTrue(af1 in fb)
         self.assertFalse(af2 in fb)
         self.assertFalse(bf1 in fb)
+        self.assertFalse(bf1 in fb3)
 
         # Test __bool__
         fb2 = FactBase()
+        fb3 = FactBase(facts=lambda: [])
         self.assertTrue(fb)
         self.assertFalse(fb2)
+        self.assertFalse(fb3)
 
         # Test __len__
         self.assertEqual(len(fb2), 0)
         self.assertEqual(len(fb), 1)
         self.assertEqual(len(FactBase([af1,af2])),2)
-        self.assertEqual(len(FactBase([af1,af2, bf1])), 3)
+        self.assertEqual(len(FactBase(facts=lambda: [af1,af2, bf1])), 3)
 
         # Test __iter__
         input = set([])
@@ -1621,6 +1627,8 @@ class FactBaseTestCase(unittest.TestCase):
         self.assertEqual(set(FactBase(input)), input)
         input = set([af1,af2,bf1])
         self.assertEqual(set(FactBase(input)), input)
+        input = set([af1,af2,bf1])
+        self.assertEqual(set(FactBase(facts=lambda: input)), input)
 
 #------------------------------------------------------------------------------
 # main

@@ -1673,14 +1673,23 @@ class FactBase(object):
         return fact in self._factmaps[ptype].facts()
 
     def __bool__(self):
+        # Always check if we have delayed initialisation
+        if self._delayed_init: self._delayed_init()
+
         for fm in self._factmaps.values():
             if fm: return True
         return False
 
     def __len__(self):
+        # Always check if we have delayed initialisation
+        if self._delayed_init: self._delayed_init()
+
         return sum([len(fm) for fm in self._factmaps.values()])
 
     def __iter__(self):
+        # Always check if we have delayed initialisation
+        if self._delayed_init: self._delayed_init()
+
         for fm in self._factmaps.values():
             for f in fm: yield f
 
