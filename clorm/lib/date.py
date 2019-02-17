@@ -35,39 +35,6 @@ class DateField(StringField):
     cltopy = lambda s: datetime.datetime.strptime(s,"%Y-%m-%d").date()
 
 #------------------------------------------------------------------------------
-# date_range takes a start and end date and a step (default 1)
-# ------------------------------------------------------------------------------
-def date_range(start, stop, step=1):
-    """Generate dates within a range, with optional day step counter"""
-    td = datetime.timedelta(days=step)
-    dates = []
-    while start < stop:
-        dates.append(start)
-        start += td
-    return dates
-
-#------------------------------------------------------------------------------
-# dow - callable by python - returns the day of the week
-#------------------------------------------------------------------------------
-
-def dow(dt):
-    """Return the day of the week for a date"""
-    return calendar.day_name[dt.weekday()].lower()
-
-#------------------------------------------------------------------------------
-# Function signatures to generate ASP callable functions
-#------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-# Generate some wrapper functions
-#------------------------------------------------------------------------------
-
-cl_date_range = make_function_asp_callable(DateField, DateField,
-                                  IntegerField, [DateField],
-                                  date_range)
-cl_dow = make_function_asp_callable(DateField, ConstantField, dow)
-
-#------------------------------------------------------------------------------
 # Enumerated Date is a tuple containing an index and a date.
 #------------------------------------------------------------------------------
 
@@ -153,3 +120,83 @@ class EnumDateRange(object):
     cl_last = make_method_asp_callable(EnumDate.Field, last)
     cl_enumdate_range = make_method_asp_callable([EnumDate.Field], enumdate_range)
     cl_dow = make_method_asp_callable(EnumDate.Field, ConstantField, dow)
+
+
+#------------------------------------------------------------------------------
+#
+#------------------------------------------------------------------------------
+
+
+class DateRange(object):
+    '''A class to generate and query dates within a range.
+
+    Like the python range() function - it generates from a starting date to a
+    stop date (but not including the stop date), incrementing by a step
+    count. Also includes a test predicate - if the predicate returns true for
+    the date then the date is included. For example, can use the test to skip
+    weekends.
+
+    '''
+
+    def __init__(self, start, stop=None, step=1, test=lambda x: True, count=None):
+        self._edr = EnumDateRange(start=start,stop=stop,step=step,
+                                  test=test,count=count)
+
+
+
+    # --------------------------------------------------------------------------
+    #
+    # --------------------------------------------------------------------------
+
+    def first(self):
+        '''Return the first date in the range'''
+        return self._edr.first[1]
+
+    def last(self):
+        '''Return the last date in the range'''
+        return self._edr.last[1]
+
+    def date_range(self):
+        '''Return the list of all the dates in the range'''
+        return [ dt for idx, dt in self._edr.enumdate_range() ]
+
+    def dow(self, dt):
+        '''Return the day of the week for a date'''
+        return calendar.day_name[dt.weekday()].lower()
+
+    # --------------------------------------------------------------------------
+    # Generate some wrapper functions
+    # --------------------------------------------------------------------------
+    cl_first = make_method_asp_callable(DateField, first)
+    cl_last = make_method_asp_callable(DateField, last)
+    cl_date_range = make_method_asp_callable([DateField], date_range)
+    cl_dow = make_method_asp_callable(DateField, ConstantField, dow)
+
+#------------------------------------------------------------------------------
+# date_range takes a start and end date and a step (default 1)
+# ------------------------------------------------------------------------------
+def date_range(start, stop, step=1):
+    """Generate dates within a range, with optional day step counter"""
+    dtrange = DateRange(start=start, stop=stop, step=step)
+    return dtrange.date_range()
+
+#------------------------------------------------------------------------------
+# dow - callable by python - returns the day of the week
+#------------------------------------------------------------------------------
+
+def dow(dt):
+    """Return the day of the week for a date"""
+    return calendar.day_name[dt.weekday()].lower()
+
+#------------------------------------------------------------------------------
+# Function signatures to generate ASP callable functions
+#------------------------------------------------------------------------------
+cl_date_range = make_function_asp_callable(
+    DateField, DateField, IntegerField, [DateField], date_range)
+cl_dow = make_function_asp_callable(DateField, ConstantField, dow)
+
+
+#------------------------------------------------------------------------------
+# Generate some wrapper functions
+#------------------------------------------------------------------------------
+
