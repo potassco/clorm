@@ -111,8 +111,8 @@ encapsulates an ASP model and the associated meta-data. It is passed to the
 provide a mechanism to extract Clorm facts from the model. The added and
 modified functions are:
 
-* ``facts(self, factbase, atoms=False, terms=False, shown=False,
-  raise_on_empty=True)``. This function requires a ``FactBase`` sub-class to be
+* ``facts(self, factbasebuilder, atoms=False, terms=False, shown=False,
+  raise_on_empty=True)``. This function requires a ``FactBaseBuilder`` to be
   specified as the first argument, as well as allowing for the ``atoms``,
   ``terms``, and ``shown`` options from the ``Model.symbols()`` function. It
   creates a fact base object from the passed class and populates it with the

@@ -1,12 +1,6 @@
 Fact Bases and Querying
 =======================
 
-.. warning:: Out of date documentation
-
-   This part needs to be modified. FactBase works differently and is no longer
-   sub-classed.
-
-
 As well as offering a higher-level interface for mapping ASP facts to Python
 objects, Clorm also provides facilities for dealing with collections of facts.
 Whether they are the set of facts that make up the problem instance or,
@@ -17,8 +11,9 @@ A Container for Facts
 ---------------------
 
 Clorm provides the ``FactBase`` as a container class for storing and querying
-facts. This class must be sub-classed, and each sub-class is distinguished by
-the predicates that it can store and the terms for which it maintains an index.
+facts. ``FactBase`` behaves much like a normal Python container except that it
+can only instances of Predicate (or it's sub-classes) and has database-like
+query mechanism.
 
 .. code-block:: python
 
@@ -32,103 +27,36 @@ the predicates that it can store and the terms for which it maintains an index.
       owner = ConstantField()
       petname = StringField()
 
-   class AppDB(FactBase):
-      predicates = [Person, Pet]
-      indexes = [Pet.owner]
-
-
-The fact base can be populated at object construction time or later.
-
-.. code-block:: python
-
    dave = Person(person="dave", address="UNSW")
    morri = Person(person="morri", address="UNSW")
    dave_cat = Pet(owner="dave", petname="Frank")
+
+   fb = FactBase([dave,morri,dave_cat])
+
+   # The in and len operators work as expected
+   assert dave in fb
+   assert len(fb) == 3
+
+The fact base can be populated at object construction time or later. Like a
+Python ``set`` object a ``FactBase`` has an ``add`` member function for adding
+facts. However, because it only accepts ``Predicate`` instances the function is
+overloaded to accept either a single fact or a list of facts.
+
+.. code-block:: python
+
    dave_dog = Pet(owner="dave", petname="Bob")
    morri_cat = Pet(onwer="morri", petname="Fido")
+   morri_cat2 = Pet(onwer="morri", petname="Dusty")
 
-   facts = AppDB([dave, morri, dave_cat])
-   facts.add([dave_dog, morri_cat])
-
-It should be noted that adding a fact for a predicate type that has not been
-registered for a given ``FactBase`` sub-class will result in the fact not being
-added; which is also why the ``FactBase.add()`` function returns the number of
-facts that have been added.
-
-Importing Raw Clingo Symbols
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-While a container can be populated with existing predicate objects, it can also
-be used a generate predicate objects from the raw ``Clingo.Symbol`` objects by
-passing a named parameter ``symbols`` to the constructor.
-
-.. code-block:: python
-
-   from clingo import *
-
-   dave_raw = Function("person", [Function("dave",[]),String("UNSW")])
-   facts = AppDB(symbols=[dave_raw])
-
-Here the ``AppDB`` object tries to unify each raw symbol with its internal list
-of predicates and creates a matching object for the first predicate that it
-unifies with. If there are no unifying predicates then the symbol is ignored.
-
-.. note:: Since a raw Clingo symbol is mapped to the first predicate that it
-   unifies with, the order that the predicates are defined can change the
-   behaviour of the fact base. Therefore, in general it is a good idea to avoid
-   defining multiple predicates that can unify with the same symbols.
-
-A final feature of the ``FactBase`` constructor is that it implements a delayed
-initialisation feature with the constructor option ``delayed_init=True``. With
-this option the importing of a symbols list is delayed until the first access of
-the object. The usefulness of this option will be discussed later when we
-examine the integration of Clorm with the ASP solver and dealing with ASP
-models.
-
-A Helper for Defining Containers
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-While defining a ``FactBase`` is not a particularly onerous task, nevertheless
-it does leave open some room for mistakes; for example when a Predicate
-definition is modified and the modification is not reflected in the fact base
-definitions.
-
-
-To help with this Clorm provides a ``FactBaseHelper`` class that instantiates a
-decorator that can be used to associate a predicate with a helper object.
-
-.. code-block:: python
-
-   from clorm import *
-
-   fbh1  = FactBaseHelper()
-   fbh2  = FactBaseHelper()
-
-   @fbh1.register
-   @fbh2.register
-   class Person(Predicate):
-      person = ConstantField()
-      address = StringField()
-
-   @fbh1.register
-   class Pet(Predicate):
-      owner = ConstantField(index=True)
-      petname = StringField()
-
-   AppDB1 = fbh1.create_class("AppDB1")
-   AppDB2 = fbh2.create_class("AppDB2")
-
-As was mentioned in the previous chapter the indexes are defined by specifying
-``index=True`` for the appropriate predicate definition.
+   fb.add(dave_dog)
+   fb.add([morri_cat, morri_cat2])
 
 Querying
 --------
 
-Having outlined how to define a fact base we now turn to showing how to
-efficiently access the data in a fact base. In fact, the primary motivation for
-providing a specialised container class for storing facts, instead of simply
-using a Python ``list`` or ``set`` oject, is to support a richer query
-mechanism.
+The primary motivation for providing a specialised container class for storing
+facts, instead of simply using a Python ``list`` or ``set`` object, is to
+support a richer query mechanism.
 
 When an ASP model is returned by the solver the application developer needs to
 process the model in order to extract the relevant facts. The simplest mechanism
@@ -137,16 +65,15 @@ contain a number of conditional statements to determine what action to take for
 the given fact; and to store it if some sort of matching needs to take place.
 
 However, this loop-and-test approach leads to unnecessary boilerplate code as
-well as making the purpose of the code more obscure. Clorm's ``FactBase`` is
-intended to alleviate this problem by offering a database-like query mechanism
-for extracting facts from a model.
+well as making the purpose of the code more obscure. ``FactBase`` is intended to
+alleviate this problem by offering a database-like query mechanism for
+extracting facts from a model.
 
 Simple Queries
 ^^^^^^^^^^^^^^
 
-Assuming the first definition of ``AppDB`` and the ``facts`` instance from
-above, the class provides a function to generate appropriate ``Select`` query
-objects. From a query object a ``where`` clause can also be set.
+Assuming the definitions and the ``fb`` instance above, a ``FactBase`` object
+can create ``Select`` query objects:
 
 .. code-block:: python
 
@@ -164,6 +91,21 @@ exactly one result.
        dave = query1.get_unique()
        for pet in query2.get():
            assert pet.owner == "dave"
+
+Indexing
+^^^^^^^^
+
+Querying can be a relatively expensive process is it has to potentially has to
+examine every fact in the ``FactBase``. However, if you know that you will be
+mostly searching for on a particular field(s) then it is useful to define an index
+on that field when the ``FactBase`` object is instantiated:
+
+.. code-block:: python
+
+   fb = FactBase([dave,morri,dave_cat], index=[Pet.owner])
+
+   query=facts.select(Pet).where(Pet.owner == ph1_)
+
 
 Queries with Parameters
 ^^^^^^^^^^^^^^^^^^^^^^^
@@ -190,12 +132,12 @@ Additional placeholders can be defined using the ``ph_`` function:
 Clorm also supports **named placeholders**, which may be preferable if there are
 a larger number of parameters. A named placeholder is created using the ``ph_``
 function with a non-numeric first parameter, and are referenced in the query
-execution using a keyword function parameter. Named placeholders also allow for
-a default value.
+execution using a keyword function parameter. An advantange of named
+placeholders is that they allow for a default value to be set.
 
 .. code-block:: python
 
-   query2=facts.select(Pet).where(Pet.owner == ph_("owner", "dave")
+   query2=facts.select(Pet).where(Pet.owner == ph_("owner", "dave"))
 
    # Find pets owned by "morri"
    for pet in query2.get(owner="morri"):
@@ -204,8 +146,6 @@ a default value.
    # Find pets owned by "dave" (using the default value)
    for pet in query2.get():
        print("\t pet named {}".format(pet.petname))
-
-
 
 
 Ordering Queries
@@ -280,5 +220,99 @@ function. Consequently in these cases the query would have to examine every fact
 in the fact base of the given type and test the function against that
 fact. Hence it is usually preferable to use the Clorm generated clauses where
 possible.
+
+Importing Raw Clingo Symbols and FactBaseBuilder
+------------------------------------------------
+
+A ``FactBase`` container can only contain predicate objects. However, the Clingo
+reasoner deals in ``Clingo.Symbol`` objects. Clorm provides the ``unify``
+function and the ``FactBaseBuilder`` class to simplify the interaction with
+``Clingo.Symbol`` objects.
+
+The ``unify`` function takes two parameters; a list of predicate classes as
+`unifies` and a list of raw clingo symbols. It then tries to unify the list of
+raw symbols with the list of predicates. This function returns a list of facts
+that represent the unification of the symbols with the first matching
+predicate. If a symbol was not able to unify with any predicate then it is
+ignored.
+
+.. code-block:: python
+
+   from clingo import *
+   from clorm import *
+
+   class Person(Predicate):
+      person = ConstantField()
+      address = StringField()
+
+   dave = Person(person="dave", address="UNSW")
+   dave_raw = Function("person", [Function("dave",[]),String("UNSW")])
+   facts = unify([Person], [dave_raw])
+   assert facts == [dave]
+
+.. note:: Since a raw Clingo symbol is mapped to the first predicate that it
+   unifies with, the order that the predicates are defined can change the
+   behaviour of the fact base. Therefore, in general it is a good idea to avoid
+   defining multiple predicates that can unify with the same symbols.
+
+
+The ``FactBaseBuilder`` provides a helper class to make it easier to build fact
+bases. It also provides integrated features to make it easier to define field
+indexes.
+
+Because defining queries is a potentially common requirement the field
+definition within the predicate can include the option ``index=True`` which will
+be used by the ``FactBaseBuilder``.
+
+So the earlier definition can be modified:
+
+.. code-block:: python
+
+   class Pet(Predicate):
+      owner = ConstantField(index=True)
+      petname = StringField()
+
+``FactBaseBuilder`` provides a decorator function that can used to register the
+class and index option with the builder.
+
+.. code-block:: python
+
+   from clorm import *
+
+   fbb = FactBaseBuilder()
+
+   @fbb.register
+   class Person(Predicate):
+      person = ConstantField()
+      address = StringField()
+
+   @fbb.register
+   class Pet(Predicate):
+      owner = ConstantField(index=True)
+      petname = StringField()
+
+   dave_raw = Function("person", [Function("dave",[]),String("UNSW")])
+   fb1 = fbb.new(symbols=[dave_raw])
+
+
+``FactBaseBuilder.new()`` member function has two other useful features. Firtly,
+the option ``raise_on_empty=True`` will throw an error if no clingo symbols
+unify with the registered predicates. While there are legitimate cases where a
+symbol doesn't unify with the builder there are also many cases where this
+indicates an error in the definition of the predicates or in the ASP program
+itself.
+
+The final option is that it allows for a delayed initialisation feature for the
+``FactBase``. We will be highlighted in the section on integrating with Clingo
+and processing ASP models, but essentially it allows for ``FactBase`` objects
+that are not used to be defined and discarded cheaply.
+
+
+
+
+
+
+
+
 
 
