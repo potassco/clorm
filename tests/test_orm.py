@@ -26,6 +26,8 @@ __all__ = [
     'FactIndexTestCase',
     'FactMapTestCase',
     'FactBaseTestCase',
+    'SelectTestCase',
+    'TypeCastSignatureTestCase'
     ]
 
 #------------------------------------------------------------------------------
@@ -298,6 +300,31 @@ class ORMTestCase(unittest.TestCase):
         self.assertEqual(f1, af1.raw)
         self.assertEqual(f2, af2.raw)
         self.assertEqual(af2.atup.aint,4)
+
+    #--------------------------------------------------------------------------
+    # Test that the Predicate meta class only allows a single sub-class derived
+    # from Predicate.
+    # --------------------------------------------------------------------------
+    def test_subclassing_nonlogicalsymbol(self):
+
+        class Ok1(Predicate):
+            astr = StringField()
+
+        class Ok2(Predicate):
+            aint = IntegerField()
+
+        # Test that you cannot instantiate NonLogicalSymbol
+        with self.assertRaises(TypeError) as ctx:
+            a = NonLogicalSymbol()
+
+        with self.assertRaises(TypeError):
+            class Bad1(Ok1,Ok2):
+                pass
+
+        with self.assertRaises(TypeError):
+            class Bad2(Ok1,Predicate):
+                pass
+
 
     #--------------------------------------------------------------------------
     # Test the clone operator
@@ -622,412 +649,6 @@ class ORMTestCase(unittest.TestCase):
         ac4 = and_(*es4)
         self.assertFalse(is_static(ac4.simplified()))
 
-    #--------------------------------------------------------------------------
-    #   Test that the select works
-    #--------------------------------------------------------------------------
-    def test_select_over_factmap(self):
-        class Afact1(Predicate):
-            num1=IntegerField()
-            num2=StringField()
-            str1=StringField()
-            class Meta: name = "afact"
-
-        fm1 = _FactMap(Afact1, [Afact1.num1,Afact1.str1])
-        fm2 = _FactMap(Afact1)
-        f1 = Afact1(1,1,"1")
-        f3 = Afact1(3,3,"3")
-        f4 = Afact1(4,4,"4")
-        f42 = Afact1(4,42,"42")
-        f10 = Afact1(10,10,"10")
-        fm1.add(f1)
-        fm1.add(f3)
-        fm1.add(f4)
-        fm1.add(f42)
-        fm1.add(f10)
-        fm2.add(f1)
-        fm2.add(f3)
-        fm2.add(f4)
-        fm2.add(f42)
-        fm2.add(f10)
-
-        s1_all = fm1.select()
-        s1_num1_eq_4 = fm1.select().where(Afact1.num1 == 4)
-        s1_num1_ne_4 = fm1.select().where(Afact1.num1 != 4)
-        s1_num1_lt_4 = fm1.select().where(Afact1.num1 < 4)
-        s1_num1_le_4 = fm1.select().where(Afact1.num1 <= 4)
-        s1_num1_gt_4 = fm1.select().where(Afact1.num1 > 4)
-        s1_num1_ge_4 = fm1.select().where(Afact1.num1 >= 4)
-        s1_str1_eq_4 = fm1.select().where(Afact1.str1 == "4")
-        s1_num2_eq_4 = fm1.select().where(Afact1.num2 == 4)
-
-        s2_all = fm1.select()
-        s2_num1_eq_4 = fm2.select().where(Afact1.num1 == 4)
-        s2_num1_ne_4 = fm2.select().where(Afact1.num1 != 4)
-        s2_num1_lt_4 = fm2.select().where(Afact1.num1 < 4)
-        s2_num1_le_4 = fm2.select().where(Afact1.num1 <= 4)
-        s2_num1_gt_4 = fm2.select().where(Afact1.num1 > 4)
-        s2_num1_ge_4 = fm2.select().where(Afact1.num1 >= 4)
-        s2_str1_eq_4 = fm2.select().where(Afact1.str1 == "4")
-        s2_num2_eq_4 = fm2.select().where(Afact1.num2 == 4)
-
-        self.assertFalse(s1_all._debug())
-        self.assertEqual(s1_num1_eq_4._debug()[0], Afact1.num1)
-        self.assertTrue(s1_num1_ne_4._debug())
-        self.assertTrue(s1_num1_lt_4._debug())
-        self.assertTrue(s1_num1_le_4._debug())
-        self.assertTrue(s1_num1_gt_4._debug())
-        self.assertTrue(s1_num1_ge_4._debug())
-        self.assertEqual(s1_str1_eq_4._debug()[0], Afact1.str1)
-        self.assertFalse(s1_num2_eq_4._debug())
-
-        self.assertFalse(s2_all._debug())
-        self.assertFalse(s2_num1_eq_4._debug())
-        self.assertFalse(s2_num1_ne_4._debug())
-        self.assertFalse(s2_num1_lt_4._debug())
-        self.assertFalse(s2_num1_le_4._debug())
-        self.assertFalse(s2_num1_gt_4._debug())
-        self.assertFalse(s2_num1_ge_4._debug())
-        self.assertFalse(s2_str1_eq_4._debug())
-        self.assertFalse(s2_num2_eq_4._debug())
-
-        self.assertEqual(set(list(s1_all.get())), set([f1,f3,f4,f42,f10]))
-        self.assertEqual(set(list(s1_num1_eq_4.get())), set([f4,f42]))
-        self.assertEqual(set(list(s1_num1_ne_4.get())), set([f1,f3,f10]))
-        self.assertEqual(set(list(s1_num1_lt_4.get())), set([f1,f3]))
-        self.assertEqual(set(list(s1_num1_le_4.get())), set([f1,f3,f4,f42]))
-        self.assertEqual(set(list(s1_num1_gt_4.get())), set([f10]))
-        self.assertEqual(set(list(s1_num1_ge_4.get())), set([f4,f42,f10]))
-        self.assertEqual(s1_str1_eq_4.get_unique(), f4)
-        self.assertEqual(s1_num2_eq_4.get_unique(), f4)
-
-        self.assertEqual(set(list(s2_all.get())), set([f1,f3,f4,f42,f10]))
-        self.assertEqual(set(list(s2_num1_eq_4.get())), set([f4,f42]))
-        self.assertEqual(set(list(s2_num1_ne_4.get())), set([f1,f3,f10]))
-        self.assertEqual(set(list(s2_num1_lt_4.get())), set([f1,f3]))
-        self.assertEqual(set(list(s2_num1_le_4.get())), set([f1,f3,f4,f42]))
-        self.assertEqual(set(list(s2_num1_gt_4.get())), set([f10]))
-        self.assertEqual(set(list(s2_num1_ge_4.get())), set([f4,f42,f10]))
-        self.assertEqual(s2_str1_eq_4.get_unique(), f4)
-        self.assertEqual(s2_num2_eq_4.get_unique(), f4)
-
-
-        # Test simple conjunction select
-        s1_conj1 = fm1.select().where(Afact1.str1 == "42", Afact1.num1 == 4)
-        s1_conj2 = fm1.select().where(Afact1.num1 == 4, Afact1.str1 == "42")
-        s1_conj3 = fm1.select().where(lambda x: x.str1 == "42", Afact1.num1 == 4)
-
-        self.assertEqual(s1_conj1._debug()[0], Afact1.num1)
-        self.assertEqual(s1_conj2._debug()[0], Afact1.num1)
-        self.assertEqual(s1_conj3._debug()[0], Afact1.num1)
-        self.assertEqual(s1_conj1.get_unique(), f42)
-        self.assertEqual(s1_conj2.get_unique(), f42)
-        self.assertEqual(s1_conj3.get_unique(), f42)
-
-        # Test select with placeholders
-        s1_ph1 = fm1.select().where(Afact1.num1 == ph_("num1"))
-        s1_ph2 = fm1.select().where(Afact1.str1 == ph_("str1","42"), Afact1.num1 == ph_("num1"))
-        self.assertEqual(set(s1_ph1.get(num1=4)), set([f4,f42]))
-        self.assertEqual(set(list(s1_ph1.get(num1=3))), set([f3]))
-        self.assertEqual(set(list(s1_ph1.get(num1=2))), set([]))
-        self.assertEqual(s1_ph2.get_unique(num1=4), f42)
-        self.assertEqual(s1_ph2.get_unique(str1="42",num1=4), f42)
-
-        with self.assertRaises(ValueError) as ctx:
-            tmp = list(s1_ph1.get_unique(num1=4))  # fails because of multiple values
-        with self.assertRaises(TypeError) as ctx:
-            tmp = list(s1_ph2.get(num2=5))         # fails because of no values
-        with self.assertRaises(TypeError) as ctx:
-            tmp = list(s1_ph2.get(str1="42"))
-
-    #--------------------------------------------------------------------------
-    #   Test that we can use the same placeholder multiple times
-    #--------------------------------------------------------------------------
-    def test_select_multi_placeholder(self):
-        class Afact(Predicate):
-            num1=IntegerField()
-            num2=IntegerField()
-
-        fm1 = _FactMap(Afact, [Afact.num1])
-        f1 = Afact(1,1)
-        f2 = Afact(1,2)
-        f3 = Afact(1,3)
-        f4 = Afact(2,1)
-        f5 = Afact(2,2)
-
-        fm1.add(f1) ; fm1.add(f2) ; fm1.add(f3) ; fm1.add(f4) ; fm1.add(f5)
-
-        s1 = fm1.select().where(Afact.num1 == ph1_, Afact.num2 == ph1_)
-        self.assertTrue(set([f for f in s1.get(1)]), set([f1]))
-        self.assertTrue(set([f for f in s1.get(2)]), set([f5]))
-
-        s2 = fm1.select().where(Afact.num1 == ph_("a",1), Afact.num2 == ph_("a",2))
-        self.assertTrue(set([f for f in s2.get(a=1)]), set([f1]))
-        self.assertTrue(set([f for f in s2.get(a=2)]), set([f5]))
-        self.assertTrue(set([f for f in s2.get()]), set([f2]))
-
-        # test that we can do different parameters with normal functions
-        def tmp(f,a,b=2):
-            return f.num1 == a and f.num2 == 2
-
-        s3 = fm1.select().where(tmp)
-        with self.assertRaises(TypeError) as ctx:
-            r=[f for f in s3.get()]
-
-        self.assertTrue(set([f for f in s3.get(a=1)]), set([f2]))
-        self.assertTrue(set([f for f in s3.get(a=1,b=3)]), set([f3]))
-
-        # Test manually created positional placeholders
-        s1 = fm1.select().where(Afact.num1 == ph1_, Afact.num2 == ph_(1))
-        self.assertTrue(set([f for f in s1.get(1)]), set([f1]))
-        self.assertTrue(set([f for f in s1.get(2)]), set([f5]))
-
-    #--------------------------------------------------------------------------
-    #   Test that select works with order_by
-    #--------------------------------------------------------------------------
-    def test_select_order_by(self):
-        class Afact(Predicate):
-            num1=IntegerField()
-            str1=StringField()
-            str2=ConstantField()
-
-        f1 = Afact(num1=1,str1="1",str2="5")
-        f2 = Afact(num1=2,str1="3",str2="4")
-        f3 = Afact(num1=3,str1="5",str2="3")
-        f4 = Afact(num1=4,str1="3",str2="2")
-        f5 = Afact(num1=5,str1="1",str2="1")
-        fb = FactBase(facts=[f1,f2,f3,f4,f5])
-
-        q = fb.select(Afact).order_by(Afact.num1)
-        self.assertEqual([f1,f2,f3,f4,f5], q.get())
-
-        q = fb.select(Afact).order_by(Afact.num1.asc())
-        self.assertEqual([f1,f2,f3,f4,f5], q.get())
-
-        q = fb.select(Afact).order_by(Afact.num1.desc())
-        self.assertEqual([f5,f4,f3,f2,f1], q.get())
-
-        q = fb.select(Afact).order_by(Afact.str2)
-        self.assertEqual([f5,f4,f3,f2,f1], q.get())
-
-        q = fb.select(Afact).order_by(Afact.str2.desc())
-        self.assertEqual([f1,f2,f3,f4,f5], q.get())
-
-        q = fb.select(Afact).order_by(Afact.str1.desc(), Afact.num1)
-        self.assertEqual([f3,f2,f4,f1,f5], q.get())
-
-        q = fb.select(Afact).order_by(desc(Afact.str1), Afact.num1)
-        self.assertEqual([f3,f2,f4,f1,f5], q.get())
-
-        # Adding a duplicate object to a factbase shouldn't do anything
-        f6 = Afact(num1=5,str1="1",str2="1")
-        fb.add(f6)
-        q = fb.select(Afact).order_by(desc(Afact.str1), Afact.num1)
-        self.assertEqual([f3,f2,f4,f1,f5], q.get())
-
-    #--------------------------------------------------------------------------
-    #   Test that select works with order_by for complex term
-    #--------------------------------------------------------------------------
-    def test_select_order_by_complex_term(self):
-
-        class SwapField(IntegerField):
-            pytocl = lambda x: 100 - x
-            cltopy = lambda x: 100 - x
-
-        class AComplex(ComplexTerm):
-            swap=SwapField(index=True)
-            norm=IntegerField(index=True)
-
-        class AFact(Predicate):
-            astr = StringField(index=True)
-            cmplx = AComplex.Field(index=True)
-
-        cmplx1 = AComplex(swap=99,norm=1)
-        cmplx2 = AComplex(swap=98,norm=2)
-        cmplx3 = AComplex(swap=97,norm=3)
-
-        f1 = AFact(astr="aaa", cmplx=cmplx1)
-        f2 = AFact(astr="bbb", cmplx=cmplx2)
-        f3 = AFact(astr="ccc", cmplx=cmplx3)
-        f4 = AFact(astr="ddd", cmplx=cmplx3)
-
-        fb = FactBase(facts=[f1,f2,f3,f4], indexes = [AFact.astr, AFact.cmplx])
-
-        q = fb.select(AFact).order_by(AFact.astr)
-        self.assertEqual([f1,f2,f3,f4], q.get())
-
-        q = fb.select(AFact).order_by(AFact.cmplx, AFact.astr)
-        self.assertEqual([f3,f4,f2,f1], q.get())
-
-        q = fb.select(AFact).where(AFact.cmplx <= ph1_).order_by(AFact.cmplx, AFact.astr)
-        self.assertEqual([f3,f4,f2], q.get(cmplx2))
-
-
-    #--------------------------------------------------------------------------
-    #   Test that the indexing works
-    #--------------------------------------------------------------------------
-    def test_select_indexing(self):
-        class Afact(Predicate):
-            num1=IntegerField()
-            num2=IntegerField()
-
-        fm1 = _FactMap(Afact, [Afact.num1])
-        f1 = Afact(1,1)
-        f2 = Afact(1,2)
-        f3 = Afact(1,3)
-        f4 = Afact(2,1)
-        f5 = Afact(2,2)
-        f6 = Afact(3,1)
-
-        fm1.add(f1) ; fm1.add(f2) ; fm1.add(f3) ; fm1.add(f4) ; fm1.add(f5) ; fm1.add(f6)
-
-        # Use an function to track the facts that are visited. This will show
-        # that the first operator slects only the appropriate terms.
-        facts = set()
-        def track(f,a,b):
-            nonlocal facts
-            facts.add(f)
-            return f.num2 == b
-
-        s1 = fm1.select().where(Afact.num1 == ph1_, track)
-        s2 = fm1.select().where(Afact.num1 < ph1_, track)
-
-        self.assertTrue(set([f for f in s1.get(2,1)]), set([f4]))
-        self.assertTrue(facts, set([f4,f5]))
-
-        self.assertTrue(set([f for f in s2.get(2,2)]), set([f2]))
-        self.assertTrue(facts, set([f1,f2,f3]))
-
-
-    #--------------------------------------------------------------------------
-    #   Test the delete
-    #--------------------------------------------------------------------------
-    def test_delete_over_factmap_and_factbase(self):
-        class Afact(Predicate):
-            num1=IntegerField()
-            num2=StringField()
-            str1=StringField()
-
-        fm1 = _FactMap(Afact, [Afact.num1,Afact.str1])
-        fm2 = _FactMap(Afact)
-        f1 = Afact(1,1,"1")
-        f3 = Afact(3,3,"3")
-        f4 = Afact(4,4,"4")
-        f42 = Afact(4,42,"42")
-        f10 = Afact(10,10,"10")
-        fm1.add(f1) ; fm2.add(f1)
-        fm1.add(f3) ; fm2.add(f3)
-        fm1.add(f4) ; fm2.add(f4)
-        fm1.add(f42) ; fm2.add(f42)
-        fm1.add(f10) ; fm2.add(f10)
-
-        d1_all = fm1.delete()
-        d1_num1 = fm2.delete().where(Afact.num1 == ph1_)
-        s1_num1 = fm2.select().where(Afact.num1 == ph1_)
-
-        self.assertEqual(d1_all.execute(), 5)
-        self.assertEqual(set([f for f in s1_num1.get(4)]), set([f4,f42]))
-        self.assertEqual(d1_num1.execute(4), 2)
-        self.assertEqual(set([f for f in s1_num1.get(4)]), set([]))
-
-#        return
-
-        fb1 = FactBase(facts=[f1,f3, f4,f42,f10], indexes = [Afact.num1, Afact.num2])
-        d1_num1 = fb1.delete(Afact).where(Afact.num1 == ph1_)
-        s1_num1 = fb1.select(Afact).where(Afact.num1 == ph1_)
-        self.assertEqual(set([f for f in s1_num1.get(4)]), set([f4,f42]))
-        self.assertEqual(d1_num1.execute(4), 2)
-        self.assertEqual(set([f for f in s1_num1.get(4)]), set([]))
-
-    #--------------------------------------------------------------------------
-    # Test basic insert and selection of facts in a factbase
-    #--------------------------------------------------------------------------
-
-    def test_factbase(self):
-
-        class Afact(Predicate):
-            num1=IntegerField()
-            num2=IntegerField()
-            str1=StringField()
-        class Bfact(Predicate):
-            num1=IntegerField()
-            str1=StringField()
-        class Cfact(Predicate):
-            num1=IntegerField()
-
-        af1 = Afact(1,10,"bbb")
-        af2 = Afact(2,20,"aaa")
-        af3 = Afact(3,20,"aaa")
-        bf1 = Bfact(1,"aaa")
-        bf2 = Bfact(2,"bbb")
-        cf1 = Cfact(1)
-
-#        fb = FactBase([Afact.num1, Afact.num2, Afact.str1])
-        fb = FactBase()
-        facts=[af1,af2,af3,bf1,bf2,cf1]
-        fb.add(facts)
-#####        self.assertEqual(fb.add(facts), 6)
-
-        self.assertEqual(set(fb.facts()), set(facts))
-        self.assertEqual(set(fb.predicates), set([Afact,Bfact,Cfact]))
-
-        s_af_all = fb.select(Afact)
-        s_af_num1_eq_1 = fb.select(Afact).where(Afact.num1 == 1)
-        s_af_num1_le_2 = fb.select(Afact).where(Afact.num1 <= 2)
-        s_af_num2_eq_20 = fb.select(Afact).where(Afact.num2 == 20)
-        s_bf_str1_eq_aaa = fb.select(Bfact).where(Bfact.str1 == "aaa")
-        s_bf_str1_eq_ccc = fb.select(Bfact).where(Bfact.str1 == "ccc")
-        s_cf_num1_eq_1 = fb.select(Cfact).where(Cfact.num1 == 1)
-
-        self.assertEqual(set(s_af_all.get()), set([af1,af2,af3]))
-        self.assertEqual(set(s_af_num1_eq_1.get()), set([af1]))
-        self.assertEqual(set(s_af_num1_le_2.get()), set([af1,af2]))
-        self.assertEqual(set(s_af_num2_eq_20.get()), set([af2, af3]))
-        self.assertEqual(set(s_bf_str1_eq_aaa.get()), set([bf1]))
-        self.assertEqual(set(s_bf_str1_eq_ccc.get()), set([]))
-        self.assertEqual(set(s_cf_num1_eq_1.get()), set([cf1]))
-
-        fb.clear()
-        self.assertEqual(set(s_af_all.get()), set())
-        self.assertEqual(set(s_af_num1_eq_1.get()), set())
-        self.assertEqual(set(s_af_num1_le_2.get()), set())
-        self.assertEqual(set(s_af_num2_eq_20.get()), set())
-        self.assertEqual(set(s_bf_str1_eq_aaa.get()), set())
-        self.assertEqual(set(s_bf_str1_eq_ccc.get()), set())
-        self.assertEqual(set(s_cf_num1_eq_1.get()), set())
-
-        # Test that the select can work with an initially empty factbase
-        fb2 = FactBase()
-        s2 = fb2.select(Afact).where(Afact.num1 == 1)
-        self.assertEqual(set(s2.get()), set())
-        fb2.add([af1,af2])
-        self.assertEqual(set(s2.get()), set([af1]))
-
-        # Test select with placeholders
-#        fb3 = FactBase([Afact.num1])
-        fb3 = FactBase()
-        fb3.add([af1,af2,af3])
-####        self.assertEqual(fb3.add([af1,af2,af3]),3)
-        s3 = fb3.select(Afact).where(Afact.num1 == ph_("num1"))
-        self.assertEqual(s3.get_unique(num1=1), af1)
-        self.assertEqual(s3.get_unique(num1=2), af2)
-        self.assertEqual(s3.get_unique(num1=3), af3)
-
-
-        # Test placeholders with positional arguments
-        s4 = fb3.select(Afact).where(Afact.num1 < ph1_)
-        self.assertEqual(set(list(s4.get(1))), set([]))
-        self.assertEqual(set(list(s4.get(2))), set([af1]))
-        self.assertEqual(set(list(s4.get(3))), set([af1,af2]))
-
-        s5 = fb3.select(Afact).where(Afact.num1 <= ph1_, Afact.num2 == ph2_)
-        self.assertEqual(set(s5.get(3,10)), set([af1]))
-
-        with self.assertRaises(TypeError) as ctx:
-            self.assertEqual(set(list(s5.get(1))), set([]))
-
-        # Test that the fact base index
-        fb = FactBase(indexes=[Afact.num2, Bfact.str1])
-        self.assertEqual(set(fb.indexes), set([Afact.num2, Bfact.str1]))
 
     #--------------------------------------------------------------------------
     # Test the factbasehelper with double decorators
@@ -1142,163 +763,6 @@ class ORMTestCase(unittest.TestCase):
         self.assertEqual(s.get_unique(), af1)
         s = fb.select(Bfact).where(Bfact.num1 == 1)
         self.assertEqual(s.get_unique(), bf1)
-
-    #--------------------------------------------------------------------------
-    # Test the signature generation for writing python functions that can be
-    # called from ASP.
-    # --------------------------------------------------------------------------
-
-    def test_signature(self):
-
-        class DateField(StringField):
-            pytocl = lambda dt: dt.strftime("%Y%m%d")
-            cltopy = lambda s: datetime.datetime.strptime(s,"%Y%m%d").date()
-
-        class DowField(ConstantField):
-            pytocl = lambda dt: calendar.day_name[dt.weekday()].lower()
-
-        class EDate(ComplexTerm):
-            idx = IntegerField()
-            date = DateField()
-            class Meta: name="edate"
-
-        sig1 = TypeCastSignature(DateField)     # returns a single date
-        sig2 = TypeCastSignature([DateField])   # returns a list of dates
-        sig3 = TypeCastSignature(DateField, DowField)  # takes a date and returns the day or week
-
-        sig4 = TypeCastSignature(EDate.Field,EDate.Field)    # takes an EDate and returns an EDate
-
-        # Some bad declarations
-        with self.assertRaises(TypeError) as ctx:
-            sig5 = TypeCastSignature(int)
-        with self.assertRaises(TypeError) as ctx:
-            sig5 = TypeCastSignature(DateField, int)
-        with self.assertRaises(TypeError) as ctx:
-            sig5 = TypeCastSignature(DateField, [int])
-        with self.assertRaises(TypeError) as ctx:
-            sig5 = TypeCastSignature(DateField, [DateField, DateField])
-
-        date1 = datetime.date(2018,1,1)
-        date2 = datetime.date(2019,2,2)
-
-        edate1 = EDate(idx=1, date=date1)
-        edate2 = EDate(idx=2, date=date2)
-
-        # Test simple output and list output
-
-        def getdate1() : return date1
-        def getdates() : return [date1, date2]
-
-        cl_getdate1 = sig1.wrap_function(getdate1)
-        cl_getdates = sig2.wrap_function(getdates)
-        self.assertEqual(cl_getdate1(), String("20180101"))
-        self.assertEqual(cl_getdates(), [String("20180101"), String("20190202")])
-
-        # Use decoractor mode
-
-        @sig3.wrap_function
-        def getdow(dt) : return dt
-        result = getdow(String("20180101"))
-        self.assertEqual(result, Function("monday",[]))
-
-        # Test a ComplexTerm input and output
-        @sig4.wrap_function
-        def getedate(indate): return indate
-        self.assertEqual(getedate(edate1.raw), edate1.raw)
-        self.assertEqual(getedate(edate2.raw), edate2.raw)
-
-        # Now test the method wrapper
-        class Tmp(object):
-            def __init__(self,x,y):
-                self._x = x
-                self._y = y
-
-            def get_pair(self):
-                return [self._x, self._y]
-
-            cl_get_pair = sig2.wrap_method(get_pair)
-
-        t = Tmp(date1,date2)
-        self.assertEqual(t.cl_get_pair(), [String("20180101"), String("20190202")])
-
-    #--------------------------------------------------------------------------
-    # Test the signature generation for writing python functions that can be
-    # called from ASP.
-    # --------------------------------------------------------------------------
-
-    def test_make_function_asp_callable(self):
-
-        class DateField(StringField):
-            pytocl = lambda dt: dt.strftime("%Y%m%d")
-            cltopy = lambda s: datetime.datetime.strptime(s,"%Y%m%d").date()
-
-        class DowField(ConstantField):
-            pytocl = lambda dt: calendar.day_name[dt.weekday()].lower()
-
-        class EDate(ComplexTerm):
-            idx = IntegerField()
-            date = DateField()
-            class Meta: name="edate"
-
-        date1 = datetime.date(2018,1,1)
-        date2 = datetime.date(2019,2,2)
-
-        edate1 = EDate(idx=1, date=date1)
-        edate2 = EDate(idx=2, date=date2)
-
-        def getdate1() : return date1
-        def getdates() : return [date1, date2]
-
-        # Test wrapper as a normal function and specifying a signature
-        cl_getdate1 = make_function_asp_callable(DateField, getdate1)
-        self.assertEqual(cl_getdate1(), String("20180101"))
-
-        cl_getdates = make_function_asp_callable([DateField], getdates)
-        self.assertEqual(cl_getdates(), [String("20180101"), String("20190202")])
-
-        # Test wrapper as a decorator and specifying a signature
-        @make_function_asp_callable(DateField)
-        def getdate1() : return date1
-        self.assertEqual(getdate1(), String("20180101"))
-
-        @make_function_asp_callable([DateField])
-        def getdates() : return [date1, date2]
-        self.assertEqual(getdates(), [String("20180101"), String("20190202")])
-
-        @make_function_asp_callable
-        def getdates2(x: DateField, y : EDate.Field) -> [DateField]:
-            '''GETDATES2'''
-            return [date1,date2]
-        self.assertEqual(getdates2(String("20180101"), edate1.raw),
-                         [String("20180101"), String("20190202")])
-        self.assertEqual(getdates2.__doc__, '''GETDATES2''')
-
-        with self.assertRaises(TypeError) as ctx:
-            @make_function_asp_callable
-            def getdates3(x,y): return [date1,date2]
-
-        with self.assertRaises(TypeError) as ctx:
-            @make_function_asp_callable
-            def getdates4(x : DateField, y : DateField): return [date1,date2]
-
-        # Now test the method wrapper
-        class Tmp(object):
-            def __init__(self,x,y):
-                self._x = x
-                self._y = y
-
-            def get_pair(self):
-                return [self._x, self._y]
-
-            cl_get_pair = make_method_asp_callable([DateField], get_pair)
-
-            @make_method_asp_callable
-            def get_pair2(self) -> [DateField]:
-                return [self._x, self._y]
-
-        t = Tmp(date1,date2)
-        self.assertEqual(t.cl_get_pair(), [String("20180101"), String("20190202")])
-        self.assertEqual(t.get_pair2(), [String("20180101"), String("20190202")])
 
 
 #------------------------------------------------------------------------------
@@ -1629,6 +1093,584 @@ class FactBaseTestCase(unittest.TestCase):
         self.assertEqual(set(FactBase(input)), input)
         input = set([af1,af2,bf1])
         self.assertEqual(set(FactBase(facts=lambda: input)), input)
+
+#------------------------------------------------------------------------------
+# Test the _Select class
+#------------------------------------------------------------------------------
+
+class SelectTestCase(unittest.TestCase):
+    def setUp(self):
+        pass
+
+    #--------------------------------------------------------------------------
+    #   Test that the select works
+    #--------------------------------------------------------------------------
+    def test_select_over_factmap(self):
+        class Afact1(Predicate):
+            num1=IntegerField()
+            num2=StringField()
+            str1=StringField()
+            class Meta: name = "afact"
+
+        fm1 = _FactMap(Afact1, [Afact1.num1,Afact1.str1])
+        fm2 = _FactMap(Afact1)
+        f1 = Afact1(1,1,"1")
+        f3 = Afact1(3,3,"3")
+        f4 = Afact1(4,4,"4")
+        f42 = Afact1(4,42,"42")
+        f10 = Afact1(10,10,"10")
+        fm1.add(f1)
+        fm1.add(f3)
+        fm1.add(f4)
+        fm1.add(f42)
+        fm1.add(f10)
+        fm2.add(f1)
+        fm2.add(f3)
+        fm2.add(f4)
+        fm2.add(f42)
+        fm2.add(f10)
+
+        s1_all = fm1.select()
+        s1_num1_eq_4 = fm1.select().where(Afact1.num1 == 4)
+        s1_num1_ne_4 = fm1.select().where(Afact1.num1 != 4)
+        s1_num1_lt_4 = fm1.select().where(Afact1.num1 < 4)
+        s1_num1_le_4 = fm1.select().where(Afact1.num1 <= 4)
+        s1_num1_gt_4 = fm1.select().where(Afact1.num1 > 4)
+        s1_num1_ge_4 = fm1.select().where(Afact1.num1 >= 4)
+        s1_str1_eq_4 = fm1.select().where(Afact1.str1 == "4")
+        s1_num2_eq_4 = fm1.select().where(Afact1.num2 == 4)
+
+        s2_all = fm1.select()
+        s2_num1_eq_4 = fm2.select().where(Afact1.num1 == 4)
+        s2_num1_ne_4 = fm2.select().where(Afact1.num1 != 4)
+        s2_num1_lt_4 = fm2.select().where(Afact1.num1 < 4)
+        s2_num1_le_4 = fm2.select().where(Afact1.num1 <= 4)
+        s2_num1_gt_4 = fm2.select().where(Afact1.num1 > 4)
+        s2_num1_ge_4 = fm2.select().where(Afact1.num1 >= 4)
+        s2_str1_eq_4 = fm2.select().where(Afact1.str1 == "4")
+        s2_num2_eq_4 = fm2.select().where(Afact1.num2 == 4)
+
+        self.assertFalse(s1_all._debug())
+        self.assertEqual(s1_num1_eq_4._debug()[0], Afact1.num1)
+        self.assertTrue(s1_num1_ne_4._debug())
+        self.assertTrue(s1_num1_lt_4._debug())
+        self.assertTrue(s1_num1_le_4._debug())
+        self.assertTrue(s1_num1_gt_4._debug())
+        self.assertTrue(s1_num1_ge_4._debug())
+        self.assertEqual(s1_str1_eq_4._debug()[0], Afact1.str1)
+        self.assertFalse(s1_num2_eq_4._debug())
+
+        self.assertFalse(s2_all._debug())
+        self.assertFalse(s2_num1_eq_4._debug())
+        self.assertFalse(s2_num1_ne_4._debug())
+        self.assertFalse(s2_num1_lt_4._debug())
+        self.assertFalse(s2_num1_le_4._debug())
+        self.assertFalse(s2_num1_gt_4._debug())
+        self.assertFalse(s2_num1_ge_4._debug())
+        self.assertFalse(s2_str1_eq_4._debug())
+        self.assertFalse(s2_num2_eq_4._debug())
+
+        self.assertEqual(set(list(s1_all.get())), set([f1,f3,f4,f42,f10]))
+        self.assertEqual(set(list(s1_num1_eq_4.get())), set([f4,f42]))
+        self.assertEqual(set(list(s1_num1_ne_4.get())), set([f1,f3,f10]))
+        self.assertEqual(set(list(s1_num1_lt_4.get())), set([f1,f3]))
+        self.assertEqual(set(list(s1_num1_le_4.get())), set([f1,f3,f4,f42]))
+        self.assertEqual(set(list(s1_num1_gt_4.get())), set([f10]))
+        self.assertEqual(set(list(s1_num1_ge_4.get())), set([f4,f42,f10]))
+        self.assertEqual(s1_str1_eq_4.get_unique(), f4)
+        self.assertEqual(s1_num2_eq_4.get_unique(), f4)
+
+        self.assertEqual(set(list(s2_all.get())), set([f1,f3,f4,f42,f10]))
+        self.assertEqual(set(list(s2_num1_eq_4.get())), set([f4,f42]))
+        self.assertEqual(set(list(s2_num1_ne_4.get())), set([f1,f3,f10]))
+        self.assertEqual(set(list(s2_num1_lt_4.get())), set([f1,f3]))
+        self.assertEqual(set(list(s2_num1_le_4.get())), set([f1,f3,f4,f42]))
+        self.assertEqual(set(list(s2_num1_gt_4.get())), set([f10]))
+        self.assertEqual(set(list(s2_num1_ge_4.get())), set([f4,f42,f10]))
+        self.assertEqual(s2_str1_eq_4.get_unique(), f4)
+        self.assertEqual(s2_num2_eq_4.get_unique(), f4)
+
+
+        # Test simple conjunction select
+        s1_conj1 = fm1.select().where(Afact1.str1 == "42", Afact1.num1 == 4)
+        s1_conj2 = fm1.select().where(Afact1.num1 == 4, Afact1.str1 == "42")
+        s1_conj3 = fm1.select().where(lambda x: x.str1 == "42", Afact1.num1 == 4)
+
+        self.assertEqual(s1_conj1._debug()[0], Afact1.num1)
+        self.assertEqual(s1_conj2._debug()[0], Afact1.num1)
+        self.assertEqual(s1_conj3._debug()[0], Afact1.num1)
+        self.assertEqual(s1_conj1.get_unique(), f42)
+        self.assertEqual(s1_conj2.get_unique(), f42)
+        self.assertEqual(s1_conj3.get_unique(), f42)
+
+        # Test select with placeholders
+        s1_ph1 = fm1.select().where(Afact1.num1 == ph_("num1"))
+        s1_ph2 = fm1.select().where(Afact1.str1 == ph_("str1","42"), Afact1.num1 == ph_("num1"))
+        self.assertEqual(set(s1_ph1.get(num1=4)), set([f4,f42]))
+        self.assertEqual(set(list(s1_ph1.get(num1=3))), set([f3]))
+        self.assertEqual(set(list(s1_ph1.get(num1=2))), set([]))
+        self.assertEqual(s1_ph2.get_unique(num1=4), f42)
+        self.assertEqual(s1_ph2.get_unique(str1="42",num1=4), f42)
+
+        with self.assertRaises(ValueError) as ctx:
+            tmp = list(s1_ph1.get_unique(num1=4))  # fails because of multiple values
+        with self.assertRaises(TypeError) as ctx:
+            tmp = list(s1_ph2.get(num2=5))         # fails because of no values
+        with self.assertRaises(TypeError) as ctx:
+            tmp = list(s1_ph2.get(str1="42"))
+
+    #--------------------------------------------------------------------------
+    # Test basic insert and selection of facts in a factbase
+    #--------------------------------------------------------------------------
+
+    def test_select_over_factbase(self):
+
+        class Afact(Predicate):
+            num1=IntegerField()
+            num2=IntegerField()
+            str1=StringField()
+        class Bfact(Predicate):
+            num1=IntegerField()
+            str1=StringField()
+        class Cfact(Predicate):
+            num1=IntegerField()
+
+        af1 = Afact(1,10,"bbb")
+        af2 = Afact(2,20,"aaa")
+        af3 = Afact(3,20,"aaa")
+        bf1 = Bfact(1,"aaa")
+        bf2 = Bfact(2,"bbb")
+        cf1 = Cfact(1)
+
+#        fb = FactBase([Afact.num1, Afact.num2, Afact.str1])
+        fb = FactBase()
+        facts=[af1,af2,af3,bf1,bf2,cf1]
+        fb.add(facts)
+#####        self.assertEqual(fb.add(facts), 6)
+
+        self.assertEqual(set(fb.facts()), set(facts))
+        self.assertEqual(set(fb.predicates), set([Afact,Bfact,Cfact]))
+
+        s_af_all = fb.select(Afact)
+        s_af_num1_eq_1 = fb.select(Afact).where(Afact.num1 == 1)
+        s_af_num1_le_2 = fb.select(Afact).where(Afact.num1 <= 2)
+        s_af_num2_eq_20 = fb.select(Afact).where(Afact.num2 == 20)
+        s_bf_str1_eq_aaa = fb.select(Bfact).where(Bfact.str1 == "aaa")
+        s_bf_str1_eq_ccc = fb.select(Bfact).where(Bfact.str1 == "ccc")
+        s_cf_num1_eq_1 = fb.select(Cfact).where(Cfact.num1 == 1)
+
+        self.assertEqual(set(s_af_all.get()), set([af1,af2,af3]))
+        self.assertEqual(set(s_af_num1_eq_1.get()), set([af1]))
+        self.assertEqual(set(s_af_num1_le_2.get()), set([af1,af2]))
+        self.assertEqual(set(s_af_num2_eq_20.get()), set([af2, af3]))
+        self.assertEqual(set(s_bf_str1_eq_aaa.get()), set([bf1]))
+        self.assertEqual(set(s_bf_str1_eq_ccc.get()), set([]))
+        self.assertEqual(set(s_cf_num1_eq_1.get()), set([cf1]))
+
+        fb.clear()
+        self.assertEqual(set(s_af_all.get()), set())
+        self.assertEqual(set(s_af_num1_eq_1.get()), set())
+        self.assertEqual(set(s_af_num1_le_2.get()), set())
+        self.assertEqual(set(s_af_num2_eq_20.get()), set())
+        self.assertEqual(set(s_bf_str1_eq_aaa.get()), set())
+        self.assertEqual(set(s_bf_str1_eq_ccc.get()), set())
+        self.assertEqual(set(s_cf_num1_eq_1.get()), set())
+
+        # Test that the select can work with an initially empty factbase
+        fb2 = FactBase()
+        s2 = fb2.select(Afact).where(Afact.num1 == 1)
+        self.assertEqual(set(s2.get()), set())
+        fb2.add([af1,af2])
+        self.assertEqual(set(s2.get()), set([af1]))
+
+        # Test select with placeholders
+#        fb3 = FactBase([Afact.num1])
+        fb3 = FactBase()
+        fb3.add([af1,af2,af3])
+####        self.assertEqual(fb3.add([af1,af2,af3]),3)
+        s3 = fb3.select(Afact).where(Afact.num1 == ph_("num1"))
+        self.assertEqual(s3.get_unique(num1=1), af1)
+        self.assertEqual(s3.get_unique(num1=2), af2)
+        self.assertEqual(s3.get_unique(num1=3), af3)
+
+
+        # Test placeholders with positional arguments
+        s4 = fb3.select(Afact).where(Afact.num1 < ph1_)
+        self.assertEqual(set(list(s4.get(1))), set([]))
+        self.assertEqual(set(list(s4.get(2))), set([af1]))
+        self.assertEqual(set(list(s4.get(3))), set([af1,af2]))
+
+        s5 = fb3.select(Afact).where(Afact.num1 <= ph1_, Afact.num2 == ph2_)
+        self.assertEqual(set(s5.get(3,10)), set([af1]))
+
+        with self.assertRaises(TypeError) as ctx:
+            self.assertEqual(set(list(s5.get(1))), set([]))
+
+        # Test that the fact base index
+        fb = FactBase(indexes=[Afact.num2, Bfact.str1])
+        self.assertEqual(set(fb.indexes), set([Afact.num2, Bfact.str1]))
+
+    #--------------------------------------------------------------------------
+    #   Test that we can use the same placeholder multiple times
+    #--------------------------------------------------------------------------
+    def test_select_multi_placeholder(self):
+        class Afact(Predicate):
+            num1=IntegerField()
+            num2=IntegerField()
+
+        fm1 = _FactMap(Afact, [Afact.num1])
+        f1 = Afact(1,1)
+        f2 = Afact(1,2)
+        f3 = Afact(1,3)
+        f4 = Afact(2,1)
+        f5 = Afact(2,2)
+
+        fm1.add(f1) ; fm1.add(f2) ; fm1.add(f3) ; fm1.add(f4) ; fm1.add(f5)
+
+        s1 = fm1.select().where(Afact.num1 == ph1_, Afact.num2 == ph1_)
+        self.assertTrue(set([f for f in s1.get(1)]), set([f1]))
+        self.assertTrue(set([f for f in s1.get(2)]), set([f5]))
+
+        s2 = fm1.select().where(Afact.num1 == ph_("a",1), Afact.num2 == ph_("a",2))
+        self.assertTrue(set([f for f in s2.get(a=1)]), set([f1]))
+        self.assertTrue(set([f for f in s2.get(a=2)]), set([f5]))
+        self.assertTrue(set([f for f in s2.get()]), set([f2]))
+
+        # test that we can do different parameters with normal functions
+        def tmp(f,a,b=2):
+            return f.num1 == a and f.num2 == 2
+
+        s3 = fm1.select().where(tmp)
+        with self.assertRaises(TypeError) as ctx:
+            r=[f for f in s3.get()]
+
+        self.assertTrue(set([f for f in s3.get(a=1)]), set([f2]))
+        self.assertTrue(set([f for f in s3.get(a=1,b=3)]), set([f3]))
+
+        # Test manually created positional placeholders
+        s1 = fm1.select().where(Afact.num1 == ph1_, Afact.num2 == ph_(1))
+        self.assertTrue(set([f for f in s1.get(1)]), set([f1]))
+        self.assertTrue(set([f for f in s1.get(2)]), set([f5]))
+
+    #--------------------------------------------------------------------------
+    #   Test that select works with order_by
+    #--------------------------------------------------------------------------
+    def test_select_order_by(self):
+        class Afact(Predicate):
+            num1=IntegerField()
+            str1=StringField()
+            str2=ConstantField()
+
+        f1 = Afact(num1=1,str1="1",str2="5")
+        f2 = Afact(num1=2,str1="3",str2="4")
+        f3 = Afact(num1=3,str1="5",str2="3")
+        f4 = Afact(num1=4,str1="3",str2="2")
+        f5 = Afact(num1=5,str1="1",str2="1")
+        fb = FactBase(facts=[f1,f2,f3,f4,f5])
+
+        q = fb.select(Afact).order_by(Afact.num1)
+        self.assertEqual([f1,f2,f3,f4,f5], q.get())
+
+        q = fb.select(Afact).order_by(Afact.num1.asc())
+        self.assertEqual([f1,f2,f3,f4,f5], q.get())
+
+        q = fb.select(Afact).order_by(Afact.num1.desc())
+        self.assertEqual([f5,f4,f3,f2,f1], q.get())
+
+        q = fb.select(Afact).order_by(Afact.str2)
+        self.assertEqual([f5,f4,f3,f2,f1], q.get())
+
+        q = fb.select(Afact).order_by(Afact.str2.desc())
+        self.assertEqual([f1,f2,f3,f4,f5], q.get())
+
+        q = fb.select(Afact).order_by(Afact.str1.desc(), Afact.num1)
+        self.assertEqual([f3,f2,f4,f1,f5], q.get())
+
+        q = fb.select(Afact).order_by(desc(Afact.str1), Afact.num1)
+        self.assertEqual([f3,f2,f4,f1,f5], q.get())
+
+        # Adding a duplicate object to a factbase shouldn't do anything
+        f6 = Afact(num1=5,str1="1",str2="1")
+        fb.add(f6)
+        q = fb.select(Afact).order_by(desc(Afact.str1), Afact.num1)
+        self.assertEqual([f3,f2,f4,f1,f5], q.get())
+
+    #--------------------------------------------------------------------------
+    #   Test that select works with order_by for complex term
+    #--------------------------------------------------------------------------
+    def test_select_order_by_complex_term(self):
+
+        class SwapField(IntegerField):
+            pytocl = lambda x: 100 - x
+            cltopy = lambda x: 100 - x
+
+        class AComplex(ComplexTerm):
+            swap=SwapField(index=True)
+            norm=IntegerField(index=True)
+
+        class AFact(Predicate):
+            astr = StringField(index=True)
+            cmplx = AComplex.Field(index=True)
+
+        cmplx1 = AComplex(swap=99,norm=1)
+        cmplx2 = AComplex(swap=98,norm=2)
+        cmplx3 = AComplex(swap=97,norm=3)
+
+        f1 = AFact(astr="aaa", cmplx=cmplx1)
+        f2 = AFact(astr="bbb", cmplx=cmplx2)
+        f3 = AFact(astr="ccc", cmplx=cmplx3)
+        f4 = AFact(astr="ddd", cmplx=cmplx3)
+
+        fb = FactBase(facts=[f1,f2,f3,f4], indexes = [AFact.astr, AFact.cmplx])
+
+        q = fb.select(AFact).order_by(AFact.astr)
+        self.assertEqual([f1,f2,f3,f4], q.get())
+
+        q = fb.select(AFact).order_by(AFact.cmplx, AFact.astr)
+        self.assertEqual([f3,f4,f2,f1], q.get())
+
+        q = fb.select(AFact).where(AFact.cmplx <= ph1_).order_by(AFact.cmplx, AFact.astr)
+        self.assertEqual([f3,f4,f2], q.get(cmplx2))
+
+
+    #--------------------------------------------------------------------------
+    #   Test that the indexing works
+    #--------------------------------------------------------------------------
+    def test_select_indexing(self):
+        class Afact(Predicate):
+            num1=IntegerField()
+            num2=IntegerField()
+
+        fm1 = _FactMap(Afact, [Afact.num1])
+        f1 = Afact(1,1)
+        f2 = Afact(1,2)
+        f3 = Afact(1,3)
+        f4 = Afact(2,1)
+        f5 = Afact(2,2)
+        f6 = Afact(3,1)
+
+        fm1.add(f1) ; fm1.add(f2) ; fm1.add(f3) ; fm1.add(f4) ; fm1.add(f5) ; fm1.add(f6)
+
+        # Use an function to track the facts that are visited. This will show
+        # that the first operator slects only the appropriate terms.
+        facts = set()
+        def track(f,a,b):
+            nonlocal facts
+            facts.add(f)
+            return f.num2 == b
+
+        s1 = fm1.select().where(Afact.num1 == ph1_, track)
+        s2 = fm1.select().where(Afact.num1 < ph1_, track)
+
+        self.assertTrue(set([f for f in s1.get(2,1)]), set([f4]))
+        self.assertTrue(facts, set([f4,f5]))
+
+        self.assertTrue(set([f for f in s2.get(2,2)]), set([f2]))
+        self.assertTrue(facts, set([f1,f2,f3]))
+
+    #--------------------------------------------------------------------------
+    #   Test the delete
+    #--------------------------------------------------------------------------
+    def test_delete_over_factmap_and_factbase(self):
+        class Afact(Predicate):
+            num1=IntegerField()
+            num2=StringField()
+            str1=StringField()
+
+        fm1 = _FactMap(Afact, [Afact.num1,Afact.str1])
+        fm2 = _FactMap(Afact)
+        f1 = Afact(1,1,"1")
+        f3 = Afact(3,3,"3")
+        f4 = Afact(4,4,"4")
+        f42 = Afact(4,42,"42")
+        f10 = Afact(10,10,"10")
+        fm1.add(f1) ; fm2.add(f1)
+        fm1.add(f3) ; fm2.add(f3)
+        fm1.add(f4) ; fm2.add(f4)
+        fm1.add(f42) ; fm2.add(f42)
+        fm1.add(f10) ; fm2.add(f10)
+
+        d1_all = fm1.delete()
+        d1_num1 = fm2.delete().where(Afact.num1 == ph1_)
+        s1_num1 = fm2.select().where(Afact.num1 == ph1_)
+
+        self.assertEqual(d1_all.execute(), 5)
+        self.assertEqual(set([f for f in s1_num1.get(4)]), set([f4,f42]))
+        self.assertEqual(d1_num1.execute(4), 2)
+        self.assertEqual(set([f for f in s1_num1.get(4)]), set([]))
+
+#        return
+
+        fb1 = FactBase(facts=[f1,f3, f4,f42,f10], indexes = [Afact.num1, Afact.num2])
+        d1_num1 = fb1.delete(Afact).where(Afact.num1 == ph1_)
+        s1_num1 = fb1.select(Afact).where(Afact.num1 == ph1_)
+        self.assertEqual(set([f for f in s1_num1.get(4)]), set([f4,f42]))
+        self.assertEqual(d1_num1.execute(4), 2)
+        self.assertEqual(set([f for f in s1_num1.get(4)]), set([]))
+
+#------------------------------------------------------------------------------
+#
+#------------------------------------------------------------------------------
+
+class TypeCastSignatureTestCase(unittest.TestCase):
+    def setUp(self):
+        class DateField(StringField):
+            pytocl = lambda dt: dt.strftime("%Y%m%d")
+            cltopy = lambda s: datetime.datetime.strptime(s,"%Y%m%d").date()
+
+        class DowField(ConstantField):
+            pytocl = lambda dt: calendar.day_name[dt.weekday()].lower()
+
+        class EDate(ComplexTerm):
+            idx = IntegerField()
+            date = DateField()
+            class Meta: name="edate"
+
+        self.DateField = DateField
+        self.DowField = DowField
+        self.EDate = EDate
+
+    #--------------------------------------------------------------------------
+    # Test the signature generation for writing python functions that can be
+    # called from ASP.
+    # --------------------------------------------------------------------------
+
+    def test_signature(self):
+
+        DateField = self.DateField
+        DowField = self.DowField
+        EDate = self.EDate
+
+        sig1 = TypeCastSignature(DateField)     # returns a single date
+        sig2 = TypeCastSignature([DateField])   # returns a list of dates
+        sig3 = TypeCastSignature(DateField, DowField)  # takes a date and returns the day or week
+
+        sig4 = TypeCastSignature(EDate.Field,EDate.Field)    # takes an EDate and returns an EDate
+
+        # Some bad declarations
+        with self.assertRaises(TypeError) as ctx:
+            sig5 = TypeCastSignature(int)
+        with self.assertRaises(TypeError) as ctx:
+            sig5 = TypeCastSignature(DateField, int)
+        with self.assertRaises(TypeError) as ctx:
+            sig5 = TypeCastSignature(DateField, [int])
+        with self.assertRaises(TypeError) as ctx:
+            sig5 = TypeCastSignature(DateField, [DateField, DateField])
+
+        date1 = datetime.date(2018,1,1)
+        date2 = datetime.date(2019,2,2)
+
+        edate1 = EDate(idx=1, date=date1)
+        edate2 = EDate(idx=2, date=date2)
+
+        # Test simple output and list output
+
+        def getdate1() : return date1
+        def getdates() : return [date1, date2]
+
+        cl_getdate1 = sig1.wrap_function(getdate1)
+        cl_getdates = sig2.wrap_function(getdates)
+        self.assertEqual(cl_getdate1(), String("20180101"))
+        self.assertEqual(cl_getdates(), [String("20180101"), String("20190202")])
+
+        # Use decoractor mode
+
+        @sig3.wrap_function
+        def getdow(dt) : return dt
+        result = getdow(String("20180101"))
+        self.assertEqual(result, Function("monday",[]))
+
+        # Test a ComplexTerm input and output
+        @sig4.wrap_function
+        def getedate(indate): return indate
+        self.assertEqual(getedate(edate1.raw), edate1.raw)
+        self.assertEqual(getedate(edate2.raw), edate2.raw)
+
+        # Now test the method wrapper
+        class Tmp(object):
+            def __init__(self,x,y):
+                self._x = x
+                self._y = y
+
+            def get_pair(self):
+                return [self._x, self._y]
+
+            cl_get_pair = sig2.wrap_method(get_pair)
+
+        t = Tmp(date1,date2)
+        self.assertEqual(t.cl_get_pair(), [String("20180101"), String("20190202")])
+
+    #--------------------------------------------------------------------------
+    # Test the signature generation for writing python functions that can be
+    # called from ASP.
+    # --------------------------------------------------------------------------
+
+    def test_make_function_asp_callable(self):
+
+        DateField = self.DateField
+        DowField = self.DowField
+        EDate = self.EDate
+
+        date1 = datetime.date(2018,1,1)
+        date2 = datetime.date(2019,2,2)
+
+        edate1 = EDate(idx=1, date=date1)
+        edate2 = EDate(idx=2, date=date2)
+
+        def getdate1() : return date1
+        def getdates() : return [date1, date2]
+
+        # Test wrapper as a normal function and specifying a signature
+        cl_getdate1 = make_function_asp_callable(DateField, getdate1)
+        self.assertEqual(cl_getdate1(), String("20180101"))
+
+        cl_getdates = make_function_asp_callable([DateField], getdates)
+        self.assertEqual(cl_getdates(), [String("20180101"), String("20190202")])
+
+        # Test wrapper as a decorator and specifying a signature
+        @make_function_asp_callable(DateField)
+        def getdate1() : return date1
+        self.assertEqual(getdate1(), String("20180101"))
+
+        @make_function_asp_callable([DateField])
+        def getdates() : return [date1, date2]
+        self.assertEqual(getdates(), [String("20180101"), String("20190202")])
+
+        @make_function_asp_callable
+        def getdates2(x: DateField, y : EDate.Field) -> [DateField]:
+            '''GETDATES2'''
+            return [date1,date2]
+        self.assertEqual(getdates2(String("20180101"), edate1.raw),
+                         [String("20180101"), String("20190202")])
+        self.assertEqual(getdates2.__doc__, '''GETDATES2''')
+
+        with self.assertRaises(TypeError) as ctx:
+            @make_function_asp_callable
+            def getdates3(x,y): return [date1,date2]
+
+        with self.assertRaises(TypeError) as ctx:
+            @make_function_asp_callable
+            def getdates4(x : DateField, y : DateField): return [date1,date2]
+
+        # Now test the method wrapper
+        class Tmp(object):
+            def __init__(self,x,y):
+                self._x = x
+                self._y = y
+
+            def get_pair(self):
+                return [self._x, self._y]
+
+            cl_get_pair = make_method_asp_callable([DateField], get_pair)
+
+            @make_method_asp_callable
+            def get_pair2(self) -> [DateField]:
+                return [self._x, self._y]
+
+        t = Tmp(date1,date2)
+        self.assertEqual(t.cl_get_pair(), [String("20180101"), String("20190202")])
+        self.assertEqual(t.get_pair2(), [String("20180101"), String("20190202")])
+
 
 #------------------------------------------------------------------------------
 # main

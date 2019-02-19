@@ -467,6 +467,8 @@ def _nls_constructor(self, *args, **kwargs):
     else:
         _nls_init_by_keyword_values(self, **kwargs)
 
+def _nls_base_constructor(self, *args, **kwargs):
+    raise TypeError("NonLogicalSymbol must be sub-classed")
 
 #------------------------------------------------------------------------------
 # Metaclass constructor support functions to create the terms
@@ -549,6 +551,8 @@ class _NonLogicalSymbolMeta(type):
     #--------------------------------------------------------------------------
     def __new__(meta, name, bases, dct):
         if name == "NonLogicalSymbol":
+            dct["_nls"] = None
+            dct["__init__"] = _nls_base_constructor
             return super(_NonLogicalSymbolMeta, meta).__new__(meta, name, bases, dct)
 
         # Create the metadata and populate the class dict (including the terms)
@@ -558,6 +562,12 @@ class _NonLogicalSymbolMeta(type):
         dct["_meta"] = md
         dct["__init__"] = _nls_constructor
         dct["_termdefn"] = _FieldContainer()
+
+        parents = [ b for b in bases if issubclass(b, NonLogicalSymbol) ]
+        if len(parents) == 0:
+            raise TypeError("Internal bug: number of NonLogicalSymbol bases is 0!")
+        if len(parents) > 1:
+            raise TypeError("Multiple NonLogicalSymbol sub-class inheritance forbidden")
 
         return super(_NonLogicalSymbolMeta, meta).__new__(meta, name, bases, dct)
 
