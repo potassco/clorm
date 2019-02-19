@@ -51,7 +51,6 @@ class Symbol(object):
         else:
             raise ValueError("Unknown SymbolType {}".format(stype))
 
-
     @property
     def name(self):
         if self._stype != SymbolType.Function: return None
@@ -60,6 +59,7 @@ class Symbol(object):
     @property
     def arguments(self):
         if self._stype != SymbolType.Function: return None
+        return self._args
 
     @property
     def string(self):

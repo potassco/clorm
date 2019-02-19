@@ -54,11 +54,13 @@ class NoClingoTestCase(unittest.TestCase):
     def test_string(self):
         nc = noclingo.String("atest")
         c =  clingo.String("atest")
+        self.assertEqual(nc.name, c.name)
         self.assertEqual(str(nc), str(c))
 
     def test_number(self):
         nc = noclingo.Number(1)
         c =  clingo.Number(1)
+        self.assertEqual(nc.number, c.number)
         self.assertEqual(str(nc), str(c))
 
     def test_infimum_supremum(self):
@@ -82,9 +84,6 @@ class NoClingoTestCase(unittest.TestCase):
         self.assertEqual(str(nc1), str(clingo.Infimum))
         self.assertEqual(str(nc5), str(clingo.Supremum))
 
-    def test_supremum(self):
-        pass
-
     def test_function(self):
         nc = noclingo.Function("atest")
         c =  clingo.Function("atest")
@@ -99,7 +98,14 @@ class NoClingoTestCase(unittest.TestCase):
 
         nc = noclingo.Function("atest",[nc1,nc2,nc3])
         c =  clingo.Function("atest", [c1,c2,c3])
+
         self.assertEqual(str(nc), str(c))
+        self.assertEqual(nc.name, c.name)
+        self.assertEqual(nc.name, "atest")
+        self.assertEqual(len(nc.arguments), len(c.arguments))
+        self.assertEqual(nc.arguments[0].name, c.arguments[0].name)
+        self.assertEqual(nc.arguments[0].name, "aaaa")
+        self.assertEqual(nc.arguments[1].string, c.arguments[1].string)
 
     def test_tuple(self):
         nc1 = noclingo.Function("aaaa")
