@@ -6,7 +6,7 @@ import unittest
 import clingo
 import clorm.json as cjson
 import json
-from clorm import Predicate, ComplexTerm, IntegerField, StringField
+from clorm import Predicate, ComplexTerm, IntegerField, StringField, FactBase
 
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
@@ -189,6 +189,25 @@ class JSONPredicateTestCase(unittest.TestCase):
         result2 = pc2.loads(json_str1)
         self.assertEqual(allf,result1)
         self.assertEqual(allf,result2)
+
+    #--------------------------------------------------------------------------
+    #
+    #--------------------------------------------------------------------------
+    def test_factbase_coder(self):
+        pc = cjson.FactCoder()
+        Fun = self.Fun
+        Tup = self.Tup
+        allf = self.allf
+
+        Afact = pc.register(self.Afact)
+        Bfact = pc.register(self.Bfact)
+
+        fb_in = FactBase(facts=allf, indexes=[Afact.aint, Bfact.astr])
+        json_str = pc.dumps(fb_in, indent=4, sort_keys=True)
+        fb_out = pc.loads(json_str)
+        self.assertEqual(fb_in.indexes, fb_out.indexes)
+        self.assertEqual(set(fb_in), set(fb_out))
+        self.assertEqual(fb_in, fb_out)
 
 #------------------------------------------------------------------------------
 # main

@@ -1094,6 +1094,28 @@ class FactBaseTestCase(unittest.TestCase):
         input = set([af1,af2,bf1])
         self.assertEqual(set(FactBase(facts=lambda: input)), input)
 
+    #--------------------------------------------------------------------------
+    #
+    #--------------------------------------------------------------------------
+    def test_comparison_ops(self):
+        Afact = self._Afact
+        Bfact = self._Bfact
+
+        af1 = Afact(num1=1, str1="1", str2="a")
+        af2 = Afact(num1=1, str1="1", str2="b")
+        bf1 = Bfact(num1=1, str1="1", str2="a")
+
+        delayed_init=lambda: [af1,af2]
+
+        fb1 = FactBase([af1,af2])
+        fb2 = FactBase([af1,af2,bf1])
+        fb3 = FactBase([af1,af2,bf1])
+        fb4 = FactBase(facts=delayed_init)
+
+        self.assertTrue(fb1 != fb2)
+        self.assertTrue(fb1 == fb4)
+        self.assertTrue(fb2 == fb3)
+
 #------------------------------------------------------------------------------
 # Test the _Select class
 #------------------------------------------------------------------------------

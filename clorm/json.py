@@ -17,7 +17,7 @@ __all__ = [
 ]
 
 def _raise(obj):
-    otype = type(s)
+    otype = type(obj)
     raise TypeError("Object of type '{}' is not JSON serializable".format(otype))
 
 #------------------------------------------------------------------------------
@@ -98,6 +98,7 @@ class FactCoder(object):
         self._preds = []
         self._predset = set()
         self._name2pred = {}
+        self._name2field = {}
         for p in predicates: self._register_predicate(p)
 
     def _register_predicate(self, cls):
@@ -107,6 +108,8 @@ class FactCoder(object):
         self._predset.add(cls)
         self._preds.append(cls)
         self._name2pred[cls.__name__] = cls
+        for f in cls.meta.fields:
+            self._name2field[str(f)] = f
 
     #-------------------------------------------------------------------------
     #
@@ -132,16 +135,18 @@ class FactCoder(object):
           obj: an object to encode as json
         '''
         if isinstance(obj, clingo.Symbol): return symbol_encoder(obj)
+        if isinstance(obj, FactBase):
+            return {
+                "clorm.FactBase" : [ str(f) for f in obj.indexes ],
+                "facts" : list(obj) }
         for p in self._preds:
             if isinstance(obj, p):
-                js = {}
-                js["clorm.Predicate"] = p.__name__
-                js["raw"] = symbol_encoder(obj.raw)
-                return js
+                return { "clorm.Predicate" : p.__name__,
+                         "raw" : symbol_encoder(obj.raw) }
         _raise(obj)
 
     def decoder(self, obj):
-        '''JSON Decoder.
+        '''JSON Decoder for clingo.Symbol, clorm.Predicate, and clorm.FactBase.
 
         Call by overiding the ``object_hook`` argument for json.load(s)
 
@@ -158,6 +163,12 @@ class FactCoder(object):
 
         '''
         if "clingo.SymbolType" in obj: return symbol_decoder(obj)
+        if "clorm.FactBase" in obj and "facts" in obj:
+            indexes = []
+            for fname in obj["clorm.FactBase"]:
+                if fname not in self._name2field: continue
+                indexes.append(self._name2field[fname])
+            return FactBase(facts=obj["facts"], indexes=indexes)
         if not "clorm.Predicate" in obj: return obj
         pname = obj["clorm.Predicate"]
         if pname not in self._name2pred: return obj

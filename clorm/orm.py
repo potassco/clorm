@@ -421,11 +421,11 @@ def _nls_init_by_symbol(self, **kwargs):
 def _nls_init_by_keyword_values(self, **kwargs):
     class_name = type(self).__name__
     pred_name = self.meta.name
-    terms = set(self.meta.term_defns.keys())
+    fields = set(self.meta.term_defns.keys())
 
-    invalids = [ k for k in kwargs if k not in terms ]
+    invalids = [ k for k in kwargs if k not in fields ]
     if invalids:
-        raise ValueError(("Arguments {} are not valid terms "
+        raise ValueError(("Arguments {} are not valid fields "
                           "of {}".format(invalids,class_name)))
 
     # Construct the clingo function arguments
@@ -667,6 +667,10 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
 
         @property
         def terms(self):
+            return self._terms
+
+        @property
+        def fields(self):
             return self._terms
 
         @property
@@ -1702,6 +1706,24 @@ class FactBase(object):
 
         for fm in self._factmaps.values():
             for f in fm: yield f
+
+    def __eq__(self, other):
+        """Overloaded boolean operator."""
+        if not isinstance(other, self.__class__): return NotImplemented
+
+        # Always check if we have delayed initialisation
+        if self._delayed_init: self._delayed_init()
+
+        if len(self) != len(other): return False
+        for f in self:
+            if f not in other: return False
+        return True
+
+    def __ne__(self, other):
+        """Overloaded boolean operator."""
+        result = self.__eq__(other)
+        if result is NotImplemented: return NotImplemented
+        return not result
 
     #--------------------------------------------------------------------------
     # Initiliser
