@@ -38,6 +38,7 @@ easier to refactor the python code as the ASP program evolves.
    clorm/integration
    clorm/embedding
    clorm/liborm
+   clorm/json
    clorm/api
 
 Indices and tables
