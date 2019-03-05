@@ -15,6 +15,7 @@ __all__ = [
     'Infimum',
     'Supremum',
     'SymbolType',
+    'Control'
 ]
 
 class SymbolType(enum.IntEnum):
@@ -25,6 +26,22 @@ class SymbolType(enum.IntEnum):
     Supremum = 5
 
 class Symbol(object):
+    """A noclingo replacement for clingo.Symbol.
+
+    noclingo is a replacement for clingo that provides basic Symbol object
+    instantiation as pure python objects (rather than the C clingo external
+    library). This allows a process to create a problem instance using the clorm
+    predicate/complex term objects, JSON serialise the instance (using the
+    clorm.json module) and pass the instance to a second process for actual
+    processing.
+
+    This is useful because clingo has a known issue that it cannot release
+    Symbol objects. The solver was originally designed to solve one problem and
+    exit. It has slowly evolved into calling the solver repeated as part of a
+    larger application, but no facility has been added (yet) to allow the old
+    Symbol objects to be released.
+    """
+
     def __init__(self, stype, value=None, args=[]):
         if not isinstance(stype, SymbolType):
             raise TypeError("{} is not a SymbolType".format(stype))
@@ -163,6 +180,26 @@ def String(string):
 
 def Number(number):
     return Symbol(SymbolType.Number, number)
+
+
+
+#--------------------------------------------------------------------------------
+# Replacement for clingo.Control that simply throws an exception when
+# instantiated.
+# --------------------------------------------------------------------------------
+
+class Control(object):
+    """A noclingo replacement for clingo.Control.
+
+    noclingo is a replacement for clingo that provides basic Symbol object
+    instatiation as pure python objects (rather than the C clingo external
+    library). The solver cannot be run using noclingo so noclingo.Control simply
+    raises a TypeError on instantiation.
+
+    """
+
+    def __init__(*args, **kwargs):
+        raise TypeError("noclingo.Control cannot be instantiated")
 
 #------------------------------------------------------------------------------
 # main

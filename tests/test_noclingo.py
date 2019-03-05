@@ -182,6 +182,15 @@ class NoClingoTestCase(unittest.TestCase):
         else:
             self.assertTrue(nc1 > nc3)
 
+    def test_clingo_noclingo_difference(self):
+        self.assertNotEqual(clingo.String("blah"), noclingo.String("blah"))
+        self.assertNotEqual(clingo.Number(5), noclingo.Number(5))
+
+    def test_control(self):
+        with self.assertRaises(TypeError) as ctx:
+            instance = noclingo.Control()
+
+
 #------------------------------------------------------------------------------
 # main
 #------------------------------------------------------------------------------
