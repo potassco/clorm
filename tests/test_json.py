@@ -175,14 +175,14 @@ class JSONPredicateTestCase(unittest.TestCase):
     #
     #--------------------------------------------------------------------------
     def test_predicate_coder(self):
-        pc1 = cjson.FactCoder()
+        pc1 = cjson.JSONCoder()
         Fun = self.Fun
         Tup = self.Tup
         Afact = pc1.register(self.Afact)
         Bfact = pc1.register(self.Bfact)
         allf = self.allf
 
-        pc2 = cjson.FactCoder([Afact,Bfact])
+        pc2 = cjson.JSONCoder([Afact,Bfact])
         json_str1 = pc1.dumps(allf)
         json_str2 = pc2.dumps(allf)
         result1 = pc1.loads(json_str2)
@@ -194,7 +194,7 @@ class JSONPredicateTestCase(unittest.TestCase):
     #
     #--------------------------------------------------------------------------
     def test_factbase_coder(self):
-        pc = cjson.FactCoder()
+        pc = cjson.JSONCoder()
         Fun = self.Fun
         Tup = self.Tup
         allf = self.allf

@@ -83,7 +83,7 @@ def symbol_decoder(obj):
 #
 #------------------------------------------------------------------------------
 
-class FactCoder(object):
+class JSONCoder(object):
     '''A JSON Encoder/Decoder for facts (i.e., Predicate sub-classed objects).
 
     Provides a helper class for encoding and decoding facts to JSON. The
@@ -173,6 +173,10 @@ class FactCoder(object):
         pname = obj["clorm.Predicate"]
         if pname not in self._name2pred: return obj
         return self._name2pred[pname](raw=obj["raw"])
+
+    #-------------------------------------------------------------------------
+    # Convenience functions to call the JSON encoder and decoder
+    #-------------------------------------------------------------------------
 
     def dumps(self, obj, indent=None, sort_keys=False):
         '''A convenience function for calling json.dumps'''
