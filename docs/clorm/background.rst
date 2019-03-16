@@ -24,7 +24,7 @@ modelling and solving combinatorial optimisation problems. ASP has a
 Prolog-style language for specifying problems in terms of predicates and the
 relations between them. The solver then generates solutions (called *models* or
 *answer sets*) consisting of a sets of ground facts that are (minimally)
-consistent with the defintions.
+consistent with these definitions.
 
 `Clingo <https://potassco.org>`_ is the leading open-source ASP solver. It can
 be run as a stand-alone executable or integrated as a library into other

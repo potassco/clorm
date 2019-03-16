@@ -7,6 +7,8 @@ this: *fields*, that define how *logical terms* are mapped to Python objects,
 and *predicate* definitions, that define predicate and function names, their
 arities and the field for each of the parameter.
 
+.. _api_fields:
+
 Fields
 ------
 
@@ -21,6 +23,8 @@ more intuitive Python objects.
 .. autoclass:: clorm.ConstantField
 
 .. autoclass:: clorm.IntegerField
+
+.. _api_predicates:
 
 Predicates and Complex Terms
 ----------------------------
@@ -42,6 +46,8 @@ aliases.
    :members:
 
 
+.. _api_factbase:
+
 Fact Bases and Queries
 ------------------------
 
@@ -60,6 +66,7 @@ query mechanism for accessing elements.
 .. autoclass:: clorm.Delete
    :members:
 
+.. _api_calling_python_from_asp:
 
 Calling Python From an ASP Program
 ----------------------------------

@@ -13,7 +13,7 @@ from .orm import *
 __all__ = [
     'symbol_encoder',
     'symbol_decoder',
-    'FactCoder'
+    'JSONCoder'
 ]
 
 def _raise(obj):

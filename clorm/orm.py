@@ -613,11 +613,12 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
            b1 = Booking("20190101", "10:00")
            b2 = Booking("20190101", "11:00", "Dinner")
 
-    Fields names can be any valid Python variable name (i.e., not be a Python
-    keyword) subject to the following restrictions:
+    Field names can be any valid Python variable name subject to the following
+    restrictions:
 
-    - start with a "_", or
-    - be one of the following reserved words: "meta", "raw", "clone", "Field".
+    - it cannot start with a "_", or
+    - it cannot be be one of the following reserved words: "meta", "raw",
+      "clone", or "Field".
 
     The constructor creates a predicate instance (i.e., a *fact*) or complex
     term. If the ``raw`` parameter is used then it tries to unify the supplied
@@ -1265,8 +1266,8 @@ class Select(abc.ABC):
         The second parameter can point to an arbitrary value or a special
         placeholder value that issubstituted when the query is actually
         executed. These placeholders are named ``ph1_``, ``ph2_``, ``ph3_``, and
-        ``ph4_`` and correspond to the 1st to 4th arguments of the ``get`` or
-        ``get_unique`` function call.
+        ``ph4_`` and correspond to the 1st to 4th arguments of the ``get``,
+        ``get_unique`` or ``count`` function call.
 
         Args:
           expressions: one or more comparison expressions.
@@ -1276,14 +1277,22 @@ class Select(abc.ABC):
 
     @abc.abstractmethod
     def order_by(self, *fieldorder):
+        """Provide an ordering over the results."""
         pass
 
     @abc.abstractmethod
     def get(self, *args, **kwargs):
+        """Return all matching entries."""
         pass
 
     @abc.abstractmethod
     def get_unique(self, *args, **kwargs):
+        """Return the single matching entry. Raises ValueError otherwise."""
+        pass
+
+    @abc.abstractmethod
+    def count(self, *args, **kwargs):
+        """Return the number of matching entries."""
         pass
 
 #------------------------------------------------------------------------------
@@ -1420,6 +1429,8 @@ class _Select(Select):
             raise ValueError("No facts found - exactly one expected")
         return fact
 
+    def count(self, *args, **kwargs):
+        return len(self.get(*args, **kwargs))
 
 #------------------------------------------------------------------------------
 # A deletion over a _FactMap

@@ -16,30 +16,30 @@ solver.
    readable but would require parsing to regenerate the original symbol objects.
 
 
-The ``FactCoder`` class is a helper class to be able to encode/decode JSON for
+The ``JSONCoder`` class is a helper class to be able to encode/decode JSON for
 particular Predicate sub-classes. The predicates can be supplied at
 construction.
 
 .. code-block:: python
 
    from clorm import Predicate, IntegerField, StringField
-   from clorm.json import FactCoder
+   from clorm.json import JSONCoder
 
    class Afact(Predicate):
         aint = IntegerField()
 	astr = StringField()
 
-   json_coder = FactCoder([Afact])
+   json_coder = JSONCoder([Afact])
 
-Alternatively, the ``FactCoder`` can also be used as a decorator to register
+Alternatively, the ``JSONCoder`` can also be used as a decorator to register
 predicates (just like the ``FactBaseBuilder``).
 
 .. code-block:: python
 
    from clorm import Predicate, IntegerField, StringField
-   from clorm.json import FactCoder
+   from clorm.json import JSONCoder
 
-   json_coder = FactCoder()
+   json_coder = JSONCoder()
 
    class Fun(ComplexTerm):
 	aint = IntegerField()

@@ -9,7 +9,7 @@ Clorm: An ORM API for Clingo
 Introduction
 ------------
 
-Clorm is a Python library that provides an Object Relational Mapping (ORM)
+Clorm is a Python library that provides an Object Relational Mapper (ORM)-like
 interface to the Clingo Answer Set Programming (ASP) solver. It allows *facts*
 to be asserted to, and extracted from, the ASP solver in an intuitive and easy
 to use way. The goal of this library is to supplement the existing Clingo API to

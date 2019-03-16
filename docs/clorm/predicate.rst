@@ -1,5 +1,5 @@
-Mapping Predicates
-==================
+Predicates and Fields
+=====================
 
 The heart of an ORM is defining the mapping between the predicates and Python
 objects. In Clorm this is acheived by sub-classing the ``Predicate`` class and
@@ -33,8 +33,7 @@ specifies that the address of the entity ``dave`` is ``"UNSW Sydney"`` and
    avoid this usage to prevent confusion with Python functions) which we will
    discuss later. Note however that ASP does not support real number values.
 
-Getting back to the example, the following Python code provides the mapping to
-the ASP predicates:
+The following Python code provides the mapping to the ASP predicates:
 
 .. code-block:: python
 
@@ -57,7 +56,7 @@ With the above class definitions we can instantiate some objects:
    fact3 = Pets(entity="bill", num=2)
 
 When instantiating a predicate all field values must be specified, unless the
-field has a default value, such as with ``fact2`` above.
+field has a default value, such as with the ``fact2`` instantiation of ``Pets``.
 
 When this Python code is imported into the Clingo solver it will correspond to
 the following *ground atoms* (i.e., facts):
@@ -185,37 +184,41 @@ We will discuss fact bases and the index options in the following chapter.
 Sub-classing Field Definitions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-All fields classes inherit from a base class ``RawField`` and it's possible to
-define arbitrary conversions by sub-classing ``RawField``, or one it's existing
-sub-classes.
+All field classes inherit from a base class ``RawField`` and it's possible to
+define arbitrary data conversions by sub-classing ``RawField``. Clorm provides
+the standard sub-classes ``StringField``, ``ConstantField``, and
+``IntegerField``.
 
-By sub-classing a sub-class it is possible to form a data translation chain. To
-understand why this is useful it is first necessary to appreciate that because
-the ASP language only has three simple term types it is often necessary to
-perform some form of data encoding.
+As well as sub-classing ``RawField`` directly it is also possible to sub-class a
+sub-class, which makes it possible to form a *data conversion chain*. To
+understand why this is useful we consider an example of specifying a date
+field. But it is first useful to appreciate that because the ASP language only
+has three simple term types it is often necessary to perform some form of data
+encoding when modelling a problem domain.
 
-As an example, in an application you may want to have a date term for an event
-tracking application. So for the Python code you may want to use a Python
-``datetime.date`` object. It then becomes a question of how to encode this data
-in ASP.
+Consider the example of an application that needs a date term for an event
+tracking application. From the Python code perspective it would be natural to
+use Python ``datetime.date`` objects. However, it then becomes a question of how
+to encode these Python date objects in ASP.
 
 A useful encoding would be to encode a date as a string in **YYYYMMDD**
 format. Dates encoded in this format satisfy some useful properties such as the
 comparison operators will produce the expected results (e.g., ``"20180101" <
-"20180204"``). It also doesn't satisfy some unwanted properties. For example,
-encoding the date in the same way as an integer would allow incrementing or
-subtracting a date encoded number, which could lead to unwanted values (e.g.,
-``20180131 + 1 = 20180132`` does not correspond to a valid date).
+"20180204"``). A string is also preferable to using a similiarly encoded integer
+value.  For example, encoding the date in the same way as an integer would allow
+incrementing or subtracting a date encoded number, which could lead to unwanted
+values (e.g., ``20180131 + 1 = 20180132`` does not correspond to a valid date).
 
-Adopting a date encoded string we can consider a fact within a booking
-application:
+So, adopting a date encoded string we can consider a date based fact for the
+booking application that simply encodes that there is a New Year's eve party on
+the 31st December 2018.
 
 .. code-block:: prolog
 
     booking("20181231", "NYE party").
 
-This fact can be captured by the following Python ``Predicate`` sub-class
-definition:
+Using Clorm this fact can be captured by the following Python ``Predicate``
+sub-class definition:
 
 .. code-block:: python
 
@@ -225,8 +228,9 @@ definition:
       date = StringField()
       description = StringField()
 
-It is now up to the user of the ``Booking`` class to perform the necessary
-translations to and from a Python ``datetime.date`` objects when necessary:
+However, since we encoded the date as simply a ``StringField`` it is now up to
+the user of the ``Booking`` class to perform the necessary translations to and
+from a Python ``datetime.date`` objects when necessary. For example:
 
 .. code-block:: python
 
@@ -250,8 +254,11 @@ remember to make the correct translation both in creating and reading the
 date. Furthermore the places in the code where these translations are made may
 be far apart, leading to potential problems when code needs to be refactored.
 
-One solution to this problem is to sub-class the ``StringField`` and provide
-an extra data translation step.
+The solution to this problem is to create a sub-class of ``RawField`` that
+performs the appropriate data conversion. However, sub-classing
+``Rawfield``directly requires dealing with raw Clingo ``Symbol`` objects. A
+better alternative is to sub-class the ``StringField`` class and then you can
+deal with the string to date conversion directly.
 
 .. code-block:: python
 
@@ -313,19 +320,13 @@ To support this flexibility Clorm introduces a ``ComplexTerm`` class.  A complex
 term is defined identically to a predicate, and similarly needs to be
 sub-classed.
 
-Just like with simple terms, when specifying a field as part of a predicate (or
-within another complex term) it is necessary to specify the term's field
-definiton. This field then encodes the translation from a ``Clingo.Symbol``
-object to the ``ComplexTerm`` object.
-
-While it is possible to specify this translation manually by sub-classing
-``RawField`` and specifying the translation functions, fortunately Clorm is able
-generate such a class automatically from any complex term definition. This class
-is exposed as the class ``Field`` property.
-
 .. code-block:: python
 
    from clorm import *
+
+   class Location(ComplexTerm):
+      city = StringField()
+      country = StringField()
 
    class LocationTuple(ComplexTerm):
       city = StringField()
@@ -333,16 +334,44 @@ is exposed as the class ``Field`` property.
       class Meta:
          istuple = True
 
+These complex term definitions then need to be included within a Predicate
+definition.  Just like with simple terms, when specifying a field as part of a
+predicate (or within another complex term) it is necessary to specify the term's
+field definition. This field then encodes the translation from a
+``Clingo.Symbol`` object to the ``ComplexTerm`` object.
+
+While it is possible to specify this translation manually (i.e., sub-classing
+``RawField`` and specifying the translation functions), fortunately Clorm is
+able generate a ``RawField`` sub-class automatically from the complex term
+definition. This class is exposed as the complex term's class ``Field``
+property.
+
+.. code-block:: python
+
+   from clorm import *
+
+   class Booking(Predicate):
+       date=DateField()
+       location=Location.Field()
+
    class Booking2(Predicate):
        date=DateField()
-       location=LocationTuple.Field(
-		default=LocationTuple(city="Sydney", country="Australia"))
+       location=LocationTuple.Field()
 
 The ``Booking`` and ``Booking2`` Python classes correspond to the
 signature of the above example predicates ``booking/2`` and ``booking2/2``.
 
 Note: as with the simple term definitions it is possible to provide an optional
-``default`` or ``index`` parameter.
+``default`` or ``index`` parameter. For example, the above ``Booking`` class could be replaced with:
+
+.. code-block:: python
+
+   from clorm import *
+
+   class Booking(Predicate):
+       date=DateField()
+       location=Location.Field(index=True,
+		default=LocationTuple(city="Sydney", country="Australia"))
 
 
 Dealing with Raw Clingo Symbols
@@ -398,7 +427,7 @@ Integrating Clingo Symbols into a Predicate Definition
 
 There are some cases when it might be convenient to combine the simplicity and
 the structure of the Clorm predicate interface with the flexibility of the
-underlying Clingo symbol API. For this it is possible to use the
+underlying Clingo symbol API. For this case it is possible to use the
 ``RawField`` base class itself.
 
 For example when modeling dynamic domains it is often useful to provide a
@@ -434,6 +463,7 @@ Clingo symbol objects.
 
 Accessing the value of the ``fluent`` simply returns the raw Clingo symbol. Also
 the ``RawField`` has the useful property that it will unify with any
-``Clingo.Symbol`` object.
+``Clingo.Symbol`` object so the can be used to capture the ``light/1`` and
+``robotlocation/2`` complex terms.
 
 

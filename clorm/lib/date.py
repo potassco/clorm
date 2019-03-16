@@ -18,10 +18,10 @@
 #
 #------------------------------------------------------------------------------
 
-from ..orm import ComplexTerm, IntegerField, StringField,\
-    ConstantField, make_function_asp_callable, make_method_asp_callable
 import datetime
 import calendar
+from ..orm import ComplexTerm, IntegerField, StringField,\
+    ConstantField, make_function_asp_callable, make_method_asp_callable
 
 #------------------------------------------------------------------------------
 #

@@ -90,13 +90,16 @@ Defining the Data Model
 -----------------------
 
 The most important step is to define a data model that maps the Clingo
-predicates to Python classes. Clorm introduces two basic concepts for defining
-the data model: ``Predicate`` and ``FactBase``. ``Predicate`` maps the ASP
-predicates to Python classes and must be sub-classed, while ``FactBase``
-provides a container for storing predicate instances (i.e., *facts*).
+predicates to Python classes. Clorm introduces the ``Predicate`` and
+``ComplexTerm`` classes, which must be sub-classed, that define a direct mapping
+to ASP predicates (for this example we only need the ``Predicate`` class).
 
-A helper class ``FactBaseBuilder`` is provided for alternative ways of creating
-FactBases (e.g., building a fact base from raw Clingo ``Symbol`` objects).
+Clorm further introduces the ``FactBase`` class as a general container for
+storing predicate instances (i.e., *facts*), as well as providing a helper class
+``FactBaseBuilder`` that makes it easy to build fact bases. The data generated
+by the ASP solver is returned as Clingo ``Symbol`` objects. The
+``FactBaseBuilder`` provides a mechanism to *unify* Clorm predicate classes with
+Clingo symbols.
 
 .. code-block:: python
 
@@ -130,13 +133,13 @@ The number of fields in the ``Predicate`` declaration must match the predicate
 arity and the order in which they are declared must also match the position of
 each term in the ASP predicate.
 
-The ``FactBaseBulider`` provides a decorator that registers the predicate class
+The ``FactBaseBuilder`` provides a decorator that registers the predicate class
 with the builder. Once a predicate class is registered the builder will use this
 class to try and unify against Clingo symbols. It also ensures that the fact
 base is built with the appropriate indexes as specified by ``index=True`` for
-the field. The the example, the ``driver`` field is indexed allowing for faster
-queries when searching for specific drivers. As with a traditional database
-indexing improves query performance but should be used sparingly.
+the field. In the example, the ``driver`` field is indexed allowing for faster
+queries when searching for specific drivers. As with databases, indexing
+improves query performance but should be used sparingly.
 
 Using the Data Model
 --------------------
@@ -153,7 +156,7 @@ First we create the Clingo ``Control`` object and load the ASP program.
 
 
 Next we generate a problem instance by generating a lists of ``Driver`` and
-``Item`` objects. These items are added to an ``AppDB`` instance.
+``Item`` objects. These items are added to an ``FactBase`` instance.
 
 .. code-block:: python
 
@@ -162,7 +165,9 @@ Next we generate a problem instance by generating a lists of ``Driver`` and
     instance = FactBase(drivers + items)
 
 The ``Driver`` and ``Item`` constructors require named parameters that match the
-declared term names; you cannot use "normal" Python positional arguments.
+declared term names. Note, a design decision was taken to disallow "normal"
+Python positional arguments as it would make it too easy to write brittle code;
+for example, the code would break if the order of the fields was changed.
 
 The facts can now be added to the control object and the combined ASP program
 grounded.
@@ -216,9 +221,10 @@ executed. Note: seperating query definition from query execution allows for a
 query to be re-used.
 
 In particular, we now iterate over the list of drivers and execute the query for
-each driver and print the result. Because the ``Assignment.driver`` field is
-indexed for the ``AppDB`` class these repeat queries will be relatively
-efficient.
+each driver and print the result. Note, the ``FactBaseBuilder`` instance ``fbb``
+had the ``Assignment.driver`` field registered as an index. This means that the
+returned ``FactBase`` instance will have indexing for this field and therefore
+querying based on this field will be relatively efficient.
 
 .. code-block:: python
 

@@ -12,23 +12,23 @@ A Container for Facts
 
 Clorm provides the ``FactBase`` as a container class for storing and querying
 facts. ``FactBase`` behaves much like a normal Python container except that it
-can only instances of Predicate (or it's sub-classes) and has database-like
-query mechanism.
+can only contain instances of Predicate (or it's sub-classes) and has
+database-like query mechanism.
 
 .. code-block:: python
 
    from clorm import *
 
    class Person(Predicate):
-      person = ConstantField()
+      id = ConstantField()
       address = StringField()
 
    class Pet(Predicate):
       owner = ConstantField()
       petname = StringField()
 
-   dave = Person(person="dave", address="UNSW")
-   morri = Person(person="morri", address="UNSW")
+   dave = Person(id="dave", address="UNSW")
+   morri = Person(id="morri", address="UNSW")
    dave_cat = Pet(owner="dave", petname="Frank")
 
    fb = FactBase([dave,morri,dave_cat])
@@ -39,8 +39,9 @@ query mechanism.
 
 The fact base can be populated at object construction time or later. Like a
 Python ``set`` object a ``FactBase`` has an ``add`` member function for adding
-facts. However, because it only accepts ``Predicate`` instances the function is
-overloaded to accept either a single fact or a list of facts.
+facts. However, because it can only store ``Predicate`` instances the function
+is able to be more flexible and has been overloaded to accept either a single
+fact or a list of facts.
 
 .. code-block:: python
 
@@ -54,15 +55,16 @@ overloaded to accept either a single fact or a list of facts.
 Querying
 --------
 
-The primary motivation for providing a specialised container class for storing
+An important motivation for providing a specialised container class for storing
 facts, instead of simply using a Python ``list`` or ``set`` object, is to
-support a richer query mechanism.
+support a rich mechanism to query the contents of a fact base.
 
 When an ASP model is returned by the solver the application developer needs to
 process the model in order to extract the relevant facts. The simplest mechanism
-to do this to loop through the facts in the model. This loop will typically
-contain a number of conditional statements to determine what action to take for
-the given fact; and to store it if some sort of matching needs to take place.
+to do this to simply loop through the facts in the model. This loop will
+typically contain a number of conditional statements to determine what action to
+take for the given fact; and to store it if some sort of matching needs to take
+place.
 
 However, this loop-and-test approach leads to unnecessary boilerplate code as
 well as making the purpose of the code more obscure. ``FactBase`` is intended to
@@ -77,14 +79,14 @@ can create ``Select`` query objects:
 
 .. code-block:: python
 
-       query1=facts.select(Person).where(Person.person == "dave")
+       query1=facts.select(Person).where(Person.id == "dave")
        query2=facts.select(Pet).where(Pet.owner == "dave")
 
 A query object needs to be executed in order to return the results. There are
-two member functions to execute a query: ``get()`` and
-``get_unique()``. ``get()`` returns a list of results, while ``get_unique()``
-returns exactly one results and will raise a ``ValueError`` if there is not
-exactly one result.
+three member functions to execute a query: ``get()``, ``get_unique()``, and
+``count()``. ``get()`` returns a list of results, while ``get_unique()`` returns
+exactly one results and will raise a ``ValueError`` if there is not exactly one
+result. Finally, ``count()`` returns the number of matching entries.
 
 .. code-block:: python
 
@@ -95,10 +97,11 @@ exactly one result.
 Indexing
 ^^^^^^^^
 
-Querying can be a relatively expensive process is it has to potentially has to
+Querying can be a relatively expensive process as it has to potentially to
 examine every fact in the ``FactBase``. However, if you know that you will be
-mostly searching for on a particular field(s) then it is useful to define an index
-on that field when the ``FactBase`` object is instantiated:
+mostly searching for values that match a particular field (or set of fields)
+then it is useful to define an index on that field (or fields) when the
+``FactBase`` object is instantiated:
 
 .. code-block:: python
 
@@ -110,10 +113,10 @@ on that field when the ``FactBase`` object is instantiated:
 Queries with Parameters
 ^^^^^^^^^^^^^^^^^^^^^^^
 
-To provide for more flexible queries Clorm introduces placeholders in order to
-parameterise queries. Placeholders are named ``ph1_`` to ``ph4_`` and correspond
-to the position of the parameter in the ``get()`` or ``get_unique()`` function
-calls.
+To allow more flexible queries Clorm introduces placeholders as a means of
+parameterising queries. Placeholders are named ``ph1_`` to ``ph4_`` and
+correspond to the position of the parameter in the ``get()``, ``get_unique()``,
+or ``count()`` function calls.
 
 .. code-block:: python
 
@@ -121,7 +124,7 @@ calls.
        query2=facts.select(Pet).where(Pet.owner == ph1_)
 
        for person in query1.get():
-          print("Pets owned by: {}".format(person.person))
+          print("Pets owned by: {}".format(person.id))
           for pet in query2.get(person.owner):
 	      print("\t pet named {}".format(pet.petname))
 
@@ -132,7 +135,7 @@ Additional placeholders can be defined using the ``ph_`` function:
 Clorm also supports **named placeholders**, which may be preferable if there are
 a larger number of parameters. A named placeholder is created using the ``ph_``
 function with a non-numeric first parameter, and are referenced in the query
-execution using a keyword function parameter. An advantange of named
+execution using keyword function parameters. An advantange of named
 placeholders is that they allow for a default value to be set.
 
 .. code-block:: python
@@ -160,7 +163,7 @@ the default).
 
        query2=facts.select(Pet).order_by(Pet.owner, Pet.petname.desc())
 
-The above will list all pets first sorted by the owner's name and then sorted in
+The above will list all pets, first sorted by the owner's name and then sorted in
 descending order by the pet's name.
 
 There is also a ``desc`` helper function for those that find the syntax more
@@ -178,15 +181,15 @@ Complex Query Expressions and Indexing
 
 In the simple case where the ``Select`` query object contains a ``where`` clause
 that corresponds to a field that is indexed then Clorm is able to use this index
-to make query execution efficient.
+to make query execution more efficient.
 
-However, a ``where`` clause can consist of more the one clause and these are
+However, a ``where`` clause can consist of more than one clause and these are
 treated as a conjunction. Its is also possible to construct more complex clauses
 using Clorm supplied ``and_``, ``or_``, and ``not_`` constructs.
 
 .. code-block:: python
 
-       query1=facts.select(Person).where(or_(Person.person == "dave", Person.address == "UNSW"))
+       query1=facts.select(Person).where(or_(Person.id == "dave", Person.address == "UNSW"))
 
 Here when ``query1`` is execute it will return any person who is either
 ``"dave""`` or based at ``"UNSW"``.
@@ -213,13 +216,11 @@ the same results.
 However, while both these queries do generate the same result they are not
 equivalent in behaviour. In particular, the Clorm generated functor has a
 structure that the system is able to analyse and can therefore potentially use
-indexing to improve query efficiency.
-
-However, there is no mechanism to analyse the internal make up of a lambda or
-function. Consequently in these cases the query would have to examine every fact
-in the fact base of the given type and test the function against that
-fact. Hence it is usually preferable to use the Clorm generated clauses where
-possible.
+indexing to improve query efficiency. In contrast, there is no mechanism to
+analyse the internal make up of a lambda or function. Consequently in these
+latter cases the query would have to examine every fact in the fact base of the
+given type and test the function against that fact. Hence it is usually
+preferable to use the Clorm generated clauses where possible.
 
 Importing Raw Clingo Symbols and FactBaseBuilder
 ------------------------------------------------
@@ -230,7 +231,7 @@ function and the ``FactBaseBuilder`` class to simplify the interaction with
 ``Clingo.Symbol`` objects.
 
 The ``unify`` function takes two parameters; a list of predicate classes as
-`unifies` and a list of raw clingo symbols. It then tries to unify the list of
+*unifiers* and a list of raw clingo symbols. It then tries to unify the list of
 raw symbols with the list of predicates. This function returns a list of facts
 that represent the unification of the symbols with the first matching
 predicate. If a symbol was not able to unify with any predicate then it is
@@ -242,18 +243,18 @@ ignored.
    from clorm import *
 
    class Person(Predicate):
-      person = ConstantField()
+      id = ConstantField()
       address = StringField()
 
-   dave = Person(person="dave", address="UNSW")
+   dave = Person(id="dave", address="UNSW")
    dave_raw = Function("person", [Function("dave",[]),String("UNSW")])
    facts = unify([Person], [dave_raw])
    assert facts == [dave]
 
-.. note:: Since a raw Clingo symbol is mapped to the first predicate that it
-   unifies with, the order that the predicates are defined can change the
-   behaviour of the fact base. Therefore, in general it is a good idea to avoid
-   defining multiple predicates that can unify with the same symbols.
+.. note:: In general it is a good idea to avoid defining multiple predicate
+   definitions that can unify to the same symbol. However, if a symbol can unify
+   with multiple predicate definitions then the ``unify`` function will match to
+   only the first predicate definition in the list of predicates.
 
 
 The ``FactBaseBuilder`` provides a helper class to make it easier to build fact
@@ -272,8 +273,8 @@ So the earlier definition can be modified:
       owner = ConstantField(index=True)
       petname = StringField()
 
-``FactBaseBuilder`` provides a decorator function that can used to register the
-class and index option with the builder.
+``FactBaseBuilder`` provides a decorator function that can be used to register
+the class and index option with the builder.
 
 .. code-block:: python
 
@@ -283,7 +284,7 @@ class and index option with the builder.
 
    @fbb.register
    class Person(Predicate):
-      person = ConstantField()
+      id = ConstantField()
       address = StringField()
 
    @fbb.register
@@ -295,17 +296,30 @@ class and index option with the builder.
    fb1 = fbb.new(symbols=[dave_raw])
 
 
-``FactBaseBuilder.new()`` member function has two other useful features. Firtly,
-the option ``raise_on_empty=True`` will throw an error if no clingo symbols
-unify with the registered predicates. While there are legitimate cases where a
-symbol doesn't unify with the builder there are also many cases where this
-indicates an error in the definition of the predicates or in the ASP program
-itself.
+Once a ``FactBaseBuilder`` object has registered a number of predicates then the
+``FactBaseBuilder.new()`` member function can be used to create a ``FactBase``
+object containing the facts that were generated by unifying the
+``Clingo.Symbol`` objects against the registered predicates. The generated
+``FactBase`` will also have the appropriate indexes specified by the
+registration of the predicates.
 
-The final option is that it allows for a delayed initialisation feature for the
-``FactBase``. We will be highlighted in the section on integrating with Clingo
-and processing ASP models, but essentially it allows for ``FactBase`` objects
-that are not used to be defined and discarded cheaply.
+This function has two other useful features. Firtly, the option
+``raise_on_empty=True`` will throw an error if no clingo symbols unify with the
+registered predicates. While there are legitimate cases where a symbol doesn't
+unify with the builder there are also many cases where this indicates an error
+in the definition of the predicates or in the ASP program itself.
+
+The final option is the ``delayed_init=True`` option that allow for a delayed
+initialisation of the ``FactBase``. What this means is that the symbols are only
+processed (i.e., they are not unified agaist the predicates to generate facts)
+when the ``FactBase`` object is actually used.
+
+This is useful because there are cases where a fact base object is never
+actually used and is simply discarded. In particular this can happen when the
+ASP solver generates models as part of the ``on_model()`` callback function. If
+applications only cares about an optimal model or there is a timeout being
+applied then only the last model generated will actually be processed and all
+the earlier models may be discarded (see :ref:`api_clingo_integration`).
 
 
 

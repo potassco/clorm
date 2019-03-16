@@ -1282,6 +1282,7 @@ class SelectTestCase(unittest.TestCase):
         s_cf_num1_eq_1 = fb.select(Cfact).where(Cfact.num1 == 1)
 
         self.assertEqual(set(s_af_all.get()), set([af1,af2,af3]))
+        self.assertEqual(s_af_all.count(), 3)
         self.assertEqual(set(s_af_num1_eq_1.get()), set([af1]))
         self.assertEqual(set(s_af_num1_le_2.get()), set([af1,af2]))
         self.assertEqual(set(s_af_num2_eq_20.get()), set([af2, af3]))
