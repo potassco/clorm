@@ -6,6 +6,7 @@
 # be easily machine processable whereas the clingo output would require parsing
 # to regenerate the original symbol objects.
 # --------------------------------------------------------------------------------
+from collections.abc import Mapping
 import clingo
 import json
 from .orm import *
@@ -66,7 +67,7 @@ def symbol_decoder(obj):
     Args:
       obj: a JSON object
     '''
-
+    if not isinstance(obj, Mapping): return obj
     if "clingo.SymbolType" not in obj: return obj
     stype_str = obj["clingo.SymbolType"]
     if stype_str == "Infimum": return clingo.Infimum
@@ -74,7 +75,8 @@ def symbol_decoder(obj):
     if stype_str == "String": return clingo.String(obj["string"])
     if stype_str == "Number": return clingo.Number(obj["number"])
     if stype_str == "Function":
-        return clingo.Function(obj["name"], obj["arguments"])
+        args = [ symbol_decoder(a) for a in obj["arguments"] ]
+        return clingo.Function(obj["name"], args)
 
     # A bad encoding?
     return obj
@@ -162,17 +164,19 @@ class JSONCoder(object):
           json_object: a json encoded object
 
         '''
+        if not isinstance(obj, Mapping): return obj
         if "clingo.SymbolType" in obj: return symbol_decoder(obj)
         if "clorm.FactBase" in obj and "facts" in obj:
             indexes = []
             for fname in obj["clorm.FactBase"]:
                 if fname not in self._name2field: continue
                 indexes.append(self._name2field[fname])
-            return FactBase(facts=obj["facts"], indexes=indexes)
+            facts = [ self.decoder(f) for f in obj["facts"] ]
+            return FactBase(facts=facts, indexes=indexes)
         if not "clorm.Predicate" in obj: return obj
         pname = obj["clorm.Predicate"]
         if pname not in self._name2pred: return obj
-        return self._name2pred[pname](raw=obj["raw"])
+        return self._name2pred[pname](raw=symbol_decoder(obj["raw"]))
 
     #-------------------------------------------------------------------------
     # Convenience functions to call the JSON encoder and decoder
