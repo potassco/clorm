@@ -50,7 +50,7 @@ def symbol_encoder(s):
         return js
     if s.type == clingo.SymbolType.Function:
         js["name"] = s.name
-        js["arguments"] = s.arguments
+        js["arguments"] = [symbol_encoder(a) for a in s.arguments]
         return js
 
 #------------------------------------------------------------------------------
@@ -137,8 +137,8 @@ class JSONCoder(object):
         if isinstance(obj, clingo.Symbol): return symbol_encoder(obj)
         if isinstance(obj, FactBase):
             return {
-                "clorm.FactBase" : [ str(f) for f in obj.indexes ],
-                "facts" : list(obj) }
+                "clorm.FactBase" : [ str(fld) for fld in obj.indexes ],
+                "facts" : [ self.encoder(fct) for fct in obj] }
         for p in self._preds:
             if isinstance(obj, p):
                 return { "clorm.Predicate" : p.__name__,
