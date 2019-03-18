@@ -128,3 +128,16 @@ documentation for more details.
 
 .. autoclass:: clorm.clingo.SolveHandle
    :members:
+
+JSON Encoding and Decoding
+--------------------------
+
+Clorm allows clingo.Symbols, Predicates, and FactBases to be translated to/from
+JSON.
+
+.. autoclass:: clorm.json.FactBaseCoder
+   :members:
+
+.. autofunction:: clorm.json.symbol_encoder
+
+.. autofunction:: clorm.json.symbol_decoder

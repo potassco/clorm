@@ -13,7 +13,7 @@ def read(fname):
 
 setup(
     name="CLORM",
-    version="0.4.3",
+    version="0.4.4",
     author="David Rajaratnam",
     author_email="daver@gemarex.com.au",
     description="Clingo ORM (CLORM) provides a ORM interface for interacting with the Clingo Answer Set Programming (ASP) solver",

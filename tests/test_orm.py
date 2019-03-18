@@ -1023,6 +1023,11 @@ class FactBaseTestCase(unittest.TestCase):
         self.assertTrue(bf1 in fs2)
         self.assertTrue(cf1 in fs2)
 
+        fs3 = FactBase()
+        fs3.add([af1])
+        asp_str = fs3.asp_str().lstrip().rstrip()
+        self.assertEqual(asp_str, "{}.".format(str(af1)))
+
     #--------------------------------------------------------------------------
     #
     #--------------------------------------------------------------------------

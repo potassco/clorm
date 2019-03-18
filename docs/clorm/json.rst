@@ -16,30 +16,30 @@ solver.
    readable but would require parsing to regenerate the original symbol objects.
 
 
-The ``JSONCoder`` class is a helper class to be able to encode/decode JSON for
+The ``FactBaseCoder`` class is a helper class to be able to encode/decode JSON for
 particular Predicate sub-classes. The predicates can be supplied at
 construction.
 
 .. code-block:: python
 
    from clorm import Predicate, IntegerField, StringField
-   from clorm.json import JSONCoder
+   from clorm.json import FactBaseCoder
 
    class Afact(Predicate):
         aint = IntegerField()
 	astr = StringField()
 
-   json_coder = JSONCoder([Afact])
+   fb_coder = FactBaseCoder([Afact])
 
-Alternatively, the ``JSONCoder`` can also be used as a decorator to register
+Alternatively, the ``FactBaseCoder`` can also be used as a decorator to register
 predicates (just like the ``FactBaseBuilder``).
 
 .. code-block:: python
 
    from clorm import Predicate, IntegerField, StringField
-   from clorm.json import JSONCoder
+   from clorm.json import FactBaseCoder
 
-   json_coder = JSONCoder()
+   fb_coder = FactBaseCoder()
 
    class Fun(ComplexTerm):
 	aint = IntegerField()
@@ -50,12 +50,12 @@ predicates (just like the ``FactBaseBuilder``).
         astr = StringField()
         class Meta: istuple = True
 
-   @json_coder.register
+   @fb_coder.register
    class Afact(Predicate):
 	aint = IntegerField()
         afun = Fun.Field()
 
-   @json_coder.register
+   @fb_coder.register
    class Bfact(Predicate):
 	astr = StringField()
         atup = Tup.Field()
@@ -75,9 +75,9 @@ Assuming the above code:
    bfact1 = Bfact(astr="aa", atup=Tup(aint=1, astr="a"))
    bfact2 = Bfact(astr="bb", atup=Tup(aint=2, astr="b"))
 
-   json_str = json.dumps([afact1,afact2,bfact1,bfact2], default=json_coder.encoder)
+   json_str = json.dumps([afact1,afact2,bfact1,bfact2], default=fb_coder.encoder)
 
-   facts = json.loads(json_str, object_hook=json_coder.decoder)
+   facts = json.loads(json_str, object_hook=fb_coder.decoder)
 
 As a convenience the fact coder provides member functions: ``dump``, ``dumps``,
 ``load``, ``loads`` that call the respective json functions with the appropriate
@@ -86,6 +86,6 @@ simplified to:
 
 .. code-block:: python
 
-   json_str = json_coder.dumps([afact1,afact2,bfact1,bfact2])
+   json_str = fb_coder.dumps([afact1,afact2,bfact1,bfact2])
 
-   facts = json_coder.loads(json_str)
+   facts = fb_coder.loads(json_str)

@@ -14,7 +14,7 @@ from .orm import *
 __all__ = [
     'symbol_encoder',
     'symbol_decoder',
-    'JSONCoder'
+    'FactBaseCoder'
 ]
 
 def _raise(obj):
@@ -85,8 +85,8 @@ def symbol_decoder(obj):
 #
 #------------------------------------------------------------------------------
 
-class JSONCoder(object):
-    '''A JSON Encoder/Decoder for facts (i.e., Predicate sub-classed objects).
+class FactBaseCoder(object):
+    '''A JSON Encoder/Decoder for clingo.Symbols, predicate instances, and fact bases.
 
     Provides a helper class for encoding and decoding facts to JSON. The
     predicates of interest are passed in the constructor or can be registered
@@ -117,13 +117,13 @@ class JSONCoder(object):
     #
     #-------------------------------------------------------------------------
     def register(self, cls):
-        '''Decorator to register a Predicate sub-class with the FactCoder'''
+        '''Decorator to register a Predicate sub-class with the FactBaseCoder'''
 
         self._register_predicate(cls)
         return cls
 
     def encoder(self, obj):
-        '''JSON Encoder.
+        '''JSON Encoder for clingo.Symbol, clorm.Predicate, and clorm.FactBase.
 
         Call by overiding the ``default`` argument for json.dump(s)
 

@@ -1824,13 +1824,15 @@ class FactBase(object):
 
         out = io.StringIO()
         for fm in self._factmaps.values():
-            print("{}".format(fm.asp_str()), file=out)
+            for f in fm:
+                print("{}.".format(f), file=out)
         data = out.getvalue()
         out.close()
         return data
 
     def __str__(self):
-        return self.asp_str()
+        tmp = ", ".join([str(f) for f in self])
+        return '{' + tmp + '}'
 
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------

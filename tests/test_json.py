@@ -160,6 +160,10 @@ class JSONPredicateTestCase(unittest.TestCase):
             astr = StringField()
             atup = Tup.Field()
 
+        class Cfact(ComplexTerm):
+            aint = IntegerField()
+            astr = StringField()
+
         afact1 = Afact(aint=10, afun=Fun(aint=1, astr="a"))
         afact2 = Afact(aint=20, afun=Fun(aint=2, astr="b"))
         bfact1 = Bfact(astr="aa", atup=Tup(aint=1, astr="a"))
@@ -170,19 +174,34 @@ class JSONPredicateTestCase(unittest.TestCase):
         self.Tup = Tup
         self.Afact = Afact
         self.Bfact = Bfact
+        self.Cfact = Cfact
+
+        self.n1 = clingo.Number(60)
+        self.s1 = clingo.String("aaaa")
+        self.f1 = clingo.Function("",[self.n1, self.s1])
+        self.p1 = Cfact(aint=60, astr="aaaa")
+        self.fb1 = FactBase(facts=[self.p1])
+
+        self.str_n1 = '{"clingo.SymbolType": "Number", "number": 60}'
+        self.str_s1 = '{"clingo.SymbolType": "String", "string": "aaaa"}'
+        self.str_f1 = '{"clingo.SymbolType": "Function", "name": "cfact", ' \
+            + '"arguments": [' + self.str_n1 + ', ' + self.str_s1 + ']}'
+        self.str_p1 = '{"clorm.Predicate": "Cfact", "raw": ' + self.str_f1 + '}'
+        self.str_fb1 = '{"clorm.FactBase": [], "facts": ['+ self.str_p1 + ']}'
 
     #--------------------------------------------------------------------------
     #
     #--------------------------------------------------------------------------
     def test_predicate_coder(self):
-        pc1 = cjson.JSONCoder()
-        Fun = self.Fun
-        Tup = self.Tup
+        pc1 = cjson.FactBaseCoder()
         Afact = pc1.register(self.Afact)
         Bfact = pc1.register(self.Bfact)
+        Cfact = pc1.register(self.Cfact)
         allf = self.allf
+        p1 = self.p1
+        str_p1 = self.str_p1
 
-        pc2 = cjson.JSONCoder([Afact,Bfact])
+        pc2 = cjson.FactBaseCoder([Afact,Bfact,Cfact])
         json_str1 = pc1.dumps(allf)
         json_str2 = pc2.dumps(allf)
         result1 = pc1.loads(json_str2)
@@ -190,17 +209,24 @@ class JSONPredicateTestCase(unittest.TestCase):
         self.assertEqual(allf,result1)
         self.assertEqual(allf,result2)
 
+        json_p1 = pc2.dumps(p1)
+        self.assertEqual(json_p1, str_p1)
+
+
     #--------------------------------------------------------------------------
     #
     #--------------------------------------------------------------------------
     def test_factbase_coder(self):
-        pc = cjson.JSONCoder()
-        Fun = self.Fun
-        Tup = self.Tup
+        pc = cjson.FactBaseCoder()
         allf = self.allf
-
+        fb1 = self.fb1
+        str_fb1 = self.str_fb1
         Afact = pc.register(self.Afact)
         Bfact = pc.register(self.Bfact)
+        Cfact = pc.register(self.Cfact)
+
+        json_fb1 = pc.dumps(fb1)
+        self.assertEqual(json_fb1, str_fb1)
 
         fb_in = FactBase(facts=allf, indexes=[Afact.aint, Bfact.astr])
         json_str = pc.dumps(fb_in, indent=4, sort_keys=True)
