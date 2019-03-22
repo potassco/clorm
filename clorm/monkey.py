@@ -4,8 +4,8 @@
 
 import sys
 import clingo as original_clingo
-from .clingo import Control
-#import clorm as orm
+from . import clingo as clorm_clingo
+from . import noclingo as clorm_noclingo
 
 original_control = original_clingo.Control
 
@@ -22,7 +22,7 @@ def patch():
     it returns clorm.clingo.Model or clorm.clingo.SolveHandle object (as
     necessary).
     """
-    original_clingo.Control=Control
+    original_clingo.Control=clorm_clingo.Control
 
 
 def unpatch():
