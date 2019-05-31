@@ -160,7 +160,7 @@ class RawField(object, metaclass=_RawFieldMeta):
        sub-classing ``RawField`` directly, it forms a longer data translation
        chain:
 
-              ASP Symbol object -- RawField -- StringField -- date object
+         clingo symbol object -- RawField -- StringField -- DateField -- python date object
 
        Here the ``DateField.cltopy`` is called at the end of the chain of
        translations, so it expects a Python string object as input and outputs a
