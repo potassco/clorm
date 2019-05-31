@@ -864,13 +864,25 @@ def unify(unifiers, symbols):
         except ValueError:
             return None
 
-    types = {(cls.meta.name, cls.meta.arity) : cls for cls in unifiers}
+    # To make things a little more efficient use the name/arity signature as a
+    # filter. However, Python doesn't have a built in multidict and I don't want
+    # to add an extra dependency - so this is a bit more complex than it needs
+    # to be.
+    sigs = [((cls.meta.name, cls.meta.arity),cls) for cls in unifiers]
+    types = {}
+    for sig,cls in sigs:
+        if sig not in types: types[sig] = [cls]
+        else: types[sig].append(cls)
+
     facts = []
     for raw in symbols:
-        cls = types.get((raw.name, len(raw.arguments)))
-        if not cls: continue
-        f = unify_single(cls,raw)
-        if f: facts.append(f)
+        classes = types.get((raw.name, len(raw.arguments)))
+        if not classes: continue
+        for cls in classes:
+            f = unify_single(cls,raw)
+            if f:
+                facts.append(f)
+                break
     return facts
 
 

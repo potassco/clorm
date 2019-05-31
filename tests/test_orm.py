@@ -555,6 +555,86 @@ class ORMTestCase(unittest.TestCase):
         self.assertEqual([af1_1,bf_1], g5)
 
     #--------------------------------------------------------------------------
+    #   Test unifying between predicates which have the same name-arity
+    #   signature. There was a bug in the unify() function where only of the
+    #   unifying classes was ignored leading to failed unification.
+    #   --------------------------------------------------------------------------
+    def test_unify_same_sig(self):
+        class ATuple(ComplexTerm):
+            aconst=ConstantField()
+            bint = IntegerField()
+            class Meta: istuple = True
+
+        class Fact1(Predicate):
+            aint = IntegerField()
+            aconst = ConstantField()
+            class Meta: name = "fact"
+
+        class Fact2(Predicate):
+            aint = IntegerField()
+            atuple = ATuple.Field()
+            class Meta: name = "fact"
+
+        r1 = Function("fact",[Number(1), Function("bob",[])])
+        r2 = Function("fact",[Number(1), Function("", [Function("bob",[]),Number(1)])])
+
+        # r1 only unifies with Fact1 and r2 only unifies with Fact2
+        f1 = Fact1(raw=r1)
+        self.assertEqual(f1.raw, r1)
+        with self.assertRaises(ValueError) as ctx:
+            f2 = Fact1(raw=r2)
+        f2 = Fact2(raw=r2)
+        self.assertEqual(f2.raw, r2)
+        with self.assertRaises(ValueError) as ctx:
+            f1 = Fact2(raw=r1)
+
+        # The unify() function should correctly unify both facts
+        res = unify([Fact1,Fact2],[r1,r2])
+        self.assertEqual(len(res), 2)
+
+    #--------------------------------------------------------------------------
+    #   Test unifying between predicates which have the same name-arity
+    #   signature to make sure the order of the predicate classes correctly
+    #   corresponds to the order in which the facts are unified.
+    #   --------------------------------------------------------------------------
+    def test_unify_same_sig2(self):
+
+        class Fact1(Predicate):
+            aint = IntegerField()
+            aconst = ConstantField()
+            class Meta: name = "fact"
+
+        class Fact2(Predicate):
+            aint = IntegerField()
+            araw = RawField()
+            class Meta: name = "fact"
+
+        r1 = Function("fact",[Number(1), Function("bob",[])])
+        r2 = Function("fact",[Number(1), Function("", [Function("bob",[]),Number(1)])])
+
+        # r1 only unifies with Fact1 but both r1 and r2 unify with Fact2
+        f1 = Fact1(raw=r1)
+        self.assertEqual(f1.raw, r1)
+        with self.assertRaises(ValueError) as ctx:
+            f2 = Fact1(raw=r2)
+        f1 = Fact2(raw=r1)
+        self.assertEqual(f1.raw, r1)
+        f2 = Fact2(raw=r2)
+        self.assertEqual(f2.raw, r2)
+
+        # unify() should unify r1 with Fact1 and r2 with Fact2
+        res = unify([Fact1,Fact2],[r1,r2])
+        self.assertEqual(len(res), 2)
+        self.assertTrue(isinstance(res[0],Fact1))
+        self.assertTrue(isinstance(res[1],Fact2))
+
+        # unify() should unify r1 and r2 with Fact2
+        res = unify([Fact2,Fact1],[r1,r2])
+        self.assertEqual(len(res), 2)
+        self.assertTrue(isinstance(res[0],Fact2))
+        self.assertTrue(isinstance(res[1],Fact2))
+
+    #--------------------------------------------------------------------------
     #  Test that the fact comparators work
     #--------------------------------------------------------------------------
 
@@ -1459,7 +1539,6 @@ class SelectTestCase(unittest.TestCase):
 
         q = fb.select(AFact).where(AFact.cmplx <= ph1_).order_by(AFact.cmplx, AFact.astr)
         self.assertEqual([f3,f4,f2], q.get(cmplx2))
-
 
     #--------------------------------------------------------------------------
     #   Test that the indexing works
