@@ -12,6 +12,7 @@ from clingo import Control
 from clorm.orm import \
     NonLogicalSymbol, Predicate, ComplexTerm, \
     IntegerField, StringField, ConstantField, RawField, \
+    define_field_restriction, \
     not_, and_, or_, _StaticComparator, _get_term_comparators, \
     ph_, ph1_, ph2_, \
     _FactIndex, _FactMap, \
@@ -166,6 +167,72 @@ class ORMTestCase(unittest.TestCase):
         self.assertTrue(fint2.index)
         self.assertTrue(fstr2.index)
         self.assertTrue(fconst2.index)
+
+    #--------------------------------------------------------------------------
+    # Test catching invalid default values for a field
+    #--------------------------------------------------------------------------
+    def test_catch_bad_field_defaults(self):
+        with self.assertRaises(TypeError) as ctx:
+            fld = IntegerField(default="bad")
+
+    #--------------------------------------------------------------------------
+    # Test making a restriction of a field
+    #--------------------------------------------------------------------------
+    def test_define_field_restriction(self):
+        dfr = define_field_restriction
+
+        # Some bad calls
+        with self.assertRaises(TypeError) as ctx:
+            class Something(object):
+                def __init__(self): self._a = 1
+
+            fld = dfr("fld", Something, ["a","b"])
+
+        with self.assertRaises(TypeError) as ctx:
+            fld = dfr("fld", "notaclass", ["a","b"])
+
+        with self.assertRaises(TypeError) as ctx:
+            fld = dfr("fld", IntegerField, ["a"])
+
+        # A good restriction
+        ABCField = dfr("ABCField", ConstantField, ["a","b","c"])
+
+        # Make sure it works
+        r_a = Function("a",[])
+        r_b = Function("b",[])
+        r_c = Function("c",[])
+        r_d = Function("d",[])
+        r_1 = Number(1)
+
+        # Test the pytocl direction
+        self.assertEqual(ABCField.pytocl("a"), r_a)
+        self.assertEqual(ABCField.pytocl("b"), r_b)
+        self.assertEqual(ABCField.pytocl("c"), r_c)
+
+        with self.assertRaises(TypeError) as ctx:
+            v = ABCField.pytocl("d")
+
+        with self.assertRaises(TypeError) as ctx:
+            v = ABCField.pytocl(1)
+
+        # Test the cltopy direction
+        self.assertEqual(ABCField.cltopy(r_a), "a")
+        self.assertEqual(ABCField.cltopy(r_b), "b")
+        self.assertEqual(ABCField.cltopy(r_c), "c")
+        with self.assertRaises(TypeError) as ctx:
+            v = ABCField.cltopy(r_d)
+        with self.assertRaises(TypeError) as ctx:
+            v = ABCField.cltopy(r_1)
+
+        # Test a version with no class name
+        ABCField2 = dfr(ConstantField, ["a","b","c"])
+        self.assertEqual(ABCField2.pytocl("a"), r_a)
+
+        # But only 2 and 3 arguments are valid
+        with self.assertRaises(TypeError) as ctx:
+            ABCField3 = dfr(["a","b","c"])
+        with self.assertRaises(TypeError) as ctx:
+            ABCField4 = dfr("ABCField", ConstantField, ["a","b","c"], 1)
 
     #--------------------------------------------------------------------------
     # Test that we can define predicates using the class syntax and test that

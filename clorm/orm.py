@@ -84,6 +84,14 @@ def _sfm_constructor(self, default=None, index=False):
     self._default = default
     self._index = index
 
+    # Check that the default is a valid value
+    if default:
+        try:
+            self.pytocl(default)
+        except TypeError:
+            raise TypeError("Invalid default value \"{}\" for {}".format(
+                default, type(self).__name__))
+
 class _RawFieldMeta(type):
     def __new__(meta, name, bases, dct):
 
@@ -241,6 +249,83 @@ class ConstantField(RawField):
 
     cltopy = _constant_cltopy
     pytocl = lambda v: clingo.Function(v,[])
+
+
+#------------------------------------------------------------------------------
+# Helper function to define a sub-class of a RawField (or sub-class) that
+# restricts the allowable values.
+# ------------------------------------------------------------------------------
+
+def define_field_restriction(*args):
+    """Defines a field sub-class that restricts the set of field values.
+
+    A helper function to define a sub-class of a RawField (or sub-class) that
+    restricts the allowable values. For example, if you have a constant in a
+    predicate that is restricted to the days of the week ("monday", ...,
+    "sunday"), you then want the Python code to respect that restriction and
+    throw an error if the user uses the wrong value (eg a spelling error such as
+    "wednsday").
+
+    Example:
+       .. code-block:: python
+
+           WorkDayField = define_field_restriction("WorkDayField", ConstantField,
+              ["monday", "tuesday", "wednesday", "thursday", "friday"])
+
+          class WorksOn(Predicate):
+              employee = ConstantField()
+              workday = WorkdDayField()
+
+    Must be called as positional arguments with either 2 or 3 arguments. For the
+    2 argument version a class name is automatically generated.
+
+    Example:
+       .. code-block:: python
+
+           WorkDayField = define_field_restriction(ConstantField,
+              ["monday", "tuesday", "wednesday", "thursday", "friday"])
+
+    Args:
+       subclass_name: the name of the new sub-class (name generated if none specified).
+       field_class: the field that is being sub-classed
+       values: the collection (list/set) of valid values for the sub-class.
+
+    """
+    largs = len(args)
+    if largs == 2:
+        field_class = args[0]
+        values = args[1]
+        subclass_name = field_class.__name__ + "_Restriction"
+    elif largs == 3:
+        subclass_name = args[0]
+        field_class = args[1]
+        values = args[2]
+    else:
+        raise TypeError("define_field_restriction() missing required positional arguments")
+
+    if not inspect.isclass(field_class) or not issubclass(field_class,RawField):
+        raise TypeError("{} is not a subclass of RawField".format(field_class))
+
+    # Check that the values are all valid
+    for v in values:
+        try:
+            out = field_class.pytocl(v)
+        except TypeError:
+            raise TypeError("Invalid value \"{}\" for {}".format(
+                v, field_class.__name__))
+
+    # Now define the restricted pytocl and cltopy functions
+    fs = frozenset(values)
+    def _test_value(v):
+        if v not in fs:
+            raise TypeError(("Invalid value \"{}\" for {} (restriction of "
+                             "{})").format(v, subclass_name, field_class.__name__))
+        return v
+
+    return type(subclass_name, (field_class,),
+                { "pytocl": _test_value,
+                  "cltopy": _test_value})
+
 
 #------------------------------------------------------------------------------
 # Field - a Pyton descriptor (similar to a property) but with overloaded
@@ -535,6 +620,7 @@ class _FieldContainer(object):
     @property
     def defn(self):
         return self._defn
+
 
 #------------------------------------------------------------------------------
 # A Metaclass for the NonLogicalSymbol base class
