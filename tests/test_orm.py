@@ -224,6 +224,12 @@ class ORMTestCase(unittest.TestCase):
         with self.assertRaises(TypeError) as ctx:
             v = ABCField.cltopy(r_1)
 
+        self.assertTrue(ABCField.unifies(r_a))
+        self.assertTrue(ABCField.unifies(r_b))
+        self.assertTrue(ABCField.unifies(r_c))
+        self.assertFalse(ABCField.unifies(r_d))
+        self.assertFalse(ABCField.unifies(r_1))
+
         # Test a version with no class name
         ABCField2 = dfr(ConstantField, ["a","b","c"])
         self.assertEqual(ABCField2.pytocl("a"), r_a)
@@ -233,6 +239,8 @@ class ORMTestCase(unittest.TestCase):
             ABCField3 = dfr(["a","b","c"])
         with self.assertRaises(TypeError) as ctx:
             ABCField4 = dfr("ABCField", ConstantField, ["a","b","c"], 1)
+
+
 
     #--------------------------------------------------------------------------
     # Test that we can define predicates using the class syntax and test that

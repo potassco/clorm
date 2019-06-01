@@ -21,6 +21,7 @@ __all__ = [
     'IntegerField',
     'StringField',
     'ConstantField',
+    'define_field_restriction',
     'Field',
     'Placeholder',
     'NonLogicalSymbol',
@@ -257,14 +258,15 @@ class ConstantField(RawField):
 # ------------------------------------------------------------------------------
 
 def define_field_restriction(*args):
-    """Defines a field sub-class that restricts the set of field values.
+    """Helper function to define a field sub-class that restricts the set of values.
 
     A helper function to define a sub-class of a RawField (or sub-class) that
     restricts the allowable values. For example, if you have a constant in a
     predicate that is restricted to the days of the week ("monday", ...,
     "sunday"), you then want the Python code to respect that restriction and
-    throw an error if the user uses the wrong value (eg a spelling error such as
-    "wednsday").
+    throw an error if the user enters the wrong value (e.g. a spelling error
+    such as "wednsday"). Restrictions are also useful for unification if you
+    want to unify based on some specific value.
 
     Example:
        .. code-block:: python
@@ -276,8 +278,10 @@ def define_field_restriction(*args):
               employee = ConstantField()
               workday = WorkdDayField()
 
-    Must be called as positional arguments with either 2 or 3 arguments. For the
-    2 argument version a class name is automatically generated.
+    The function must be called using positional arguments with either 2 or 3
+    arguments. For the 3 argument case a class name is specified for the name of
+    the new field. For the 2 argument case the field class name is automatically
+    generated.
 
     Example:
        .. code-block:: python

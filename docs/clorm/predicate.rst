@@ -163,14 +163,15 @@ natural Python representations.  ASP has three *simple terms*: *integer*,
 a mapping to these fields: ``IntegerField``, ``StringField``, and
 ``ConstantField``.
 
-These classes do not represent instances of the actual fields but rather they
-implement functions to perform the necessary data conversions. When instantiated
-as part of a predicate definition they also specify a number of options.
+Note, these classes do not represent instances of the actual fields but rather
+they implement functions to perform the necessary data conversions. When
+instantiated as part of a predicate definition they also specify a number of
+options.
 
 Simple Term Definition Options
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The are currently two options when specifying the Python fields for a
+There are currently two options when specifying the Python fields for a
 predicate. We have already seen the ``default`` option, but there is also the
 ``index`` option.
 
@@ -192,22 +193,22 @@ the standard sub-classes ``StringField``, ``ConstantField``, and
 As well as sub-classing ``RawField`` directly it is also possible to sub-class a
 sub-class, which makes it possible to form a *data conversion chain*. To
 understand why this is useful we consider an example of specifying a date
-field. But it is first useful to appreciate that because the ASP language only
-has three simple term types it is often necessary to perform some form of data
-encoding when modelling a problem domain.
+field.
 
 Consider the example of an application that needs a date term for an event
 tracking application. From the Python code perspective it would be natural to
 use Python ``datetime.date`` objects. However, it then becomes a question of how
-to encode these Python date objects in ASP.
+to encode these Python date objects in ASP (noting that ASP only has three
+simple term types).
 
-A useful encoding would be to encode a date as a string in **YYYYMMDD**
-format. Dates encoded in this format satisfy some useful properties such as the
-comparison operators will produce the expected results (e.g., ``"20180101" <
-"20180204"``). A string is also preferable to using a similiarly encoded integer
-value.  For example, encoding the date in the same way as an integer would allow
-incrementing or subtracting a date encoded number, which could lead to unwanted
-values (e.g., ``20180131 + 1 = 20180132`` does not correspond to a valid date).
+A useful encoding would be to encode a date as a string in **YYYYMMDD** format
+(or **YYYY-MM-DD** for greater readability). Dates encoded in this format
+satisfy some useful properties such as the comparison operators will produce the
+expected results (e.g., ``"20180101" < "20180204"``). A string is also
+preferable to using a similiarly encoded integer value.  For example, encoding
+the date in the same way as an integer would allow incrementing or subtracting a
+date encoded number, which could lead to unwanted values (e.g., ``20180131 + 1 =
+20180132``, which does not correspond to a valid date).
 
 So, adopting a date encoded string we can consider a date based fact for the
 booking application that simply encodes that there is a New Year's eve party on
@@ -248,9 +249,9 @@ encoded string into an actual ``datetime.date`` object:
 
    nyedate = datetime.datetime.strptime(str(nyepart.date), "%Y%m%d")
 
-The problem with the above code is that the process of creating and using the
-date in the ``Booking`` object is cumbersome and error-prone. You have to
-remember to make the correct translation both in creating and reading the
+However, the problem with the above code is that the process of creating and
+using the date in the ``Booking`` object is cumbersome and error-prone. You have
+to remember to make the correct translation both in creating and reading the
 date. Furthermore the places in the code where these translations are made may
 be far apart, leading to potential problems when code needs to be refactored.
 
@@ -298,6 +299,60 @@ will print the expected output:
 
     Event booking(20181231,"NYE Party"): date "2018-12-31" type <class 'datetime.date'>
 
+
+Restricted Sub-class of a Field Definition
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Another reason to sub-class a field definition is to restrict the set of values
+that a field can hold. For example if you have an application where an argument
+of a predicate is restricted to a specific set of constants, such as the days of
+the week.
+
+.. code-block:: prolog
+
+    cooking(sunday, "Bob"). cooking(monday, "Jane").
+
+When defining a predicate corresponding to cooking/2 it is possible to simply use a
+``ConstantField`` field for the days.
+
+.. code-block:: python
+
+   class Cooking1(Predicate):
+      dow = ConstantField()
+      person = StringField()
+      class Meta: name = "cooking"
+
+However, this would potentiallly allow for creating erroneous instances that
+don't correspond to real days of the week (for example, with a spelling
+mistake):
+
+.. code-block:: python
+
+   ck = Cooking1(dow="mnday",person="Bob")
+
+In order to avoid these errors it is necessary to subclass the ``ConstantField``
+in order to restrict the set of values. Clorm provides a helper function
+``define_field_restriction`` specifically for this case. It dynamically defines
+a new class that restricts the values of an existing field class.
+
+.. code-block:: python
+
+   DowField = define_field_restriction("DowField", ConstantField,
+      ["sunday","monday","tuesday","wednesday","thursday","friday","saturday"])
+
+   class Cooking2(Predicate):
+      dow = DowField()
+      person = StringField()
+      class Meta: name = "cooking"
+
+   try:
+      ck = Cooking2(dow="mnday",person="Bob")  # raises a TypeError exception
+   except TypeError:
+      print("Caught exception")
+
+Note: the ``define_field_restriction`` function can also be called with only 2
+arguments, ignoring the name for the generated class. An anonymously generated
+name will be used.
 
 Dealing with Complex Terms
 --------------------------
