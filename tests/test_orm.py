@@ -176,9 +176,9 @@ class ORMTestCase(unittest.TestCase):
             fld = IntegerField(default="bad")
 
     #--------------------------------------------------------------------------
-    # Test making a restriction of a field
+    # Test making a restriction of a field using a list of values
     #--------------------------------------------------------------------------
-    def test_define_field_restriction(self):
+    def test_define_field_restriction_values(self):
         dfr = define_field_restriction
 
         # Some bad calls
@@ -241,6 +241,43 @@ class ORMTestCase(unittest.TestCase):
             ABCField4 = dfr("ABCField", ConstantField, ["a","b","c"], 1)
 
 
+    #--------------------------------------------------------------------------
+    # Test making a restriction of a field using a value functor
+    #--------------------------------------------------------------------------
+    def test_define_field_restriction_functor(self):
+        dfr = define_field_restriction
+
+        # A good restriction
+        PosIntField = dfr("PosIntField", IntegerField, lambda x: x >= 0)
+
+        # Make sure it works
+        r_neg1 = Number(-1)
+        r_0 = Number(0)
+        r_1 = Number(1)
+        r_a = Function("a",[])
+
+        # Test the pytocl direction
+        self.assertEqual(PosIntField.pytocl(0), r_0)
+        self.assertEqual(PosIntField.pytocl(1), r_1)
+
+        with self.assertRaises(TypeError) as ctx:
+            v = PosIntField.pytocl("a")
+
+        with self.assertRaises(TypeError) as ctx:
+            v = PosIntField.pytocl(-1)
+
+        # Test the cltopy direction
+        self.assertEqual(PosIntField.cltopy(r_0), 0)
+        self.assertEqual(PosIntField.cltopy(r_1), 1)
+        with self.assertRaises(TypeError) as ctx:
+            v = PosIntField.cltopy(r_neg1)
+        with self.assertRaises(TypeError) as ctx:
+            v = PosIntField.cltopy(r_a)
+
+        self.assertTrue(PosIntField.unifies(r_0))
+        self.assertTrue(PosIntField.unifies(r_1))
+        self.assertFalse(PosIntField.unifies(r_neg1))
+        self.assertFalse(PosIntField.unifies(r_a))
 
     #--------------------------------------------------------------------------
     # Test that we can define predicates using the class syntax and test that

@@ -256,6 +256,41 @@ class ConstantField(RawField):
 # Helper function to define a sub-class of a RawField (or sub-class) that
 # restricts the allowable values.
 # ------------------------------------------------------------------------------
+# Support for define_field_restriction
+def _dfr_functor(subclass_name, field_class, valfunc):
+    def _test_value(v):
+        if not valfunc(v):
+            raise TypeError(("Invalid value \"{}\" for {} (restriction of "
+                             "{})").format(v, subclass_name, field_class.__name__))
+        return v
+
+    return type(subclass_name, (field_class,),
+                { "pytocl": _test_value,
+                  "cltopy": _test_value})
+
+# Support for define_field_restriction
+def _dfr_collection(subclass_name, field_class, values):
+    # Check that the values are all valid
+    for v in values:
+        try:
+            out = field_class.pytocl(v)
+        except TypeError:
+            raise TypeError("Invalid value \"{}\" for {}".format(
+                v, field_class.__name__))
+
+    # Now define the restricted pytocl and cltopy functions
+    fs = frozenset(values)
+    def _test_value(v):
+        if v not in fs:
+            raise TypeError(("Invalid value \"{}\" for {} (restriction of "
+                             "{})").format(v, subclass_name, field_class.__name__))
+        return v
+
+    return type(subclass_name, (field_class,),
+                { "pytocl": _test_value,
+                  "cltopy": _test_value})
+
+
 
 def define_field_restriction(*args):
     """Helper function to define a field sub-class that restricts the set of values.
@@ -278,6 +313,16 @@ def define_field_restriction(*args):
               employee = ConstantField()
               workday = WorkdDayField()
 
+    Instead of a passing a list of values the last parameter can also be a
+    function/functor. If the last parameter is callable then it is treated as a
+    function that takes a field value and returns true if it is a valid value.
+
+    Example:
+       .. code-block:: python
+
+           PosIntField = define_field_restriction("PosIntField", NumberField,
+              lambda x : x >= 0)
+
     The function must be called using positional arguments with either 2 or 3
     arguments. For the 3 argument case a class name is specified for the name of
     the new field. For the 2 argument case the field class name is automatically
@@ -292,7 +337,7 @@ def define_field_restriction(*args):
     Args:
        subclass_name: the name of the new sub-class (name generated if none specified).
        field_class: the field that is being sub-classed
-       values: the collection (list/set) of valid values for the sub-class.
+       values or value functor: a list of values or a functor to determine validity
 
     """
     largs = len(args)
@@ -310,25 +355,10 @@ def define_field_restriction(*args):
     if not inspect.isclass(field_class) or not issubclass(field_class,RawField):
         raise TypeError("{} is not a subclass of RawField".format(field_class))
 
-    # Check that the values are all valid
-    for v in values:
-        try:
-            out = field_class.pytocl(v)
-        except TypeError:
-            raise TypeError("Invalid value \"{}\" for {}".format(
-                v, field_class.__name__))
-
-    # Now define the restricted pytocl and cltopy functions
-    fs = frozenset(values)
-    def _test_value(v):
-        if v not in fs:
-            raise TypeError(("Invalid value \"{}\" for {} (restriction of "
-                             "{})").format(v, subclass_name, field_class.__name__))
-        return v
-
-    return type(subclass_name, (field_class,),
-                { "pytocl": _test_value,
-                  "cltopy": _test_value})
+    if callable(values):
+        return _dfr_functor(subclass_name, field_class, values)
+    else:
+        return _dfr_collection(subclass_name, field_class, values)
 
 
 #------------------------------------------------------------------------------

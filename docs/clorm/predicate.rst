@@ -310,7 +310,9 @@ the week.
 
 .. code-block:: prolog
 
-    cooking(sunday, "Bob"). cooking(monday, "Jane").
+    cooking(monday, "Jane"). cooking(tuesday, "Bill"). cooking(wednesday, "Bob").
+    cooking(thursday, "Anne"). cooking(friday, "Bill").
+    cooking(saturday, "Jane"). cooking(sunday, "Bob").
 
 When defining a predicate corresponding to cooking/2 it is possible to simply use a
 ``ConstantField`` field for the days.
@@ -353,6 +355,40 @@ a new class that restricts the values of an existing field class.
 Note: the ``define_field_restriction`` function can also be called with only 2
 arguments, ignoring the name for the generated class. An anonymously generated
 name will be used.
+
+For a more general approach, instead of passing a set of valid values, the
+``define_field_restriction`` function can instead be passed a function/functor
+that takes a value and returns true if the value is valid. For example, to
+define a field that accepts only positive integers:
+
+.. code-block:: python
+
+   PosIntField = define_field_restriction("PosIntField", NumberField, lambda x : x >= 0)
+
+Finally, it should be highlighted that this mechanism for defining a field
+restriction works not just for validating the inputs into an ASP program. It can
+also be used to filter the outputs of the ASP solver as the invalid field values
+will not *unify* with the predicate.
+
+For example, in the above program you can separate the cooks on the weekend
+from the weekday cooks.
+
+.. code-block:: python
+
+   WeekendField = define_field_restriction("WeekendField", ConstantField,
+      ["sunday","saturday"])
+   WeekdayField = define_field_restriction("WeekdayField", ConstantField,
+      ["monday","tuesday","wednesday","thursday","friday"])
+
+   class WeekendCooking(Predicate):
+      dow = WeekendField()
+      person = StringField()
+      class Meta: name = "cooking"
+
+   class WeekdayCooking(Predicate):
+      dow = WeekdayField()
+      person = StringField()
+      class Meta: name = "cooking"
 
 Dealing with Complex Terms
 --------------------------
@@ -417,7 +453,8 @@ The ``Booking`` and ``Booking2`` Python classes correspond to the
 signature of the above example predicates ``booking/2`` and ``booking2/2``.
 
 Note: as with the simple term definitions it is possible to provide an optional
-``default`` or ``index`` parameter. For example, the above ``Booking`` class could be replaced with:
+``default`` or ``index`` parameter. For example, the above ``Booking`` class
+could be replaced with:
 
 .. code-block:: python
 
