@@ -21,7 +21,7 @@ __all__ = [
     'IntegerField',
     'StringField',
     'ConstantField',
-    'define_field_restriction',
+    'refine_field',
     'Field',
     'Placeholder',
     'NonLogicalSymbol',
@@ -256,8 +256,8 @@ class ConstantField(RawField):
 # Helper function to define a sub-class of a RawField (or sub-class) that
 # restricts the allowable values.
 # ------------------------------------------------------------------------------
-# Support for define_field_restriction
-def _dfr_functor(subclass_name, field_class, valfunc):
+# Support for refine_field
+def _refine_field_functor(subclass_name, field_class, valfunc):
     def _test_value(v):
         if not valfunc(v):
             raise TypeError(("Invalid value \"{}\" for {} (restriction of "
@@ -268,8 +268,8 @@ def _dfr_functor(subclass_name, field_class, valfunc):
                 { "pytocl": _test_value,
                   "cltopy": _test_value})
 
-# Support for define_field_restriction
-def _dfr_collection(subclass_name, field_class, values):
+# Support for refine_field
+def _refine_field_collection(subclass_name, field_class, values):
     # Check that the values are all valid
     for v in values:
         try:
@@ -292,7 +292,7 @@ def _dfr_collection(subclass_name, field_class, values):
 
 
 
-def define_field_restriction(*args):
+def refine_field(*args):
     """Helper function to define a field sub-class that restricts the set of values.
 
     A helper function to define a sub-class of a RawField (or sub-class) that
@@ -306,7 +306,7 @@ def define_field_restriction(*args):
     Example:
        .. code-block:: python
 
-           WorkDayField = define_field_restriction("WorkDayField", ConstantField,
+           WorkDayField = refine_field("WorkDayField", ConstantField,
               ["monday", "tuesday", "wednesday", "thursday", "friday"])
 
           class WorksOn(Predicate):
@@ -320,7 +320,7 @@ def define_field_restriction(*args):
     Example:
        .. code-block:: python
 
-           PosIntField = define_field_restriction("PosIntField", NumberField,
+           PosIntField = refine_field("PosIntField", NumberField,
               lambda x : x >= 0)
 
     The function must be called using positional arguments with either 2 or 3
@@ -331,7 +331,7 @@ def define_field_restriction(*args):
     Example:
        .. code-block:: python
 
-           WorkDayField = define_field_restriction(ConstantField,
+           WorkDayField = refine_field(ConstantField,
               ["monday", "tuesday", "wednesday", "thursday", "friday"])
 
     Args:
@@ -350,15 +350,15 @@ def define_field_restriction(*args):
         field_class = args[1]
         values = args[2]
     else:
-        raise TypeError("define_field_restriction() missing required positional arguments")
+        raise TypeError("refine_field() missing required positional arguments")
 
     if not inspect.isclass(field_class) or not issubclass(field_class,RawField):
         raise TypeError("{} is not a subclass of RawField".format(field_class))
 
     if callable(values):
-        return _dfr_functor(subclass_name, field_class, values)
+        return _refine_field_functor(subclass_name, field_class, values)
     else:
-        return _dfr_collection(subclass_name, field_class, values)
+        return _refine_field_collection(subclass_name, field_class, values)
 
 
 #------------------------------------------------------------------------------

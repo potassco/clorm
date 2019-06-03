@@ -334,12 +334,12 @@ mistake):
 
 In order to avoid these errors it is necessary to subclass the ``ConstantField``
 in order to restrict the set of values. Clorm provides a helper function
-``define_field_restriction`` specifically for this case. It dynamically defines
+``refine_field`` specifically for this case. It dynamically defines
 a new class that restricts the values of an existing field class.
 
 .. code-block:: python
 
-   DowField = define_field_restriction("DowField", ConstantField,
+   DowField = refine_field("DowField", ConstantField,
       ["sunday","monday","tuesday","wednesday","thursday","friday","saturday"])
 
    class Cooking2(Predicate):
@@ -352,18 +352,18 @@ a new class that restricts the values of an existing field class.
    except TypeError:
       print("Caught exception")
 
-Note: the ``define_field_restriction`` function can also be called with only 2
+Note: the ``refine_field`` function can also be called with only 2
 arguments, ignoring the name for the generated class. An anonymously generated
 name will be used.
 
 For a more general approach, instead of passing a set of valid values, the
-``define_field_restriction`` function can instead be passed a function/functor
+``refine_field`` function can instead be passed a function/functor
 that takes a value and returns true if the value is valid. For example, to
 define a field that accepts only positive integers:
 
 .. code-block:: python
 
-   PosIntField = define_field_restriction("PosIntField", NumberField, lambda x : x >= 0)
+   PosIntField = refine_field("PosIntField", NumberField, lambda x : x >= 0)
 
 Finally, it should be highlighted that this mechanism for defining a field
 restriction works not just for validating the inputs into an ASP program. It can
@@ -375,9 +375,9 @@ from the weekday cooks.
 
 .. code-block:: python
 
-   WeekendField = define_field_restriction("WeekendField", ConstantField,
+   WeekendField = refine_field("WeekendField", ConstantField,
       ["sunday","saturday"])
-   WeekdayField = define_field_restriction("WeekdayField", ConstantField,
+   WeekdayField = refine_field("WeekdayField", ConstantField,
       ["monday","tuesday","wednesday","thursday","friday"])
 
    class WeekendCooking(Predicate):

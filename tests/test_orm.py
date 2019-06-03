@@ -12,7 +12,7 @@ from clingo import Control
 from clorm.orm import \
     NonLogicalSymbol, Predicate, ComplexTerm, \
     IntegerField, StringField, ConstantField, RawField, \
-    define_field_restriction, \
+    refine_field, \
     not_, and_, or_, _StaticComparator, _get_term_comparators, \
     ph_, ph1_, ph2_, \
     _FactIndex, _FactMap, \
@@ -178,24 +178,24 @@ class ORMTestCase(unittest.TestCase):
     #--------------------------------------------------------------------------
     # Test making a restriction of a field using a list of values
     #--------------------------------------------------------------------------
-    def test_define_field_restriction_values(self):
-        dfr = define_field_restriction
+    def test_refine_field_values(self):
+        rf = refine_field
 
         # Some bad calls
         with self.assertRaises(TypeError) as ctx:
             class Something(object):
                 def __init__(self): self._a = 1
 
-            fld = dfr("fld", Something, ["a","b"])
+            fld = rf("fld", Something, ["a","b"])
 
         with self.assertRaises(TypeError) as ctx:
-            fld = dfr("fld", "notaclass", ["a","b"])
+            fld = rf("fld", "notaclass", ["a","b"])
 
         with self.assertRaises(TypeError) as ctx:
-            fld = dfr("fld", IntegerField, ["a"])
+            fld = rf("fld", IntegerField, ["a"])
 
         # A good restriction
-        ABCField = dfr("ABCField", ConstantField, ["a","b","c"])
+        ABCField = rf("ABCField", ConstantField, ["a","b","c"])
 
         # Make sure it works
         r_a = Function("a",[])
@@ -231,24 +231,24 @@ class ORMTestCase(unittest.TestCase):
         self.assertFalse(ABCField.unifies(r_1))
 
         # Test a version with no class name
-        ABCField2 = dfr(ConstantField, ["a","b","c"])
+        ABCField2 = rf(ConstantField, ["a","b","c"])
         self.assertEqual(ABCField2.pytocl("a"), r_a)
 
         # But only 2 and 3 arguments are valid
         with self.assertRaises(TypeError) as ctx:
-            ABCField3 = dfr(["a","b","c"])
+            ABCField3 = rf(["a","b","c"])
         with self.assertRaises(TypeError) as ctx:
-            ABCField4 = dfr("ABCField", ConstantField, ["a","b","c"], 1)
+            ABCField4 = rf("ABCField", ConstantField, ["a","b","c"], 1)
 
 
     #--------------------------------------------------------------------------
     # Test making a restriction of a field using a value functor
     #--------------------------------------------------------------------------
-    def test_define_field_restriction_functor(self):
-        dfr = define_field_restriction
+    def test_refine_field_functor(self):
+        rf = refine_field
 
         # A good restriction
-        PosIntField = dfr("PosIntField", IntegerField, lambda x: x >= 0)
+        PosIntField = rf("PosIntField", IntegerField, lambda x: x >= 0)
 
         # Make sure it works
         r_neg1 = Number(-1)
