@@ -182,19 +182,42 @@ class Control(object, metaclass=_ControlMetaClass):
           facts: can be a ``clorm.FactBase`` or a list of ``clorm.Predicate`` instances.
         '''
 
-        # Facts can be a FactBase or a list of facts
-        if isinstance(facts, FactBase):
-            asp_str = facts.asp_str()
-        else:
-            out = io.StringIO()
+        # Facts are added by manually generating Abstract Syntax Tree (AST)
+        # elements for each fact and calling Control.add().
+        line = 1
+        with self._ctrl.builder() as bldr:
             for f in facts:
-                print("{}.".format(f), file=out)
-            asp_str = out.getvalue()
-            out.close()
+                floc = { "filename" : "<input>", "line" : line , "column" : 1 }
+                location = { "begin" : floc, "end" : floc }
+                r = ast.Rule(location,
+                             ast.Literal(location, ast.Sign.NoSign,
+                                         ast.SymbolicAtom(ast.Symbol(location,f.raw))),
+                             [])
+                bldr.add(r)
+                line += 1
+        return
 
-        # Parse and add the facts
-        with self._ctrl.builder() as b:
-            oclingo.parse_program(asp_str, lambda stmt: b.add(stmt))
+#        # DON'T USE BACKEND - COULD CAUSE UNEXPECTED INTERACTION BETWEEN GROUNDER AND SOLVER
+#        # Better to use the backend because we don't have to resort to parsing!
+#        with self._ctrl.backend() as bknd:
+#            for f in facts:
+#                atm = bknd.add_atom(f.raw)
+#                bknd.add_rule([atm])
+#        return
+
+        # Ugly way is to generate a string and then parse the string
+#        if isinstance(facts, FactBase):
+#            asp_str = facts.asp_str()
+#        else:
+#            out = io.StringIO()
+#            for f in facts:
+#                print("{}.".format(f), file=out)
+#            asp_str = out.getvalue()
+#            out.close()
+
+#        # Parse and add the facts
+#        with self._ctrl.builder() as b:
+#            oclingo.parse_program(asp_str, lambda stmt: b.add(stmt))
 
     # Overide assign_external to deal with NonLogicalSymbol object and a Clingo Symbol
     def assign_external(self, fact, truth):
