@@ -179,7 +179,7 @@ class Control(object, metaclass=_ControlMetaClass):
         '''Add facts to the control object. Note: facts must be added before grounding.
 
         Args:
-          facts: can be a ``clorm.FactBase`` or a list of ``clorm.Predicate`` instances.
+          facts: a collection of ``clorm.Predicate`` instances (include a ``clorm.FactBase``)
         '''
 
         # Facts are added by manually generating Abstract Syntax Tree (AST)
