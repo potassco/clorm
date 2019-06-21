@@ -322,6 +322,21 @@ class ORMTestCase(unittest.TestCase):
             f3=Fact("test")
 
     #--------------------------------------------------------------------------
+    # Test that we can predicate fields using positional arguments
+    # --------------------------------------------------------------------------
+    def test_predicate_positional_access(self):
+
+        class Fact(Predicate):
+            anum = IntegerField(default=1)
+            astr = StringField()
+
+        func=Function("fact",[Number(1),String("test")])
+        f1=Fact(1, "test")
+
+        self.assertEqual(f1[0], 1)
+        self.assertEqual(f1[1], "test")
+
+    #--------------------------------------------------------------------------
     # Test that we can define predicates using the class syntax and test that
     # the getters and setters are connected properly to the predicate classes.
     # --------------------------------------------------------------------------
