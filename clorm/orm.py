@@ -567,7 +567,7 @@ def _nls_init_by_positional_values(self, *args):
     argc = len(args)
     arity = len(self.meta.field_defns)
     if argc != arity:
-        return ValueError("Expected {} arguments but {} given".format(arity,argc))
+        raise ValueError("Expected {} arguments but {} given".format(arity,argc))
 
     for idx, (field_name, field_defn) in enumerate(self.meta.field_defns.items()):
         self._term_values[field_name] = args[idx]

@@ -297,6 +297,31 @@ class ORMTestCase(unittest.TestCase):
         self.assertEqual(f1.raw, func)
 
     #--------------------------------------------------------------------------
+    # Test that we can initialise using positional arguments
+    # --------------------------------------------------------------------------
+    def test_predicate_init_positional(self):
+
+        class Fact(Predicate):
+            anum = IntegerField(default=1)
+            astr = StringField()
+
+        func=Function("fact",[Number(1),String("test")])
+        f1=Fact(1, "test")
+
+        self.assertEqual(f1.raw, func)
+
+        # Test trying to initialise with the wrong number of arguments - note
+        # cannot use default values when initialising with positional arguments.
+        with self.assertRaises(ValueError) as ctx:
+            f4=Fact(1,"test",2)
+
+        with self.assertRaises(ValueError) as ctx:
+            f2=Fact(1)
+
+        with self.assertRaises(ValueError) as ctx:
+            f3=Fact("test")
+
+    #--------------------------------------------------------------------------
     # Test that we can define predicates using the class syntax and test that
     # the getters and setters are connected properly to the predicate classes.
     # --------------------------------------------------------------------------
@@ -1201,7 +1226,7 @@ class FactBaseTestCase(unittest.TestCase):
         Cfact = self._Cfact
 
         af1 = Afact(1,10,"bbb")
-        bf1 = Bfact(1,"aaa")
+        bf1 = Bfact(1,"aaa", "bbb")
         cf1 = Cfact(1)
 
         fs1 = FactBase([af1,bf1,cf1])
@@ -1230,7 +1255,7 @@ class FactBaseTestCase(unittest.TestCase):
         Cfact = self._Cfact
 
         af1 = Afact(1,10,"bbb")
-        bf1 = Bfact(1,"aaa")
+        bf1 = Bfact(1,"aaa","bbb")
         cf1 = Cfact(1)
 
         fs1 = FactBase(lambda: [af1,bf1])
