@@ -336,6 +336,9 @@ class ORMTestCase(unittest.TestCase):
         self.assertEqual(f1[0], 1)
         self.assertEqual(f1[1], "test")
 
+        with self.assertRaises(IndexError) as ctx:
+            a = f1[2]
+
     #--------------------------------------------------------------------------
     # Test that we can define predicates using the class syntax and test that
     # the getters and setters are connected properly to the predicate classes.

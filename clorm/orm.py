@@ -362,7 +362,7 @@ def refine_field(*args):
 
 
 #------------------------------------------------------------------------------
-# Field - a Pyton descriptor (similar to a property) but with overloaded
+# Field - a Python descriptor (similar to a property) but with overloaded
 # comparison operator that build a query so that we can perform lazy evaluation
 # for querying.
 # ------------------------------------------------------------------------------
@@ -432,7 +432,7 @@ class Field(abc.ABC):
 
 
 #------------------------------------------------------------------------------
-#
+# Specification of an ordering over a field of a predicate/complex-term
 #------------------------------------------------------------------------------
 class _FieldOrderBy(object):
     def __init__(self, field, asc):
@@ -456,7 +456,10 @@ def desc(field):
     return field.desc()
 
 #------------------------------------------------------------------------------
-# Implementation of a Field
+# Implementation of a Field - has a __get__ overload to return the data of the
+# field if the function is called from an instance. Returns itself if the
+# function is not called as an instance. This is what allows the field to be
+# used when specifying a query.
 # ------------------------------------------------------------------------------
 class _Field(Field):
     def __init__(self, name, index, defn):
