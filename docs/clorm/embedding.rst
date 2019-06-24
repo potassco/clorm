@@ -44,7 +44,7 @@ list of outputs converted back into ``Clingo.String`` symbols.
        return tmp
 
 Clorm provides a way to simplify this data translation by declaring a function
-*type case signature* and using the signature to generate wrapper Python code
+*type cast signature* and using the signature to generate wrapper Python code
 that performs the required conversions. The code above can be replaced with:
 
 .. code-block:: python
@@ -99,10 +99,6 @@ starting at 0) the corresponding Clorm version adds very little overhead.
        pytocl = lambda dt: dt.strftime("%Y%m%d")
        cltopy = lambda s: datetime.datetime.strptime(s,"%Y%m%d").date()
 
-   class EnumDate(ComplexTerm):
-       idx = IntegerField()
-       date = DateField()
-
    def py_date_range(start, end):
        inc = timedelta(days=1)
        tmp = []
@@ -111,8 +107,25 @@ starting at 0) the corresponding Clorm version adds very little overhead.
 	   start += inc
        return list(enumerate(tmp))
 
+   date_range = make_function_asp_callable(DateField, DateField, [(IntegerField, DateField)],
+                                           py_date_range)
+
+The above example takes advantage of a Clorm simplified tuple syntax for
+defining type conversion. The return value is a list of pairs of an integer and
+a date field. This code can be viewed as a short-hand for the explicit
+ComplexTerm tuple:
+
+
+.. code-block:: python
+
+   class EnumDate(ComplexTerm):
+       idx = IntegerField()
+       dt = DateField()
+       class Meta: is_tuple=True
+
    date_range = make_function_asp_callable(DateField, DateField, [EnumDate.Field],
                                            py_date_range)
+
 
 The above example shows that even with relatively complex data structures the
 corresponding Python code remains compact and readable. It also highlights how
@@ -128,7 +141,7 @@ decoration is possible:
 .. code-block:: python
 
    @make_function_asp_callable
-   def date_range(start : DateField, end : DateField) -> [EnumDate.Field]:
+   def date_range(start : DateField, end : DateField) -> [(IntegerField,DateField)]:
        inc = timedelta(days=1)
        tmp = []
        while start < end:
