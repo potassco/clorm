@@ -129,6 +129,13 @@ class _RawFieldMeta(type):
         else:
             dct["pytocl"] = classmethod(_raise_nie)
 
+        # For complex-terms provide an interface to the underlying complex term
+        # object or return None
+        if "complex" in dct:
+            dct["complex"] = _classproperty(dct["complex"])
+        else:
+            dct["complex"] = _classproperty(lambda cls: None)
+
         return super(_RawFieldMeta, meta).__new__(meta, name, bases, dct)
 
 #------------------------------------------------------------------------------
@@ -202,6 +209,10 @@ class RawField(object, metaclass=_RawFieldMeta):
         except TypeError:
             return False
         return True
+
+    @_classproperty
+    def complex(cls):
+        return None
 
     @property
     def default(self):
@@ -517,9 +528,54 @@ class _Field(Field):
 
     def __str__(self):
         return "{}.{}".format(self.parent.__name__,self.name)
+
+#------------------------------------------------------------------------------
+# Helper function to cleverly handle a term definition. If the input is an
+# instance of a RawField then simply return the object. If it is a subclass of
+# RawField then return an instantiation of the object. If it is a tuple then
+# treat it as a recursive definition and return an instantiation of a
+# dynamically created complex-term corresponding to a tuple (which we call a
+# Clorm tuple).
+# ------------------------------------------------------------------------------
+
+def _get_field_defn(defn):
+    if inspect.isclass(defn):
+        if not issubclass(defn,RawField):
+            raise TypeError("Unrecognised field definition object {}".format(defn))
+        return defn()
+
+    # Simplest case of a RawField instance
+    if isinstance(defn,RawField): return defn
+
+    # Expecting a tuple and treat it as a recursive definition
+    if not isinstance(defn, tuple):
+        raise TypeError("Unrecognised field definition object {}".format(defn))
+
+    proto = { "arg{}".format(i+1) : _get_field_defn(d) for i,d in enumerate(defn) }
+    proto['Meta'] = type("Meta", (object,), {"istuple" : True})
+    ct = type("ClormTuple", (NonLogicalSymbol,), proto)
+    return ct.Field()
+
+
 #------------------------------------------------------------------------------
 # The NonLogicalSymbol base class and supporting functions and classes
 # ------------------------------------------------------------------------------
+
+# ------------------------------------------------------------------------------
+# Helper function that takes a field definition and a value and if the value is
+# a tuple and the field definition is a complex-term for a tuple then creates an
+# instance corresponding to the tuple.
+# ------------------------------------------------------------------------------
+
+def _preprocess_field_input(field_defn, v):
+    complex_term = field_defn.complex
+    if not complex_term: return v
+    if not isinstance(v,tuple): return v
+    ctm = complex_term.meta
+    if len(v) != ctm.arity:
+        raise ValueError("incorrect values to unpack (expected {})".format(ctm.arity))
+    return complex_term(*v)
+#    if not complex_term.meta.is_tuple:
 
 # ------------------------------------------------------------------------------
 # Helper functions for NonLogicalSymbolMeta class to create a NonLogicalSymbol
@@ -556,9 +612,11 @@ def _nls_init_by_keyword_values(self, **kwargs):
             if not field_defn.default:
                 raise ValueError(("Unspecified term {} has no "
                                   "default value".format(field_name)))
-            self._term_values[field_name] = field_defn.default
+            self._term_values[field_name] = _preprocess_field_input(
+                field_defn, field_defn.default)
         else:
-            self._term_values[field_name] = kwargs[field_name]
+            self._term_values[field_name] = _preprocess_field_input(
+                field_defn, kwargs[field_name])
 
     # Create the clingo symbol object
     self._symbol = self._generate_symbol()
@@ -573,7 +631,7 @@ def _nls_init_by_positional_values(self, *args):
         raise ValueError("Expected {} arguments but {} given".format(arity,argc))
 
     for idx, (field_name, field_defn) in enumerate(self.meta.field_defns.items()):
-        self._term_values[field_name] = args[idx]
+        self._term_values[field_name] = _preprocess_field_input(field_defn, args[idx])
 
     # Create the clingo symbol object
     self._symbol = self._generate_symbol()
@@ -599,7 +657,7 @@ def _nls_base_constructor(self, *args, **kwargs):
 # build the metadata for the NonLogicalSymbol
 def _make_nls_metadata(class_name, dct):
 
-    # Generate a name for the NonLogicalSymbol
+    # Generate a default name for the NonLogicalSymbol
     name = class_name[:1].lower() + class_name[1:]  # convert first character to lowercase
     if "Meta" in dct:
         metadefn = dct["Meta"]
@@ -621,39 +679,56 @@ def _make_nls_metadata(class_name, dct):
     terms = []
     idx = 0
     for field_name, field_defn in dct.items():
-        if not isinstance(field_defn, RawField): continue
-        if field_name.startswith('_'):
-            raise ValueError(("Error: term name starts with an "
-                              "underscore: {}").format(field_name))
         if field_name in reserved:
             raise ValueError(("Error: invalid term name: '{}' "
                               "is a reserved keyword").format(field_name))
-
-        term = _Field(field_name, idx, field_defn)
-        dct[field_name] = term
-        terms.append(term)
-        idx += 1
+        try:
+            fd = _get_field_defn(field_defn)
+            if field_name.startswith('_'):
+                raise ValueError(("Error: term names cannot start with an "
+                                  "underscore: {}").format(field_name))
+            term = _Field(field_name, idx, fd)
+            dct[field_name] = term
+            terms.append(term)
+            idx += 1
+        except TypeError as e:
+            # If we get here assume that the dictionary item is for something
+            # other than a field definition.
+            pass
 
     # Now create the MetaData object
     return NonLogicalSymbol.MetaData(name=name,terms=terms)
 
 #------------------------------------------------------------------------------
-#
+# A container to dynamically generate a RawField subclass corresponding to a
+# Predicate/Complex-term class.
+# ------------------------------------------------------------------------------
 class _FieldContainer(object):
     def __init__(self):
         self._defn = None
     def set_defn(self, cls):
         field_defn_name = "{}Field".format(cls.__name__)
         def _pytocl(v):
-            if not isinstance(v, cls):
-                raise TypeError("Value not an instance of {}".format(cls))
-            return v.raw
+            if isinstance(v,cls): return v.raw
+            if isinstance(v,tuple):
+                if len(v) != cls.meta.arity:
+                    raise ValueError(("incorrect values to unpack (expected "
+                                      "{})").format(cls.meta.arity))
+                try:
+                    v = cls(*v)
+                    return v.raw
+                except Exception:
+                    raise TypeError(("Failed to unify tuple {} with complex "
+                                      "term {}").format(v,cls))
+            raise TypeError("Value {} not an instance of {}".format(v, cls))
+
         def _cltopy(v):
             return cls(raw=v)
 
         self._defn = type(field_defn_name, (RawField,),
                           { "pytocl": _pytocl,
-                            "cltopy": _cltopy })
+                            "cltopy": _cltopy,
+                            "complex": lambda v: cls})
     @property
     def defn(self):
         return self._defn
@@ -842,7 +917,8 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
         cloneargs = {}
         for field_name, field_defn in self.meta.field_defns.items():
             if field_name in kwargs: cloneargs[field_name] = kwargs[field_name]
-            else: cloneargs[field_name] = kwargs[field_name] = self._term_values[field_name]
+            else:
+                cloneargs[field_name] = kwargs[field_name] = self._term_values[field_name]
 
         # Create the new object
         return type(self)(**cloneargs)
@@ -2018,8 +2094,9 @@ class TypeCastSignature(object):
         """
 
     @staticmethod
-    def is_input_element(se):
-        '''An input element must be a subclass of RawField'''
+    def _is_input_element(se):
+        '''An input element must be a subclass of RawField (or an instance of a
+           subclass) or a tuple corresponding to a subclass of RawField'''
         return inspect.isclass(se) and issubclass(se, RawField)
 
     @staticmethod
@@ -2027,23 +2104,31 @@ class TypeCastSignature(object):
         '''An output element must be a subclass of RawField or a singleton containing'''
         if isinstance(se, collections.Iterable):
             if len(se) != 1: return False
-            return TypeCastSignature.is_input_element(se[0])
-        return TypeCastSignature.is_input_element(se)
+            return TypeCastSignature._is_input_element(se[0])
+        return TypeCastSignature._is_input_element(se)
 
     def __init__(self, *sigs):
         def _validate_basic_sig(sig):
-            if TypeCastSignature.is_input_element(sig): return True
+            if TypeCastSignature._is_input_element(sig): return True
             raise TypeError(("TypeCastSignature element {} must be a RawField "
                              "subclass".format(sig)))
 
-        self._insigs = sigs[:-1]
+        self._insigs = [ type(_get_field_defn(s)) for s in sigs[:-1]]
+#        self._insigs = sigs[:-1]
         self._outsig = sigs[-1]
+
+        # A tuple is a special case that we want to convert into a complex field
+        if isinstance(self._outsig, tuple):
+            self._outsig = type(_get_field_defn(self._outsig))
+        elif isinstance(self._outsig, collections.Iterable):
+            if len(self._outsig) != 1:
+                raise TypeError("Return value list signature not a singleton")
+            if isinstance(self._outsig[0], tuple):
+                self._outsig[0] = type(_get_field_defn(self._outsig[0]))
 
         # Validate the signature
         for s in self._insigs: _validate_basic_sig(s)
         if isinstance(self._outsig, collections.Iterable):
-            if len(self._outsig) != 1:
-                raise TypeError("Return value list signature not a singleton")
             _validate_basic_sig(self._outsig[0])
         else:
             _validate_basic_sig(self._outsig)

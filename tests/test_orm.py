@@ -12,7 +12,7 @@ from clingo import Control
 from clorm.orm import \
     NonLogicalSymbol, Predicate, ComplexTerm, \
     IntegerField, StringField, ConstantField, RawField, \
-    refine_field, \
+    _get_field_defn, refine_field, \
     not_, and_, or_, _StaticComparator, _get_term_comparators, \
     ph_, ph1_, ph2_, \
     _FactIndex, _FactMap, \
@@ -167,6 +167,128 @@ class ORMTestCase(unittest.TestCase):
         self.assertTrue(fint2.index)
         self.assertTrue(fstr2.index)
         self.assertTrue(fconst2.index)
+
+    #--------------------------------------------------------------------------
+    # As part of the _get_field_defn function to flexibly deal with tuples
+    # extend the complex-term Field() pytocol function to handle tuples in the
+    # input (with the arity matches).
+    # --------------------------------------------------------------------------
+    def test_complex_term_field_tuple_pytocl(self):
+        class Blah(ComplexTerm):
+            a = IntegerField()
+            b = StringField()
+        class BlahBlah(ComplexTerm):
+            a = IntegerField()
+            b = Blah.Field()
+
+        BF = Blah.Field
+        BBF = BlahBlah.Field
+        blah1 = Function("blah",[Number(1),String("a")])
+        blahblah1 = Function("blahBlah",[Number(1),blah1])
+        self.assertEqual(BF.pytocl((1,"a")), blah1)
+        self.assertEqual(BBF.pytocl((1,(1,"a"))), blahblah1)
+
+        # Throws an erorr if its not a tuple or the arity of conversion fails
+        with self.assertRaises(TypeError) as ctx:
+            v = BF.pytocl([1,"a"])
+        with self.assertRaises(TypeError) as ctx:
+            v = BF.pytocl(("b","a"))
+        with self.assertRaises(ValueError) as ctx:
+            v = BF.pytocl(("b",))
+        with self.assertRaises(ValueError) as ctx:
+            v = BF.pytocl((1,"b","c"))
+
+
+        class BlahBlah2(ComplexTerm):
+            a = IntegerField()
+            b = (IntegerField(), StringField())
+
+        class BlahBlah3(ComplexTerm):
+            a = IntegerField
+            b = (IntegerField, StringField)
+
+        b2_field =  BlahBlah2.meta.field_defns["b"]
+        b2_complex = b2_field.complex
+        self.assertTrue(issubclass(type(b2_field), RawField))
+        self.assertEqual(b2_complex.meta.arity, 2)
+
+        b3_field =  BlahBlah2.meta.field_defns["b"]
+        b3_complex = b3_field.complex
+        self.assertTrue(issubclass(type(b3_field), RawField))
+        self.assertEqual(b3_complex.meta.arity, 2)
+
+        blahblah2_raw = Function("blahBlah2",[Number(1),Function("",[Number(1),String("b")])])
+        blahblah2 = BlahBlah2(a=1, b=b2_complex(1,"b"))
+        self.assertEqual(blahblah2.raw, blahblah2_raw)
+        blahblah2 = BlahBlah2(a=1, b=(1,"b"))
+        self.assertEqual(blahblah2.raw, blahblah2_raw)
+        self.assertTrue(isinstance(blahblah2.b, b2_complex))
+
+
+    #--------------------------------------------------------------------------
+    # As part of the _get_field_defn function extended the field definition to
+    # include a complex class property that returns the complex-term class if
+    # the field is based on a complex term or None otherwise.
+    # --------------------------------------------------------------------------
+
+    def test_field_complex_class_property(self):
+        self.assertEqual(IntegerField.complex, None)
+        self.assertEqual(IntegerField().complex, None)
+
+        class Blah(ComplexTerm):
+            a = IntegerField()
+            b = StringField()
+
+        self.assertEqual(Blah.Field.complex, Blah)
+
+        class BlahBlah(ComplexTerm):
+            a = IntegerField()
+            b = Blah.Field()
+
+        self.assertEqual(BlahBlah.Field().complex, BlahBlah)
+
+    #--------------------------------------------------------------------------
+    # Test the _get_field_defn function that smartly returns field definitions
+    #--------------------------------------------------------------------------
+    def test_get_field_defn(self):
+        # Simple case of a RawField instance - return the input
+        tmp = RawField()
+        self.assertEqual(_get_field_defn(tmp), tmp)
+        tmp = IntegerField()
+        self.assertEqual(_get_field_defn(tmp), tmp)
+        tmp = ConstantField()
+        self.assertEqual(_get_field_defn(tmp), tmp)
+
+        # A raw field subclass returns an instance of the subclass
+        self.assertTrue(isinstance(_get_field_defn(RawField), RawField))
+        self.assertTrue(isinstance(_get_field_defn(StringField), StringField))
+
+        # Throws an erorr on an unrecognised object
+        with self.assertRaises(TypeError) as ctx:
+            t = _get_field_defn("error")
+
+        # Throws an erorr on an unrecognised class object
+        with self.assertRaises(TypeError) as ctx:
+            t = _get_field_defn(int)
+        with self.assertRaises(TypeError) as ctx:
+            class Blah(object): pass
+            t = _get_field_defn(Blah)
+
+        # A simple tuple definition
+        td = _get_field_defn((IntegerField(), ConstantField()))
+        self.assertTrue(isinstance(td,RawField))
+
+        # Test the positional and named argument access of result
+        clob = Function("",[Number(1),Function("blah")])
+        pyresult = td.cltopy(clob)
+        self.assertEqual(pyresult[0], 1)
+        self.assertEqual(pyresult.arg1, 1)
+        self.assertEqual(pyresult[1], "blah")
+        self.assertEqual(pyresult.arg2, "blah")
+
+        clresult = td.pytocl((1,"blah"))
+        self.assertEqual(clresult, clob)
+
 
     #--------------------------------------------------------------------------
     # Test catching invalid default values for a field
@@ -1863,6 +1985,31 @@ class TypeCastSignatureTestCase(unittest.TestCase):
         self.assertEqual(t.cl_get_pair(), [String("20180101"), String("20190202")])
 
     #--------------------------------------------------------------------------
+    # Test the extended signatures with tuples
+    # --------------------------------------------------------------------------
+
+    def test_signature_with_tuples(self):
+        DateField = self.DateField
+
+        # Some complicated signatures
+        sig1 = TypeCastSignature((IntegerField, DateField),(IntegerField, DateField))
+        sig2 = TypeCastSignature(DateField,[(IntegerField, DateField)])
+
+        @sig1.wrap_function
+        def test_sig1(pair) : return (pair[0],pair[1])
+
+        @sig2.wrap_function
+        def test_sig2(dt): return [(1,dt),(2,dt)]
+
+        s_raw = String("20180101")
+        t1_raw = Function("",[Number(1), s_raw])
+        t2_raw = Function("",[Number(2), s_raw])
+
+#        result = test_sig1(t1_raw)
+        self.assertEqual(test_sig1(t1_raw),t1_raw)
+        self.assertEqual(test_sig2(s_raw),[t1_raw,t2_raw])
+
+    #--------------------------------------------------------------------------
     # Test the signature generation for writing python functions that can be
     # called from ASP.
     # --------------------------------------------------------------------------
@@ -1932,6 +2079,30 @@ class TypeCastSignatureTestCase(unittest.TestCase):
         t = Tmp(date1,date2)
         self.assertEqual(t.cl_get_pair(), [String("20180101"), String("20190202")])
         self.assertEqual(t.get_pair2(), [String("20180101"), String("20190202")])
+
+
+    def test_make_function_asp_callable_with_tuples(self):
+        DateField = self.DateField
+
+        # Some complicated signatures
+        sig1 = TypeCastSignature((IntegerField, DateField),(IntegerField, DateField))
+        sig2 = TypeCastSignature(DateField,[(IntegerField, DateField)])
+
+        @make_function_asp_callable
+        def test_sig1(pair : (IntegerField,DateField)) -> (IntegerField,DateField):
+            return (pair[0],pair[1])
+
+        @make_function_asp_callable
+        def test_sig2(dt : DateField) -> [(IntegerField,DateField)]:
+            return [(1,dt),(2,dt)]
+
+        s_raw = String("20180101")
+        t1_raw = Function("",[Number(1), s_raw])
+        t2_raw = Function("",[Number(2), s_raw])
+
+#        result = test_sig1(t1_raw)
+        self.assertEqual(test_sig1(t1_raw),t1_raw)
+        self.assertEqual(test_sig2(s_raw),[t1_raw,t2_raw])
 
 
 #------------------------------------------------------------------------------
