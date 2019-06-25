@@ -938,35 +938,64 @@ class ORMTestCase(unittest.TestCase):
         e3 = Afact.anum1 == Afact.anum1
         e4 = Bfact.astr == "aaa"
 
+        # generated test comparators through positional arguments
+        ep1 = Afact[0] == 2
+        ep2 = Afact[0] == Afact.anum2
+        ep3 = Afact[0] == Afact.anum1
+        ep4 = Bfact[1] == "aaa"
+
+
         self.assertEqual(e1, _get_term_comparators(e1)[0])
         self.assertEqual(e2, _get_term_comparators(e2)[0])
         self.assertEqual(e3, _get_term_comparators(e3)[0])
         self.assertEqual([], _get_term_comparators(e3.simplified()))
+
+        self.assertEqual(ep1, _get_term_comparators(ep1)[0])
+        self.assertEqual(ep2, _get_term_comparators(ep2)[0])
+        self.assertEqual(ep3, _get_term_comparators(ep3)[0])
+        self.assertEqual([], _get_term_comparators(ep3.simplified()))
 
         self.assertFalse(is_static(e1.simplified()))
         self.assertFalse(is_static(e2.simplified()))
         self.assertTrue(is_static(e3.simplified()))
         self.assertFalse(is_static(e4.simplified()))
 
+        self.assertFalse(is_static(ep1.simplified()))
+        self.assertFalse(is_static(ep2.simplified()))
+        self.assertTrue(is_static(ep3.simplified()))
+        self.assertFalse(is_static(ep4.simplified()))
+
         self.assertFalse(e1(af1))
         self.assertTrue(e1(af2))
+
+        self.assertFalse(ep1(af1))
+        self.assertTrue(ep1(af2))
 
         # Testing the FieldComparator on the wrong fact type
         with self.assertRaises(TypeError) as ctx:
             self.assertFalse(e1(bf1))
 
+        # Testing the FieldComparator on the wrong fact type
+        with self.assertRaises(TypeError) as ctx:
+            self.assertFalse(ep1(bf1))
+
         self.assertTrue(e2(af1))
         self.assertFalse(e2(af2))
+        self.assertTrue(ep2(af1))
+        self.assertFalse(ep2(af2))
 #        self.assertFalse(e2(bf1))
 
         self.assertTrue(e3(af1))
         self.assertTrue(e3(af2))
+        self.assertTrue(ep3(af1))
+        self.assertTrue(ep3(af2))
 #        self.assertTrue(e3(bf1))
 
 #        self.assertFalse(e4(af1))
 #        self.assertFalse(e4(af2))
 
         self.assertTrue(e4(bf1))
+        self.assertTrue(ep4(bf1))
 
         es1 = [Afact.anum1 == 2, Afact.anum2 == 3]
 

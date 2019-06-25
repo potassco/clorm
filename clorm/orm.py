@@ -1,4 +1,4 @@
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # ORM provides a Object Relational Mapper type model for specifying non-logical
 # symbols (ie., predicates and terms)
 # ------------------------------------------------------------------------------
@@ -787,6 +787,12 @@ class _NonLogicalSymbolMeta(type):
 
 #        print("CLS: {}".format(cls) + "I am still called '" + name +"'")
         return super(_NonLogicalSymbolMeta, cls).__init__(name, bases, dct)
+
+    # A NonLogicalSymbol subclass is an instance of this meta class. So to
+    # provide querying of a NonLogicalSymbol subclass Blah by a positional
+    # argument we need to implement __getitem__ for the metaclass.
+    def __getitem__(self, idx):
+        return self.meta.fields[idx]
 
 #------------------------------------------------------------------------------
 # A base non-logical symbol that all predicate/term declarations must inherit
