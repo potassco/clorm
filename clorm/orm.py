@@ -654,7 +654,8 @@ def _nls_base_constructor(self, *args, **kwargs):
 # Metaclass constructor support functions to create the terms
 #------------------------------------------------------------------------------
 
-# build the metadata for the NonLogicalSymbol
+# build the metadata for the NonLogicalSymbol - NOTE: this funtion returns a
+# MetaData instance but it also modified the dct paramater to add the fields.
 def _make_nls_metadata(class_name, dct):
 
     # Generate a default name for the NonLogicalSymbol
@@ -753,7 +754,7 @@ class _NonLogicalSymbolMeta(type):
             dct["__init__"] = _nls_base_constructor
             return super(_NonLogicalSymbolMeta, meta).__new__(meta, name, bases, dct)
 
-        # Create the metadata and populate the class dict (including the terms)
+        # Create the metadata AND populate dct - the class dict (including the terms)
         md = _make_nls_metadata(name, dct)
 
         # Set the _meta attribute and constuctor
