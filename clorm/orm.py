@@ -798,6 +798,11 @@ class _NonLogicalSymbolMeta(type):
     def __getitem__(self, idx):
         return self.meta.fields[idx]
 
+    # Also overload the __len__ function to return the arity of the
+    # NonLogicalSymbol class when called from len().
+    def __len__(self):
+        return self.meta.arity
+
 #------------------------------------------------------------------------------
 # A base non-logical symbol that all predicate/term declarations must inherit
 # from. The Metaclass creates the magic to create the terms and the underlying
@@ -972,11 +977,14 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
         return cls(raw=symbol)
 
     #--------------------------------------------------------------------------
-    # Overloaded index operator to access the values
+    # Overloaded index operator to access the values and len operator
     #--------------------------------------------------------------------------
     def __getitem__(self, idx):
         """Allows for index based access to term elements."""
         return self.meta.fields[idx].__get__(self)
+
+    def __len__(self):
+        return self.meta.arity
 
     #--------------------------------------------------------------------------
     # Overloaded operators
