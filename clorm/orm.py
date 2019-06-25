@@ -552,7 +552,7 @@ def _get_field_defn(defn):
         raise TypeError("Unrecognised field definition object {}".format(defn))
 
     proto = { "arg{}".format(i+1) : _get_field_defn(d) for i,d in enumerate(defn) }
-    proto['Meta'] = type("Meta", (object,), {"istuple" : True, "_anontuple" : True})
+    proto['Meta'] = type("Meta", (object,), {"istuple" : True, "_anon" : True})
     ct = type("AnonymousClormTuple", (NonLogicalSymbol,), proto)
     return ct.Field()
 
@@ -660,7 +660,7 @@ def _make_nls_metadata(class_name, dct):
 
     # Generate a default name for the NonLogicalSymbol
     name = class_name[:1].lower() + class_name[1:]  # convert first character to lowercase
-    anontuple = False
+    anon = False
     if "Meta" in dct:
         metadefn = dct["Meta"]
         if not inspect.isclass(metadefn):
@@ -669,8 +669,8 @@ def _make_nls_metadata(class_name, dct):
         istuple_def="istuple" in metadefn.__dict__
         if name_def : name = metadefn.__dict__["name"]
         istuple = metadefn.__dict__["istuple"] if istuple_def else False
-        if "_anontuple" in metadefn.__dict__:
-            anontuple = metadefn.__dict__["_anontuple"]
+        if "_anon" in metadefn.__dict__:
+            anon = metadefn.__dict__["_anon"]
 
         if name_def and istuple:
             raise AttributeError(("Mutually exclusive meta attibutes "
@@ -702,7 +702,7 @@ def _make_nls_metadata(class_name, dct):
             pass
 
     # Now create the MetaData object
-    return NonLogicalSymbol.MetaData(name=name,terms=terms, anontuple=anontuple)
+    return NonLogicalSymbol.MetaData(name=name,terms=terms, anon=anon)
 
 #------------------------------------------------------------------------------
 # A container to dynamically generate a RawField subclass corresponding to a
@@ -733,7 +733,7 @@ class _FieldContainer(object):
         self._defn = type(field_defn_name, (RawField,),
                           { "pytocl": _pytocl,
                             "cltopy": _cltopy,
-                            "complex": lambda v: cls})
+                            "complex": lambda self: cls})
     @property
     def defn(self):
         return self._defn
@@ -856,10 +856,10 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
 
         """
 
-        def __init__(self, name, terms, anontuple=False):
+        def __init__(self, name, terms, anon=False):
             self._name = name
             self._terms = tuple(terms)
-            self._anontuple = anontuple
+            self._anon = anon
 
         @property
         def name(self):
@@ -885,10 +885,10 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
             """Returns true if the definition corresponds to a tuple"""
             return self.name == ""
 
-        # Internal implementation detail if it is an anonymous clorm tuple
         @property
-        def _is_anontuple(self):
-            return self._anontuple
+        def anonymous(self):
+            """Returns whether definition is anonymous or explicitly user created"""
+            return self._anon
 
     #--------------------------------------------------------------------------
     # Properties and functions for NonLogicalSymbol

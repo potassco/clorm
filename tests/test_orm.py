@@ -169,6 +169,34 @@ class ORMTestCase(unittest.TestCase):
         self.assertTrue(fconst2.index)
 
     #--------------------------------------------------------------------------
+    # Test that we can distinguish between user defined and anonymous
+    # predicate/complex-terms.
+    # --------------------------------------------------------------------------
+    def test_anon_nonlogicalsymbol(self):
+        class Blah(ComplexTerm):
+            a = (IntegerField(), IntegerField())
+            b = StringField()
+
+        self.assertFalse(Blah.meta.anonymous)
+        self.assertTrue(Blah.a.defn.complex.meta.anonymous)
+
+    #--------------------------------------------------------------------------
+    # Test that we can distinguish NonLogicalSymbol tuples
+    # --------------------------------------------------------------------------
+    def test_tuple_nonlogicalsymbol(self):
+        class NotTuple(ComplexTerm):
+            a = IntegerField()
+            b = StringField()
+
+        class Tuple(ComplexTerm):
+            a = IntegerField()
+            b = StringField()
+            class Meta: istuple=True
+
+        self.assertFalse(NotTuple.meta.is_tuple)
+        self.assertTrue(Tuple.meta.is_tuple)
+
+    #--------------------------------------------------------------------------
     # As part of the _get_field_defn function to flexibly deal with tuples
     # extend the complex-term Field() pytocol function to handle tuples in the
     # input (with the arity matches).
