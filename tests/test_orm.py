@@ -1847,6 +1847,37 @@ class SelectTestCase(unittest.TestCase):
         self.assertEqual([f3,f4,f2], q.get(cmplx2))
 
     #--------------------------------------------------------------------------
+    #   Test that select works with order_by for complex term
+    #--------------------------------------------------------------------------
+    def _test_select_complex_term_placeholders(self):
+
+        class AFact(Predicate):
+            astr = StringField()
+            cmplx1 = (IntegerField(), IntegerField())
+            cmplx2 = (IntegerField(), IntegerField())
+
+        f1 = AFact(astr="aaa", cmplx1=(1,2), cmplx2=(1,2))
+        f2 = AFact(astr="bbb", cmplx1=(1,2), cmplx2=(1,5))
+        f3 = AFact(astr="ccc", cmplx1=(1,5), cmplx2=(1,5))
+        f4 = AFact(astr="ddd", cmplx1=(1,4), cmplx2=(1,2))
+
+        fb = FactBase(facts=[f1,f2,f3,f4])
+
+        q = fb.select(AFact).where(AFact.cmplx1 == (1,2))
+        self.assertEqual([f1,f2], q.get())
+
+        q = fb.select(AFact).where(AFact.cmplx1 == ph1_)
+        self.assertEqual([f1,f2], q.get((1,2)))
+
+        q = fb.select(AFact).where(AFact.cmplx1 == AFact.cmplx2)
+        self.assertEqual([f1,f3], q.get())
+
+        # Fail because of type mismatch
+        with self.assertRaises(TypeError) as ctx:
+            q = fb.select(AFact).where(AFact.cmplx1 == 1)
+            r = q.get()
+
+    #--------------------------------------------------------------------------
     #   Test that the indexing works
     #--------------------------------------------------------------------------
     def test_select_indexing(self):

@@ -552,8 +552,8 @@ def _get_field_defn(defn):
         raise TypeError("Unrecognised field definition object {}".format(defn))
 
     proto = { "arg{}".format(i+1) : _get_field_defn(d) for i,d in enumerate(defn) }
-    proto['Meta'] = type("Meta", (object,), {"istuple" : True})
-    ct = type("ClormTuple", (NonLogicalSymbol,), proto)
+    proto['Meta'] = type("Meta", (object,), {"istuple" : True, "_anontuple" : True})
+    ct = type("AnonymousClormTuple", (NonLogicalSymbol,), proto)
     return ct.Field()
 
 
@@ -660,6 +660,7 @@ def _make_nls_metadata(class_name, dct):
 
     # Generate a default name for the NonLogicalSymbol
     name = class_name[:1].lower() + class_name[1:]  # convert first character to lowercase
+    anontuple = False
     if "Meta" in dct:
         metadefn = dct["Meta"]
         if not inspect.isclass(metadefn):
@@ -668,11 +669,14 @@ def _make_nls_metadata(class_name, dct):
         istuple_def="istuple" in metadefn.__dict__
         if name_def : name = metadefn.__dict__["name"]
         istuple = metadefn.__dict__["istuple"] if istuple_def else False
+        if "_anontuple" in metadefn.__dict__:
+            anontuple = metadefn.__dict__["_anontuple"]
 
         if name_def and istuple:
             raise AttributeError(("Mutually exclusive meta attibutes "
                                   "'name' and 'istuple' "))
         elif istuple: name = ""
+
 
     reserved = set(["meta", "raw", "clone", "Field"])
 
@@ -698,7 +702,7 @@ def _make_nls_metadata(class_name, dct):
             pass
 
     # Now create the MetaData object
-    return NonLogicalSymbol.MetaData(name=name,terms=terms)
+    return NonLogicalSymbol.MetaData(name=name,terms=terms, anontuple=anontuple)
 
 #------------------------------------------------------------------------------
 # A container to dynamically generate a RawField subclass corresponding to a
@@ -852,9 +856,10 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
 
         """
 
-        def __init__(self, name, terms):
+        def __init__(self, name, terms, anontuple=False):
             self._name = name
             self._terms = tuple(terms)
+            self._anontuple = anontuple
 
         @property
         def name(self):
@@ -879,6 +884,11 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
         def is_tuple(self):
             """Returns true if the definition corresponds to a tuple"""
             return self.name == ""
+
+        # Internal implementation detail if it is an anonymous clorm tuple
+        @property
+        def _is_anontuple(self):
+            return self._anontuple
 
     #--------------------------------------------------------------------------
     # Properties and functions for NonLogicalSymbol
@@ -1249,7 +1259,17 @@ class _FieldComparator(Comparator):
         # Get the values of the two arguments and then calculate the operator
         v1 = getargval(self._arg1)
         v2 = getargval(self._arg2)
+
+        # Return the result of comparing the two values
         return self._compop(v1,v2)
+
+        # TODO:
+        # As much as possible check that the types should match - ie if the
+        # first value is a complex term type then the second value should also
+        # be of the same type. However, if the first value is a complex term and
+        # the second is a tuple then we can try to convert the tuple into
+        # complex term object of the first type.
+
 
     def simplified(self):
         if self._static: return _StaticComparator(self._value)
