@@ -961,11 +961,6 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
         """Allows for index based access to term elements."""
         return self.meta.fields[idx].__get__(self)
 
-#------------------------------------------------------------------------
-# Removed so don't allow value to be changed.
-#    def __setitem__(self, idx,v):
-#        return self.meta.fields[idx].__set__(self,v)
-
     #--------------------------------------------------------------------------
     # Overloaded operators
     #--------------------------------------------------------------------------
