@@ -19,13 +19,13 @@ specifies that the address of the entity ``dave`` is ``"UNSW Sydney"`` and
    pets(dave, 1).
 
 
-.. note:: ASP syntax.
+.. note::
 
-   All predicates must start with a lower-case letter and consist of only
-   alphanumeric characters (and underscore). ASP supports three basic types of
-   *terms* (i.e., the parameters of a predicate); a *constant*, a *string*, and
-   an *integer*. Like the predicate names, constants consist of only
-   alphanumeric characters (and underscore) with a starting lower-case
+   A note on ASP syntax. All predicates must start with a lower-case letter and
+   consist of only alphanumeric characters (and underscore). ASP supports three
+   basic types of *terms* (i.e., the parameters of a predicate); a *constant*, a
+   *string*, and an *integer*. Like the predicate names, constants consist of
+   only alphanumeric characters (and underscore) with a starting lower-case
    character. This is different to a string, which is quoted and can contain
    arbitrary characters including spaces.
 
@@ -465,6 +465,115 @@ could be replaced with:
        location=Location.Field(index=True,
 		default=LocationTuple(city="Sydney", country="Australia"))
 
+Using Positional Arguments
+--------------------------
+
+So far we have shown how creating Clorm predicate and complex term objects using
+keyword arguments that match the field names, as well as accessing the arguments
+via the fields as named properties.
+
+.. code-block:: python
+
+   from clorm import *
+
+   class Contact(Predicate):
+       cid=IntegerField()
+       name=StringField()
+
+   c1 = Contact(cid=1, name="Bob")
+
+   assert c1.cid == 1
+   assert c1.name == "Bob"
+
+Clorm also supports creating and accessing the field data using positional
+arguments.
+
+
+.. code-block:: python
+
+   c2 = Contact(2,"Bill")
+
+   assert c2[0] == 2
+   assert c2[1] == "Bill"
+
+However, in general using positional arguments is discouraged as it can lead to
+brittle code that can be harder to debug, and can also be more difficult to
+refactor as the ASP program changes. But, there are some cases where it can be
+convenient to use positional arguments. In particular when defining very simple
+tuples, where the position of arguments is unlikely to change as the ASP program
+changes. We discuss Clorm's support for these cases in the following section.
+
+Working with Tuples
+-------------------
+
+The previous sections have shown the syntax for declaring a Clorm
+predicate/complex-term that corresponds to an ASP tuple. For example, assuming
+the previously defined ``DateField``, we can consider using an enumerate date
+tuple as part of an event predicate.
+
+.. code-block:: python
+
+   import datetime
+   from clorm import *
+
+   class EnumDate(ComplexTerm):
+      idx = IntegerField()
+      dt = DateField()
+      class Meta: istuple=True
+
+   class Event(Predicate):
+      edt = EnumDate.Field()
+      details = StringField()
+
+   e1 = Event(edt=EnumDate(idx=1, dt=datetime.date(2018, 10, 1)), details="Bill's Party")
+   e2 = Event(edt=EnumDate(idx=5, dt=datetime.date(2018, 10, 5)), details="Holidays")
+
+Here the index associated with the date could be used to capture a sequence of
+dates and used to calcuate the number of days between certain dates (which is
+information that does not arise directly from the date encoded string).
+
+In any case, the two generated Event objects will correspond to the ASP facts:
+
+.. code-block:: prolog
+
+   event((1,"20181001"), "Bill's Party").
+   event((5,"20181005"), "Holidays").
+
+Now, declaring and using the ``EnumDate`` class can be quite cumbersome,
+considering that it really corresponds to a very simple tuple. Clorm supports a
+special syntax, using a tuple of field definitions, for dealing with cases of
+simple tuples.  The above Python code could be replaced with:
+
+.. code-block:: python
+
+   import datetime
+   from clorm import *
+
+   class Event(Predicate):
+      edt = (IntegerField(), DateField())
+      details = StringField()
+
+   e1 = Event(edt=(1, datetime.date(2018, 10, 1)), details="Bill's Party")
+   e2 = Event(edt=(5, datetime.date(2018, 10, 5)), details="Holidays")
+
+Internally, Clorm will generate an anonymously named complex term class that is
+declared similarly to ``EnumDate``. The fields of this class will be given
+automatically generated names ``arg1`` and ``arg2`` (up to ``arg<n>`` for a
+tuple of arity n), although in maybe more convenient to access the values using
+positional arguments.
+
+.. code-block:: python
+
+   assert e2.edt[0] == 5
+   assert e2.edt[1] == datetime.date(2018, 10, 5)
+
+.. note::
+
+   As mentioned in the previous section, using positional arguments is something
+   that should be used sparingly as it can lead to brittle code that is more
+   difficult to refactor. Particularly it should be used only for cases where
+   the ordering of fields in the tuple is unlikely to change as the ASP program
+   is refactored.
 
 Dealing with Raw Clingo Symbols
 -------------------------------
@@ -508,7 +617,7 @@ objects. So assuming the above python code.
 
    address_copy = Address(raw=raw_address)
 
-.. note:: Unification.
+.. note::
 
    Not every raw symbol will *unify* with a given ``Predicate`` or
    ``ComplexTerm`` class. If the raw constructor fails to unify a symbol with a
