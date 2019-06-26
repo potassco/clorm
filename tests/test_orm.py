@@ -216,7 +216,10 @@ class ORMTestCase(unittest.TestCase):
     # arguments as well as iterating over them (for both the class itself as
     # well as an instance).
     # --------------------------------------------------------------------------
-    def test_len_nonlogicalsymbol(self):
+    def test_iter_bool_nonlogicalsymbol(self):
+        class Empty(ComplexTerm):
+            pass
+
         class Blah(ComplexTerm):
             a = IntegerField()
             b = StringField()
@@ -236,6 +239,11 @@ class ORMTestCase(unittest.TestCase):
         self.assertEqual(b.c, b[2])
         for idx,v in enumerate(b):
             self.assertEqual(v,b[idx])
+
+        self.assertTrue(b)
+        e = Empty()
+        self.assertFalse(e)
+
 
     #--------------------------------------------------------------------------
     # As part of the _get_field_defn function to flexibly deal with tuples

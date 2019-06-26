@@ -987,6 +987,9 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
         """Allows for index based access to term elements."""
         return self.meta.fields[idx].__get__(self)
 
+    def __bool__(self):
+        return self.meta.arity > 0
+
     def __len__(self):
         return self.meta.arity
 
