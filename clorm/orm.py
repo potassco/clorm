@@ -764,7 +764,7 @@ class _NonLogicalSymbolMeta(type):
         # Set the _meta attribute and constuctor
         dct["_meta"] = md
         dct["__init__"] = _nls_constructor
-        dct["_termdefn"] = _FieldContainer()
+        dct["_fieldcontainer"] = _FieldContainer()
 
         parents = [ b for b in bases if issubclass(b, NonLogicalSymbol) ]
         if len(parents) == 0:
@@ -779,7 +779,7 @@ class _NonLogicalSymbolMeta(type):
             return super(_NonLogicalSymbolMeta, cls).__init__(name, bases, dct)
 
         # Set this class as the field
-        dct["_termdefn"].set_defn(cls)
+        dct["_fieldcontainer"].set_defn(cls)
 
         md = dct["_meta"]
         # The property attribute for each term can only be created in __new__
@@ -913,7 +913,7 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
     @_classproperty
     def Field(cls):
         """A RawField sub-class corresponding to a Field for this class."""
-        return cls._termdefn.defn
+        return cls._fieldcontainer.defn
 
     # Recompute the symbol object from the stored term objects
     def _generate_symbol(self):
@@ -1229,6 +1229,17 @@ class _StaticComparator(Comparator):
 # Helper for field comparator. Want to check whether two types are comparable
 #------------------------------------------------------------------------------
 
+def _compatible_types(t1,t2):
+    if t1 == t2: return True
+
+    # For non-fields let Python duck-typing try to resolve any mismatches
+    if not issubclass(t1, _Field) and not issubclass(t2, _Field): return True
+
+    
+    if t1 != t2: raise TypeError(("Mis-matched fields {} ({}) "
+                                  "and {} ({})").format(f1,t1,f2,t2))
+
+    
 #------------------------------------------------------------------------------
 # A fact comparator functor that tests whether a fact satisfies a comparision
 # with the value of some predicate's term.
