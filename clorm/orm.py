@@ -1220,9 +1220,14 @@ class _StaticComparator(Comparator):
         return self._value
     def simpified(self):
         return self
+    def placeholders(self): return []
     @property
     def value(self):
         return self._value
+
+#------------------------------------------------------------------------------
+# Helper for field comparator. Want to check whether two types are comparable
+#------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 # A fact comparator functor that tests whether a fact satisfies a comparision
@@ -1255,20 +1260,8 @@ class _FieldComparator(Comparator):
         # Get the value of an argument (resolving placeholder)
         def getargval(arg):
             if isinstance(arg, _Field): return arg.__get__(fact)
-            elif isinstance(arg, _PositionalPlaceholder):
-                if arg.posn >= len(args):
-                    raise TypeError(("missing argument in {} for placeholder "
-                                     "{}").format(args, arg))
-                return args[arg.posn]
-            elif isinstance(arg, _NamedPlaceholder):
-                if arg.name in kwargs:
-                    return kwargs[arg.name]
-                elif arg.default is not None:
-                    return arg.default
-                else:
-                    raise TypeError(("missing argument in {} for named "
-                                     "placeholder with no default "
-                                     "{}").format(kwargs, arg))
+            elif isinstance(arg, _PositionalPlaceholder): return args[arg.posn]
+            elif isinstance(arg, _NamedPlaceholder): return kwargs[arg.name]
             else: return arg
 
         # Get the values of the two arguments and then calculate the operator
@@ -1360,6 +1353,12 @@ class _BoolComparator(Comparator):
             return newargs[0]
         # If we get here there then there is a real boolean comparison
         return _BoolComparator(self._boolop, *newargs)
+
+    def placeholders(self):
+        tmp = []
+        for a in self._args:
+            if isinstance(a, Comparator): tmp.extend(a.placeholders())
+        return tmp
 
     @property
     def boolop(self): return self._boolop
@@ -1631,23 +1630,42 @@ class _Select(Select):
     def _debug(self):
         return self._indexable
 
+    # Support function to check that arguments match placeholders and assign any
+    # default values for named placeholders.
+    def _resolve_arguments(self, *args, **kwargs):
+        if not self._where: return kwargs
+        if not isinstance(self._where, Comparator): return kwargs
+        new_kwargs = {}
+        placeholders = self._where.placeholders()
+        for ph in placeholders:
+            if isinstance(ph, _PositionalPlaceholder):
+                if ph.posn < len(args): continue
+                raise TypeError(("missing argument in {} for placeholder "
+                                 "{}").format(args, ph))
+            elif isinstance(ph, _NamedPlaceholder):
+                if ph.name in kwargs: continue
+                elif ph.default is not None:
+                    new_kwargs[ph.name] = ph.default
+                    continue
+                raise TypeError(("missing argument in {} for named "
+                                 "placeholder with no default "
+                                 "{}").format(kwargs, args))
+            raise TypeError("unknown placeholder {} ({})".format(ph, type(ph)))
+
+        # Add any new values
+        if not new_kwargs: return kwargs
+        new_kwargs.update(kwargs)
+        return new_kwargs
+
+    # Function to execute the select statement
     def get(self, *args, **kwargs):
+
+        nkwargs = self._resolve_arguments(*args, **kwargs)
+
         # Function to get a value - resolving placeholder if necessary
         def get_value(arg):
-            if isinstance(arg, _PositionalPlaceholder):
-                if arg.posn >= len(args):
-                    raise TypeError(("missing argument in {} for placeholder "
-                                     "{}").format(args, arg))
-                return args[arg.posn]
-            elif isinstance(arg, _NamedPlaceholder):
-                if arg.name in kwargs:
-                    return kwargs[arg.name]
-                elif arg.default is not None:
-                    return arg.default
-                else:
-                    raise TypeError(("missing argument in {} for named "
-                                     "placeholder with no default "
-                                     "{}").format(kwargs, arg))
+            if isinstance(arg, _PositionalPlaceholder): return args[arg.posn]
+            elif isinstance(arg, _NamedPlaceholder): return nkwargs[arg.name]
             else: return arg
 
         # If there is no index test all instances else use the index
@@ -1655,11 +1673,11 @@ class _Select(Select):
         if not self._indexable:
             for f in self._factmap.facts():
                 if not self._where: result.append(f)
-                elif self._where and self._where(f,*args,**kwargs): result.append(f)
+                elif self._where and self._where(f,*args,**nkwargs): result.append(f)
         else:
             findex = self._factmap.get_factindex(self._indexable[0])
             for f in findex.find(self._indexable[1], get_value(self._indexable[2])):
-                if self._where(f,*args,**kwargs): result.append(f)
+                if self._where(f,*args,**nkwargs): result.append(f)
 
         # Return the results - sorted if necessary
         if self._key: result.sort(key=self._key)
