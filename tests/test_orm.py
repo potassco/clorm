@@ -1926,7 +1926,7 @@ class SelectTestCase(unittest.TestCase):
     #--------------------------------------------------------------------------
     #   Test that select works with order_by for complex term
     #--------------------------------------------------------------------------
-    def _test_select_complex_term_placeholders(self):
+    def test_select_complex_term_placeholders(self):
 
         class AFact(Predicate):
             astr = StringField()
@@ -1949,10 +1949,16 @@ class SelectTestCase(unittest.TestCase):
         q = fb.select(AFact).where(AFact.cmplx1 == AFact.cmplx2)
         self.assertEqual([f1,f3], q.get())
 
+        # Some type mismatch failures
+        with self.assertRaises(TypeError) as ctx:
+            fb.select(AFact).where(AFact.cmplx1 == 1).get()
+
         # Fail because of type mismatch
         with self.assertRaises(TypeError) as ctx:
-            q = fb.select(AFact).where(AFact.cmplx1 == 1)
-            r = q.get()
+            q = fb.select(AFact).where(AFact.cmplx1 == (1,2,3)).get()
+
+        with self.assertRaises(TypeError) as ctx:
+            q = fb.select(AFact).where(AFact.cmplx1 == ph1_).get((1,2,3))
 
     #--------------------------------------------------------------------------
     #   Test that the indexing works

@@ -1229,13 +1229,16 @@ class _StaticComparator(Comparator):
 # Helper for field comparator. Want to check whether two types are comparable
 #------------------------------------------------------------------------------
 
-def _compatible_types(t1,t2):
-    if t1 == t2: return True
+def _compatible_types(f1,f2):
+    t2 = type(f2)
+#    if t2 == : return True
 
+    
+    
     # For non-fields let Python duck-typing try to resolve any mismatches
     if not issubclass(t1, _Field) and not issubclass(t2, _Field): return True
 
-    
+#    if issubclass(t1, _Field) and 
     if t1 != t2: raise TypeError(("Mis-matched fields {} ({}) "
                                   "and {} ({})").format(f1,t1,f2,t2))
 
@@ -1254,6 +1257,8 @@ class _FieldComparator(Comparator):
         self._arg2 = arg2
         self._static = False
 
+        if not isinstance(arg1,_Field):
+            raise TypeError("Argument 1 is not a _Field object: {}".format(arg1))
         # Comparison is trivial if:
         # 1) the objects are identical then it is a trivial comparison and
         # equivalent to checking if the operator satisfies a simple identity (eg., 1)
@@ -1276,19 +1281,29 @@ class _FieldComparator(Comparator):
             else: return arg
 
         # Get the values of the two arguments and then calculate the operator
-        v1 = getargval(self._arg1)
+        v1 = self._arg1.__get__(fact)
         v2 = getargval(self._arg2)
 
-        # Return the result of comparing the two values
-        return self._compop(v1,v2)
-
-        # TODO:
         # As much as possible check that the types should match - ie if the
         # first value is a complex term type then the second value should also
         # be of the same type. However, if the first value is a complex term and
         # the second is a tuple then we can try to convert the tuple into
         # complex term object of the first type.
-
+        tryconv = False
+        if type(v1) != type(v2):
+            if isinstance(v1, NonLogicalSymbol):
+                tryconv = True
+                if isinstance(v2, NonLogicalSymbol) and v1.meta.name != v2.meta.name:
+                    raise TypeError(("Incompatabile type comparison of "
+                                     "{} and {}").format(v1,v2))
+        if tryconv:
+            try:
+                v2 = type(v1)(*v2)
+            except:
+                raise TypeError(("Incompatabile type comparison of "
+                                 "{} and {}").format(v1,v2))
+        # Return the result of comparing the two values
+        return self._compop(v1,v2)
 
     def simplified(self):
         if self._static: return _StaticComparator(self._value)
