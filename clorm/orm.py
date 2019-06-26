@@ -798,6 +798,10 @@ class _NonLogicalSymbolMeta(type):
     def __getitem__(self, idx):
         return self.meta.fields[idx]
 
+    # Allow iterating over the fields
+    def __iter__(self):
+        return iter(self.meta.fields)
+
     # Also overload the __len__ function to return the arity of the
     # NonLogicalSymbol class when called from len().
     def __len__(self):

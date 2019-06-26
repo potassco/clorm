@@ -212,6 +212,32 @@ class ORMTestCase(unittest.TestCase):
         self.assertEqual(len(Tuple.c.defn.complex),2)
 
     #--------------------------------------------------------------------------
+    # Test that we can return access the NLS class fields using positional
+    # arguments as well as iterating over them (for both the class itself as
+    # well as an instance).
+    # --------------------------------------------------------------------------
+    def test_len_nonlogicalsymbol(self):
+        class Blah(ComplexTerm):
+            a = IntegerField()
+            b = StringField()
+            c = (IntegerField(), ConstantField())
+
+        # Test the NonLogicalSymbol class
+        self.assertEqual(Blah.a, Blah[0])
+        self.assertEqual(Blah.b, Blah[1])
+        self.assertEqual(Blah.c, Blah[2])
+        for idx,f in enumerate(Blah):
+            self.assertEqual(f,Blah[idx])
+
+        # Test an instance
+        b = Blah(a=1,b="asd", c=(1,"dfd"))
+        self.assertEqual(b.a, b[0])
+        self.assertEqual(b.b, b[1])
+        self.assertEqual(b.c, b[2])
+        for idx,v in enumerate(b):
+            self.assertEqual(v,b[idx])
+
+    #--------------------------------------------------------------------------
     # As part of the _get_field_defn function to flexibly deal with tuples
     # extend the complex-term Field() pytocol function to handle tuples in the
     # input (with the arity matches).
