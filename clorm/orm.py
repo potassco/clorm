@@ -1226,24 +1226,6 @@ class _StaticComparator(Comparator):
         return self._value
 
 #------------------------------------------------------------------------------
-# Helper for field comparator. Want to check whether two types are comparable
-#------------------------------------------------------------------------------
-
-def _compatible_types(f1,f2):
-    t2 = type(f2)
-#    if t2 == : return True
-
-    
-    
-    # For non-fields let Python duck-typing try to resolve any mismatches
-    if not issubclass(t1, _Field) and not issubclass(t2, _Field): return True
-
-#    if issubclass(t1, _Field) and 
-    if t1 != t2: raise TypeError(("Mis-matched fields {} ({}) "
-                                  "and {} ({})").format(f1,t1,f2,t2))
-
-    
-#------------------------------------------------------------------------------
 # A fact comparator functor that tests whether a fact satisfies a comparision
 # with the value of some predicate's term.
 #
