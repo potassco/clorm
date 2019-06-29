@@ -561,6 +561,51 @@ def _get_field_defn(defn):
 # The NonLogicalSymbol base class and supporting functions and classes
 # ------------------------------------------------------------------------------
 
+#--------------------------------------------------------------------------
+# One NLSDefn object for each NonLogicalSymbol sub-class
+#--------------------------------------------------------------------------
+class NLSDefn(object):
+    """Encapsulates some meta-data for a NonLogicalSymbol (NLS) definition. Each NLS
+    class will have a corresponding NLSDefn object that provides some
+    specifies some introspective properties of the predicate/complex-term.
+
+    """
+
+    def __init__(self, name, terms, anon=False):
+        self._name = name
+        self._terms = tuple(terms)
+        self._anon = anon
+
+    @property
+    def name(self):
+        """Returns the string name of the predicate or complex term"""
+        return self._name
+
+    @property
+    def field_defns(self):
+        """Returns the set of fields - keyed by field name"""
+        return { f.name : f.defn for f in self._terms }
+
+    @property
+    def fields(self):
+        return self._terms
+
+    @property
+    def arity(self):
+        """Returns the number of fields"""
+        return len(self._terms)
+
+    @property
+    def is_tuple(self):
+        """Returns true if the definition corresponds to a tuple"""
+        return self.name == ""
+
+    @property
+    def anonymous(self):
+        """Returns whether definition is anonymous or explicitly user created"""
+        return self._anon
+
+
 # ------------------------------------------------------------------------------
 # Helper function that takes a field definition and a value and if the value is
 # a tuple and the field definition is a complex-term for a tuple then creates an
@@ -655,8 +700,8 @@ def _nls_base_constructor(self, *args, **kwargs):
 #------------------------------------------------------------------------------
 
 # build the metadata for the NonLogicalSymbol - NOTE: this funtion returns a
-# MetaData instance but it also modified the dct paramater to add the fields.
-def _make_nls_metadata(class_name, dct):
+# NLSDefn instance but it also modified the dct paramater to add the fields.
+def _make_nlsdefn(class_name, dct):
 
     # Generate a default name for the NonLogicalSymbol
     name = class_name[:1].lower() + class_name[1:]  # convert first character to lowercase
@@ -701,8 +746,8 @@ def _make_nls_metadata(class_name, dct):
             # other than a field definition.
             pass
 
-    # Now create the MetaData object
-    return NonLogicalSymbol.MetaData(name=name,terms=terms, anon=anon)
+    # Now create the NLSDefn object
+    return NLSDefn(name=name,terms=terms, anon=anon)
 
 #------------------------------------------------------------------------------
 # A container to dynamically generate a RawField subclass corresponding to a
@@ -756,10 +801,11 @@ class _NonLogicalSymbolMeta(type):
         if name == "NonLogicalSymbol":
             dct["_nls"] = None
             dct["__init__"] = _nls_base_constructor
+            dct["_meta"] = NLSDefn(name="",terms=[], anon=False) # make autodoc happy
             return super(_NonLogicalSymbolMeta, meta).__new__(meta, name, bases, dct)
 
         # Create the metadata AND populate dct - the class dict (including the terms)
-        md = _make_nls_metadata(name, dct)
+        md = _make_nlsdefn(name, dct)
 
         # Set the _meta attribute and constuctor
         dct["_meta"] = md
@@ -862,52 +908,6 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
         raise NotImplementedError(("Class {} can only be instantiated through a "
                                    "sub-class").format(self.__name__))
 
-    #--------------------------------------------------------------------------
-    # A Metadata internal object for each NonLogicalSymbol class
-    #--------------------------------------------------------------------------
-    class MetaData(object):
-        """Internal class that encapsulates the meta-data for a NonLogicalSymbol
-        definition
-
-        .. warning:: Deprecated interface
-
-           Thing remove these details from the external interface.
-
-        """
-
-        def __init__(self, name, terms, anon=False):
-            self._name = name
-            self._terms = tuple(terms)
-            self._anon = anon
-
-        @property
-        def name(self):
-            """Returns the string name of the predicate or complex term"""
-            return self._name
-
-        @property
-        def field_defns(self):
-#            """Returns the set of fields - keyed by field name"""
-            return { f.name : f.defn for f in self._terms }
-
-        @property
-        def fields(self):
-            return self._terms
-
-        @property
-        def arity(self):
-            """Returns the number of fields"""
-            return len(self._terms)
-
-        @property
-        def is_tuple(self):
-            """Returns true if the definition corresponds to a tuple"""
-            return self.name == ""
-
-        @property
-        def anonymous(self):
-            """Returns whether definition is anonymous or explicitly user created"""
-            return self._anon
 
     #--------------------------------------------------------------------------
     # Properties and functions for NonLogicalSymbol
@@ -966,7 +966,7 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
     # Get the metadata for the NonLogicalSymbol definition
     @_classproperty
     def meta(cls):
-        """Returns the meta data for the object"""
+        """The meta data (definitional information) for the Predicate/Complex-term"""
         return cls._meta
 
     # Returns whether or not a Symbol can unify with this NonLogicalSymbol
