@@ -37,9 +37,29 @@ logical symbols*. The Clorm implementation captures this in the
 aliases.
 
 .. autoclass:: clorm.NonLogicalSymbol
-   :members:
 
-   .. autoattribute:: Field
+   .. attribute:: raw
+
+      Returns the underlying Clingo.Symbol object
+
+   .. attribute:: Field
+
+      A RawField sub-class corresponding to a Field for this class
+
+   .. autoclass:: clorm.NonLogicalSymbol.MetaData
+
+   .. attribute:: meta
+
+      The meta data for the object
+
+   .. method:: clone(self, **kwargs):
+
+     Clone the object with some differences.
+
+     For any term name that is not one of the parameter keywords the clone
+     keeps the same value. But for any term listed in the parameter keywords
+     replace with specified new value.
+
 
 .. autoclass:: clorm.Predicate
    :members:

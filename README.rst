@@ -12,6 +12,8 @@ instances and process the results dynamically. Clorm makes this integration
 cleaner, both in terms of code readability but also by making it easier to
 refactor the python code as the ASP program evolves.
 
+The documentation is available online `here <https://en.wikipedia.org/wiki/Monkey_patch>`_.
+
 Note: Clorm currently only works with Python 3.x.
 
 Installation

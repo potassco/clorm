@@ -796,15 +796,18 @@ class _NonLogicalSymbolMeta(type):
     # provide querying of a NonLogicalSymbol subclass Blah by a positional
     # argument we need to implement __getitem__ for the metaclass.
     def __getitem__(self, idx):
+        '''Return the number of field of the Predicate/Complex-term by index'''
         return self.meta.fields[idx]
 
     # Allow iterating over the fields
     def __iter__(self):
+        '''Iterate through the fields of the Predicate/Complex-term'''
         return iter(self.meta.fields)
 
     # Also overload the __len__ function to return the arity of the
     # NonLogicalSymbol class when called from len().
     def __len__(self):
+        '''Return the number of fields in the Predicate/Complex-term'''
         return self.meta.arity
 
 #------------------------------------------------------------------------------
@@ -851,6 +854,13 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
          - named parameters corresponding to the term names.
 
     """
+
+    #--------------------------------------------------------------------------
+    #
+    #--------------------------------------------------------------------------
+    def __init__(self):
+        raise NotImplementedError(("Class {} can only be instantiated through a "
+                                   "sub-class").format(self.__name__))
 
     #--------------------------------------------------------------------------
     # A Metadata internal object for each NonLogicalSymbol class
@@ -988,9 +998,11 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
         return self.meta.fields[idx].__get__(self)
 
     def __bool__(self):
+        '''Behaves like a tuple: returns False if the predicate/complex-term has no elements'''
         return self.meta.arity > 0
 
     def __len__(self):
+        '''Returns the number of fields in the object'''
         return self.meta.arity
 
     #--------------------------------------------------------------------------

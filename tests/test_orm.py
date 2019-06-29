@@ -288,6 +288,7 @@ class ORMTestCase(unittest.TestCase):
         b2_complex = b2_field.complex
         self.assertTrue(issubclass(type(b2_field), RawField))
         self.assertEqual(b2_complex.meta.arity, 2)
+        self.assertEqual(len(b2_complex), 2)
 
         b3_field =  BlahBlah2.meta.field_defns["b"]
         b3_complex = b3_field.complex
