@@ -284,16 +284,16 @@ class ORMTestCase(unittest.TestCase):
             a = IntegerField
             b = (IntegerField, StringField)
 
-        b2_field =  BlahBlah2.meta.field_defns["b"]
-        b2_complex = b2_field.complex
-        self.assertTrue(issubclass(type(b2_field), RawField))
-        self.assertEqual(b2_complex.meta.arity, 2)
+        b2_field =  BlahBlah2.meta["b"]
+        b2_complex = b2_field.defn.complex
+        self.assertTrue(issubclass(type(b2_field.defn), RawField))
+        self.assertEqual(len(b2_complex.meta), 2)
         self.assertEqual(len(b2_complex), 2)
 
-        b3_field =  BlahBlah2.meta.field_defns["b"]
-        b3_complex = b3_field.complex
-        self.assertTrue(issubclass(type(b3_field), RawField))
-        self.assertEqual(b3_complex.meta.arity, 2)
+        b3_field =  BlahBlah2.meta["b"]
+        b3_complex = b3_field.defn.complex
+        self.assertTrue(issubclass(type(b3_field.defn), RawField))
+        self.assertEqual(len(b3_complex.meta), 2)
 
         blahblah2_raw = Function("blahBlah2",[Number(1),Function("",[Number(1),String("b")])])
         blahblah2 = BlahBlah2(a=1, b=b2_complex(1,"b"))
@@ -579,8 +579,8 @@ class ORMTestCase(unittest.TestCase):
         # Test the class properties; when access from the class and the object.
         self.assertEqual(up1.meta.name, "unary")
         self.assertEqual(UnaryPredicate.meta.name, "unary")
-        self.assertEqual(up1.meta.arity, 0)
-        self.assertEqual(UnaryPredicate.meta.arity, 0)
+        self.assertEqual(len(up1.meta), 0)
+        self.assertEqual(len(UnaryPredicate.meta), 0)
 
         # Test that default terms work and that not specifying a value raises
         # an exception

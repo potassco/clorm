@@ -571,29 +571,16 @@ class NLSDefn(object):
 
     """
 
-    def __init__(self, name, terms, anon=False):
+    def __init__(self, name, fields, anon=False):
         self._name = name
-        self._terms = tuple(terms)
+        self._byidx = tuple(fields)
+        self._byname = { f.name : f for f in fields }
         self._anon = anon
 
     @property
     def name(self):
         """Returns the string name of the predicate or complex term"""
         return self._name
-
-    @property
-    def field_defns(self):
-        """Returns the set of fields - keyed by field name"""
-        return { f.name : f.defn for f in self._terms }
-
-    @property
-    def fields(self):
-        return self._terms
-
-    @property
-    def arity(self):
-        """Returns the number of fields"""
-        return len(self._terms)
 
     @property
     def is_tuple(self):
@@ -606,6 +593,25 @@ class NLSDefn(object):
         return self._anon
 
 
+    def keys(self):
+        """Returns the names of fields"""
+        return self._byname.keys()
+
+    def __len__(self):
+        '''Returns the number of fields'''
+        return len(self._byidx)
+
+    def __getitem__(self, key):
+        '''Find a field by position index or by name'''
+        try:
+            idx = int(key)
+            return self._byidx[idx]
+        except ValueError as e:
+            return self._byname[key]
+
+    def __iter__(self):
+        return iter(self._byidx)
+
 # ------------------------------------------------------------------------------
 # Helper function that takes a field definition and a value and if the value is
 # a tuple and the field definition is a complex-term for a tuple then creates an
@@ -617,8 +623,8 @@ def _preprocess_field_input(field_defn, v):
     if not complex_term: return v
     if not isinstance(v,tuple): return v
     ctm = complex_term.meta
-    if len(v) != ctm.arity:
-        raise ValueError("incorrect values to unpack (expected {})".format(ctm.arity))
+    if len(v) != len(ctm):
+        raise ValueError("incorrect values to unpack (expected {})".format(len(ctm)))
     return complex_term(*v)
 #    if not complex_term.meta.is_tuple:
 
@@ -637,31 +643,31 @@ def _nls_init_by_raw(self, **kwargs):
         raise ValueError(("Failed to unify clingo.Symbol object {} with "
                           "NonLogicalSymbol class {}").format(raw, class_name))
     self._raw = raw
-    for idx, (field_name, field_defn) in enumerate(self.meta.field_defns.items()):
-        self._term_values[field_name] = field_defn.cltopy(raw.arguments[idx])
+    for idx, f in enumerate(self.meta):
+        self._term_values[f.name] = f.defn.cltopy(raw.arguments[idx])
 
 # Construct a NonLogicalSymbol via the term keywords
 def _nls_init_by_keyword_values(self, **kwargs):
     class_name = type(self).__name__
     pred_name = self.meta.name
-    fields = set(self.meta.field_defns.keys())
+    names = set(self.meta.keys())
 
-    invalids = [ k for k in kwargs if k not in fields ]
+    invalids = [ k for k in kwargs if k not in names ]
     if invalids:
-        raise ValueError(("Arguments {} are not valid fields "
+        raise ValueError(("Arguments {} are not valid field names "
                           "of {}".format(invalids,class_name)))
 
     # Construct the clingo function arguments
-    for field_name, field_defn in self.meta.field_defns.items():
-        if field_name not in kwargs:
-            if not field_defn.default:
+    for field in self.meta:
+        if field.name not in kwargs:
+            if not field.defn.default:
                 raise ValueError(("Unspecified term {} has no "
-                                  "default value".format(field_name)))
-            self._term_values[field_name] = _preprocess_field_input(
-                field_defn, field_defn.default)
+                                  "default value".format(field.name)))
+            self._term_values[field.name] = _preprocess_field_input(
+                field.defn, field.defn.default)
         else:
-            self._term_values[field_name] = _preprocess_field_input(
-                field_defn, kwargs[field_name])
+            self._term_values[field.name] = _preprocess_field_input(
+                field.defn, kwargs[field.name])
 
     # Create the raw clingo.Symbol object
     self._raw = self._generate_raw()
@@ -671,12 +677,12 @@ def _nls_init_by_positional_values(self, *args):
     class_name = type(self).__name__
     pred_name = self.meta.name
     argc = len(args)
-    arity = len(self.meta.field_defns)
+    arity = len(self.meta)
     if argc != arity:
         raise ValueError("Expected {} arguments but {} given".format(arity,argc))
 
-    for idx, (field_name, field_defn) in enumerate(self.meta.field_defns.items()):
-        self._term_values[field_name] = _preprocess_field_input(field_defn, args[idx])
+    for idx, field in enumerate(self.meta):
+        self._term_values[field.name] = _preprocess_field_input(field.defn, args[idx])
 
     # Create the raw clingo.Symbol object
     self._raw = self._generate_raw()
@@ -747,7 +753,7 @@ def _make_nlsdefn(class_name, dct):
             pass
 
     # Now create the NLSDefn object
-    return NLSDefn(name=name,terms=terms, anon=anon)
+    return NLSDefn(name=name,fields=terms, anon=anon)
 
 #------------------------------------------------------------------------------
 # A container to dynamically generate a RawField subclass corresponding to a
@@ -761,9 +767,9 @@ class _FieldContainer(object):
         def _pytocl(v):
             if isinstance(v,cls): return v.raw
             if isinstance(v,tuple):
-                if len(v) != cls.meta.arity:
+                if len(v) != len(cls.meta):
                     raise ValueError(("incorrect values to unpack (expected "
-                                      "{})").format(cls.meta.arity))
+                                      "{})").format(len(cls.meta)))
                 try:
                     v = cls(*v)
                     return v.raw
@@ -801,7 +807,7 @@ class _NonLogicalSymbolMeta(type):
         if name == "NonLogicalSymbol":
             dct["_nls"] = None
             dct["__init__"] = _nls_base_constructor
-            dct["_meta"] = NLSDefn(name="",terms=[], anon=False) # make autodoc happy
+            dct["_meta"] = NLSDefn(name="",fields=[], anon=False) # make autodoc happy
             return super(_NonLogicalSymbolMeta, meta).__new__(meta, name, bases, dct)
 
         # Create the metadata AND populate dct - the class dict (including the terms)
@@ -832,8 +838,8 @@ class _NonLogicalSymbolMeta(type):
         # but the class itself does not get created until after __new__. Hence
         # we have to set the pointer within the term back to the this class
         # here.
-        for field_name, field_defn in md.field_defns.items():
-            dct[field_name].set_parent(cls)
+        for field in md:
+            dct[field.name].set_parent(cls)
 
 #        print("CLS: {}".format(cls) + "I am still called '" + name +"'")
         return super(_NonLogicalSymbolMeta, cls).__init__(name, bases, dct)
@@ -843,18 +849,18 @@ class _NonLogicalSymbolMeta(type):
     # argument we need to implement __getitem__ for the metaclass.
     def __getitem__(self, idx):
         '''Return the number of field of the Predicate/Complex-term by index'''
-        return self.meta.fields[idx]
+        return self.meta[idx]
 
     # Allow iterating over the fields
     def __iter__(self):
         '''Iterate through the fields of the Predicate/Complex-term'''
-        return iter(self.meta.fields)
+        return iter(self.meta)
 
     # Also overload the __len__ function to return the arity of the
     # NonLogicalSymbol class when called from len().
     def __len__(self):
         '''Return the number of fields in the Predicate/Complex-term'''
-        return self.meta.arity
+        return len(self.meta)
 
 #------------------------------------------------------------------------------
 # A base non-logical symbol that all predicate/term declarations must inherit
@@ -928,8 +934,8 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
     # Recompute the clingo.Symbol object from the stored term
     def _generate_raw(self):
         pred_args = []
-        for field_name, field_defn in self.meta.field_defns.items():
-            pred_args.append(field_defn.pytocl(self._term_values[field_name]))
+        for field in self.meta:
+            pred_args.append(field.defn.pytocl(self._term_values[field.name]))
         # Create the clingo.Symbol object
         return clingo.Function(self.meta.name, pred_args)
 
@@ -944,17 +950,17 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
 
         # Sanity check
         clonekeys = set(kwargs.keys())
-        objkeys = set(self.meta.field_defns.keys())
+        objkeys = set(self.meta.keys())
         diffkeys = clonekeys - objkeys
         if diffkeys:
             raise ValueError("Unknown term names: {}".format(diffkeys))
 
         # Get the arguments for the new object
         cloneargs = {}
-        for field_name, field_defn in self.meta.field_defns.items():
-            if field_name in kwargs: cloneargs[field_name] = kwargs[field_name]
+        for field in self.meta:
+            if field.name in kwargs: cloneargs[field.name] = kwargs[field.name]
             else:
-                cloneargs[field_name] = kwargs[field_name] = self._term_values[field_name]
+                cloneargs[field.name] = kwargs[field.name] = self._term_values[field.name]
 
         # Create the new object
         return type(self)(**cloneargs)
@@ -975,15 +981,12 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
     def _unifies(cls, raw):
         if raw.type != clingo.SymbolType.Function: return False
 
-        name = cls.meta.name
-        field_defns = cls.meta.field_defns
+        if raw.name != cls.meta.name: return False
+        if len(raw.arguments) != len(cls.meta): return False
 
-        if raw.name != name: return False
-        if len(raw.arguments) != len(field_defns): return False
-
-        for idx, (field_name, field_defn) in enumerate(field_defns.items()):
+        for idx, field in enumerate(cls.meta):
             term = raw.arguments[idx]
-            if not field_defn.unifies(raw.arguments[idx]): return False
+            if not field.defn.unifies(raw.arguments[idx]): return False
         return True
 
     # Factory that returns a unified NonLogicalSymbol object
@@ -996,15 +999,15 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
     #--------------------------------------------------------------------------
     def __getitem__(self, idx):
         """Allows for index based access to term elements."""
-        return self.meta.fields[idx].__get__(self)
+        return self.meta[idx].__get__(self)
 
     def __bool__(self):
         '''Behaves like a tuple: returns False if the predicate/complex-term has no elements'''
-        return self.meta.arity > 0
+        return len(self.meta) > 0
 
     def __len__(self):
         '''Returns the number of fields in the object'''
-        return self.meta.arity
+        return len(self.meta)
 
     #--------------------------------------------------------------------------
     # Overloaded operators
@@ -1025,7 +1028,7 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
         if not isinstance(other, self.__class__): return NotImplemented
 
         # compare each field in order
-        for idx in range(0,self._meta.arity):
+        for idx in range(0,len(self._meta)):
             selfv = self[idx]
             otherv = other[idx]
             if selfv == otherv: continue
@@ -1043,7 +1046,7 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
         if not isinstance(other, self.__class__): return NotImplemented
 
         # compare each field in order
-        for idx in range(0,self._meta.arity):
+        for idx in range(0,len(self._meta)):
             selfv = self[idx]
             otherv = other[idx]
             if selfv == otherv: continue
@@ -1106,7 +1109,7 @@ def unify(unifiers, symbols):
     # filter. However, Python doesn't have a built in multidict and I don't want
     # to add an extra dependency - so this is a bit more complex than it needs
     # to be.
-    sigs = [((cls.meta.name, cls.meta.arity),cls) for cls in unifiers]
+    sigs = [((cls.meta.name, len(cls.meta)),cls) for cls in unifiers]
     types = {}
     for sig,cls in sigs:
         if sig not in types: types[sig] = [cls]
@@ -1852,7 +1855,7 @@ class FactBaseBuilder(object):
         if self._suppress_auto_index: return
 
         # Register the fields that have the index flag set
-        for field in cls.meta.fields:
+        for field in cls.meta:
             with contextlib.suppress(AttributeError):
                 if field.defn.index: self._register_index(field)
 

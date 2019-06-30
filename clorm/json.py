@@ -110,7 +110,7 @@ class FactBaseCoder(object):
         self._predset.add(cls)
         self._preds.append(cls)
         self._name2pred[cls.__name__] = cls
-        for f in cls.meta.fields:
+        for f in cls.meta:
             self._name2field[str(f)] = f
 
     #-------------------------------------------------------------------------
