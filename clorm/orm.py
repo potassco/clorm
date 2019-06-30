@@ -230,20 +230,20 @@ class RawField(object, metaclass=_RawFieldMeta):
 
 class StringField(RawField):
     """A field to convert between a Clingo.String object and a Python string."""
-    def _string_cltopy(symbol):
-        if symbol.type != clingo.SymbolType.String:
-            raise TypeError("Object {0} is not a String symbol")
-        return symbol.string
+    def _string_cltopy(raw):
+        if raw.type != clingo.SymbolType.String:
+            raise TypeError("Object {0} is not a clingo.String symbol")
+        return raw.string
 
     cltopy = _string_cltopy
     pytocl = lambda v: clingo.String(v)
 
 class IntegerField(RawField):
     """A field to convert between a Clingo.Number object and a Python integer."""
-    def _integer_cltopy(symbol):
-        if symbol.type != clingo.SymbolType.Number:
-            raise TypeError("Object {0} is not a Number symbol")
-        return symbol.number
+    def _integer_cltopy(raw):
+        if raw.type != clingo.SymbolType.Number:
+            raise TypeError("Object {0} is not a clingo.Number symbol")
+        return raw.number
 
     cltopy = _integer_cltopy
     pytocl = lambda v: clingo.Number(v)
@@ -253,11 +253,11 @@ class ConstantField(RawField):
     string.
 
     """
-    def _constant_cltopy(symbol):
-        if   (symbol.type != clingo.SymbolType.Function or
-              not symbol.name or len(symbol.arguments) != 0):
+    def _constant_cltopy(raw):
+        if   (raw.type != clingo.SymbolType.Function or
+              not raw.name or len(raw.arguments) != 0):
             raise TypeError("Object {0} is not a Simple symbol")
-        return symbol.name
+        return raw.name
 
     cltopy = _constant_cltopy
     pytocl = lambda v: clingo.Function(v,[])
@@ -506,7 +506,7 @@ class _Field(Field):
             raise TypeError(("field {} doesn't match type "
                              "{}").format(self, type(instance).__name__))
         return instance._term_values[self._name]
-#            return term_defn.cltopy(self._symbol.arguments[idx])
+#            return term_defn.cltopy(self._raw.arguments[idx])
 
     def __set__(self, instance, value):
         raise AttributeError("field is a read-only data descriptor")
@@ -627,18 +627,18 @@ def _preprocess_field_input(field_defn, v):
 # class constructor.
 # ------------------------------------------------------------------------------
 
-# Construct a NonLogicalSymbol via an explicit clingo Symbol
-def _nls_init_by_symbol(self, **kwargs):
+# Construct a NonLogicalSymbol via an explicit (raw) clingo.Symbol object
+def _nls_init_by_raw(self, **kwargs):
     if len(kwargs) != 1:
         raise ValueError("Invalid combination of keyword arguments")
-    symbol = kwargs["raw"]
+    raw = kwargs["raw"]
     class_name = type(self).__name__
-    if not self._unifies(symbol):
-        raise ValueError(("Failed to unify symbol {} with "
-                          "NonLogicalSymbol class {}").format(symbol, class_name))
-    self._symbol = symbol
+    if not self._unifies(raw):
+        raise ValueError(("Failed to unify clingo.Symbol object {} with "
+                          "NonLogicalSymbol class {}").format(raw, class_name))
+    self._raw = raw
     for idx, (field_name, field_defn) in enumerate(self.meta.field_defns.items()):
-        self._term_values[field_name] = field_defn.cltopy(symbol.arguments[idx])
+        self._term_values[field_name] = field_defn.cltopy(raw.arguments[idx])
 
 # Construct a NonLogicalSymbol via the term keywords
 def _nls_init_by_keyword_values(self, **kwargs):
@@ -663,8 +663,8 @@ def _nls_init_by_keyword_values(self, **kwargs):
             self._term_values[field_name] = _preprocess_field_input(
                 field_defn, kwargs[field_name])
 
-    # Create the clingo symbol object
-    self._symbol = self._generate_symbol()
+    # Create the raw clingo.Symbol object
+    self._raw = self._generate_raw()
 
 # Construct a NonLogicalSymbol via the term keywords
 def _nls_init_by_positional_values(self, *args):
@@ -678,15 +678,15 @@ def _nls_init_by_positional_values(self, *args):
     for idx, (field_name, field_defn) in enumerate(self.meta.field_defns.items()):
         self._term_values[field_name] = _preprocess_field_input(field_defn, args[idx])
 
-    # Create the clingo symbol object
-    self._symbol = self._generate_symbol()
+    # Create the raw clingo.Symbol object
+    self._raw = self._generate_raw()
 
 # Constructor for every NonLogicalSymbol sub-class
 def _nls_constructor(self, *args, **kwargs):
-    self._symbol = None
+    self._raw = None
     self._term_values = {}
     if "raw" in kwargs:
-        _nls_init_by_symbol(self, **kwargs)
+        _nls_init_by_raw(self, **kwargs)
     elif len(args) > 0:
         _nls_init_by_positional_values(self, *args)
     else:
@@ -859,7 +859,7 @@ class _NonLogicalSymbolMeta(type):
 #------------------------------------------------------------------------------
 # A base non-logical symbol that all predicate/term declarations must inherit
 # from. The Metaclass creates the magic to create the terms and the underlying
-# clingo symbol object.
+# clingo.Symbol object.
 # ------------------------------------------------------------------------------
 
 class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
@@ -913,24 +913,24 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
     # Properties and functions for NonLogicalSymbol
     #--------------------------------------------------------------------------
 
-    # Get the underlying clingo symbol object
+    # Get the underlying clingo.Symbol object
     @property
     def raw(self):
-        """Returns the underlying Clingo.Symbol object"""
-        return self._symbol
-#        return self._generate_symbol()
+        """Returns the underlying clingo.Symbol object"""
+        return self._raw
+#        return self._generate_raw()
 
     @_classproperty
     def Field(cls):
         """A RawField sub-class corresponding to a Field for this class."""
         return cls._fieldcontainer.defn
 
-    # Recompute the symbol object from the stored term objects
-    def _generate_symbol(self):
+    # Recompute the clingo.Symbol object from the stored term
+    def _generate_raw(self):
         pred_args = []
         for field_name, field_defn in self.meta.field_defns.items():
             pred_args.append(field_defn.pytocl(self._term_values[field_name]))
-        # Create the clingo symbol object
+        # Create the clingo.Symbol object
         return clingo.Function(self.meta.name, pred_args)
 
     # Clone the object with some differences
@@ -969,26 +969,27 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
         """The meta data (definitional information) for the Predicate/Complex-term"""
         return cls._meta
 
-    # Returns whether or not a Symbol can unify with this NonLogicalSymbol
+    # Returns whether or not a clingo.Symbol object can unify with this
+    # NonLogicalSymbol
     @classmethod
-    def _unifies(cls, symbol):
-        if symbol.type != clingo.SymbolType.Function: return False
+    def _unifies(cls, raw):
+        if raw.type != clingo.SymbolType.Function: return False
 
         name = cls.meta.name
         field_defns = cls.meta.field_defns
 
-        if symbol.name != name: return False
-        if len(symbol.arguments) != len(field_defns): return False
+        if raw.name != name: return False
+        if len(raw.arguments) != len(field_defns): return False
 
         for idx, (field_name, field_defn) in enumerate(field_defns.items()):
-            term = symbol.arguments[idx]
-            if not field_defn.unifies(symbol.arguments[idx]): return False
+            term = raw.arguments[idx]
+            if not field_defn.unifies(raw.arguments[idx]): return False
         return True
 
     # Factory that returns a unified NonLogicalSymbol object
     @classmethod
-    def _unify(cls, symbol):
-        return cls(raw=symbol)
+    def _unify(cls, raw):
+        return cls(raw=raw)
 
     #--------------------------------------------------------------------------
     # Overloaded index operator to access the values and len operator
@@ -1060,10 +1061,9 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
 
     def __str__(self):
         """Returns the NonLogicalSymbol as the string representation of the raw
-        symbol.
+        clingo.Symbol.
         """
-        self_symbol = self.raw
-        return str(self_symbol)
+        return str(self.raw)
 
     def __repr__(self):
         return self.__str__()
