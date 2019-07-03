@@ -1489,6 +1489,36 @@ class FactIndexTestCase(unittest.TestCase):
         fi.clear()
         self.assertEqual(fi.keys,[])
 
+    #--------------------------------------------------------------------------
+    # Test the support for indexes of subfields
+    #--------------------------------------------------------------------------
+    def test_subfields(self):
+        class CT(ComplexTerm):
+            num1=IntegerField()
+            str1=StringField()
+        class Fact(Predicate):
+            ct1=CT.Field()
+            ct2=(IntegerField(),IntegerField())
+
+        fi1 = _FactIndex(Fact.ct1.num1)
+        fi2 = _FactIndex(Fact.ct2[1])
+        fi3 = _FactIndex(Fact.ct1)
+
+        f1=Fact(CT(10,"a"),(1,4))
+        f2=Fact(CT(20,"b"),(2,3))
+        f3=Fact(CT(30,"c"),(5,2))
+        f4=Fact(CT(40,"d"),(6,1))
+
+        fi1.add(f1); fi2.add(f1); fi3.add(f1)
+        fi1.add(f2); fi2.add(f2); fi3.add(f2)
+        fi1.add(f3); fi2.add(f3); fi3.add(f3)
+        fi1.add(f4); fi2.add(f4); fi3.add(f4)
+
+        self.assertEqual(fi1.keys, [10,20,30,40])
+        self.assertEqual(fi2.keys, [1,2,3,4])
+        self.assertEqual(set(fi3.keys),
+                         set([CT(10,"a"),CT(20,"b"),CT(30,"c"),CT(40,"d")]))
+
 #------------------------------------------------------------------------------
 # Test the _FactMap and _Select _Delete class
 #------------------------------------------------------------------------------
@@ -2125,10 +2155,10 @@ class SelectTestCase(unittest.TestCase):
         f5 = Afact(2,2)
         f6 = Afact(3,1)
 
-        fm1.add(f1) ; fm1.add(f2) ; fm1.add(f3) ; fm1.add(f4) ; fm1.add(f5) ; fm1.add(f6)
+        fm1.add(f1); fm1.add(f2); fm1.add(f3); fm1.add(f4); fm1.add(f5); fm1.add(f6)
 
-        # Use an function to track the facts that are visited. This will show
-        # that the first operator slects only the appropriate terms.
+        # Use a function to track the facts that are visited. This will show
+        # that the first operator selects only the appropriate terms.
         facts = set()
         def track(f,a,b):
             nonlocal facts
@@ -2183,6 +2213,42 @@ class SelectTestCase(unittest.TestCase):
         self.assertEqual(set([f for f in s1_num1.get(4)]), set([f4,f42]))
         self.assertEqual(d1_num1.execute(4), 2)
         self.assertEqual(set([f for f in s1_num1.get(4)]), set([]))
+
+    #--------------------------------------------------------------------------
+    # Test the support for indexes of subfields
+    #--------------------------------------------------------------------------
+    def test_select_with_subfields(self):
+        class CT(ComplexTerm):
+            num1=IntegerField()
+            str1=StringField()
+        class Fact(Predicate):
+            ct1=CT.Field()
+            ct2=(IntegerField(),IntegerField())
+            ct3=(IntegerField(),IntegerField())
+
+        fb = FactBase(indexes=[Fact.ct1.num1, Fact.ct1, Fact.ct2])
+
+        f1=Fact(CT(10,"a"),(3,4),(4,3))
+        f2=Fact(CT(20,"b"),(1,2),(2,1))
+        f3=Fact(CT(30,"c"),(5,2),(2,5))
+        f4=Fact(CT(40,"d"),(6,1),(1,6))
+
+        fb.add(f1); fb.add(f2); fb.add(f3); fb.add(f4);
+
+        # Three queries that uses index
+        s1 = fb.select(Fact).where(Fact.ct1.num1 <= ph1_).order_by(Fact.ct2)
+        s2 = fb.select(Fact).where(Fact.ct1 == ph1_)
+        s3 = fb.select(Fact).where(Fact.ct2 == ph1_)
+        s4 = fb.select(Fact).where(Fact.ct3 == ph1_)
+
+        self.assertEqual(s1.get(20), [f2,f1])
+        self.assertEqual(s2.get(CT(20,"b")), [f2])
+        self.assertEqual(s3.get((1,2)), [f2])
+        self.assertEqual(s4.get((2,1)), [f2])
+
+        # One query doesn't use the index
+        s4 = fb.select(Fact).where(Fact.ct1.str1 == ph1_)
+        self.assertEqual(s4.get("c"), [f3])
 
 #------------------------------------------------------------------------------
 #

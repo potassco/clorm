@@ -1661,6 +1661,9 @@ class _FactIndex(object):
         self._keylist = []
         self._key2values = {}
 
+    def field_path(self):
+        return self._fpspec
+
     def add(self, fact):
         if not isinstance(fact, self._predicate):
             raise TypeError("{} is not a {}".format(fact, self._predicate))
@@ -1949,7 +1952,11 @@ class _Select(Select):
                 elif self._where and self._where(f,*args,**nkwargs): result.append(f)
         else:
             findex = self._factmap.get_factindex(self._indexable[0])
-            for f in findex.find(self._indexable[1], get_value(self._indexable[2])):
+            value = get_value(self._indexable[2])
+            fp = findex.field_path()
+            cmplx = fp.defn.complex
+            if cmplx and isinstance(value, tuple): value = cmplx(*value)
+            for f in findex.find(self._indexable[1], value):
                 if self._where(f,*args,**nkwargs): result.append(f)
 
         # Return the results - sorted if necessary
