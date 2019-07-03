@@ -13,9 +13,9 @@ from clorm.orm import \
     NonLogicalSymbol, Predicate, ComplexTerm, \
     IntegerField, StringField, ConstantField, RawField, \
     _get_field_defn, refine_field, \
-    not_, and_, or_, _StaticComparator, _get_term_comparators, \
+    not_, and_, or_, StaticComparator, \
     ph_, ph1_, ph2_, \
-    _FactIndex, _FactMap, \
+    _FactIndex, _FactMap, _FieldPathEval,\
     unify, desc, FactBase, FactBaseBuilder, \
     TypeCastSignature, make_function_asp_callable, make_method_asp_callable
 
@@ -24,6 +24,7 @@ from clorm.orm import \
 
 __all__ = [
     'ORMTestCase',
+    'FieldPathTestCase',
     'FactIndexTestCase',
     'FactMapTestCase',
     'FactBaseTestCase',
@@ -178,7 +179,7 @@ class ORMTestCase(unittest.TestCase):
             b = StringField()
 
         self.assertFalse(Blah.meta.anonymous)
-        self.assertTrue(Blah.a.defn.complex.meta.anonymous)
+        self.assertTrue(Blah.a.meta.field_path().defn.complex.meta.anonymous)
 
     #--------------------------------------------------------------------------
     # Test that we can distinguish NonLogicalSymbol tuples
@@ -207,9 +208,9 @@ class ORMTestCase(unittest.TestCase):
 
         t = Tuple(a=1,b="asd", c=(1,"dfd"))
         self.assertEqual(len(t), 3)
-        self.assertEqual(len(Tuple), 3)
+        self.assertEqual(len(Tuple.meta), 3)
         self.assertEqual(len(t.c), 2)
-        self.assertEqual(len(Tuple.c.defn.complex),2)
+        self.assertEqual(len(Tuple.c.meta.field_path().defn.complex.meta),2)
 
     #--------------------------------------------------------------------------
     # Test that we can return access the NLS class fields using positional
@@ -288,7 +289,6 @@ class ORMTestCase(unittest.TestCase):
         b2_complex = b2_field.defn.complex
         self.assertTrue(issubclass(type(b2_field.defn), RawField))
         self.assertEqual(len(b2_complex.meta), 2)
-        self.assertEqual(len(b2_complex), 2)
 
         b3_field =  BlahBlah2.meta["b"]
         b3_complex = b3_field.defn.complex
@@ -493,6 +493,7 @@ class ORMTestCase(unittest.TestCase):
         f1=Fact(astr="test")
         f2=Fact(1,"test")
 
+        self.assertEqual(Fact.meta.parent, Fact)
         self.assertEqual(f1, f2)
         self.assertEqual(f1.raw, func)
 
@@ -572,6 +573,8 @@ class ORMTestCase(unittest.TestCase):
         class UnaryPredicate(Predicate):
             class Meta: name = "unary"
 
+        self.assertEqual(UnaryPredicate.meta.parent, UnaryPredicate)
+
         up1 = UnaryPredicate()
         up2 = Function("unary",[])
         self.assertEqual(up1.raw, up2)
@@ -588,6 +591,8 @@ class ORMTestCase(unittest.TestCase):
             first = IntegerField()
             second = IntegerField(default=10)
             class Meta: name = "dfp"
+
+        self.assertEqual(DefaultFieldPredicate.meta.parent, DefaultFieldPredicate)
 
         dfp1 = DefaultFieldPredicate(first=15)
         dfp2 = Function("dfp",[Number(15),Number(10)])
@@ -996,7 +1001,7 @@ class ORMTestCase(unittest.TestCase):
     def test_comparators(self):
 
         def is_static(fc):
-            return isinstance(fc, _StaticComparator)
+            return isinstance(fc, StaticComparator)
 
         class Afact(Predicate):
             anum1=IntegerField()
@@ -1023,15 +1028,15 @@ class ORMTestCase(unittest.TestCase):
         ep4 = Bfact[1] == "aaa"
 
 
-        self.assertEqual(e1, _get_term_comparators(e1)[0])
-        self.assertEqual(e2, _get_term_comparators(e2)[0])
-        self.assertEqual(e3, _get_term_comparators(e3)[0])
-        self.assertEqual([], _get_term_comparators(e3.simplified()))
+#        self.assertEqual(e1, _get_term_comparators(e1)[0])
+#        self.assertEqual(e2, _get_term_comparators(e2)[0])
+#        self.assertEqual(e3, _get_term_comparators(e3)[0])
+#        self.assertEqual([], _get_term_comparators(e3.simplified()))
 
-        self.assertEqual(ep1, _get_term_comparators(ep1)[0])
-        self.assertEqual(ep2, _get_term_comparators(ep2)[0])
-        self.assertEqual(ep3, _get_term_comparators(ep3)[0])
-        self.assertEqual([], _get_term_comparators(ep3.simplified()))
+#        self.assertEqual(ep1, _get_term_comparators(ep1)[0])
+#        self.assertEqual(ep2, _get_term_comparators(ep2)[0])
+#        self.assertEqual(ep3, _get_term_comparators(ep3)[0])
+#        self.assertEqual([], _get_term_comparators(ep3.simplified()))
 
         self.assertFalse(is_static(e1.simplified()))
         self.assertFalse(is_static(e2.simplified()))
@@ -1049,11 +1054,11 @@ class ORMTestCase(unittest.TestCase):
         self.assertFalse(ep1(af1))
         self.assertTrue(ep1(af2))
 
-        # Testing the FieldComparator on the wrong fact type
+        # Testing the FieldQueryComparator on the wrong fact type
         with self.assertRaises(TypeError) as ctx:
             self.assertFalse(e1(bf1))
 
-        # Testing the FieldComparator on the wrong fact type
+        # Testing the FieldQueryComparator on the wrong fact type
         with self.assertRaises(TypeError) as ctx:
             self.assertFalse(ep1(bf1))
 
@@ -1106,7 +1111,6 @@ class ORMTestCase(unittest.TestCase):
         self.assertFalse(is_static(ac3.simplified()))
 
         self.assertEqual(str(Afact.anum1), "Afact.anum1")
-        self.assertEqual(str(Afact.anum1 == 1), "Afact.anum1 == 1")
 
         # This cannot be simplified
         es4 = [Afact.anum1 == Afact.anum1, lambda x: False]
@@ -1228,6 +1232,148 @@ class ORMTestCase(unittest.TestCase):
         s = fb.select(Bfact).where(Bfact.num1 == 1)
         self.assertEqual(s.get_unique(), bf1)
 
+
+#------------------------------------------------------------------------------
+# Test the FieldPathBuilder class
+#------------------------------------------------------------------------------
+
+class FieldPathTestCase(unittest.TestCase):
+    def setUp(self):
+        pass
+
+    def test_create_fpb(self):
+        self.assertTrue(StringField.FieldPathBuilder)
+
+        stffp = StringField.FieldPathBuilder(None)
+#        self.assertEqual(stffp._fields, [StringField])
+
+        class Cmplx1(ComplexTerm):
+            a = IntegerField()
+            b = StringField()
+            c = ConstantField()
+
+        class Cmplx2(ComplexTerm):
+            x = Cmplx1.Field()
+            y = (StringField(), ConstantField())
+
+        fp0 = Cmplx1.Field.FieldPathBuilder(None,None)
+        self.assertEqual(fp0._comp_list(), [(Cmplx1.Field, None)])
+
+        fp1 = Cmplx1.b
+        self.assertEqual(fp1._comp_list(), [(Cmplx1.Field,'b'), (StringField,None)])
+
+        fp2 = Cmplx1[2]
+        self.assertEqual(fp2._comp_list(), [(Cmplx1.Field,2), (ConstantField,None)])
+
+        fp3 = Cmplx2.x
+        self.assertEqual(fp3._comp_list(), [(Cmplx2.Field,'x'), (Cmplx1.Field,None)])
+
+        fp4 = Cmplx2.x.a
+        self.assertEqual(fp4._comp_list(),
+                         [(Cmplx2.Field,'x'), (Cmplx1.Field,'a'),(IntegerField,None)])
+
+        fp5 = Cmplx2.x[1]
+        self.assertEqual(fp5._comp_list(),
+                         [(Cmplx2.Field,'x'), (Cmplx1.Field,1),(StringField,None)])
+
+        fp6 = Cmplx2.y[1]
+        self.assertEqual(fp6._comp_list()[0], (Cmplx2.Field,'y'))
+        self.assertEqual(fp6._comp_list()[-1], (ConstantField,None))
+
+        with self.assertRaises(AttributeError) as ctx:
+            fp7 = Cmplx2.b
+
+        with self.assertRaises(IndexError) as ctx:
+            fp7 = Cmplx2.x[4]
+
+        with self.assertRaises(KeyError) as ctx:
+            fp7 = Cmplx2.x['f']
+
+        # Test using the FPB generated from the Predicate.meta
+        fpb1 = Cmplx2.meta.fpb()
+        self.assertEqual(str(fpb1), "Cmplx2")
+        self.assertEqual(str(fpb1.x), "Cmplx2.x")
+        self.assertEqual(str(fpb1['x']), "Cmplx2.x")
+        self.assertEqual(str(fpb1[1]), "Cmplx2[1]")
+
+    def test_fpspec_fpget(self):
+        class Cmplx1(ComplexTerm):
+            a = IntegerField()
+            b = StringField()
+            c = ConstantField()
+
+        class Cmplx2(ComplexTerm):
+            x = Cmplx1.Field()
+            y = (StringField(), ConstantField())
+
+        # Test the FieldPath and the equality boolean operator
+        fps1_a = Cmplx1.b.meta.field_path()
+        fps1_b = Cmplx1.a.meta.field_path()
+        self.assertFalse(fps1_a == fps1_b)
+        self.assertTrue(fps1_a != fps1_b)
+
+        fps2_a = Cmplx1.a.meta.field_path()
+        fps2_b = Cmplx1.a.meta.field_path()
+        self.assertTrue(fps2_a == fps2_b)
+        self.assertFalse(fps2_a != fps2_b)
+
+        fps3 = Cmplx2.x.b.meta.field_path()
+        fps3_alt = Cmplx2[0][1].meta.field_path()
+        self.assertTrue(fps3 == fps3_alt)
+        self.assertEqual(str(fps3), "Cmplx2.x.b")
+        self.assertEqual(str(fps3_alt), "Cmplx2[0][1]")
+        self.assertFalse(str(fps3) == str(fps3_alt))
+        fps3_alt_canon = fps3_alt.canonical()
+        self.assertTrue(fps3_alt == fps3_alt_canon)
+        self.assertTrue(str(fps3) == str(fps3_alt_canon))
+
+        self.assertTrue(Cmplx1.a.meta.field_path() == Cmplx1[0].meta.field_path())
+        self.assertTrue(Cmplx2.x.b.meta.field_path() == Cmplx2[0][1].meta.field_path())
+        self.assertFalse(Cmplx2.x.b.meta.field_path() == Cmplx2[0][0].meta.field_path())
+
+        # Now test the _FieldPathEval
+        tmp1 = Cmplx1(1,"blah1","blah2")
+        tmp2 = Cmplx2(tmp1, ("blah3", "blah4"))
+
+        fp0 = Cmplx1.Field.FieldPathBuilder(None,None)
+        fpg0 = _FieldPathEval(fp0.meta.field_path())
+        self.assertEqual(fpg0(tmp1), tmp1)
+
+        fp1 = Cmplx1.b
+        fpg1 = _FieldPathEval(fp1.meta.field_path())
+        self.assertEqual(fpg1(tmp1), "blah1")
+
+        fp2 = Cmplx1[2]
+        fpg2 = _FieldPathEval(fp2.meta.field_path())
+        self.assertEqual(fpg2(tmp1), "blah2")
+
+        fp3 = Cmplx2.x
+        fpg3 = _FieldPathEval(fp3.meta.field_path())
+        self.assertEqual(fpg3(tmp2), tmp1)
+
+        fp4 = Cmplx2.x.a
+        fpg4 = _FieldPathEval(fp4.meta.field_path())
+        self.assertEqual(fpg4(tmp2), 1)
+
+    def test_fp_comparator(self):
+        class Cmplx1(ComplexTerm):
+            a = IntegerField()
+            b = StringField()
+            c = ConstantField()
+
+        class Cmplx2(ComplexTerm):
+            x = Cmplx1.Field()
+            y = (StringField(), ConstantField())
+
+        tmp1_1 = Cmplx1(1,"b1","b2")
+        tmp1_2 = Cmplx1(2,"b1","b3")
+        tmp1_3 = Cmplx1(2,"b1","b2")
+        tmp2 = Cmplx2(tmp1_1, ("blah3", "blah4"))
+        tmp2_1 = Cmplx2(tmp1_1, ("blah3", "blah5"))
+        tmp2_3 = Cmplx2(tmp1_2, ("blah6", "blah4"))
+
+        fpc1 = Cmplx1.b == 1
+#        self.assertTrue(qpdc1(tmp1_1))
 
 #------------------------------------------------------------------------------
 # Test the _FactIndex class
@@ -1800,7 +1946,9 @@ class SelectTestCase(unittest.TestCase):
 
         # Test that the fact base index
         fb = FactBase(indexes=[Afact.num2, Bfact.str1])
-        self.assertEqual(set(fb.indexes), set([Afact.num2, Bfact.str1]))
+        self.assertEqual(set(fb.indexes),
+                         set([Afact.num2.meta.field_path(),
+                              Bfact.str1.meta.field_path()]))
 
     #--------------------------------------------------------------------------
     #   Test that we can use the same placeholder multiple times
@@ -1863,19 +2011,19 @@ class SelectTestCase(unittest.TestCase):
         q = fb.select(Afact).order_by(Afact.num1)
         self.assertEqual([f1,f2,f3,f4,f5], q.get())
 
-        q = fb.select(Afact).order_by(Afact.num1.asc())
+        q = fb.select(Afact).order_by(Afact.num1.meta.asc())
         self.assertEqual([f1,f2,f3,f4,f5], q.get())
 
-        q = fb.select(Afact).order_by(Afact.num1.desc())
+        q = fb.select(Afact).order_by(Afact.num1.meta.desc())
         self.assertEqual([f5,f4,f3,f2,f1], q.get())
 
         q = fb.select(Afact).order_by(Afact.str2)
         self.assertEqual([f5,f4,f3,f2,f1], q.get())
 
-        q = fb.select(Afact).order_by(Afact.str2.desc())
+        q = fb.select(Afact).order_by(Afact.str2.meta.desc())
         self.assertEqual([f1,f2,f3,f4,f5], q.get())
 
-        q = fb.select(Afact).order_by(Afact.str1.desc(), Afact.num1)
+        q = fb.select(Afact).order_by(Afact.str1.meta.desc(), Afact.num1)
         self.assertEqual([f3,f2,f4,f1,f5], q.get())
 
         q = fb.select(Afact).order_by(desc(Afact.str1), Afact.num1)

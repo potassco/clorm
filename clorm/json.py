@@ -100,7 +100,6 @@ class FactBaseCoder(object):
         self._preds = []
         self._predset = set()
         self._name2pred = {}
-        self._name2field = {}
         for p in predicates: self._register_predicate(p)
 
     def _register_predicate(self, cls):
@@ -110,8 +109,6 @@ class FactBaseCoder(object):
         self._predset.add(cls)
         self._preds.append(cls)
         self._name2pred[cls.__name__] = cls
-        for f in cls.meta:
-            self._name2field[str(f)] = f
 
     #-------------------------------------------------------------------------
     #
@@ -139,7 +136,7 @@ class FactBaseCoder(object):
         if isinstance(obj, clingo.Symbol): return symbol_encoder(obj)
         if isinstance(obj, FactBase):
             return {
-                "clorm.FactBase" : [ str(fld) for fld in obj.indexes ],
+                "clorm.FactBase" : [ str(fp) for fp in obj.indexes ],
                 "facts" : [ self.encoder(fct) for fct in obj] }
         for p in self._preds:
             if isinstance(obj, p):
@@ -169,8 +166,16 @@ class FactBaseCoder(object):
         if "clorm.FactBase" in obj and "facts" in obj:
             indexes = []
             for fname in obj["clorm.FactBase"]:
-                if fname not in self._name2field: continue
-                indexes.append(self._name2field[fname])
+                fs = fname.split('.')
+                if len(fs) < 2:
+                    raise ValueError(("Expecting a field '.' split for index "
+                                      "{}").format(fs))
+                if fs[0] not in self._name2pred:
+                    raise ValueError(("Unrecognised predicate name {} not one "
+                                      "of {}").format(fs, self._name2pred.keys()))
+                fpb = self._name2pred[fs[0]].meta.fpb()
+                for key in fs[1:]: fpb = fpb[key]
+                indexes.append(fpb.meta.field_path())
             facts = [ self.decoder(f) for f in obj["facts"] ]
             return FactBase(facts=facts, indexes=indexes)
         if not "clorm.Predicate" in obj: return obj

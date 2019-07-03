@@ -22,16 +22,12 @@ __all__ = [
     'StringField',
     'ConstantField',
     'refine_field',
-    'Field',
     'Placeholder',
     'NonLogicalSymbol',
     'Predicate',
     'ComplexTerm',
-    'Comparator',
     'desc',
     'unify',
-    'Select',
-    'Delete',
     'FactBase',
     'FactBaseBuilder',
     'ph_',
@@ -62,10 +58,313 @@ class _classproperty(object):
         return self.getter(owner)
 
 #------------------------------------------------------------------------------
+# A property to help with delayed initialisation. Useful for metaclasses where
+# an object needs to be created in the __new__ call but can only be assigned in
+# the __init__ call.
+# ------------------------------------------------------------------------------
+class _lateinit(object):
+    def __init__(self, value):
+        self._value=value
+    def assign(self, value):
+        self._value=value
+    def __get__(self, instance, owner):
+        return self._value
+
+#------------------------------------------------------------------------------
+# Field Path specification. It gives a path to an individual field within a
+# predicate/complex-term. This specifies the chain of links for a field.  For
+# example, a Pred.a.b for a predicate Pred with a field a an a subfield b.  From
+# the FieldPath you can uniquely (recursively) identify a field.  It is used for
+# querying of fields and sub-fields as well as for specifying indexes for a
+# FactBase.
+# ------------------------------------------------------------------------------
+
+# A link in the field path
+FieldPathLink = collections.namedtuple('FieldPathLink', 'defn key')
+
+class FieldPath(object):
+
+    #--------------------------------------------------------------------------
+    # The initialiser validates the chain and computes a canonical version
+    #--------------------------------------------------------------------------
+    def __init__(self, chain):
+        if not chain: raise ValueError("An empty FieldPathBuilder spec is invalid")
+        self._spec = []
+        self._canon = []
+
+        # validate and build the specifcation and a canonical version
+        new_field = None
+        last_idx = len(chain)-1
+        for idx, (field, key) in enumerate(chain):
+            if not issubclass(field, RawField):
+                raise ValueError(("Element {} in {} is not a field "
+                                  "definition").format(field, chain))
+            if idx < last_idx:
+                if not field.complex:
+                    raise ValueError(("Field {} (number {}) in {} is not "
+                                  "complex").format(field, idx, chain))
+            if idx == last_idx and key is not None:
+                raise ValueError(("The last key element {} in {} must be "
+                                  "None").format(key, chain))
+            if idx > 0 and field != new_field:
+                raise ValueError(("Field {} didn't match expectation "
+                                  "{} in {}").format(field, new_field, chain))
+
+            canon = key
+            if idx < last_idx:
+                nls_defn = field.complex.meta
+                error=False
+                try:
+                    new_field = type(nls_defn[key].defn)
+                    canon = nls_defn.canonical(key)
+                except IndexError:
+                    error=True
+                except ValueError:
+                    error=True
+                if error:
+                    raise ValueError(("Key {} is not valid for field {} in "
+                                      "{}").format(key, field, chain))
+            # Update the specification
+            self._spec.append(FieldPathLink(field,key))
+            self._canon.append(FieldPathLink(field,canon))
+
+        # Turn the spec into a tuple
+        self._spec = tuple(self._spec)
+        self._canon = tuple(self._canon)
+
+    #--------------------------------------------------------------------------
+    # Returns the predicate associated with the fieldpath. Note: assumes that it
+    # is an absolute FieldPath where the first element does indeed reference a
+    # predicate.
+    # --------------------------------------------------------------------------
+    @property
+    def predicate(self):
+        return self._canon[0].defn.complex
+
+    @property
+    def defn(self):
+        return self._canon[-1].defn
+
+    def canonical(self):
+        return FieldPath(self._canon)
+
+    #--------------------------------------------------------------------------
+    # Equality overload
+    #--------------------------------------------------------------------------
+    def __eq__(self, other):
+        # Since we can refer to elements by either index or attribute use the
+        # canonoical version to guarantee semantic equivalence
+        if not isinstance(other, self.__class__): return NotImplemented
+        result = self._canon == other._canon
+        return result
+
+    def __ne__(self, other):
+        result = self.__eq__(other)
+        if result is NotImplemented: return NotImplemented
+        return not result
+
+    #--------------------------------------------------------------------------
+    # Access the elements in the spec
+    #--------------------------------------------------------------------------
+    def __getitem__(self, idx):
+        return self._spec[idx]
+
+    def __iter__(self):
+        return iter(self._spec)
+
+    def __len__(self):
+        return len(self._spec)
+
+    #--------------------------------------------------------------------------
+    # Other functions
+    #--------------------------------------------------------------------------
+    def __hash__(self):
+        return hash(self._canon)
+
+    def __str__(self):
+        tmp = self.predicate.__name__
+        for f in self._spec[:-1]:
+            try:
+                fi = int(f.key)
+                tmp += "[{}]".format(fi)
+            except:
+                tmp += ".{}".format(f.key)
+        return tmp
+
+#------------------------------------------------------------------------------
+# FieldPathBuilder and supporting functions and classes. The builder is the key
+# because allows for the nice user syntax (eg., Pred.a.b or Pred.a[0]). It does
+# this by creating a builder for every NonLogicalSymbol (NLS) sub-class where
+# the corresponding builder creates a attribute for each field names that in
+# turns returns the approriate builder object - a chain of field references.
+# The FieldPathBuilder also overloads the boolean comparison operator to return
+# a comparator. This allows for the nice syntax such as, Pred.a.b == 1
+# ------------------------------------------------------------------------------
+
+def _make_fpb_class(field_defn):
+    class_name = field_defn.__name__ + "FPB"
+    return type(class_name, (FieldPathBuilder,), { "_field_defn" : field_defn })
+
+def _fpb_base_constructor(self, *args, **kwargs):
+    raise TypeError("FieldPathBuilder must be sub-classed")
+
+def _fpb_subclass_constructor(self, prev=None, key=None):
+    self._chain = []
+    if prev: self._chain = list(prev._chain)
+    self._chain.append((self._field_defn, key))
+    self._meta = FieldPathBuilder.Meta(self)
+
+def _fpb_make_field_access(name,defn):
+    def access(self):
+        return defn.FieldPathBuilder(self, name)
+    return access
+
+class _FieldPathBuilderMeta(type):
+    def __new__(meta, name, bases, dct):
+        dct["_byidx"] = []
+        dct["_byname"] = {}
+
+        if name == "FieldPathBuilder":
+            dct["__init__"] = _fpb_base_constructor
+            return super(_FieldPathBuilderMeta, meta).__new__(meta, name, bases, dct)
+
+        dct["__init__"] = _fpb_subclass_constructor
+
+        # Expecting "_field_defn" to be defined
+        field_defn = dct["_field_defn"]
+        nls = field_defn.complex
+        if nls:
+            for field in nls.meta:
+                dct[field.name] = property(_fpb_make_field_access(field.name,field.defn))
+                dct["_byidx"].append(field)
+                dct["_byname"][field.name] = field
+
+        # The appropriate fields have been created
+        return super(_FieldPathBuilderMeta, meta).__new__(meta, name, bases, dct)
+
+
+class FieldPathBuilder(object, metaclass=_FieldPathBuilderMeta):
+
+    #--------------------------------------------------------------------------
+    # A wrapper to provide some useful functions/properties in a sub-namespace
+    #--------------------------------------------------------------------------
+
+    class Meta(object):
+        def __init__(self, fpb):
+            self._fpb = fpb
+
+        #--------------------------------------------------------------------------
+        # Return the FieldPath generated by the builder - using the function name
+        # meta because this is a reserved keyword so guaranteed not to be an
+        # attribute.
+        # --------------------------------------------------------------------------
+        def field_path(self):
+            return FieldPath(self._fpb._comp_list())
+
+        #--------------------------------------------------------------------------
+        # Return the a FieldOrderBy structure for ascending and descending
+        # order. Used by the Select query.
+        # --------------------------------------------------------------------------
+        def asc(self):
+            return FieldOrderBy(self.field_path(), asc=True)
+        def desc(self):
+            return FieldOrderBy(self.field_path(), asc=False)
+
+    #--------------------------------------------------------------------------
+    # Support function to take the internal chain of the FieldClassBuilder and
+    # turn it into a list of class,name matching pairs, where the last element
+    # only contains the type (with None) for the name element.
+    # --------------------------------------------------------------------------
+    def _comp_list(self):
+        if not self._chain: return []
+        if len(self._chain) == 1: return list(self._chain)
+        values = []
+        for i in range(0,len(self._chain)-1):
+            values.append((self._chain[i][0], self._chain[i+1][1]))
+        values.append((self._chain[-1][0],None))
+        return values
+
+    #--------------------------------------------------------------------------
+    # Return the underlying meta object with useful functions
+    #--------------------------------------------------------------------------
+    @property
+    def meta(self):
+        return self._meta
+
+    #--------------------------------------------------------------------------
+    # Helper functor to generate a FieldQueryComparator based on a query
+    # specification
+    # --------------------------------------------------------------------------
+    def _make_fq_comparator(self, op, other):
+        if isinstance(other, FieldPathBuilder):
+            other = _FieldPathEval(other.meta.field_path())
+        return FieldQueryComparator(op, _FieldPathEval(self.meta.field_path()), other)
+
+    #--------------------------------------------------------------------------
+    # Allow lookup of fields by name or index
+    # --------------------------------------------------------------------------
+    def __getitem__(self, key):
+        '''Find a field by position index or by name'''
+        try:
+            key = int(key)
+            field = self._byidx[key]
+        except ValueError as e:
+            field = self._byname[key]
+        # Return a new FieldPathBuilder instance with self as the previous link in
+        # the chain.
+        return field.defn.FieldPathBuilder(self, key)
+
+    #--------------------------------------------------------------------------
+    # Overload the boolean operators to return a functor
+    #--------------------------------------------------------------------------
+    def __eq__(self, other):
+        return self._make_fq_comparator(operator.eq, other)
+    def __ne__(self, other):
+        return self._make_fq_comparator(operator.ne, other)
+    def __lt__(self, other):
+        return self._make_fq_comparator(operator.lt, other)
+    def __le__(self, other):
+        return self._make_fq_comparator(operator.le, other)
+    def __gt__(self, other):
+        return self._make_fq_comparator(operator.gt, other)
+    def __ge__(self, other):
+        return self._make_fq_comparator(operator.ge, other)
+
+    def __str__(self):
+        if len(self._chain) < 1: return "FieldPathBuilder(<partial>)"
+        return str(self.meta.field_path())
+
+#------------------------------------------------------------------------------
+# FieldPathEval evaluates a FieldPath with respect to a fact (a predicate
+# instance).  It is a functor that extracts a component from a fact based on a
+# specification of the class/attribute. Used by the FieldQueryComparator for
+# querying.
+# ------------------------------------------------------------------------------
+
+class _FieldPathEval(object):
+    def __init__(self, fpspec):
+        if not isinstance(fpspec, FieldPath):
+            raise TypeError("{} is not of type {}".format(fpspec, FieldPath))
+        self._fpspec = fpspec
+
+    def __call__(self, fact):
+        if type(fact) != self._fpspec.predicate:
+            raise TypeError(("Fact {} is not of type "
+                             "{}").format(fact, self._fpspec.predicate))
+        value = fact
+        for field,key in self._fpspec:
+            if key == None: return value
+            value = field.complex.__getitem__(value, key)
+        raise ValueError(("Internal error: invalid FPGet specification:"
+                          "{}").format(self._fpspec))
+
+    @property
+    def spec(self): return self._fpspec
+
+#------------------------------------------------------------------------------
 # RawField class captures the definition of a term between python and clingo. It is
 # not meant to be instantiated.
 # ------------------------------------------------------------------------------
-
 def _make_pytocl(fn):
     def _pytocl(cls, v):
         if cls._parentclass:
@@ -100,6 +399,8 @@ class _RawFieldMeta(type):
         if "__init__" not in dct:
             dct["__init__"] = _sfm_constructor
 
+        dct["_fpb"] = _lateinit(None)
+
         if name == "RawField":
             dct["_parentclass"] = None
             return super(_RawFieldMeta, meta).__new__(meta, name, bases, dct)
@@ -129,14 +430,21 @@ class _RawFieldMeta(type):
         else:
             dct["pytocl"] = classmethod(_raise_nie)
 
+
         # For complex-terms provide an interface to the underlying complex term
-        # object or return None
+        # object as well as the appropriate FieldPathBuilder.
         if "complex" in dct:
             dct["complex"] = _classproperty(dct["complex"])
         else:
             dct["complex"] = _classproperty(lambda cls: None)
+#            dct["complex"] = _classproperty(None)
 
         return super(_RawFieldMeta, meta).__new__(meta, name, bases, dct)
+
+    def __init__(cls, name, bases, dct):
+        dct["_fpb"].assign(_make_fpb_class(cls))
+
+        return super(_RawFieldMeta, cls).__init__(name, bases, dct)
 
 #------------------------------------------------------------------------------
 # Field definitions. All fields have the functions: pytocl, cltopy,
@@ -214,6 +522,10 @@ class RawField(object, metaclass=_RawFieldMeta):
     def complex(cls):
         return None
 
+    @_classproperty
+    def FieldPathBuilder(cls):
+        return cls._fpb
+
     @property
     def default(self):
         """Returns the specified default value for the term (or None)"""
@@ -262,11 +574,17 @@ class ConstantField(RawField):
     cltopy = _constant_cltopy
     pytocl = lambda v: clingo.Function(v,[])
 
+#------------------------------------------------------------------------------
+# refine_field is a function that creates a sub-class of a RawField (or RawField
+# sub-class). It restricts the set of allowable values based on a functor or an
+# explicit set of values.
+# ------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 # Helper function to define a sub-class of a RawField (or sub-class) that
 # restricts the allowable values.
 # ------------------------------------------------------------------------------
+
 # Support for refine_field
 def _refine_field_functor(subclass_name, field_class, valfunc):
     def _test_value(v):
@@ -300,8 +618,6 @@ def _refine_field_collection(subclass_name, field_class, values):
     return type(subclass_name, (field_class,),
                 { "pytocl": _test_value,
                   "cltopy": _test_value})
-
-
 
 def refine_field(*args):
     """Helper function to define a field sub-class that restricts the set of values.
@@ -373,106 +689,39 @@ def refine_field(*args):
 
 
 #------------------------------------------------------------------------------
-# Field - a Python descriptor (similar to a property) but with overloaded
-# comparison operator that build a query so that we can perform lazy evaluation
-# for querying.
-# ------------------------------------------------------------------------------
-
-class Field(abc.ABC):
-    """Abstract class defining a field instance in a ``Predicate`` or
-    ``ComplexTerm``.
-
-    While the field is specified by the RawField sub-classes, when
-    the ``Predicate`` or ``ComplexTerm`` class is actually created a ``Field``
-    object is instantiated to handle extracting the actual term data from the
-    underlying ``Clingo.Symbol``.
-
-    The ``Field`` object is also referenced when building queries.
-
-    """
-
-    @abc.abstractmethod
-    def __get__(self, instance, owner=None):
-        """Overload of the Python *descriptor* to access the data values"""
-        pass
-
-    @abc.abstractmethod
-    def desc(self):
-        """Set descending sort order"""
-        pass
-
-    @abc.abstractmethod
-    def asc(self):
-        """Set descending sort order"""
-        pass
-
-    @abc.abstractmethod
-    def __hash__(self):
-        """Overload of the Python hash value generation"""
-        pass
-
-    @abc.abstractmethod
-    def __eq__(self, other):
-        """Boolean operator is overloaded to return a ``Comparator`` object"""
-        pass
-
-    @abc.abstractmethod
-    def __ne__(self, other):
-        """Boolean operator is overloaded to return a ``Comparator`` object"""
-        pass
-
-    @abc.abstractmethod
-    def __lt__(self, other):
-        """Boolean operator is overloaded to return a ``Comparator`` object"""
-        pass
-
-    @abc.abstractmethod
-    def __le__(self, other):
-        """Boolean operator is overloaded to return a ``Comparator`` object"""
-        pass
-
-    @abc.abstractmethod
-    def __gt__(self, other):
-        """Boolean operator is overloaded to return a ``Comparator`` object"""
-        pass
-
-    @abc.abstractmethod
-    def __ge__(self, other):
-        """Boolean operator is overloaded to return a ``Comparator`` object"""
-        pass
-
-
-#------------------------------------------------------------------------------
 # Specification of an ordering over a field of a predicate/complex-term
 #------------------------------------------------------------------------------
-class _FieldOrderBy(object):
-    def __init__(self, field, asc):
-        self.field = field
+class FieldOrderBy(object):
+    def __init__(self, fp, asc):
+        self._fp = _to_field_path(fp)
+        self._fpeval = _FieldPathEval(self._fp)
         self.asc = asc
     def compare(self, a,b):
-        va = self.field.__get__(a)
-        vb = self.field.__get__(b)
+        va = self._fpeval(a)
+        vb = self._fpeval(b)
         if  va == vb: return 0
         if self.asc and va < vb: return -1
         if not self.asc and va > vb: return -1
         return 1
 
     def __str__(self):
-        return "_FieldOrderBy(field={},asc={})".format(self.field, self.asc)
+        return "FieldOrderBy(field={},asc={})".format(self._fp, self.asc)
 
 #------------------------------------------------------------------------------
-# A helper function to return a _FieldOrderBy descending object
-#------------------------------------------------------------------------------
-def desc(field):
-    return field.desc()
-
-#------------------------------------------------------------------------------
-# Implementation of a Field - has a __get__ overload to return the data of the
-# field if the function is called from an instance. Returns itself if the
-# function is not called as an instance. This is what allows the field to be
-# used when specifying a query.
+# A helper function to return a FieldOrderBy descending object. Input is a
+# FieldPathBuilder.
 # ------------------------------------------------------------------------------
-class _Field(Field):
+def desc(fpb):
+    return fpb.meta.desc()
+
+#------------------------------------------------------------------------------
+# FieldAccessor - a Python descriptor (similar to a property) to access the
+# value associated with a field. If called by the class then generates a
+# FieldPathBuilder (that can be used to specify a query).  It has a __get__
+# overload to return the data of the field if the function is called from an
+# instance.
+# ------------------------------------------------------------------------------
+class FieldAccessor(object):
     def __init__(self, name, index, defn):
         self._name = name
         self._index = index
@@ -491,17 +740,18 @@ class _Field(Field):
     @property
     def parent(self): return self._parent_cls
 
-    def set_parent(self, parent_cls):
-        self._parent_cls = parent_cls
+    @parent.setter
+    def parent(self, pc):
+        self._parent_cls = pc
 
-    def asc(self):
-        return _FieldOrderBy(self, asc=True)
-
-    def desc(self):
-        return _FieldOrderBy(self, asc=False)
+    def fpb(self):
+        fpb_parent = self._parent_cls.Field.FieldPathBuilder(None,None)
+        fpb = self._defn.FieldPathBuilder(fpb_parent, self._name)
+        return fpb
 
     def __get__(self, instance, owner=None):
-        if not instance: return self
+        if not instance: return self.fpb()
+
         if not isinstance(instance, self._parent_cls):
             raise TypeError(("field {} doesn't match type "
                              "{}").format(self, type(instance).__name__))
@@ -511,23 +761,7 @@ class _Field(Field):
     def __set__(self, instance, value):
         raise AttributeError("field is a read-only data descriptor")
 
-    def __hash__(self):
-        return id(self)
-    def __eq__(self, other):
-        return _FieldComparator(operator.eq, self, other)
-    def __ne__(self, other):
-        return _FieldComparator(operator.ne, self, other)
-    def __lt__(self, other):
-        return _FieldComparator(operator.lt, self, other)
-    def __le__(self, other):
-        return _FieldComparator(operator.le, self, other)
-    def __gt__(self, other):
-        return _FieldComparator(operator.gt, self, other)
-    def __ge__(self, other):
-        return _FieldComparator(operator.ge, self, other)
 
-    def __str__(self):
-        return "{}.{}".format(self.parent.__name__,self.name)
 
 #------------------------------------------------------------------------------
 # Helper function to cleverly handle a term definition. If the input is an
@@ -576,6 +810,9 @@ class NLSDefn(object):
         self._byidx = tuple(fields)
         self._byname = { f.name : f for f in fields }
         self._anon = anon
+        self._key2canon = { f.index : f.name for f in fields }
+        self._key2canon.update({f.name : f.name for f in fields })
+        self._parent_cls = None
 
     @property
     def name(self):
@@ -592,10 +829,23 @@ class NLSDefn(object):
         """Returns whether definition is anonymous or explicitly user created"""
         return self._anon
 
+    def canonical(self, key):
+        return self._key2canon[key]
 
     def keys(self):
         """Returns the names of fields"""
         return self._byname.keys()
+
+    @property
+    def parent(self):
+        return self._parent_cls
+
+    @parent.setter
+    def parent(self, pc):
+        self._parent_cls = pc
+
+    def fpb(self):
+        return self._parent_cls.Field.FieldPathBuilder(None,None)
 
     def __len__(self):
         '''Returns the number of fields'''
@@ -743,7 +993,7 @@ def _make_nlsdefn(class_name, dct):
             if field_name.startswith('_'):
                 raise ValueError(("Error: term names cannot start with an "
                                   "underscore: {}").format(field_name))
-            term = _Field(field_name, idx, fd)
+            term = FieldAccessor(field_name, idx, fd)
             dct[field_name] = term
             terms.append(term)
             idx += 1
@@ -796,11 +1046,6 @@ class _FieldContainer(object):
 class _NonLogicalSymbolMeta(type):
 
     #--------------------------------------------------------------------------
-    # Support member fuctions
-    #--------------------------------------------------------------------------
-
-
-    #--------------------------------------------------------------------------
     # Allocate the new metaclass
     #--------------------------------------------------------------------------
     def __new__(meta, name, bases, dct):
@@ -838,29 +1083,33 @@ class _NonLogicalSymbolMeta(type):
         # but the class itself does not get created until after __new__. Hence
         # we have to set the pointer within the term back to the this class
         # here.
+        md.parent = cls
         for field in md:
-            dct[field.name].set_parent(cls)
+            dct[field.name].parent = cls
 
-#        print("CLS: {}".format(cls) + "I am still called '" + name +"'")
         return super(_NonLogicalSymbolMeta, cls).__init__(name, bases, dct)
 
     # A NonLogicalSymbol subclass is an instance of this meta class. So to
     # provide querying of a NonLogicalSymbol subclass Blah by a positional
     # argument we need to implement __getitem__ for the metaclass.
     def __getitem__(self, idx):
-        '''Return the number of field of the Predicate/Complex-term by index'''
-        return self.meta[idx]
+        fpb_parent = self.Field.FieldPathBuilder(None,None)
+        fpb = self.meta[idx].defn.FieldPathBuilder(fpb_parent, idx)
+        return fpb
 
     # Allow iterating over the fields
-    def __iter__(self):
-        '''Iterate through the fields of the Predicate/Complex-term'''
-        return iter(self.meta)
+#    def __iter__(self):
+#        '''Iterate through the fields of the Predicate/Complex-term'''
+#        print("DPR CALLED HERE 2")
+#        return iter(self.meta)
 
     # Also overload the __len__ function to return the arity of the
     # NonLogicalSymbol class when called from len().
-    def __len__(self):
-        '''Return the number of fields in the Predicate/Complex-term'''
-        return len(self.meta)
+#    def __len__(self):
+#        '''Return the number of fields in the Predicate/Complex-term'''
+#        raise TypeError("HERE")
+#        print("DPR CALLED HERE 3")
+#        return len(self.meta)
 
 #------------------------------------------------------------------------------
 # A base non-logical symbol that all predicate/term declarations must inherit
@@ -1143,18 +1392,8 @@ def _simplify_fact_comparator(comparator):
         return comparator.simplified()
     except:
         if isinstance(comparator, bool):
-            return _StaticComparator(comparator)
+            return StaticComparator(comparator)
         return comparator
-
-
-# A helper function to return the list of term comparators of a comparator
-def _get_term_comparators(comparator):
-    try:
-        return comparator.term_comparators
-    except:
-        if isinstance(comparator, _FieldComparator):
-            return [comparator]
-        return []
 
 #------------------------------------------------------------------------------
 # Placeholder allows for variable substituion of a query. Placeholder is
@@ -1228,7 +1467,7 @@ class Comparator(abc.ABC):
 # A Fact comparator functor that returns a static value
 #------------------------------------------------------------------------------
 
-class _StaticComparator(Comparator):
+class StaticComparator(Comparator):
     def __init__(self, value):
         self._value=bool(value)
     def __call__(self,fact, *args, **kwargs):
@@ -1244,18 +1483,19 @@ class _StaticComparator(Comparator):
 # A fact comparator functor that tests whether a fact satisfies a comparision
 # with the value of some predicate's term.
 #
-# Note: instances of _FieldComparator are constructed by calling the comparison
+# Note: instances of FieldQueryComparator are constructed by calling the comparison
 # operator for Field objects.
 # ------------------------------------------------------------------------------
-class _FieldComparator(Comparator):
+class FieldQueryComparator(Comparator):
     def __init__(self, compop, arg1, arg2):
         self._compop = compop
         self._arg1 = arg1
         self._arg2 = arg2
         self._static = False
 
-        if not isinstance(arg1,_Field):
-            raise TypeError("Argument 1 is not a _Field object: {}".format(arg1))
+        if not isinstance(arg1, _FieldPathEval):
+            raise TypeError(("Internal error: argument 1 is not "
+                             "a _FieldPathEval {}").format(arg1))
         # Comparison is trivial if:
         # 1) the objects are identical then it is a trivial comparison and
         # equivalent to checking if the operator satisfies a simple identity (eg., 1)
@@ -1263,22 +1503,22 @@ class _FieldComparator(Comparator):
         if arg1 is arg2:
             self._static = True
             self._value = compop(1,1)
-        elif not isinstance(arg1, _Field) and not isinstance(arg2, _Field):
+        elif isinstance(arg2, _FieldPathEval) and arg1.spec == arg2.spec:
             self._static = True
-            self._value = compop(arg1,arg2)
+            self._value = compop(1,1)
 
     def __call__(self, fact, *args, **kwargs):
         if self._static: return self._value
 
         # Get the value of an argument (resolving placeholder)
         def getargval(arg):
-            if isinstance(arg, _Field): return arg.__get__(fact)
+            if isinstance(arg, _FieldPathEval): return arg(fact)
             elif isinstance(arg, _PositionalPlaceholder): return args[arg.posn]
             elif isinstance(arg, _NamedPlaceholder): return kwargs[arg.name]
             else: return arg
 
         # Get the values of the two arguments and then calculate the operator
-        v1 = self._arg1.__get__(fact)
+        v1 = self._arg1(fact)
         v2 = getargval(self._arg2)
 
         # As much as possible check that the types should match - ie if the
@@ -1303,19 +1543,16 @@ class _FieldComparator(Comparator):
         return self._compop(v1,v2)
 
     def simplified(self):
-        if self._static: return _StaticComparator(self._value)
+        if self._static: return StaticComparator(self._value)
         return self
 
     def placeholders(self):
-        tmp = []
-        if isinstance(self._arg1, Placeholder): tmp.append(self._arg1)
-        if isinstance(self._arg2, Placeholder): tmp.append(self._arg2)
-        return tmp
+        if isinstance(self._arg2, Placeholder): return [self._arg2]
+        return []
 
     def indexable(self):
         if self._static: return None
-        if not isinstance(self._arg1, _Field) or isinstance(self._arg2, _Field):
-            return None
+        if isinstance(self._arg2, _FieldPathEval): return None
         return (self._arg1, self._compop, self._arg2)
 
     def __str__(self):
@@ -1328,11 +1565,12 @@ class _FieldComparator(Comparator):
         else: opstr = "<unknown>"
 
         return "{} {} {}".format(self._arg1, opstr, self._arg2)
+
 #------------------------------------------------------------------------------
 # A fact comparator that is a boolean operator over other Fact comparators
 # ------------------------------------------------------------------------------
 
-class _BoolComparator(Comparator):
+class BoolComparator(Comparator):
     def __init__(self, boolop, *args):
         if boolop not in [operator.not_, operator.or_, operator.and_]:
             raise TypeError("non-boolean operator")
@@ -1362,20 +1600,20 @@ class _BoolComparator(Comparator):
         # Try and simplify each argument
         for arg in self._args:
             sarg = _simplify_fact_comparator(arg)
-            if isinstance(sarg, _StaticComparator):
-                if self._boolop == operator.not_: return _StaticComparator(not sarg.value)
+            if isinstance(sarg, StaticComparator):
+                if self._boolop == operator.not_: return StaticComparator(not sarg.value)
                 if self._boolop == operator.and_ and not sarg.value: sarg
                 if self._boolop == operator.or_ and sarg.value: sarg
             else:
                 newargs.append(sarg)
         # Now see if we can simplify the combination of the arguments
         if not newargs:
-            if self._boolop == operator.and_: return _StaticComparator(True)
-            if self._boolop == operator.or_: return _StaticComparator(False)
+            if self._boolop == operator.and_: return StaticComparator(True)
+            if self._boolop == operator.or_: return StaticComparator(False)
         if self._boolop != operator.not_ and len(newargs) == 1:
             return newargs[0]
         # If we get here there then there is a real boolean comparison
-        return _BoolComparator(self._boolop, *newargs)
+        return BoolComparator(self._boolop, *newargs)
 
     def placeholders(self):
         tmp = []
@@ -1390,32 +1628,43 @@ class _BoolComparator(Comparator):
     def args(self): return self._args
 
 # ------------------------------------------------------------------------------
-# Functions to build _BoolComparator instances
+# Functions to build BoolComparator instances
 # ------------------------------------------------------------------------------
 
 def not_(*conditions):
-    return _BoolComparator(operator.not_,*conditions)
+    return BoolComparator(operator.not_,*conditions)
 def and_(*conditions):
-    return _BoolComparator(operator.and_,*conditions)
+    return BoolComparator(operator.and_,*conditions)
 def or_(*conditions):
-    return _BoolComparator(operator.or_,*conditions)
+    return BoolComparator(operator.or_,*conditions)
 
 #------------------------------------------------------------------------------
 # _FactIndex indexes facts by a given field
 #------------------------------------------------------------------------------
 
+# Support function to make sure the object is a canonical FieldPath. If it's a
+# FieldPathBuilder object then return the corresponding FieldPath.
+def _to_field_path(obj):
+    if isinstance(obj, FieldPathBuilder):
+        return obj.meta.field_path()
+    if not isinstance(obj, FieldPath):
+        raise TypeError(("{} is not a FieldPathBuilder or FieldPath "
+                         "instance").format(obj))
+    return obj.canonical()
+
+
 class _FactIndex(object):
-    def __init__(self, field):
-        if not isinstance(field, _Field):
-            raise TypeError("{} is not a _Field instance".format(field))
-        self._field = field
+    def __init__(self, fpspec):
+        self._fpspec = _to_field_path(fpspec)
+        self._predicate = self._fpspec.predicate
+        self._fpgetter = _FieldPathEval(self._fpspec)
         self._keylist = []
         self._key2values = {}
 
     def add(self, fact):
-        if not isinstance(fact, self._field.parent):
-            raise TypeError("{} is not a {}".format(fact, self._field.parent))
-        key = self._field.__get__(fact)
+        if not isinstance(fact, self._predicate):
+            raise TypeError("{} is not a {}".format(fact, self._predicate))
+        key = self._fpgetter(fact)
 
         # Index the fact by the key
         if key not in self._key2values: self._key2values[key] = set()
@@ -1430,9 +1679,9 @@ class _FactIndex(object):
         self.remove(fact, False)
 
     def remove(self, fact, raise_on_missing=True):
-        if not isinstance(fact, self._field.parent):
-            raise TypeError("{} is not a {}".format(fact, self._field.parent))
-        key = self._field.__get__(fact)
+        if not isinstance(fact, self._predicate):
+            raise TypeError("{} is not a {}".format(fact, self._predicate))
+        key = self._fpgetter(fact)
 
         # Remove the value
         if key not in self._key2values:
@@ -1616,8 +1865,8 @@ class _Select(Select):
             raise ValueError("empty 'order_by' expression")
         field_orders = []
         for exp in expressions:
-            if isinstance(exp, _FieldOrderBy): field_orders.append(exp)
-            elif isinstance(exp, _Field): field_orders.append(exp.asc())
+            if isinstance(exp, FieldOrderBy): field_orders.append(exp)
+            elif isinstance(exp, FieldPathBuilder): field_orders.append(exp.meta.asc())
             else: raise ValueError("Invalid field order expression: {}".format(exp))
 
         # Create a comparator function
@@ -1634,18 +1883,19 @@ class _Select(Select):
     def _primary_search(self, where):
         def validate_indexable(indexable):
             if not indexable: return None
-            if indexable[0] not in self._index_priority: return None
+            if indexable[0].spec not in self._index_priority: return None
             return indexable
 
-        if isinstance(where, _FieldComparator):
+        if isinstance(where, FieldQueryComparator):
             return validate_indexable(where.indexable())
         indexable = None
-        if isinstance(where, _BoolComparator) and where.boolop == operator.and_:
+        if isinstance(where, BoolComparator) and where.boolop == operator.and_:
             for arg in where.args:
                 tmp = self._primary_search(arg)
                 if tmp:
                     if not indexable: indexable = tmp
-                    elif self._index_priority[tmp[0]] < self._index_priority[indexable[0]]:
+                    elif self._index_priority[tmp[0].spec] < \
+                         self._index_priority[indexable[0].spec]:
                         indexable = tmp
         return indexable
 
@@ -1748,7 +1998,6 @@ class _Delete(Delete):
         for fact in to_delete: self._factmap.remove(fact)
         return len(to_delete)
 
-
 #------------------------------------------------------------------------------
 # A map for facts of the same type - Indexes can be built to allow for fast
 # lookups based on a term value. The order that the terms are specified in the
@@ -1763,8 +2012,9 @@ class _FactMap(object):
         if not issubclass(ptype, Predicate):
             raise TypeError("{} is not a subclass of Predicate".format(ptype))
         if index:
-            self._findexes = collections.OrderedDict( (f, _FactIndex(f)) for f in index )
-            prts = set([f.parent for f in index])
+            clean = [ _to_field_path(f) for f in index ]
+            self._findexes = collections.OrderedDict( (f, _FactIndex(f)) for f in clean )
+            prts = set([f.predicate for f in clean])
             if len(prts) != 1 or prts != set([ptype]):
                 raise TypeError("Fields in {} do not belong to {}".format(index,prts))
 
@@ -1788,7 +2038,7 @@ class _FactMap(object):
         return [ f for f, vs in self._findexes.items() ]
 
     def get_factindex(self, field):
-        return self._findexes[field]
+        return self._findexes[field.spec]
 
     def facts(self):
         return self._allfacts
@@ -1844,7 +2094,7 @@ class FactBaseBuilder(object):
         self._indset = set()
         self._suppress_auto_index = suppress_auto_index
         for pred in predicates: self._register_predicate(pred)
-        for field in indexes: self._register_index(field)
+        for f in indexes: self._register_index(f)
 
     def _register_predicate(self, cls):
         if cls in self._predset: return    # ignore if already registered
@@ -1854,19 +2104,22 @@ class FactBaseBuilder(object):
         self._predicates.append(cls)
         if self._suppress_auto_index: return
 
+        # DPR Fixup - add sub-field indexes
         # Register the fields that have the index flag set
         for field in cls.meta:
+            # Hmm. can't remember why I might get an attributeerror?
             with contextlib.suppress(AttributeError):
-                if field.defn.index: self._register_index(field)
+                if field.defn.index: self._register_index(field.__get__(None))
 
-    def _register_index(self, field):
-        if field in self._indset: return    # ignore if already registered
-        if isinstance(field, Field) and field.parent in self.predicates:
-            self._indset.add(field)
-            self._indexes.append(field)
+    def _register_index(self, fp):
+        fp = _to_field_path(fp)
+        if fp in self._indset: return    # ignore if already registered
+        if isinstance(fp, FieldPath) and fp.predicate in self.predicates:
+            self._indset.add(fp)
+            self._indexes.append(fp)
         else:
             raise TypeError("{} is not a predicate field for one of {}".format(
-                field, [ p.__name__ for p in self.predicates ]))
+                fp, [ p.__name__ for p in self.predicates ]))
 
     def register(self, cls):
         self._register_predicate(cls)
@@ -1931,10 +2184,12 @@ class FactBase(object):
 
         # Create _FactMaps for the predicate types with indexed terms
         grouped = {}
-        for field in indexes:
-            if field.parent not in grouped: grouped[field.parent] = []
-            grouped[field.parent].append(field)
-        self._factmaps = { pt : _FactMap(pt, fields) for pt, fields in grouped.items() }
+
+        clean = [ _to_field_path(f) for f in indexes ]
+        for fp in clean:
+            if fp.predicate not in grouped: grouped[fp.predicate] = []
+            grouped[fp.predicate].append(fp)
+        self._factmaps = { pt : _FactMap(pt, fps) for pt, fps in grouped.items() }
 
         if facts is None: return
         self._add(facts)
