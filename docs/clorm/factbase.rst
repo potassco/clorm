@@ -161,13 +161,13 @@ the default).
 
 .. code-block:: python
 
-       query2=facts.select(Pet).order_by(Pet.owner, Pet.petname.desc())
+       query2=facts.select(Pet).order_by(Pet.owner, Pet.petname)
 
 The above will list all pets, first sorted by the owner's name and then sorted in
-descending order by the pet's name.
+by the pet's name.
 
-There is also a ``desc`` helper function for those that find the syntax more
-intuitive. So the above could equally be written as:
+In order to specify descending order you need to use the ``desc`` function. So
+for the above example to sort by the pet's name in descending order:
 
 .. code-block:: python
 
@@ -201,8 +201,8 @@ Finally, it should be noted that the specification of a select ``where`` clause
 is in reality a mechanism for generating functors. Therefore it is possible to
 simply provide a function or lambda statement instead.
 
-For example to find a specific person the following two queries will generate
-the same results.
+For example to find a specific owner from the set of pet facts, the following
+two queries will generate the same results.
 
 
 .. code-block:: python
@@ -218,9 +218,9 @@ equivalent in behaviour. In particular, the Clorm generated functor has a
 structure that the system is able to analyse and can therefore potentially use
 indexing to improve query efficiency. In contrast, there is no mechanism to
 analyse the internal make up of a lambda or function. Consequently in these
-latter cases the query would have to examine every fact in the fact base of the
-given type and test the function against that fact. Hence it is usually
-preferable to use the Clorm generated clauses where possible.
+latter cases the query would have to examine every fact (of the appropriate
+type) in the fact base and test the function against that fact. Hence it is
+usually preferable to use the Clorm generated clauses where possible.
 
 Importing Raw Clingo Symbols and FactBaseBuilder
 ------------------------------------------------
