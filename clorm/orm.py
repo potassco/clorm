@@ -1,6 +1,6 @@
 # -----------------------------------------------------------------------------
 # ORM provides a Object Relational Mapper type model for specifying non-logical
-# symbols (ie., predicates and terms)
+# symbols (ie., predicates/complex-terms and fields)
 # ------------------------------------------------------------------------------
 
 #import logging
@@ -362,8 +362,8 @@ class _FieldPathEval(object):
     def spec(self): return self._fpspec
 
 #------------------------------------------------------------------------------
-# RawField class captures the definition of a term between python and clingo. It is
-# not meant to be instantiated.
+# RawField class captures the definition of a logical term ("which we will can a
+# field") between python and clingo.
 # ------------------------------------------------------------------------------
 def _make_pytocl(fn):
     def _pytocl(cls, v):
@@ -755,8 +755,7 @@ class FieldAccessor(object):
         if not isinstance(instance, self._parent_cls):
             raise TypeError(("field {} doesn't match type "
                              "{}").format(self, type(instance).__name__))
-        return instance._term_values[self._name]
-#            return term_defn.cltopy(self._raw.arguments[idx])
+        return instance._field_values[self._name]
 
     def __set__(self, instance, value):
         raise AttributeError("field is a read-only data descriptor")
@@ -764,7 +763,7 @@ class FieldAccessor(object):
 
 
 #------------------------------------------------------------------------------
-# Helper function to cleverly handle a term definition. If the input is an
+# Helper function to cleverly handle a field definition. If the input is an
 # instance of a RawField then simply return the object. If it is a subclass of
 # RawField then return an instantiation of the object. If it is a tuple then
 # treat it as a recursive definition and return an instantiation of a
@@ -863,20 +862,21 @@ class NLSDefn(object):
         return iter(self._byidx)
 
 # ------------------------------------------------------------------------------
-# Helper function that takes a field definition and a value and if the value is
-# a tuple and the field definition is a complex-term for a tuple then creates an
-# instance corresponding to the tuple.
+# Helper function that performs some data conversion on a value to make it match
+# a field's input. If the value is a tuple and the field definition is a
+# complex-term then it tries to create an instance corresponding to the
+# tuple. Otherwise simply returns the value.
 # ------------------------------------------------------------------------------
 
 def _preprocess_field_input(field_defn, v):
-    complex_term = field_defn.complex
-    if not complex_term: return v
+    nls_cls = field_defn.complex
+    if not nls_cls: return v
     if not isinstance(v,tuple): return v
-    ctm = complex_term.meta
-    if len(v) != len(ctm):
-        raise ValueError("incorrect values to unpack (expected {})".format(len(ctm)))
-    return complex_term(*v)
-#    if not complex_term.meta.is_tuple:
+    mt = nls_cls.meta
+    if len(v) != len(mt):
+        raise ValueError("incorrect values to unpack (expected {})".format(len(mt)))
+    return nls_cls(*v)
+#    if not mt.is_tuple:
 
 # ------------------------------------------------------------------------------
 # Helper functions for NonLogicalSymbolMeta class to create a NonLogicalSymbol
@@ -894,9 +894,9 @@ def _nls_init_by_raw(self, **kwargs):
                           "NonLogicalSymbol class {}").format(raw, class_name))
     self._raw = raw
     for idx, f in enumerate(self.meta):
-        self._term_values[f.name] = f.defn.cltopy(raw.arguments[idx])
+        self._field_values[f.name] = f.defn.cltopy(raw.arguments[idx])
 
-# Construct a NonLogicalSymbol via the term keywords
+# Construct a NonLogicalSymbol via the field keywords
 def _nls_init_by_keyword_values(self, **kwargs):
     class_name = type(self).__name__
     pred_name = self.meta.name
@@ -911,18 +911,18 @@ def _nls_init_by_keyword_values(self, **kwargs):
     for field in self.meta:
         if field.name not in kwargs:
             if not field.defn.default:
-                raise ValueError(("Unspecified term {} has no "
+                raise ValueError(("Unspecified field {} has no "
                                   "default value".format(field.name)))
-            self._term_values[field.name] = _preprocess_field_input(
+            self._field_values[field.name] = _preprocess_field_input(
                 field.defn, field.defn.default)
         else:
-            self._term_values[field.name] = _preprocess_field_input(
+            self._field_values[field.name] = _preprocess_field_input(
                 field.defn, kwargs[field.name])
 
     # Create the raw clingo.Symbol object
     self._raw = self._generate_raw()
 
-# Construct a NonLogicalSymbol via the term keywords
+# Construct a NonLogicalSymbol using keyword arguments
 def _nls_init_by_positional_values(self, *args):
     class_name = type(self).__name__
     pred_name = self.meta.name
@@ -932,7 +932,7 @@ def _nls_init_by_positional_values(self, *args):
         raise ValueError("Expected {} arguments but {} given".format(arity,argc))
 
     for idx, field in enumerate(self.meta):
-        self._term_values[field.name] = _preprocess_field_input(field.defn, args[idx])
+        self._field_values[field.name] = _preprocess_field_input(field.defn, args[idx])
 
     # Create the raw clingo.Symbol object
     self._raw = self._generate_raw()
@@ -940,7 +940,7 @@ def _nls_init_by_positional_values(self, *args):
 # Constructor for every NonLogicalSymbol sub-class
 def _nls_constructor(self, *args, **kwargs):
     self._raw = None
-    self._term_values = {}
+    self._field_values = {}
     if "raw" in kwargs:
         _nls_init_by_raw(self, **kwargs)
     elif len(args) > 0:
@@ -952,7 +952,7 @@ def _nls_base_constructor(self, *args, **kwargs):
     raise TypeError("NonLogicalSymbol must be sub-classed")
 
 #------------------------------------------------------------------------------
-# Metaclass constructor support functions to create the terms
+# Metaclass constructor support functions to create the fields
 #------------------------------------------------------------------------------
 
 # build the metadata for the NonLogicalSymbol - NOTE: this funtion returns a
@@ -1056,7 +1056,7 @@ class _NonLogicalSymbolMeta(type):
 #            dct["_meta"] = NLSDefn(name="",field_accessors=[], anon=False) # make autodoc happy
             return super(_NonLogicalSymbolMeta, meta).__new__(meta, name, bases, dct)
 
-        # Create the metadata AND populate dct - the class dict (including the terms)
+        # Create the metadata AND populate dct - the class dict (including the fields)
         md = _make_nlsdefn(name, dct)
 
         # Set the _meta attribute and constuctor
@@ -1080,9 +1080,9 @@ class _NonLogicalSymbolMeta(type):
         dct["_fieldcontainer"].set_defn(cls)
 
         md = dct["_meta"]
-        # The property attribute for each term can only be created in __new__
+        # The property attribute for each field can only be created in __new__
         # but the class itself does not get created until after __new__. Hence
-        # we have to set the pointer within the term back to the this class
+        # we have to set the pointer within the field back to the this class
         # here.
         md.parent = cls
         for field in md:
@@ -1113,9 +1113,9 @@ class _NonLogicalSymbolMeta(type):
 #        return len(self.meta)
 
 #------------------------------------------------------------------------------
-# A base non-logical symbol that all predicate/term declarations must inherit
-# from. The Metaclass creates the magic to create the terms and the underlying
-# clingo.Symbol object.
+# A base non-logical symbol that all predicate/complex-term declarations must
+# inherit from. The Metaclass creates the magic to create the fields and the
+# underlying clingo.Symbol object.
 # ------------------------------------------------------------------------------
 
 class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
@@ -1153,7 +1153,7 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
 
          - if a single named parameter ``raw`` is specified then it will try to
            unify the parameter with the specification, or
-         - named parameters corresponding to the term names.
+         - named parameters corresponding to the field names.
 
     """
 
@@ -1181,11 +1181,11 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
         """A RawField sub-class corresponding to a Field for this class."""
         return cls._fieldcontainer.defn
 
-    # Recompute the clingo.Symbol object from the stored term
+    # Recompute the clingo.Symbol object from the stored fields
     def _generate_raw(self):
         pred_args = []
         for field in self.meta:
-            pred_args.append(field.defn.pytocl(self._term_values[field.name]))
+            pred_args.append(field.defn.pytocl(self._field_values[field.name]))
         # Create the clingo.Symbol object
         return clingo.Function(self.meta.name, pred_args)
 
@@ -1193,8 +1193,8 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
     def clone(self, **kwargs):
         """Clone the object with some differences.
 
-        For any term name that is not one of the parameter keywords the clone
-        keeps the same value. But for any term listed in the parameter keywords
+        For any field name that is not one of the parameter keywords the clone
+        keeps the same value. But for any field listed in the parameter keywords
         replace with specified new value.
         """
 
@@ -1203,15 +1203,17 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
         objkeys = set(self.meta.keys())
         diffkeys = clonekeys - objkeys
         if diffkeys:
-            raise ValueError("Unknown term names: {}".format(diffkeys))
+            raise ValueError("Unknown field names: {}".format(diffkeys))
 
         # Get the arguments for the new object
         cloneargs = {}
         for field in self.meta:
-            if field.name in kwargs: cloneargs[field.name] = kwargs[field.name]
+            if field.name in kwargs:
+                cloneargs[field.name] = kwargs[field.name]
             else:
-                cloneargs[field.name] = kwargs[field.name] = self._term_values[field.name]
-
+                cloneargs[field.name] = self._field_values[field.name]
+                kwargs[field.name] = self._field_values[field.name]
+    
         # Create the new object
         return type(self)(**cloneargs)
 
@@ -1235,7 +1237,6 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
         if len(raw.arguments) != len(cls.meta): return False
 
         for idx, field in enumerate(cls.meta):
-            term = raw.arguments[idx]
             if not field.defn.unifies(raw.arguments[idx]): return False
         return True
 
@@ -1248,7 +1249,7 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
     # Overloaded index operator to access the values and len operator
     #--------------------------------------------------------------------------
     def __getitem__(self, idx):
-        """Allows for index based access to term elements."""
+        """Allows for index based access to field elements."""
         return self.meta[idx].__get__(self)
 
     def __bool__(self):
@@ -1482,7 +1483,7 @@ class StaticComparator(Comparator):
 
 #------------------------------------------------------------------------------
 # A fact comparator functor that tests whether a fact satisfies a comparision
-# with the value of some predicate's term.
+# with the value of some predicate's fields.
 #
 # Note: instances of FieldQueryComparator are constructed by calling the comparison
 # operator for Field objects.
@@ -2008,7 +2009,7 @@ class _Delete(Delete):
 
 #------------------------------------------------------------------------------
 # A map for facts of the same type - Indexes can be built to allow for fast
-# lookups based on a term value. The order that the terms are specified in the
+# lookups based on a field value. The order that the fields are specified in the
 # index matters as it determines the priority of the index.
 # ------------------------------------------------------------------------------
 
@@ -2190,7 +2191,7 @@ class FactBase(object):
         # If it is delayed initialisation then get the facts
         if facts and callable(facts): facts = facts()
 
-        # Create _FactMaps for the predicate types with indexed terms
+        # Create _FactMaps for the predicate types with indexed fields
         grouped = {}
 
         clean = [ _to_field_path(f) for f in indexes ]
