@@ -805,13 +805,13 @@ class NLSDefn(object):
 
     """
 
-    def __init__(self, name, fields, anon=False):
+    def __init__(self, name, field_accessors, anon=False):
         self._name = name
-        self._byidx = tuple(fields)
-        self._byname = { f.name : f for f in fields }
+        self._byidx = tuple(field_accessors)
+        self._byname = { f.name : f for f in field_accessors }
         self._anon = anon
-        self._key2canon = { f.index : f.name for f in fields }
-        self._key2canon.update({f.name : f.name for f in fields })
+        self._key2canon = { f.index : f.name for f in field_accessors }
+        self._key2canon.update({f.name : f.name for f in field_accessors })
         self._parent_cls = None
 
     @property
@@ -959,8 +959,9 @@ def _nls_base_constructor(self, *args, **kwargs):
 # NLSDefn instance but it also modified the dct paramater to add the fields.
 def _make_nlsdefn(class_name, dct):
 
-    # Generate a default name for the NonLogicalSymbol
-    name = class_name[:1].lower() + class_name[1:]  # convert first character to lowercase
+    # Generate a default name for the NonLogicalSymbol from the class name and
+    # converting the first character to lowercase
+    name = class_name[:1].lower() + class_name[1:]
     anon = False
     if "Meta" in dct:
         metadefn = dct["Meta"]
@@ -981,21 +982,21 @@ def _make_nlsdefn(class_name, dct):
 
     reserved = set(["meta", "raw", "clone", "Field"])
 
-    # Generate the terms - NOTE: relies on dct being an OrderedDict()
-    terms = []
+    # Generate the fields - NOTE: relies on dct being an OrderedDict()
+    fas= []
     idx = 0
     for field_name, field_defn in dct.items():
         if field_name in reserved:
-            raise ValueError(("Error: invalid term name: '{}' "
+            raise ValueError(("Error: invalid field name: '{}' "
                               "is a reserved keyword").format(field_name))
         try:
             fd = _get_field_defn(field_defn)
             if field_name.startswith('_'):
-                raise ValueError(("Error: term names cannot start with an "
+                raise ValueError(("Error: field names cannot start with an "
                                   "underscore: {}").format(field_name))
-            term = FieldAccessor(field_name, idx, fd)
-            dct[field_name] = term
-            terms.append(term)
+            fa = FieldAccessor(field_name, idx, fd)
+            dct[field_name] = fa
+            fas.append(fa)
             idx += 1
         except TypeError as e:
             # If we get here assume that the dictionary item is for something
@@ -1003,7 +1004,7 @@ def _make_nlsdefn(class_name, dct):
             pass
 
     # Now create the NLSDefn object
-    return NLSDefn(name=name,fields=terms, anon=anon)
+    return NLSDefn(name=name,field_accessors=fas, anon=anon)
 
 #------------------------------------------------------------------------------
 # A container to dynamically generate a RawField subclass corresponding to a
@@ -1052,7 +1053,7 @@ class _NonLogicalSymbolMeta(type):
         if name == "NonLogicalSymbol":
             dct["_nls"] = None
             dct["__init__"] = _nls_base_constructor
-            dct["_meta"] = NLSDefn(name="",fields=[], anon=False) # make autodoc happy
+#            dct["_meta"] = NLSDefn(name="",field_accessors=[], anon=False) # make autodoc happy
             return super(_NonLogicalSymbolMeta, meta).__new__(meta, name, bases, dct)
 
         # Create the metadata AND populate dct - the class dict (including the terms)
