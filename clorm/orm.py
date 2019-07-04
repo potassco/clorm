@@ -30,6 +30,8 @@ __all__ = [
     'unify',
     'FactBase',
     'FactBaseBuilder',
+    'Select',
+    'Delete',
     'ph_',
     'ph1_',
     'ph2_',
@@ -742,6 +744,9 @@ class FieldAccessor(object):
 
     @parent.setter
     def parent(self, pc):
+        if self._parent_cls:
+            raise RuntimeError(("Trying to reset the parent for a "
+                                "FieldAccessor doesn't make sense"))
         self._parent_cls = pc
 
     def fpb(self):
@@ -841,6 +846,9 @@ class NLSDefn(object):
 
     @parent.setter
     def parent(self, pc):
+        if self._parent_cls:
+            raise RuntimeError(("Trying to reset the parent for a "
+                                "NLSDefn doesn't make sense"))
         self._parent_cls = pc
 
     def fpb(self):
@@ -868,15 +876,19 @@ class NLSDefn(object):
 # tuple. Otherwise simply returns the value.
 # ------------------------------------------------------------------------------
 
-def _preprocess_field_input(field_defn, v):
+def _preprocess_field_value(field_defn, v):
     nls_cls = field_defn.complex
     if not nls_cls: return v
-    if not isinstance(v,tuple): return v
     mt = nls_cls.meta
-    if len(v) != len(mt):
-        raise ValueError("incorrect values to unpack (expected {})".format(len(mt)))
-    return nls_cls(*v)
-#    if not mt.is_tuple:
+    if isinstance(v, nls_cls): return v
+    if (mt.is_tuple and isinstance(v,NonLogicalSymbol) and v.meta.is_tuple) or \
+       isinstance(v, tuple):
+        if len(v) != len(mt):
+            raise ValueError(("mis-matched arity between field {} (arity {}) and "
+                             " value (arity {})").format(field_defn, len(mt), len(v)))
+        return nls_cls(*v)
+    else:
+        return v
 
 # ------------------------------------------------------------------------------
 # Helper functions for NonLogicalSymbolMeta class to create a NonLogicalSymbol
@@ -913,10 +925,10 @@ def _nls_init_by_keyword_values(self, **kwargs):
             if not field.defn.default:
                 raise ValueError(("Unspecified field {} has no "
                                   "default value".format(field.name)))
-            self._field_values[field.name] = _preprocess_field_input(
+            self._field_values[field.name] = _preprocess_field_value(
                 field.defn, field.defn.default)
         else:
-            self._field_values[field.name] = _preprocess_field_input(
+            self._field_values[field.name] = _preprocess_field_value(
                 field.defn, kwargs[field.name])
 
     # Create the raw clingo.Symbol object
@@ -932,7 +944,7 @@ def _nls_init_by_positional_values(self, *args):
         raise ValueError("Expected {} arguments but {} given".format(arity,argc))
 
     for idx, field in enumerate(self.meta):
-        self._field_values[field.name] = _preprocess_field_input(field.defn, args[idx])
+        self._field_values[field.name] = _preprocess_field_value(field.defn, args[idx])
 
     # Create the raw clingo.Symbol object
     self._raw = self._generate_raw()
