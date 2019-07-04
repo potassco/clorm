@@ -1319,17 +1319,29 @@ class FieldPathTestCase(unittest.TestCase):
 
         fps3 = Cmplx2.x.b.meta.field_path()
         fps3_alt = Cmplx2[0][1].meta.field_path()
-        self.assertTrue(fps3 == fps3_alt)
+
+        # fp3 and fp3_alt are different paths but are semantically equivalent
+        self.assertFalse(fps3 == fps3_alt)
+        self.assertTrue(fps3.equivalent(fps3_alt))
         self.assertEqual(str(fps3), "Cmplx2.x.b")
         self.assertEqual(str(fps3_alt), "Cmplx2[0][1]")
         self.assertFalse(str(fps3) == str(fps3_alt))
+
+        # fp3_alt and fps3_alt_canon are different paths but semantically equivalent
         fps3_alt_canon = fps3_alt.canonical()
-        self.assertTrue(fps3_alt == fps3_alt_canon)
+        self.assertFalse(fps3_alt == fps3_alt_canon)
+        self.assertTrue(fps3_alt.equivalent(fps3_alt_canon))
         self.assertTrue(str(fps3) == str(fps3_alt_canon))
 
-        self.assertTrue(Cmplx1.a.meta.field_path() == Cmplx1[0].meta.field_path())
-        self.assertTrue(Cmplx2.x.b.meta.field_path() == Cmplx2[0][1].meta.field_path())
+        # Different paths but semantically equivalent
+        self.assertFalse(Cmplx1.a.meta.field_path() == Cmplx1[0].meta.field_path())
+        self.assertFalse(Cmplx2.x.b.meta.field_path() == Cmplx2[0][1].meta.field_path())
+        self.assertTrue(Cmplx1.a.meta.field_path().equivalent(Cmplx1[0].meta.field_path()))
+        self.assertTrue(Cmplx2.x.b.meta.field_path().equivalent(Cmplx2[0][1].meta.field_path()))
+
+        # Just different
         self.assertFalse(Cmplx2.x.b.meta.field_path() == Cmplx2[0][0].meta.field_path())
+        self.assertFalse(Cmplx2.x.b.meta.field_path().equivalent(Cmplx2[0][0].meta.field_path()))
 
         # Now test the _FieldPathEval
         tmp1 = Cmplx1(1,"blah1","blah2")

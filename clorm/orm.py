@@ -151,13 +151,24 @@ class FieldPath(object):
         return FieldPath(self._canon)
 
     #--------------------------------------------------------------------------
+    # Because fields can be referenced by name or index we can have two field
+    # paths that are not the same but still refer to the same field (i.e, they
+    # are semantically equivalent)
+    # --------------------------------------------------------------------------
+    def equivalent(self, other):
+        if not isinstance(other, self.__class__):
+            raise TypeError(("Cannot test equivalence of a FieldPath with non-"
+                             "FieldPath {}").format(other))
+        return self._canon == other._canon
+
+    #--------------------------------------------------------------------------
     # Equality overload
     #--------------------------------------------------------------------------
     def __eq__(self, other):
         # Since we can refer to elements by either index or attribute use the
         # canonoical version to guarantee semantic equivalence
         if not isinstance(other, self.__class__): return NotImplemented
-        result = self._canon == other._canon
+        result = self._spec == other._spec
         return result
 
     def __ne__(self, other):
@@ -1517,7 +1528,7 @@ class FieldQueryComparator(Comparator):
         if arg1 is arg2:
             self._static = True
             self._value = compop(1,1)
-        elif isinstance(arg2, _FieldPathEval) and arg1.spec == arg2.spec:
+        elif isinstance(arg2, _FieldPathEval) and arg1.spec.equivalent(arg2.spec):
             self._static = True
             self._value = compop(1,1)
 
