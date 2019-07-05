@@ -286,8 +286,8 @@ class FieldPathBuilder(object, metaclass=_FieldPathBuilderMeta):
 
     #--------------------------------------------------------------------------
     # A sub-class to provide some useful functions in a sub-namespace. Need this
-    # because each builder will have attributes that mirror the field names of
-    # the associated Predicate/Complex-term.
+    # to avoid creating name conflicts, since each builder will have attributes
+    # that mirror the field names of the associated Predicate/Complex-term.
     # --------------------------------------------------------------------------
 
     class Meta(object):
@@ -319,7 +319,7 @@ class FieldPathBuilder(object, metaclass=_FieldPathBuilderMeta):
         return FieldQueryComparator(op, FieldPathEval(self.meta.field_path()), other)
 
     #--------------------------------------------------------------------------
-    # Allow lookup of fields by name or index
+    # Allow extending a field path (by name or index) using []
     # --------------------------------------------------------------------------
     def __getitem__(self, key):
 
