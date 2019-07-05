@@ -15,7 +15,7 @@ from clorm.orm import \
     _get_field_defn, refine_field, \
     not_, and_, or_, StaticComparator, \
     ph_, ph1_, ph2_, \
-    _FactIndex, _FactMap, _FieldPathEval,\
+    _FactIndex, _FactMap, FieldPathEval,\
     unify, desc, FactBase, FactBaseBuilder, \
     TypeCastSignature, make_function_asp_callable, make_method_asp_callable
 
@@ -1290,11 +1290,12 @@ class FieldPathTestCase(unittest.TestCase):
             fp7 = Cmplx2.x['f']
 
         # Test using the FPB generated from the Predicate.meta
-        fpb1 = Cmplx2.meta.fpb()
+        fpb1 = Cmplx2.meta.path
         self.assertEqual(str(fpb1), "Cmplx2")
         self.assertEqual(str(fpb1.x), "Cmplx2.x")
         self.assertEqual(str(fpb1['x']), "Cmplx2.x")
         self.assertEqual(str(fpb1[1]), "Cmplx2[1]")
+
 
     def test_fpspec_fpget(self):
         class Cmplx1(ComplexTerm):
@@ -1343,28 +1344,28 @@ class FieldPathTestCase(unittest.TestCase):
         self.assertFalse(Cmplx2.x.b.meta.field_path() == Cmplx2[0][0].meta.field_path())
         self.assertFalse(Cmplx2.x.b.meta.field_path().equivalent(Cmplx2[0][0].meta.field_path()))
 
-        # Now test the _FieldPathEval
+        # Now test the FieldPathEval
         tmp1 = Cmplx1(1,"blah1","blah2")
         tmp2 = Cmplx2(tmp1, ("blah3", "blah4"))
 
         fp0 = Cmplx1.Field.FieldPathBuilder(None,None)
-        fpg0 = _FieldPathEval(fp0.meta.field_path())
+        fpg0 = FieldPathEval(fp0.meta.field_path())
         self.assertEqual(fpg0(tmp1), tmp1)
 
         fp1 = Cmplx1.b
-        fpg1 = _FieldPathEval(fp1.meta.field_path())
+        fpg1 = FieldPathEval(fp1.meta.field_path())
         self.assertEqual(fpg1(tmp1), "blah1")
 
         fp2 = Cmplx1[2]
-        fpg2 = _FieldPathEval(fp2.meta.field_path())
+        fpg2 = FieldPathEval(fp2.meta.field_path())
         self.assertEqual(fpg2(tmp1), "blah2")
 
         fp3 = Cmplx2.x
-        fpg3 = _FieldPathEval(fp3.meta.field_path())
+        fpg3 = FieldPathEval(fp3.meta.field_path())
         self.assertEqual(fpg3(tmp2), tmp1)
 
         fp4 = Cmplx2.x.a
-        fpg4 = _FieldPathEval(fp4.meta.field_path())
+        fpg4 = FieldPathEval(fp4.meta.field_path())
         self.assertEqual(fpg4(tmp2), 1)
 
     def test_fp_comparator(self):
@@ -1897,6 +1898,51 @@ class SelectTestCase(unittest.TestCase):
             tmp = list(s1_ph2.get(num2=5))         # fails because of no values
         with self.assertRaises(TypeError) as ctx:
             tmp = list(s1_ph2.get(str1="42"))
+
+
+    #--------------------------------------------------------------------------
+    # Test select by the predicate object itself (and not a field). This is a
+    # boundary case.
+    # --------------------------------------------------------------------------
+
+    def test_select_by_predicate(self):
+
+        class Fact(Predicate):
+            num1=IntegerField()
+            str1=StringField()
+
+        f1 = Fact(1,"bbb")
+        f2 = Fact(2,"aaa")
+        f2b = Fact(2,"bbb")
+        f3 = Fact(3,"aaa")
+        f4 = Fact(4,"aaa")
+        facts=[f1,f2,f2b,f3,f4]
+
+        self.assertTrue(f1 <= f2)
+        self.assertTrue(f1 <= f2b)
+        self.assertTrue(f2 <= f2b)
+        self.assertTrue(f2b <= f2b)
+        self.assertFalse(f3 <= f2b)
+
+        fpb = Fact.meta.path
+        fpe = FieldPathEval(fpb.meta.field_path())
+        self.assertEqual(f1, fpe(f1))
+        self.assertFalse(f2 == fpe(f1))
+
+        fb1 = FactBase(facts=facts, indexes=[Fact.meta.path])
+        fb2 = FactBase(facts=facts)
+        self.assertEqual(fb1, fb2)
+        self.assertEqual(len(fb1), len(facts))
+
+        s1 = fb1.select(Fact).where(fpb == ph1_)
+        self.assertEqual(s1.get(f1), [f1])
+        s1 = fb2.select(Fact).where(fpb == ph1_)
+        self.assertEqual(s1.get(f1), [f1])
+
+        s2 = fb1.select(Fact).where(fpb <= ph1_).order_by(fpb)
+        self.assertEqual(s2.get(f2b), [f1,f2,f2b])
+        s2 = fb2.select(Fact).where(fpb <= ph1_).order_by(fpb)
+        self.assertEqual(s2.get(f2b), [f1,f2,f2b])
 
     #--------------------------------------------------------------------------
     # Test basic insert and selection of facts in a factbase
