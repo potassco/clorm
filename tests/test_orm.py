@@ -16,7 +16,7 @@ from clorm.orm import \
     not_, and_, or_, StaticComparator, \
     ph_, ph1_, ph2_, \
     _FactIndex, _FactMap, FieldPathEval,\
-    unify, desc, FactBase, FactBaseBuilder, \
+    unify, desc, FactBase, FactBaseBuilder, FieldPathLink, \
     TypeCastSignature, make_function_asp_callable, make_method_asp_callable
 
 #------------------------------------------------------------------------------
@@ -1242,6 +1242,9 @@ class FieldPathTestCase(unittest.TestCase):
         pass
 
     def test_create_fpb(self):
+
+        FPL=FieldPathLink
+
         self.assertTrue(StringField.FieldPathBuilder)
 
         stffp = StringField.FieldPathBuilder(None)
@@ -1257,28 +1260,28 @@ class FieldPathTestCase(unittest.TestCase):
             y = (StringField(), ConstantField())
 
         fp0 = Cmplx1.Field.FieldPathBuilder(None,None)
-        self.assertEqual(fp0._comp_list(), [(Cmplx1.Field, None)])
+        self.assertEqual(fp0._chain, (FPL(Cmplx1.Field, None),))
 
         fp1 = Cmplx1.b
-        self.assertEqual(fp1._comp_list(), [(Cmplx1.Field,'b'), (StringField,None)])
+        self.assertEqual(fp1._chain, (FPL(Cmplx1.Field,'b'), FPL(StringField,None)))
 
         fp2 = Cmplx1[2]
-        self.assertEqual(fp2._comp_list(), [(Cmplx1.Field,2), (ConstantField,None)])
+        self.assertEqual(fp2._chain, (FPL(Cmplx1.Field,2), FPL(ConstantField,None)))
 
         fp3 = Cmplx2.x
-        self.assertEqual(fp3._comp_list(), [(Cmplx2.Field,'x'), (Cmplx1.Field,None)])
+        self.assertEqual(fp3._chain, (FPL(Cmplx2.Field,'x'), FPL(Cmplx1.Field,None)))
 
         fp4 = Cmplx2.x.a
-        self.assertEqual(fp4._comp_list(),
-                         [(Cmplx2.Field,'x'), (Cmplx1.Field,'a'),(IntegerField,None)])
+        self.assertEqual(fp4._chain,
+                         (FPL(Cmplx2.Field,'x'), FPL(Cmplx1.Field,'a'), FPL(IntegerField,None)))
 
         fp5 = Cmplx2.x[1]
-        self.assertEqual(fp5._comp_list(),
-                         [(Cmplx2.Field,'x'), (Cmplx1.Field,1),(StringField,None)])
+        self.assertEqual(fp5._chain,
+                         (FPL(Cmplx2.Field,'x'), FPL(Cmplx1.Field,1),FPL(StringField,None)))
 
         fp6 = Cmplx2.y[1]
-        self.assertEqual(fp6._comp_list()[0], (Cmplx2.Field,'y'))
-        self.assertEqual(fp6._comp_list()[-1], (ConstantField,None))
+        self.assertEqual(fp6._chain[0], FPL(Cmplx2.Field,'y'))
+        self.assertEqual(fp6._chain[-1], FPL(ConstantField,None))
 
         with self.assertRaises(AttributeError) as ctx:
             fp7 = Cmplx2.b
@@ -2099,19 +2102,19 @@ class SelectTestCase(unittest.TestCase):
         q = fb.select(Afact).order_by(Afact.num1)
         self.assertEqual([f1,f2,f3,f4,f5], q.get())
 
-        q = fb.select(Afact).order_by(Afact.num1.meta.asc())
+        q = fb.select(Afact).order_by(Afact.num1.meta.field_path().asc())
         self.assertEqual([f1,f2,f3,f4,f5], q.get())
 
-        q = fb.select(Afact).order_by(Afact.num1.meta.desc())
+        q = fb.select(Afact).order_by(Afact.num1.meta.field_path().desc())
         self.assertEqual([f5,f4,f3,f2,f1], q.get())
 
         q = fb.select(Afact).order_by(Afact.str2)
         self.assertEqual([f5,f4,f3,f2,f1], q.get())
 
-        q = fb.select(Afact).order_by(Afact.str2.meta.desc())
+        q = fb.select(Afact).order_by(Afact.str2.meta.field_path().desc())
         self.assertEqual([f1,f2,f3,f4,f5], q.get())
 
-        q = fb.select(Afact).order_by(Afact.str1.meta.desc(), Afact.num1)
+        q = fb.select(Afact).order_by(Afact.str1.meta.field_path().desc(), Afact.num1)
         self.assertEqual([f3,f2,f4,f1,f5], q.get())
 
         q = fb.select(Afact).order_by(desc(Afact.str1), Afact.num1)
