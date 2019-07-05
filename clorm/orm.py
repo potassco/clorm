@@ -256,7 +256,7 @@ class _FieldPathBuilderMeta(type):
 
         dct["__init__"] = _fpb_subclass_constructor
 
-        # Expecting "_field_defn" to be defined
+        # Expecting "_field_defn" to be in the dictionary
         field_defn = dct["_field_defn"]
         nls = field_defn.complex
         if nls:
