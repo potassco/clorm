@@ -175,7 +175,7 @@ class FactBaseCoder(object):
                                       "of {}").format(fs, self._name2pred.keys()))
                 fpb = self._name2pred[fs[0]].meta.path
                 for key in fs[1:]: fpb = fpb[key]
-                indexes.append(fpb.meta.field_path())
+                indexes.append(fpb.meta.path)
             facts = [ self.decoder(f) for f in obj["facts"] ]
             return FactBase(facts=facts, indexes=indexes)
         if not "clorm.Predicate" in obj: return obj

@@ -104,23 +104,17 @@ class FieldPath(object):
     # The initialiser validates the chain and computes a canonical version
     #--------------------------------------------------------------------------
     def __init__(self, arg):
-        if isinstance(arg, FieldPathBuilder):
-            self._chain = arg._chain
-            self._canon=[]
-            for defn,key in arg._chain[:-1]:
-                ckey = defn.complex.meta.canonical(key)
-                self._canon.append(FieldPathLink(defn,ckey))
-            self._canon.append(self._chain[-1])
-            self._canon = tuple(self._canon)
-        elif isinstance(arg,FieldPath):
+        if isinstance(arg,FieldPath):
             self._chain = arg._chain
             self._canon = arg._canon
-        elif issubclass(arg, NonLogicalSymbol):
-            self._chain = tuple([FieldPathLink(arg.Field,None)])
+        elif issubclass(arg, RawField):
+            if not arg.complex:
+                raise ValueError("Only a complex field is valid")
+            self._chain = tuple([FieldPathLink(arg,None)])
             self._canon = self._chain
         else:
-            raise ValueError(("Parameter {} must be a FieldPath or "
-                              "FieldPathBuilder").format(arg))
+            raise ValueError(("Parameter {} must be a FieldPath or a Field "
+                              "corresponding to a NonLogicalSymbol").format(arg))
 
 
     #--------------------------------------------------------------------------
@@ -152,7 +146,7 @@ class FieldPath(object):
         if not nls_cls:
             raise TypeError("The path {} cannot be extended any further".format(self))
         canonkey = nls_cls.meta.canonical(key)
-        next_defn = nls_cls.meta[key].defn
+        next_defn = type(nls_cls.meta[key].defn)
         curr_defn = self._chain[-1].defn
         next_fp = FieldPath(self)
         next_fp._chain = list(self._chain)
@@ -161,6 +155,8 @@ class FieldPath(object):
         next_fp._canon[-1] = FieldPathLink(curr_defn, canonkey)
         next_fp._chain.append(FieldPathLink(next_defn,None))
         next_fp._canon.append(FieldPathLink(next_defn,None))
+        next_fp._chain = tuple(next_fp._chain)
+        next_fp._canon = tuple(next_fp._canon)
         return next_fp
 
     #--------------------------------------------------------------------------
@@ -247,14 +243,10 @@ def _fpb_get_canon_key(field_defn, key):
 def _fpb_subclass_constructor(self, prev=None, key=None):
     if (not prev and key) or (key is None and prev):
         raise ValueError(("Internal error: prev ({}) and key ({}) must both be "
-                          "valid or None").format(prev,key))
+                          "valid or both None").format(prev,key))
     self._meta = FieldPathBuilder.Meta(self)
-    if not prev: self._chain = []
-    else:
-        self._chain = list(prev._chain)
-        self._chain[-1] = FieldPathLink(self._chain[-1].defn, key)
-    self._chain.append(FieldPathLink(self._field_defn, None))
-    self._chain = tuple(self._chain)
+    if not prev: self._fp = FieldPath(self._field_defn)
+    else: self._fp = prev._fp.extend(key)
 
 def _fpb_make_path_extender(key):
     return lambda self : self[key]
@@ -324,8 +316,9 @@ class FieldPathBuilder(object, metaclass=_FieldPathBuilderMeta):
         # meta because this is a reserved keyword so guaranteed not to be an
         # attribute.
         # --------------------------------------------------------------------------
-        def field_path(self):
-            return FieldPath(self._parent)
+        @property
+        def path(self):
+            return self._parent._fp
 
     #--------------------------------------------------------------------------
     # Return the underlying meta object with useful functions
@@ -340,23 +333,16 @@ class FieldPathBuilder(object, metaclass=_FieldPathBuilderMeta):
     # --------------------------------------------------------------------------
     def _make_fq_comparator(self, op, other):
         if isinstance(other, FieldPathBuilder):
-            other = FieldPathEval(other.meta.field_path())
-        return FieldQueryComparator(op, FieldPathEval(self.meta.field_path()), other)
+            other = FieldPathEval(other.meta.path)
+        return FieldQueryComparator(op, FieldPathEval(self.meta.path), other)
 
     #--------------------------------------------------------------------------
     # Allow extending a field path (by name or index) using []
     # --------------------------------------------------------------------------
     def __getitem__(self, key):
-
-        '''Find a field by position index or by name'''
-        try:
-            key = int(key)
-            field = self._byidx[key]
-        except ValueError as e:
-            field = self._byname[key]
-        # Return a new FieldPathBuilder instance with self as the previous link in
-        # the chain.
-        return field.defn.FieldPathBuilder(self, key)
+        '''Extend the field path by a key to the next field'''
+        nfp=self._fp.extend(key)
+        return nfp[-1].defn.FieldPathBuilder(self,key)
 
     #--------------------------------------------------------------------------
     # Overload the boolean operators to return a functor
@@ -375,8 +361,8 @@ class FieldPathBuilder(object, metaclass=_FieldPathBuilderMeta):
         return self._make_fq_comparator(operator.ge, other)
 
     def __str__(self):
-        if len(self._chain) < 1: return "FieldPathBuilder(<partial>)"
-        return str(self.meta.field_path())
+        if len(self._fp) < 1: return "FieldPathBuilder(<partial>)"
+        return str(self.meta.path)
 
 #------------------------------------------------------------------------------
 # FieldPathEval evaluates a FieldPath with respect to a fact (a predicate
@@ -756,7 +742,7 @@ class FieldOrderBy(object):
 # FieldPathBuilder.
 # ------------------------------------------------------------------------------
 def desc(fpb):
-    return fpb.meta.field_path().desc()
+    return fpb.meta.path.desc()
 
 #------------------------------------------------------------------------------
 # FieldAccessor - a Python descriptor (similar to a property) to access the
@@ -1705,7 +1691,7 @@ def or_(*conditions):
 # FieldPathBuilder object then return the corresponding FieldPath.
 def _to_field_path(obj):
     if isinstance(obj, FieldPathBuilder):
-        return obj.meta.field_path()
+        return obj.meta.path
     if not isinstance(obj, FieldPath):
         raise TypeError(("{} is not a FieldPathBuilder or FieldPath "
                          "instance").format(obj))
@@ -1720,6 +1706,7 @@ class _FactIndex(object):
         self._keylist = []
         self._key2values = {}
 
+    @property
     def field_path(self):
         return self._fpspec
 
@@ -1929,7 +1916,7 @@ class _Select(Select):
         for exp in expressions:
             if isinstance(exp, FieldOrderBy): field_orders.append(exp)
             elif isinstance(exp, FieldPathBuilder):
-                field_orders.append(exp.meta.field_path().asc())
+                field_orders.append(exp.meta.path.asc())
             else: raise ValueError("Invalid field order expression: {}".format(exp))
 
         # Create a comparator function
@@ -2013,7 +2000,7 @@ class _Select(Select):
         else:
             findex = self._factmap.get_factindex(self._indexable[0])
             value = get_value(self._indexable[2])
-            fp = findex.field_path()
+            fp = findex.field_path
             cmplx = fp.defn.complex
             if cmplx and isinstance(value, tuple): value = cmplx(*value)
             for f in findex.find(self._indexable[1], value):
