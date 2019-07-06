@@ -115,6 +115,9 @@ class FieldPath(object):
         elif isinstance(arg,FieldPath):
             self._chain = arg._chain
             self._canon = arg._canon
+        elif issubclass(arg, NonLogicalSymbol):
+            self._chain = tuple([FieldPathLink(arg.Field,None)])
+            self._canon = self._chain
         else:
             raise ValueError(("Parameter {} must be a FieldPath or "
                               "FieldPathBuilder").format(arg))
@@ -133,10 +136,32 @@ class FieldPath(object):
     def defn(self):
         return self._canon[-1].defn
 
+    #--------------------------------------------------------------------------
+    # Return a canonical version of the FieldPath
+    #--------------------------------------------------------------------------
     def canonical(self):
         cfp = FieldPath(self)
         cfp._chain = cfp._canon
         return cfp
+
+    #--------------------------------------------------------------------------
+    # Return a FieldPath that extends this one by key
+    #--------------------------------------------------------------------------
+    def extend(self,key):
+        nls_cls = self._chain[-1].defn.complex
+        if not nls_cls:
+            raise TypeError("The path {} cannot be extended any further".format(self))
+        canonkey = nls_cls.meta.canonical(key)
+        next_defn = nls_cls.meta[key].defn
+        curr_defn = self._chain[-1].defn
+        next_fp = FieldPath(self)
+        next_fp._chain = list(self._chain)
+        next_fp._canon = list(self._canon)
+        next_fp._chain[-1] = FieldPathLink(curr_defn, key)
+        next_fp._canon[-1] = FieldPathLink(curr_defn, canonkey)
+        next_fp._chain.append(FieldPathLink(next_defn,None))
+        next_fp._canon.append(FieldPathLink(next_defn,None))
+        return next_fp
 
     #--------------------------------------------------------------------------
     # Return the a FieldOrderBy structure for ascending and descending

@@ -15,7 +15,7 @@ from clorm.orm import \
     _get_field_defn, refine_field, \
     not_, and_, or_, StaticComparator, \
     ph_, ph1_, ph2_, \
-    _FactIndex, _FactMap, FieldPathEval,\
+    _FactIndex, _FactMap, FieldPath, FieldPathEval,\
     unify, desc, FactBase, FactBaseBuilder, FieldPathLink, \
     TypeCastSignature, make_function_asp_callable, make_method_asp_callable
 
@@ -1241,6 +1241,31 @@ class FieldPathTestCase(unittest.TestCase):
     def setUp(self):
         pass
 
+    def test_fp(self):
+        FPL=FieldPathLink
+
+        class Cmplx1(ComplexTerm):
+            a = IntegerField()
+            b = StringField()
+            c = ConstantField()
+
+        class Cmplx2(ComplexTerm):
+            x = Cmplx1.Field()
+            y = (StringField(), ConstantField())
+
+        fp1=FieldPath(Cmplx2)
+        fp2=fp1.extend('x')
+
+        # some failed extensions
+        with self.assertRaises(KeyError) as ctx:
+            fpf=fp1.extend('z')
+        with self.assertRaises(KeyError) as ctx:
+            fpf=fp1.extend(2)
+        with self.assertRaises(KeyError) as ctx:
+            fpf=fp2.extend('d')
+        
+
+    
     def test_create_fpb(self):
 
         FPL=FieldPathLink
