@@ -1117,6 +1117,56 @@ class ORMTestCase(unittest.TestCase):
         ac4 = and_(*es4)
         self.assertFalse(is_static(ac4.simplified()))
 
+    #--------------------------------------------------------------------------
+    # Test that simplification is working for the boolean comparator
+    #--------------------------------------------------------------------------
+    def test_bool_comparator_simplified(self):
+
+        def is_static(fc):
+            return isinstance(fc, StaticComparator)
+
+        class Afact(Predicate):
+            anum1=IntegerField()
+            anum2=IntegerField()
+            astr=StringField()
+        class Bfact(Predicate):
+            anum=IntegerField()
+            astr=StringField()
+
+        af1 = Afact(1,1,"bbb")
+        af2 = Afact(2,3,"aaa")
+        af3 = Afact(1,3,"aaa")
+        bf1 = Bfact(1,"aaa")
+
+        e1 = Afact.anum1 == 2
+        e2 = Afact.anum1 == Afact.anum2
+        e3 = Afact.anum1 == Afact.anum1
+        e4 = Afact.anum2 != Afact.anum2
+        e5 = Bfact.astr == "aaa"
+
+        and1 = and_(e1, e3)
+        and2 = and_(e2, e4)
+        or1 = or_(e1, e3)
+        sand1 = and1.simplified()
+        sand2 = and2.simplified()
+        sor1 = or1.simplified()
+
+        self.assertEqual(str(sand1), "Afact.anum1 == 2")
+        self.assertEqual(str(sand2), "False")
+        self.assertEqual(str(sor1), "True")
+
+        or2 = or_(or1,and1)
+        sor2 = or2.simplified()
+        self.assertEqual(str(sor2),"True")
+
+        and3 = and_(and1,and2)
+        sand3 = and3.simplified()
+        self.assertEqual(str(sand3),"False")
+
+        or4 = or_(and3,e1)
+        sor4 = or4.simplified()
+        self.assertEqual(str(sor4), "Afact.anum1 == 2")
+
 
     #--------------------------------------------------------------------------
     # Test the factbasehelper with double decorators

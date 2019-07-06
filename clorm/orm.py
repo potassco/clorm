@@ -391,7 +391,10 @@ class FieldPathEval(object):
                           "{}").format(self._fpspec))
 
     @property
-    def spec(self): return self._fpspec
+    def path(self): return self._fpspec
+
+    def __str__(self):
+        return str(self._fpspec)
 
 #------------------------------------------------------------------------------
 # RawField class captures the definition of a logical term ("which we will can a
@@ -1418,8 +1421,9 @@ def unify(unifiers, symbols):
 #------------------------------------------------------------------------------
 # Fact comparator: is a function that determines if a fact (i.e., predicate
 # instance) satisfies some property or condition. Any function that takes a
-# single fact as a argument and returns a bool is a fact comparator. However, we
-# define a few special types.
+# single fact as an argument and returns a bool is a fact comparator. However,
+# we define a few special types by inheriting from Comparator:
+# FieldQueryComparator, BoolComparator, StaticComparator.
 # ------------------------------------------------------------------------------
 
 # A helper function to return a simplified version of a fact comparator
@@ -1515,6 +1519,9 @@ class StaticComparator(Comparator):
     @property
     def value(self):
         return self._value
+    def __str__(self):
+        if self._value: return "True"
+        return "False"
 
 #------------------------------------------------------------------------------
 # A fact comparator functor that tests whether a fact satisfies a comparision
@@ -1540,7 +1547,7 @@ class FieldQueryComparator(Comparator):
         if arg1 is arg2:
             self._static = True
             self._value = compop(1,1)
-        elif isinstance(arg2, FieldPathEval) and arg1.spec.equivalent(arg2.spec):
+        elif isinstance(arg2, FieldPathEval) and arg1.path.equivalent(arg2.path):
             self._static = True
             self._value = compop(1,1)
 
@@ -1639,8 +1646,8 @@ class BoolComparator(Comparator):
             sarg = _simplify_fact_comparator(arg)
             if isinstance(sarg, StaticComparator):
                 if self._boolop == operator.not_: return StaticComparator(not sarg.value)
-                if self._boolop == operator.and_ and not sarg.value: sarg
-                if self._boolop == operator.or_ and sarg.value: sarg
+                if self._boolop == operator.and_ and not sarg.value: return sarg
+                if self._boolop == operator.or_ and sarg.value: return sarg
             else:
                 newargs.append(sarg)
         # Now see if we can simplify the combination of the arguments
@@ -1663,6 +1670,15 @@ class BoolComparator(Comparator):
 
     @property
     def args(self): return self._args
+
+    def __str__(self):
+        if self._boolop == operator.not_: opstr = "not_"
+        elif self._boolop == operator.and_: opstr = "and_"
+        elif self._boolop == operator.or_: opstr = "or_"
+        else: opstr = "<unknown>"
+
+        argsstr=", ".join([str(a) for a in self._args])
+        return "{}({})".format(opstr,argsstr)
 
 # ------------------------------------------------------------------------------
 # Functions to build BoolComparator instances
@@ -1925,7 +1941,7 @@ class _Select(Select):
     def _primary_search(self, where):
         def validate_indexable(indexable):
             if not indexable: return None
-            if indexable[0].spec not in self._index_priority: return None
+            if indexable[0].path not in self._index_priority: return None
             return indexable
 
         if isinstance(where, FieldQueryComparator):
@@ -1936,8 +1952,8 @@ class _Select(Select):
                 tmp = self._primary_search(arg)
                 if tmp:
                     if not indexable: indexable = tmp
-                    elif self._index_priority[tmp[0].spec] < \
-                         self._index_priority[indexable[0].spec]:
+                    elif self._index_priority[tmp[0].path] < \
+                         self._index_priority[indexable[0].path]:
                         indexable = tmp
         return indexable
 
@@ -2084,7 +2100,7 @@ class _FactMap(object):
         return [ f for f, vs in self._findexes.items() ]
 
     def get_factindex(self, field):
-        return self._findexes[field.spec]
+        return self._findexes[field.path]
 
     def facts(self):
         return self._allfacts
