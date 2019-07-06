@@ -230,7 +230,7 @@ class ORMTestCase(unittest.TestCase):
         self.assertEqual(Blah.a, Blah[0])
         self.assertEqual(Blah.b, Blah[1])
         self.assertEqual(Blah.c, Blah[2])
-        for idx,f in enumerate(Blah):
+        for idx,f in enumerate(Blah.meta):
             self.assertEqual(f,Blah[idx])
 
         # Test an instance
@@ -1406,7 +1406,7 @@ class FieldPathTestCase(unittest.TestCase):
         tmp1 = Cmplx1(1,"blah1","blah2")
         tmp2 = Cmplx2(tmp1, ("blah3", "blah4"))
 
-        fp0 = Cmplx1.Field.FieldPathBuilder(None,None)
+        fp0 = Cmplx1.Field.FieldPathBuilder()
         fpg0 = FieldPathEval(fp0.meta.path)
         self.assertEqual(fpg0(tmp1), tmp1)
 

@@ -240,13 +240,15 @@ def _fpb_base_constructor(self, *args, **kwargs):
 def _fpb_get_canon_key(field_defn, key):
     canon=nls_defn=field_defn.complex.meta.canonical(key)
 
-def _fpb_subclass_constructor(self, prev=None, key=None):
-    if (not prev and key) or (key is None and prev):
-        raise ValueError(("Internal error: prev ({}) and key ({}) must both be "
-                          "valid or both None").format(prev,key))
+def _fpb_subclass_constructor(self, fp=None):
     self._meta = FieldPathBuilder.Meta(self)
-    if not prev: self._fp = FieldPath(self._field_defn)
-    else: self._fp = prev._fp.extend(key)
+    if not fp:
+        self._fp = FieldPath(self._field_defn)
+    else:
+        if fp.defn != self._field_defn:
+            raise TypeError(("The field path leaf field {} doesn't match this "
+                            "FieldPathBuilder {}").format(fp, self._field_defn))
+        self._fp = fp
 
 def _fpb_make_path_extender(key):
     return lambda self : self[key]
@@ -342,7 +344,7 @@ class FieldPathBuilder(object, metaclass=_FieldPathBuilderMeta):
     def __getitem__(self, key):
         '''Extend the field path by a key to the next field'''
         nfp=self._fp.extend(key)
-        return nfp[-1].defn.FieldPathBuilder(self,key)
+        return nfp[-1].defn.FieldPathBuilder(nfp)
 
     #--------------------------------------------------------------------------
     # Overload the boolean operators to return a functor
@@ -778,9 +780,8 @@ class FieldAccessor(object):
         self._parent_cls = pc
 
     def fpb(self):
-        fpb_parent = self.parent.meta.path
-        fpb = self._defn.FieldPathBuilder(fpb_parent, self._name)
-        return fpb
+        fp = FieldPath(self.parent.Field).extend(self._name)
+        return self._defn.FieldPathBuilder(fp)
 
     def __get__(self, instance, owner=None):
         if not instance: return self.fpb()
@@ -879,10 +880,16 @@ class NLSDefn(object):
                                 "NLSDefn doesn't make sense"))
         self._parent_cls = pc
 
+    #-----------------------------------------------------------------------------
+    # This property is used to refer to the predicate itself in a query or
+    # index. It is called "path" because it is the most intuitive from a user
+    # perspective.
+    # -----------------------------------------------------------------------------
     @property
     def path(self):
         '''To refer to the predicate itself in a query need to use this property'''
-        return self._parent_cls.Field.FieldPathBuilder(None,None)
+        field = self._parent_cls.Field
+        return field.FieldPathBuilder(FieldPath(field))
 
     def __len__(self):
         '''Returns the number of fields'''
@@ -1136,23 +1143,8 @@ class _NonLogicalSymbolMeta(type):
     # provide querying of a NonLogicalSymbol subclass Blah by a positional
     # argument we need to implement __getitem__ for the metaclass.
     def __getitem__(self, idx):
-        fpb_parent = self.meta.path
-        fpb = self.meta[idx].defn.FieldPathBuilder(fpb_parent, idx)
-        return fpb
-
-    # Allow iterating over the fields
-#    def __iter__(self):
-#        '''Iterate through the fields of the Predicate/Complex-term'''
-#        print("DPR CALLED HERE 2")
-#        return iter(self.meta)
-
-    # Also overload the __len__ function to return the arity of the
-    # NonLogicalSymbol class when called from len().
-#    def __len__(self):
-#        '''Return the number of fields in the Predicate/Complex-term'''
-#        raise TypeError("HERE")
-#        print("DPR CALLED HERE 3")
-#        return len(self.meta)
+        fp = FieldPath(self.Field).extend(idx)
+        return fp[-1].defn.FieldPathBuilder(fp)
 
 #------------------------------------------------------------------------------
 # A base non-logical symbol that all predicate/complex-term declarations must
@@ -1255,7 +1247,7 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
             else:
                 cloneargs[field.name] = self._field_values[field.name]
                 kwargs[field.name] = self._field_values[field.name]
-    
+
         # Create the new object
         return type(self)(**cloneargs)
 
