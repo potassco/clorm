@@ -173,7 +173,7 @@ class FactBaseCoder(object):
                 if fs[0] not in self._name2pred:
                     raise ValueError(("Unrecognised predicate name {} not one "
                                       "of {}").format(fs, self._name2pred.keys()))
-                fpb = self._name2pred[fs[0]].meta.path
+                fpb = path(self._name2pred[fs[0]])
                 for key in fs[1:]: fpb = fpb[key]
                 indexes.append(fpb.meta.path)
             facts = [ self.decoder(f) for f in obj["facts"] ]

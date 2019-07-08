@@ -21,17 +21,19 @@ __all__ = [
     'IntegerField',
     'StringField',
     'ConstantField',
-    'refine_field',
     'Placeholder',
     'NonLogicalSymbol',
     'Predicate',
     'ComplexTerm',
-    'desc',
-    'unify',
     'FactBase',
     'FactBaseBuilder',
     'Select',
     'Delete',
+    'TypeCastSignature',
+    'refine_field',
+    'desc',
+    'unify',
+    'path',
     'ph_',
     'ph1_',
     'ph2_',
@@ -40,7 +42,6 @@ __all__ = [
     'not_',
     'and_',
     'or_',
-    'TypeCastSignature',
     'make_function_asp_callable',
     'make_method_asp_callable'
     ]
@@ -107,7 +108,7 @@ class FieldPath(object):
         if isinstance(arg,FieldPath):
             self._chain = arg._chain
             self._canon = arg._canon
-        elif issubclass(arg, RawField):
+        elif inspect.isclass(arg) and issubclass(arg, RawField):
             if not arg.complex:
                 raise ValueError("Only a complex field is valid")
             self._chain = tuple([FieldPathLink(arg,None)])
@@ -395,6 +396,25 @@ class FieldPathEval(object):
 
     def __str__(self):
         return str(self._fpspec)
+
+#------------------------------------------------------------------------------
+# API function to generate a field path builder for the predicate class
+# itself. This is the best way to support syntax such as "Pred == ph1_" in a
+# query without trying to do strange overloading of the class comparison
+# operator. Note: we call this function 'path' because it is more intuivite from
+# an API user point of view - even though it actually returns a FieldPathBuilder
+# object.
+# ------------------------------------------------------------------------------
+
+def path(arg):
+    if inspect.isclass(arg) and issubclass(arg, NonLogicalSymbol):
+        return arg.Field.FieldPathBuilder()
+    elif isinstance(arg, FieldPath):
+        return arg.defn.FieldPathBuilder(arg)
+    elif isinstance(arg, FieldPathBuilder):
+        return arg
+
+    raise TypeError("Cannot generate a Clorm path from {}".format(arg))
 
 #------------------------------------------------------------------------------
 # RawField class captures the definition of a logical term ("which we will can a
@@ -882,17 +902,6 @@ class NLSDefn(object):
             raise RuntimeError(("Trying to reset the parent for a "
                                 "NLSDefn doesn't make sense"))
         self._parent_cls = pc
-
-    #-----------------------------------------------------------------------------
-    # This property is used to refer to the predicate itself in a query or
-    # index. It is called "path" because it is the most intuitive from a user
-    # perspective.
-    # -----------------------------------------------------------------------------
-    @property
-    def path(self):
-        '''To refer to the predicate itself in a query need to use this property'''
-        field = self._parent_cls.Field
-        return field.FieldPathBuilder(FieldPath(field))
 
     def __len__(self):
         '''Returns the number of fields'''

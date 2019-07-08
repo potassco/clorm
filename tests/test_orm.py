@@ -15,7 +15,7 @@ from clorm.orm import \
     _get_field_defn, refine_field, \
     not_, and_, or_, StaticComparator, \
     ph_, ph1_, ph2_, \
-    _FactIndex, _FactMap, FieldPath, FieldPathEval,\
+    _FactIndex, _FactMap, FieldPath, FieldPathEval, path, \
     unify, desc, FactBase, FactBaseBuilder, FieldPathLink, \
     TypeCastSignature, make_function_asp_callable, make_method_asp_callable
 
@@ -1397,13 +1397,20 @@ class FieldPathTestCase(unittest.TestCase):
         with self.assertRaises(KeyError) as ctx:
             fp7 = Cmplx2.x['f']
 
-        # Test using the FPB generated from the Predicate.meta
-        fpb1 = Cmplx2.meta.path
+        # Test the path function, used to generate FPBs. This is a special case
+        # since we can't easily automatically generate a FPB object when
+        # referencing the NLS object itself.
+        fpb1 = path(Cmplx2)
         self.assertEqual(str(fpb1), "Cmplx2")
         self.assertEqual(str(fpb1.x), "Cmplx2.x")
         self.assertEqual(str(fpb1['x']), "Cmplx2.x")
         self.assertEqual(str(fpb1[1]), "Cmplx2[1]")
 
+        self.assertEqual(path(Cmplx2.x),Cmplx2.x)
+        self.assertEqual(path(Cmplx2.x.meta.path),Cmplx2.x)
+
+        with self.assertRaises(TypeError) as ctx:
+            tmp = path(FieldPathEval(Cmplx2.x))
 
     def test_fpspec_fpget(self):
         class Cmplx1(ComplexTerm):
@@ -2032,12 +2039,12 @@ class SelectTestCase(unittest.TestCase):
         self.assertTrue(f2b <= f2b)
         self.assertFalse(f3 <= f2b)
 
-        fpb = Fact.meta.path
+        fpb = path(Fact)
         fpe = FieldPathEval(fpb.meta.path)
         self.assertEqual(f1, fpe(f1))
         self.assertFalse(f2 == fpe(f1))
 
-        fb1 = FactBase(facts=facts, indexes=[Fact.meta.path])
+        fb1 = FactBase(facts=facts, indexes=[path(Fact)])
         fb2 = FactBase(facts=facts)
         self.assertEqual(fb1, fb2)
         self.assertEqual(len(fb1), len(facts))

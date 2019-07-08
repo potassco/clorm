@@ -176,6 +176,58 @@ for the above example to sort by the pet's name in descending order:
 	query2=facts.select(Pet).order_by(Pet.owner, desc(Pet.petname))
 
 
+Querying by Positional Arguments
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+As well as querying by field name (or sub-field) it is also possible to query by
+the field position.
+
+.. code-block:: python
+
+       query2=facts.select(Pet).where(Pet[0] == "dave").order_by(Pet[1])
+
+However, the warning from the previous section still holds; to use positional
+arguments sparingly and only in cases where the order of elements will not
+change as the ASP code evolves.
+
+Querying the Predicate Itself
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+While it is possible to query fields (and sub-fields) of a predicate using the
+intutive "." syntax (eg., ``Pet.owner == ph1_``), unfortunately, it is not
+possible to provide this intuitive syntax for querying the predicate itself
+(e.g., a query of ``Pet < ph1_`` will fail).
+
+Instead a helper function ``path()`` is provided for this special case.
+
+.. code-block:: python
+
+       from clorm import path
+
+       p1=Pet(owner="dave", petname="bob")
+       query3=facts.select(Pet).where(path(Pet) <= p1)
+
+Here the query will return all pet objects that are less than ``p1``, based on
+the ordering of the underlying Clingo Symbol objects. Note, querying by the
+predicate itself is a boundary case and it is not necessarily clear when this
+feature is required. For example, when testing for equality it is usually
+simpler to not use the query mechanism and instead to use the basic Python set
+inclusion operation.
+
+.. code-block:: python
+
+   assert p1 not in facts
+
+.. note::
+
+   The technical reason for not providing the intuitive syntax is that it would
+   require overloading the boolean comparison operators for the
+   NonLogicalSymbol's metaclass. However, this would likely cause unexpected
+   behaviour when using the NonLogicalSymbol class in a variety of
+   contexts. Because of this it was thought better to provide a special syntax
+   for this boundary case.
+
+
 Complex Query Expressions and Indexing
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
