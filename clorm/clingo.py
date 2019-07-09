@@ -33,6 +33,7 @@ __version__ = oclingo.__version__
 # Wrap clingo.Model and override some functions
 # ------------------------------------------------------------------------------
 def _model_wrapper(fn):
+#    print("SETTING WRAPPER FOR: {}".format(fn))
     @functools.wraps(fn)
     def wrapper(self, *args, **kwargs):
         return fn(self._model, *args, **kwargs)
@@ -40,7 +41,7 @@ def _model_wrapper(fn):
 
 class _ModelMetaClass(type):
     def __new__(meta, name, bases, dct):
-        overrides=["contains"]
+        overrides=["__init__", "__new__", "contains"]
         for key,value in OModel.__dict__.items():
             if key not in overrides and callable(value):
                 dct[key]=_model_wrapper(value)
@@ -106,6 +107,7 @@ class Model(object, metaclass=_ModelMetaClass):
 # Wrap clingo.SolveHandle and override some functions
 # ------------------------------------------------------------------------------
 def _solvehandle_wrapper(fn):
+#    print("SETTING WRAPPER FOR: {}".format(fn))
     @functools.wraps(fn)
     def wrapper(self, *args, **kwargs):
         return fn(self._handle, *args, **kwargs)
@@ -113,10 +115,10 @@ def _solvehandle_wrapper(fn):
 
 class _SolveHandleMetaClass(type):
     def __new__(meta, name, bases, dct):
-        overrides=["__init__", "__iter__", "__next__"]
+        overrides=["__init__", "__new__", "__iter__", "__next__", "__enter__", "__exit__"]
         for key,value in OSolveHandle.__dict__.items():
             if key not in overrides and callable(value):
-                dct[key]=_model_wrapper(value)
+                dct[key]=_solvehandle_wrapper(value)
         return super(_SolveHandleMetaClass, meta).__new__(meta, name, bases, dct)
 
 class SolveHandle(object, metaclass=_SolveHandleMetaClass):
@@ -134,17 +136,23 @@ class SolveHandle(object, metaclass=_SolveHandleMetaClass):
         self._handle = handle
 
     def __iter__(self):
-        for m in self._handle.__iter__():
-            yield Model(m)
+        return self
 
     def __next__(self):
-        m = self._handle.__next__()
-        return Model(m)
+        return Model(self._handle.__next__())
+
+    def __enter__(self):
+        self._handle.__enter__()
+        return self
+
+    def __exit__(self, exception_type, exception_value, traceback):
+        self._handle.__exit__(exception_type,exception_value,traceback)
 
 # ------------------------------------------------------------------------------
 # Wrap clingo.Control and override some functions
 # ------------------------------------------------------------------------------
 def _control_wrapper(fn):
+#    print("SETTING WRAPPER FOR: {}".format(fn))
     @functools.wraps(fn)
     def wrapper(self, *args, **kwargs):
         return fn(self._ctrl, *args, **kwargs)
@@ -198,7 +206,6 @@ class Control(object, metaclass=_ControlMetaClass):
         return
 
 #        # DON'T USE BACKEND - COULD CAUSE UNEXPECTED INTERACTION BETWEEN GROUNDER AND SOLVER
-#        # Better to use the backend because we don't have to resort to parsing!
 #        with self._ctrl.backend() as bknd:
 #            for f in facts:
 #                atm = bknd.add_atom(f.raw)
@@ -277,17 +284,21 @@ class Control(object, metaclass=_ControlMetaClass):
         if not keys.issubset(validkeys):
             diff = keys - validkeys
             msg = "solve() got an unexpected keyword argument '{}'".format(next(iter(diff)))
-            raise TypeError(msg)
+            raise ValueError(msg)
         for k,v in validargs.items():
             if k not in kwargs: kwargs[k]=v
+
+        # check and process if we have a assumption pair or single literal
+        def _process_assumption(a):
+            if isinstance(a[0], NonLogicalSymbol): return (a[0].raw, a[1])
+            return a
 
         # generate a new assumptions list if necesary
         assumptions = kwargs["assumptions"]
         if isinstance(assumptions, FactBase):
-            kwargs["assumptions"] = [f.raw for f in assumptions.facts()]
+            kwargs["assumptions"] = [(f.raw, True) for f in assumptions.facts()]
         else:
-            kwargs["assumptions"] = [ (f.raw if isinstance(f, NonLogicalSymbol) \
-                                       else f, b) for f,b in assumptions ]
+            kwargs["assumptions"] = [_process_assumption(a) for a in assumptions]
 
         # generate a new on_model function if necessary
         on_model=kwargs["on_model"]

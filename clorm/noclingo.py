@@ -25,6 +25,14 @@ class SymbolType(enum.IntEnum):
     Function = 4
     Supremum = 5
 
+    def __str__(self):
+        if self.Infimum: return "Infimum"
+        elif self.Number: return "Number"
+        elif self.String: return "String"
+        elif self.Function: return "Function"
+        return "Supremum"
+
+
 class Symbol(object):
     """A noclingo replacement for clingo.Symbol.
 

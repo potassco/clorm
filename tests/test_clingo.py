@@ -4,7 +4,7 @@
 import unittest
 
 import clingo as oclingo
-import clorm.clingo as nclingo
+import clorm.clingo as cclingo
 #from clorm.clingo import *
 from clorm.clingo import Number, String, Function, parse_program, Control
 
@@ -53,11 +53,12 @@ class ClingoTestCase(unittest.TestCase):
         def on_model(model):
             nonlocal fb2
             self.assertTrue(model.contains(af1))
+            self.assertTrue(model.contains(af1.raw))
             fb2 = model.facts(fbb, atoms=True)
 
         # Use the orignal clingo.Control object so that we can test the wrapper call
         ctrlX_ = oclingo.Control()
-        ctrl = nclingo.Control(control_ = ctrlX_)
+        ctrl = cclingo.Control(control_ = ctrlX_)
         ctrl.add_facts(fb1)
         ctrl.ground([("base",[])])
         ctrl.solve(on_model=on_model)
@@ -104,7 +105,7 @@ class ClingoTestCase(unittest.TestCase):
             fb = model.facts(fbb, atoms=True, raise_on_empty=True)
             self.assertEqual(len(fb.facts()), 3)  # fbb only imports Afact
 
-        ctrl = nclingo.Control()
+        ctrl = cclingo.Control()
         ctrl.add_facts([af1,af2,af3,bf1,bf2])
         ctrl.ground([("base",[])])
         ctrl.solve(on_model=on_model1)
@@ -117,11 +118,107 @@ class ClingoTestCase(unittest.TestCase):
                 fb = model.facts(fbb2, atoms=True, raise_on_empty=True)
                 self.assertEqual(len(fb.facts()),0)
 
-        ctrl = nclingo.Control()
+        ctrl = cclingo.Control()
         ctrl.add_facts([bf1,bf2])
         ctrl.ground([("base",[])])
         ctrl.solve(on_model=on_model2)
 
+    #--------------------------------------------------------------------------
+    # Test the solvehandle
+    #--------------------------------------------------------------------------
+    def test_solvehandle_wrapper(self):
+        fbb=FactBaseBuilder()
+        @fbb.register
+        class Fact(Predicate):
+            num1=IntegerField()
+            class Meta: name="f"
+
+        prgstr = """{ g(N) : f(N) } = 1."""
+        f1 = Fact(1) ; f2 = Fact(2) ; f3 = Fact(3)
+        ctrl = cclingo.Control(['-n 0'])
+        with ctrl.builder() as b:
+            oclingo.parse_program(prgstr, lambda stm: b.add(stm))
+        ctrl.add_facts([f1,f2,f3])
+        ctrl.ground([("base",[])])
+
+        with ctrl.solve(yield_=True) as sh:
+            self.assertTrue(isinstance(sh, cclingo.SolveHandle))
+            self.assertFalse(isinstance(sh, oclingo.SolveHandle))
+            num_models=0
+            for m in sh:
+                self.assertTrue(isinstance(m, cclingo.Model))
+                self.assertFalse(isinstance(m, oclingo.Model))
+                num_models+=1
+            self.assertEqual(num_models,3)
+
+    #--------------------------------------------------------------------------
+    # Test the solvehandle
+    #--------------------------------------------------------------------------
+    def test_solve_with_assumptions(self):
+        fbb=FactBaseBuilder()
+        @fbb.register
+        class F(Predicate):
+            num1=IntegerField()
+        @fbb.register
+        class G(Predicate):
+            num1=IntegerField()
+
+        prgstr = """{ g(N) : f(N) } = 1."""
+        f1 = F(1) ; f2 = F(2) ; f3 = F(3)
+        g1 = G(1) ; g2 = G(2) ; g3 = G(3)
+        ctrl = cclingo.Control(['-n 0'])
+        with ctrl.builder() as b:
+            oclingo.parse_program(prgstr, lambda stm: b.add(stm))
+        ctrl.add_facts([f1,f2,f3])
+        ctrl.ground([("base",[])])
+
+        num_models=0
+        def on_modelT(m):
+            nonlocal num_models
+            fb = m.facts(fbb,atoms=True)
+            self.assertTrue(g1 in fb)
+            num_models += 1
+
+        def on_modelF(m):
+            nonlocal num_models
+            fb = m.facts(fbb,atoms=True)
+            self.assertTrue(g1 not in fb)
+            self.assertFalse(g1 in fb)
+            num_models += 1
+
+        num_models=0
+        ctrl.solve(on_model=on_modelT, assumptions=[(g1,True)])
+        self.assertEqual(num_models, 1)
+        num_models=0
+        ctrl.solve(on_model=on_modelT, assumptions=[(g1.raw,True)])
+        self.assertEqual(num_models, 1)
+        num_models=0
+        ctrl.solve(on_model=on_modelF, assumptions=[(g1,False)])
+        self.assertEqual(num_models, 2)
+
+        fb2 = FactBase([g1])
+        num_models=0
+        ctrl.solve(on_model=on_modelT, assumptions=fb2)
+        self.assertEqual(num_models, 1)
+
+
+    #--------------------------------------------------------------------------
+    # Test bad arguments
+    #--------------------------------------------------------------------------
+    def test_bad_arguments(self):
+        fbb=FactBaseBuilder()
+        @fbb.register
+        class Fact(Predicate):
+            num1=IntegerField()
+            class Meta: name="f"
+
+        f1 = Fact(1) ; f2 = Fact(2) ; f3 = Fact(3)
+        ctrl = cclingo.Control(['-n 0'])
+        ctrl.add_facts([f1,f2,f3])
+        ctrl.ground([("base",[])])
+
+        with self.assertRaises(ValueError) as ctx:
+            ctrl.solve(assump=[f1])
 
 #------------------------------------------------------------------------------
 # main

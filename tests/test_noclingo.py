@@ -32,7 +32,13 @@ class NoClingoTestCase(unittest.TestCase):
     #--------------------------------------------------------------------------
     #
     #--------------------------------------------------------------------------
-    def test_symboltype_order(self):
+    def test_symboltype_value_and_order(self):
+        self.assertTrue(str(clingo.SymbolType.Number), str(noclingo.SymbolType.Number))
+        self.assertTrue(str(clingo.SymbolType.String), str(noclingo.SymbolType.String))
+        self.assertTrue(str(clingo.SymbolType.Function), str(noclingo.SymbolType.Function))
+        self.assertTrue(str(clingo.SymbolType.Supremum), str(noclingo.SymbolType.Supremum))
+        self.assertTrue(str(clingo.SymbolType.Infimum), str(noclingo.SymbolType.Infimum))
+
         if clingo.SymbolType.Number < clingo.SymbolType.String:
             self.assertTrue(noclingo.SymbolType.Number < noclingo.SymbolType.String)
         else:
@@ -51,17 +57,28 @@ class NoClingoTestCase(unittest.TestCase):
     #--------------------------------------------------------------------------
     #
     #--------------------------------------------------------------------------
+    def test_invalid_values(self):
+
+        # The symbol type needs to be valid
+        with self.assertRaises(TypeError) as ctx:
+            noclingo.Symbol(6, 4)
+
+    #--------------------------------------------------------------------------
+    #
+    #--------------------------------------------------------------------------
     def test_string(self):
         nc = noclingo.String("atest")
         c =  clingo.String("atest")
         self.assertEqual(nc.name, c.name)
         self.assertEqual(str(nc), str(c))
+        self.assertEqual(nc.type, noclingo.SymbolType.String)
 
     def test_number(self):
         nc = noclingo.Number(1)
         c =  clingo.Number(1)
         self.assertEqual(nc.number, c.number)
         self.assertEqual(str(nc), str(c))
+        self.assertEqual(nc.type, noclingo.SymbolType.Number)
 
     def test_infimum_supremum(self):
         nc1 = noclingo.Infimum
@@ -70,6 +87,7 @@ class NoClingoTestCase(unittest.TestCase):
         nc4 = noclingo.Function("a")
         nc5 = noclingo.Supremum
 
+        self.assertTrue(nc1 == nc1)
         self.assertTrue(nc1 <= nc1)
         self.assertTrue(nc1 < nc2)
         self.assertTrue(nc1 < nc3)
@@ -80,14 +98,19 @@ class NoClingoTestCase(unittest.TestCase):
         self.assertTrue(nc5 > nc3)
         self.assertTrue(nc5 > nc4)
         self.assertTrue(nc5 >= nc5)
+        self.assertTrue(nc1 != nc2)
 
         self.assertEqual(str(nc1), str(clingo.Infimum))
         self.assertEqual(str(nc5), str(clingo.Supremum))
+        self.assertEqual(nc1.type, noclingo.SymbolType.Infimum)
+        self.assertEqual(nc5.type, noclingo.SymbolType.Supremum)
+
 
     def test_function(self):
         nc = noclingo.Function("atest")
         c =  clingo.Function("atest")
         self.assertEqual(str(nc), str(c))
+        self.assertEqual(nc.type, noclingo.SymbolType.Function)
 
         nc1 = noclingo.Function("aaaa")
         nc2 = noclingo.String("bbb")
