@@ -235,6 +235,37 @@ class ClingoTestCase(unittest.TestCase):
     #--------------------------------------------------------------------------
     # Test the solvehandle
     #--------------------------------------------------------------------------
+    def test_solve_with_on_finish(self):
+        fbb=FactBaseBuilder()
+        @fbb.register
+        class F(Predicate):
+            num1=IntegerField()
+
+        f1 = F(1) ; f2 = F(2) ; f3 = F(3)
+        infb=FactBase([f1,f2,f2])
+        ctrl = cclingo.Control(['-n 0'])
+        ctrl.add_facts(infb)
+        ctrl.ground([("base",[])])
+
+        called=False
+        def on_model(m):
+            nonlocal called
+            outfb = m.facts(fbb,atoms=True)
+            self.assertEqual(infb,outfb)
+            self.assertFalse(called)
+            called=True
+
+        def on_finish(sr):
+            self.assertTrue(sr.satisfiable)
+            self.assertFalse(sr.unsatisfiable)
+
+        sr=ctrl.solve(on_model=on_model,on_finish=on_finish)
+        self.assertTrue(sr.satisfiable)
+        self.assertFalse(sr.unsatisfiable)
+
+    #--------------------------------------------------------------------------
+    # Test the solvehandle
+    #--------------------------------------------------------------------------
     def test_solve_returning_solvehandle(self):
         fbb=FactBaseBuilder()
         @fbb.register
