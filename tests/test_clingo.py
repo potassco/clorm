@@ -56,12 +56,43 @@ class ClingoTestCase(unittest.TestCase):
             self.assertTrue(model.contains(af1.raw))
             fb2 = model.facts(fbb, atoms=True)
 
+            # Check that the known attributes behave the same as the real model
+            self.assertEqual(model.cost, model._model.cost)
+            self.assertEqual(model.number, model._model.number)
+            self.assertEqual(model.optimality_proven, model._model.optimality_proven)
+            self.assertEqual(model.thread_id, model._model.thread_id)
+            self.assertEqual(model.type, model._model.type)
+
+            # Note: the SolveControl object returned is created dynamically on
+            # each call so will be different for both calls. So test that the
+            # symbolic_atoms property is the same.
+            sas1=set(model.context.symbolic_atoms)
+            sas2=set(model._model.context.symbolic_atoms)
+            self.assertEqual(len(sas1),len(sas2))
+
+
         # Use the orignal clingo.Control object so that we can test the wrapper call
         ctrlX_ = oclingo.Control()
         ctrl = cclingo.Control(control_ = ctrlX_)
         ctrl.add_facts(fb1)
         ctrl.ground([("base",[])])
         ctrl.solve(on_model=on_model)
+
+        # Check that the known control attributes behave the same as the real control
+        cfg1=ctrl.configuration
+        cfg2=ctrl._ctrl.configuration
+        self.assertEqual(len(cfg1),len(cfg2))
+        self.assertEqual(set(cfg1.keys),set(cfg2.keys))
+        sas1=set(ctrl.symbolic_atoms)
+        sas2=set(ctrl._ctrl.symbolic_atoms)
+        self.assertEqual(len(sas1),len(sas2))
+        self.assertEqual(ctrl.is_conflicting, ctrl._ctrl.is_conflicting)
+        stat1=ctrl.statistics
+        stat2=ctrl._ctrl.statistics
+        self.assertEqual(len(stat1),len(stat2))
+        tas1=ctrl.theory_atoms
+        tas2=ctrl._ctrl.theory_atoms
+        self.assertEqual(len(tas1),len(tas2))
 
         # _control_add_facts works with both a list of facts and a FactBase
         ctrl2 = Control()

@@ -33,18 +33,26 @@ __version__ = oclingo.__version__
 # Wrap clingo.Model and override some functions
 # ------------------------------------------------------------------------------
 def _model_wrapper(fn):
-#    print("SETTING WRAPPER FOR: {}".format(fn))
     @functools.wraps(fn)
     def wrapper(self, *args, **kwargs):
         return fn(self._model, *args, **kwargs)
     return wrapper
 
+def _model_property(name):
+    def wrapper(self):
+        return self._model.__getattribute__(name)
+    return property(wrapper)
+
 class _ModelMetaClass(type):
     def __new__(meta, name, bases, dct):
-        overrides=["__init__", "__new__", "contains"]
+        ignore=["__init__", "__new__", "contains", "__doc__"]
         for key,value in OModel.__dict__.items():
-            if key not in overrides and callable(value):
+            if key in ignore: continue
+            if callable(value):
                 dct[key]=_model_wrapper(value)
+            else:
+                dct[key]=_model_property(key)
+
         return super(_ModelMetaClass, meta).__new__(meta, name, bases, dct)
 
 class Model(object, metaclass=_ModelMetaClass):
@@ -94,8 +102,8 @@ class Model(object, metaclass=_ModelMetaClass):
 
     def contains(self, fact):
         '''Return whether the fact or symbol is contained in the model. Extends
-        ``clingo.Model.contains`` to allow for a clorm facts as well as a
-        clingo symbols.
+        ``clingo.Model.contains`` to allow for clorm facts as well as a clingo
+        symbols.
 
         '''
         if isinstance(fact, NonLogicalSymbol):
@@ -107,18 +115,27 @@ class Model(object, metaclass=_ModelMetaClass):
 # Wrap clingo.SolveHandle and override some functions
 # ------------------------------------------------------------------------------
 def _solvehandle_wrapper(fn):
-#    print("SETTING WRAPPER FOR: {}".format(fn))
     @functools.wraps(fn)
     def wrapper(self, *args, **kwargs):
         return fn(self._handle, *args, **kwargs)
     return wrapper
 
+def _solvehandle_property(name):
+    def wrapper(self):
+        return self._handle.__getattribute__(name)
+    return property(wrapper)
+
 class _SolveHandleMetaClass(type):
     def __new__(meta, name, bases, dct):
-        overrides=["__init__", "__new__", "__iter__", "__next__", "__enter__", "__exit__"]
+        ignore=["__init__", "__new__", "__iter__", "__next__", "__enter__",
+                   "__exit__", "__doc__"]
         for key,value in OSolveHandle.__dict__.items():
-            if key not in overrides and callable(value):
+            if key in ignore: continue
+            if callable(value):
                 dct[key]=_solvehandle_wrapper(value)
+            else:
+                dct[key]=_solvehandle_property(key)
+
         return super(_SolveHandleMetaClass, meta).__new__(meta, name, bases, dct)
 
 class SolveHandle(object, metaclass=_SolveHandleMetaClass):
@@ -152,20 +169,28 @@ class SolveHandle(object, metaclass=_SolveHandleMetaClass):
 # Wrap clingo.Control and override some functions
 # ------------------------------------------------------------------------------
 def _control_wrapper(fn):
-#    print("SETTING WRAPPER FOR: {}".format(fn))
     @functools.wraps(fn)
     def wrapper(self, *args, **kwargs):
         return fn(self._ctrl, *args, **kwargs)
     return wrapper
 
+def _control_property(name):
+    def wrapper(self):
+        return self._ctrl.__getattribute__(name)
+    return property(wrapper)
+
 class _ControlMetaClass(type):
     def __new__(meta, name, bases, dct):
-        overrides=["__init__", "__new__", "assign_external", "release_external", "solve"]
+        ignore=["__init__", "__new__", "assign_external", "release_external",
+                   "solve", "__doc__"]
         for key,value in OControl.__dict__.items():
-            if key not in overrides and callable(value):
+            if key in ignore: continue
+            if callable(value):
                 dct[key]=_control_wrapper(value)
-        return super(_ControlMetaClass, meta).__new__(meta, name, bases, dct)
+            else:
+                dct[key]=_control_property(key)
 
+        return super(_ControlMetaClass, meta).__new__(meta, name, bases, dct)
 
 
 class Control(object, metaclass=_ControlMetaClass):
