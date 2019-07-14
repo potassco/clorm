@@ -272,11 +272,11 @@ class Control(object, metaclass=_ControlMetaClass):
         validargs = { "assumptions": [], "on_model" : None,
                         "on_finish": None, "yield_" : False }
 
-        # Use "async" or "async_" depending on the python or clingo version
-        if sys.version_info >= (3,7) or oclingo.__version__ > '5.3.1':
-            validargs["async_"] = False
-        else:
-            validargs["async"] = False
+        # Use "async" or "async_" depending on clingo version. Note: "async" is
+        # a keyword for Python 3.7+.
+        async_keyword="async"
+        if oclingo.__version__ > '5.3.1': async_keyword="async_"
+        validargs[async_keyword] = False
 
         # validate the arguments and assign any missing default values
         keys = set(kwargs.keys())
@@ -308,7 +308,7 @@ class Control(object, metaclass=_ControlMetaClass):
         if on_model: kwargs["on_model"] =  on_model_wrapper
 
         result = self._ctrl.solve(**kwargs)
-        if kwargs["yield_"]:
+        if kwargs["yield_"] or kwargs[async_keyword]:
             return SolveHandle(result)
         else:
             return result

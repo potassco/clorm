@@ -201,6 +201,67 @@ class ClingoTestCase(unittest.TestCase):
         ctrl.solve(on_model=on_modelT, assumptions=fb2)
         self.assertEqual(num_models, 1)
 
+    #--------------------------------------------------------------------------
+    # Test the solvehandle
+    #--------------------------------------------------------------------------
+    def test_solve_returning_solvehandle(self):
+        fbb=FactBaseBuilder()
+        @fbb.register
+        class F(Predicate):
+            num1=IntegerField()
+        f1 = F(1) ; f2 = F(2) ; f3 = F(3)
+        infb=FactBase([f1,f2,f3])
+        ctrl = cclingo.Control(['-n 0'])
+        ctrl.add_facts(infb)
+        ctrl.ground([("base",[])])
+
+        done=False
+        def on_model(m):
+            nonlocal done
+            outfb = m.facts(fbb,atoms=True)
+            self.assertEqual(infb,outfb)
+            self.assertFalse(done)
+            done=True
+
+        if oclingo.__version__ > '5.3.1':
+            asynckw="async_"
+        else:
+            asynckw="async"
+
+        # Test the async mode
+        kwargs={ "on_model": on_model, asynckw: True }
+        done=False
+        sh = ctrl.solve(**kwargs)
+        self.assertTrue(isinstance(sh, cclingo.SolveHandle))
+        sh.get()
+        self.assertTrue(done)
+
+        # Test the yield mode
+        kwargs={ "on_model": on_model, "yield_": True }
+        done=False
+        sh = ctrl.solve(**kwargs)
+        self.assertTrue(isinstance(sh, cclingo.SolveHandle))
+        count=0
+        for m in sh:
+            count += 1
+            outfb = m.facts(fbb,atoms=True)
+            self.assertEqual(infb,outfb)
+        self.assertEqual(count,1)
+        self.assertTrue(done)
+
+        # Test both async and yield mode
+        kwargs={ "on_model": on_model, asynckw: True, "yield_": True }
+        done=False
+        sh = ctrl.solve(**kwargs)
+        self.assertTrue(isinstance(sh, cclingo.SolveHandle))
+        count=0
+        for m in sh:
+            count += 1
+            outfb = m.facts(fbb,atoms=True)
+            self.assertEqual(infb,outfb)
+        self.assertEqual(count,1)
+        self.assertTrue(done)
+
 
     #--------------------------------------------------------------------------
     # Test bad arguments
