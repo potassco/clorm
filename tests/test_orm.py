@@ -2637,6 +2637,16 @@ class TypeCastSignatureTestCase(unittest.TestCase):
         self.assertEqual(test_sig1(t1_raw),t1_raw)
         self.assertEqual(test_sig2(s_raw),[t1_raw,t2_raw])
 
+    #--------------------------------------------------------------------------
+    # Test that the input signature can be hashed
+    # --------------------------------------------------------------------------
+    def test_input_signature(self):
+        DateField = self.DateField
+
+        # Some complicated signatures
+        sig1 = TypeCastSignature((IntegerField, DateField),(IntegerField, DateField))
+        insig = hash(sig1.input_signature)
+
 #------------------------------------------------------------------------------
 # Tests for the ContextBuilder
 #------------------------------------------------------------------------------

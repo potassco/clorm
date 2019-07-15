@@ -2538,6 +2538,9 @@ class TypeCastSignature(object):
         else:
             _validate_basic_sig(self._outsig)
 
+        # Turn the signature into a tuple
+        self._insigs = tuple(self._insigs)
+
     def _input(self, sig, arg):
         return sig.cltopy(arg)
 
@@ -2551,6 +2554,8 @@ class TypeCastSignature(object):
             return [ self._output(sig[0], v) for v in arg ]
         raise ValueError("Value {} does not match signature {}".format(arg, sig))
 
+    @property
+    def input_signature(self): return self._insigs
 
     def wrap_function(self, fn):
         """Function wrapper that adds data type conversions for wrapped function.
@@ -2721,9 +2726,12 @@ def _context_wrapper(fn):
     return wrapper
 
 class ContextBuilder(object):
+
     def __init__(self):
         self._functions = {}
 
+#    def add_function(self, name, fn):
+#        
     @staticmethod
     def _get_wrapper_parts(*args):
         errmsg=("No function has been specified to register with the "
