@@ -27,6 +27,7 @@ __all__ = [
     'ComplexTerm',
     'FactBase',
     'FactBaseBuilder',
+    'ContextBuilder',
     'Select',
     'Delete',
     'TypeCastSignature',
@@ -2706,6 +2707,94 @@ def make_method_asp_callable(*args):
     if not fn and sigs: return _sig_decorate
 
     return _sig_decorate(fn)
+
+
+#------------------------------------------------------------------------------
+# Clingo 5.4 introduces the idea of a context to the grounding process. We want
+# to make it easier to use this idea. In particular providing a builder with a
+# decorator for capturing functions within a context.
+# ------------------------------------------------------------------------------
+def _context_wrapper(fn):
+    @functools.wraps(fn)
+    def wrapper(self, *args, **kwargs):
+        return fn(*args, **kwargs)
+    return wrapper
+
+class ContextBuilder(object):
+    def __init__(self):
+        self._functions = {}
+
+    @staticmethod
+    def _get_wrapper_parts(*args):
+        errmsg=("No function has been specified to register with the "
+                "context: {}").format(args)
+        if len(args) == 0: raise ValueError(errmsg)
+        origfn=None; sig=None
+
+        # If the last element is a signature element then the arguments form a sig
+        if TypeCastSignature.is_return_element(args[-1]):
+            sig = args
+        else:
+            origfn=args[-1]
+            if not callable(origfn): raise ValueError(errmsg)
+
+            # if exactly one element then use function annonations
+            if len(args) == 1: sig = _get_annotations(origfn)
+            else: sig = args[:-1]
+        return (origfn, sig)
+
+    def register(self, *args):
+        (origfn, sig) = ContextBuilder._get_wrapper_parts(*args)
+
+        # A decorator function that adjusts for the given signature
+        def _decorator(fn):
+            s = TypeCastSignature(*sig)
+            self._functions[fn.__name__] = s.wrap_function(fn)
+            return fn
+
+        # If no function but there is a signature then return the decorator
+        if not origfn and sig: return _decorator
+        return _decorator(origfn)
+
+    def register_name(self, func_name, *args):
+
+        # Called as a decorator with no args so return a decorator that uses
+        # checks for the function annotations
+        if len(args) == 0:
+            def _decorator(fn):
+                sig = _get_annotations(fn)
+                s = TypeCastSignature(*sig)
+                self._functions[func_name] = s.wrap_function(fn)
+                return fn
+            return _decorator
+
+        # There are some arguments so the signature has been specified but not
+        # necessarily the function.
+        origfn=None; sig=None
+
+        if TypeCastSignature.is_return_element(args[-1]):
+            sig = args
+        else:
+            origfn=args[-1]
+            if not callable(origfn):
+                raise ValueError(("ContextBuilder.register_name({},{}): no function "
+                                  "specified to register").format(func_name, args))
+            sig = args[:-1]
+
+        # A decorator function that adjusts for the given signature
+        def _decorator(fn):
+            s = TypeCastSignature(*sig)
+            self._functions[func_name] = s.wrap_function(fn)
+            return fn
+
+        # If no function but there is a signature then return the decorator
+        if not origfn and sig: return _decorator
+        return _decorator(origfn)
+
+
+    def make_context(self, cls_name="Context"):
+        tmp = { n : _context_wrapper(fn) for n,fn in self._functions.items() }
+        return type(cls_name, (object,), tmp)()
 
 #------------------------------------------------------------------------------
 # main

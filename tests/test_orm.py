@@ -17,7 +17,8 @@ from clorm.orm import \
     ph_, ph1_, ph2_, \
     _FactIndex, _FactMap, FieldPath, FieldPathEval, path, \
     unify, desc, FactBase, FactBaseBuilder, FieldPathLink, \
-    TypeCastSignature, make_function_asp_callable, make_method_asp_callable
+    TypeCastSignature, make_function_asp_callable, make_method_asp_callable, \
+    ContextBuilder
 
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
@@ -29,7 +30,8 @@ __all__ = [
     'FactMapTestCase',
     'FactBaseTestCase',
     'SelectTestCase',
-    'TypeCastSignatureTestCase'
+    'TypeCastSignatureTestCase',
+    'ContextBuilderTestCase',
     ]
 
 #------------------------------------------------------------------------------
@@ -2634,6 +2636,99 @@ class TypeCastSignatureTestCase(unittest.TestCase):
 #        result = test_sig1(t1_raw)
         self.assertEqual(test_sig1(t1_raw),t1_raw)
         self.assertEqual(test_sig2(s_raw),[t1_raw,t2_raw])
+
+#------------------------------------------------------------------------------
+# Tests for the ContextBuilder
+#------------------------------------------------------------------------------
+
+class ContextBuilderTestCase(unittest.TestCase):
+    def setUp(self):
+        pass
+
+    def test_register_function_nondecorator(self):
+
+        SF=StringField
+        IF=IntegerField
+        CF=ConstantField
+        # Functions to add to the context
+        def add(a: IF, b: IF) -> IF: return a+b
+        def mirror(val : CF) -> CF: return val
+
+        self.assertEqual(add(1,4),5)
+        self.assertEqual(mirror("aname"),"aname")
+
+        cb1=ContextBuilder()
+        cb1.register(add)
+        cb1.register(mirror)
+        ctx1 = cb1.make_context()
+        self.assertEqual(type(ctx1).__name__, "Context")
+        self.assertTrue("add" in type(ctx1).__dict__)
+        self.assertTrue("mirror" in type(ctx1).__dict__)
+
+        n1=Number(1); n2=Number(2); n3=Number(3); n4=Number(4)
+        c1=Function("aname")
+        self.assertEqual(ctx1.add(n1,n3),n4)
+        self.assertEqual(ctx1.mirror(c1),c1)
+
+        # Test registering functions but using external signatures
+        def add2(a,b): return a+b
+        def mirror2(val): return val
+
+        cb2=ContextBuilder()
+        cb2.register(IF,IF,IF,add2)
+        cb2.register(CF,CF,mirror2)
+        ctx2 = cb2.make_context("Ctx2")
+        self.assertEqual(type(ctx2).__name__, "Ctx2")
+        self.assertEqual(ctx2.add2(n1,n3),n4)
+        self.assertEqual(ctx2.mirror2(c1),c1)
+
+        # Test registering functions with a new function name.
+        cb3=ContextBuilder()
+        cb3.register_name("addi",add)             # use the function annotations
+        cb3.register_name("adds",SF,SF,SF,add2)   # external signature
+
+        s1=String("ab"); s2=String("cd"); s3=String("abcd")
+        ctx3 = cb3.make_context()
+        self.assertEqual(ctx3.addi(n1,n3),n4)
+        self.assertEqual(ctx3.adds(s1,s2),s3)
+
+    def test_register_function_decorator(self):
+        SF=StringField
+        IF=IntegerField
+        CF=ConstantField
+
+        n1=Number(1); n2=Number(2); n3=Number(3); n4=Number(4)
+        s1=String("ab"); s2=String("cd"); s3=String("abcd")
+
+        # Test the register as a decorator
+        cb4=ContextBuilder()
+
+        @cb4.register
+        def add2(a: IF, b: IF) -> IF: return a+b
+        self.assertEqual(add2(1,2),3)
+
+        @cb4.register(IF,IF,IF)
+        def add3(a, b): return a+b
+        self.assertEqual(add3(1,2),3)
+
+        ctx4=cb4.make_context()
+        self.assertEqual(ctx4.add2(n1,n2),n3)
+        self.assertEqual(ctx4.add3(n1,n2),n3)
+
+        # Test the register_name as a decorator
+        cb5=ContextBuilder()
+
+        @cb5.register_name("addi")
+        def add4(a: IF, b: IF) -> IF: return a+b
+        self.assertEqual(add4(1,2),3)
+
+        @cb5.register_name("adds", SF,SF,SF)
+        def add5(a, b): return a+b
+        self.assertEqual(add5("ab","cd"),"abcd")
+
+        ctx5=cb5.make_context()
+        self.assertEqual(ctx5.addi(n1,n2),n3)
+        self.assertEqual(ctx5.adds(s1,s2),s3)
 
 
 #------------------------------------------------------------------------------
