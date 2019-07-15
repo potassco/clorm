@@ -45,9 +45,10 @@ def _model_property(name):
 
 class _ModelMetaClass(type):
     def __new__(meta, name, bases, dct):
-        ignore=["__init__", "__new__", "contains", "__doc__"]
+        ignore=["contains"]
         for key,value in OModel.__dict__.items():
             if key in ignore: continue
+            if key.startswith("_"): continue
             if callable(value):
                 dct[key]=_model_wrapper(value)
             else:
@@ -127,10 +128,10 @@ def _solvehandle_property(name):
 
 class _SolveHandleMetaClass(type):
     def __new__(meta, name, bases, dct):
-        ignore=["__init__", "__new__", "__iter__", "__next__", "__enter__",
-                   "__exit__", "__doc__"]
+        ignore=[]
         for key,value in OSolveHandle.__dict__.items():
             if key in ignore: continue
+            if key.startswith("_"): continue
             if callable(value):
                 dct[key]=_solvehandle_wrapper(value)
             else:
@@ -181,10 +182,10 @@ def _control_property(name):
 
 class _ControlMetaClass(type):
     def __new__(meta, name, bases, dct):
-        ignore=["__init__", "__new__", "assign_external", "release_external",
-                   "solve", "__doc__"]
+        ignore=["assign_external", "release_external", "solve"]
         for key,value in OControl.__dict__.items():
             if key in ignore: continue
+            if key.startswith("_"): continue
             if callable(value):
                 dct[key]=_control_wrapper(value)
             else:

@@ -2645,7 +2645,7 @@ class ContextBuilderTestCase(unittest.TestCase):
     def setUp(self):
         pass
 
-    def test_register_function_nondecorator(self):
+    def _test_register_function_nondecorator(self):
 
         SF=StringField
         IF=IntegerField
@@ -2692,7 +2692,7 @@ class ContextBuilderTestCase(unittest.TestCase):
         self.assertEqual(ctx3.addi(n1,n3),n4)
         self.assertEqual(ctx3.adds(s1,s2),s3)
 
-    def test_register_function_decorator(self):
+    def _test_register_function_decorator(self):
         SF=StringField
         IF=IntegerField
         CF=ConstantField
