@@ -2645,7 +2645,12 @@ class TypeCastSignatureTestCase(unittest.TestCase):
 
         # Some complicated signatures
         sig1 = TypeCastSignature((IntegerField, DateField),(IntegerField, DateField))
-        insig = hash(sig1.input_signature)
+        sig2 = TypeCastSignature(DateField,[(IntegerField, DateField)])
+        sigs={}
+        sigs[sig1.input_signature] = sig1
+        sigs[sig2.input_signature] = sig2
+        self.assertEqual(sigs[sig1.input_signature], sig1)
+        self.assertEqual(sigs[sig2.input_signature], sig2)
 
 #------------------------------------------------------------------------------
 # Tests for the ContextBuilder
@@ -2655,7 +2660,7 @@ class ContextBuilderTestCase(unittest.TestCase):
     def setUp(self):
         pass
 
-    def _test_register_function_nondecorator(self):
+    def test_register(self):
 
         SF=StringField
         IF=IntegerField
@@ -2667,6 +2672,7 @@ class ContextBuilderTestCase(unittest.TestCase):
         self.assertEqual(add(1,4),5)
         self.assertEqual(mirror("aname"),"aname")
 
+        # Test the register function as a non-decorator
         cb1=ContextBuilder()
         cb1.register(add)
         cb1.register(mirror)
@@ -2692,54 +2698,67 @@ class ContextBuilderTestCase(unittest.TestCase):
         self.assertEqual(ctx2.add2(n1,n3),n4)
         self.assertEqual(ctx2.mirror2(c1),c1)
 
-        # Test registering functions with a new function name.
+        # Test the register function as a decorator
         cb3=ContextBuilder()
-        cb3.register_name("addi",add)             # use the function annotations
-        cb3.register_name("adds",SF,SF,SF,add2)   # external signature
 
-        s1=String("ab"); s2=String("cd"); s3=String("abcd")
-        ctx3 = cb3.make_context()
-        self.assertEqual(ctx3.addi(n1,n3),n4)
-        self.assertEqual(ctx3.adds(s1,s2),s3)
+        @cb3.register
+        def add2(a: IF, b: IF) -> IF: return a+b
+        self.assertEqual(add2(1,2),3)
 
-    def _test_register_function_decorator(self):
+        @cb3.register(IF,IF,IF)
+        def add4(a, b): return a+b
+        self.assertEqual(add4(1,2),3)
+
+        ctx3=cb3.make_context()
+        self.assertEqual(ctx3.add2(n1,n2),n3)
+        self.assertEqual(ctx3.add4(n1,n2),n3)
+
+
+    def test_register_name(self):
         SF=StringField
         IF=IntegerField
         CF=ConstantField
 
         n1=Number(1); n2=Number(2); n3=Number(3); n4=Number(4)
         s1=String("ab"); s2=String("cd"); s3=String("abcd")
-
-        # Test the register as a decorator
-        cb4=ContextBuilder()
-
-        @cb4.register
-        def add2(a: IF, b: IF) -> IF: return a+b
-        self.assertEqual(add2(1,2),3)
-
-        @cb4.register(IF,IF,IF)
-        def add3(a, b): return a+b
-        self.assertEqual(add3(1,2),3)
-
-        ctx4=cb4.make_context()
-        self.assertEqual(ctx4.add2(n1,n2),n3)
-        self.assertEqual(ctx4.add3(n1,n2),n3)
-
+        c1=Function("ab",[]); c2=Function("cd",[]); c3=Function("abcd",[]);
         # Test the register_name as a decorator
-        cb5=ContextBuilder()
+        cb1=ContextBuilder()
 
-        @cb5.register_name("addi")
-        def add4(a: IF, b: IF) -> IF: return a+b
-        self.assertEqual(add4(1,2),3)
+        @cb1.register_name("addi")                 # use function annotations
+        def add1(a: IF, b: IF) -> IF: return a+b   # external signature
+        self.assertEqual(add1(1,2),3)
 
-        @cb5.register_name("adds", SF,SF,SF)
-        def add5(a, b): return a+b
-        self.assertEqual(add5("ab","cd"),"abcd")
+        @cb1.register_name("adds", SF,SF,SF)
+        def add2(a, b): return a+b
+        self.assertEqual(add2("ab","cd"),"abcd")
 
-        ctx5=cb5.make_context()
-        self.assertEqual(ctx5.addi(n1,n2),n3)
-        self.assertEqual(ctx5.adds(s1,s2),s3)
+        # Non-decorator call - re-using a function but with a different signature
+        cb1.register_name("addc", CF,CF,CF, add1)
 
+        # Non-decorator call - setting a function with the function annotation
+        cb1.register_name("addi_alt", add1)
+
+        ctx1=cb1.make_context()
+        self.assertEqual(ctx1.addi(n1,n2),n3)
+        self.assertEqual(ctx1.addi_alt(n1,n2),n3)
+        self.assertEqual(ctx1.adds(s1,s2),s3)
+        self.assertEqual(ctx1.addc(c1,c2),c3)
+
+        # Things that should fail
+        with self.assertRaises(TypeError) as ctx:
+            self.assertEqual(ctx1.addc(s1,s2),s3)
+
+        with self.assertRaises(TypeError) as ctx:
+            self.assertEqual(ctx1.addc(s1,s2),c3)
+
+        # Fails since add2 has no function annotations
+        with self.assertRaises(TypeError) as ctx:
+            cb1.register_name("addo",add2)
+
+        # Function name already assigned
+        with self.assertRaises(ValueError) as ctx:
+            cb1.register_name("addi",add1)
 
 #------------------------------------------------------------------------------
 # main
