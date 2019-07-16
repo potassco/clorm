@@ -307,8 +307,8 @@ interface. These include:
   automatic type conversion for writing Python functions that can be called from
   an ASP program using @-syntax.
 
-  Here function ``add`` is decorated with a automatic data conversion signature
-  to take two integers and return an integer.
+  Here function ``add`` is decorated with an automatic data conversion signature
+  to add two integers and return the resulting integer.
 
 .. code-block:: python
 
