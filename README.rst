@@ -134,7 +134,7 @@ The ``FactBaseBulider`` provides a decorator that registers the predicate class
 with the builder. Once a predicate class is registered the builder will use this
 class to try and unify against Clingo symbols. It also ensures that the fact
 base is built with the appropriate indexes as specified by ``index=True`` for
-the field. The the example, the ``driver`` field is indexed allowing for faster
+the field. In the example, the ``driver`` field is indexed allowing for faster
 queries when searching for specific drivers. As with a traditional database
 indexing improves query performance but should be used sparingly.
 
@@ -158,11 +158,14 @@ Next we generate a problem instance by generating a lists of ``Driver`` and
     items = [ Item(name="item{}".format(i)) for i in range(1,6) ]
     instance = FactBase(drivers + items)
 
-The ``Driver`` and ``Item`` constructors require named parameters that match the
-declared field names; you cannot use "normal" Python list arguments.
+The ``Driver`` and ``Item`` constructors use named parameters that match the
+declared field names. Note: while you can use positional arguments to initialise
+instances, doing so will potentially make the code harder to refactor. So in
+general you should avoid using positional arguments except for a few cases (eg.,
+simple pairs where the order is unlikely to change).
 
-Now, the facts can now be added to the control object and the combined ASP
-program grounded.
+These facts can now be added to the control object and the combined ASP program
+grounded.
 
 .. code-block:: python
 
@@ -170,8 +173,8 @@ program grounded.
     ctrl.ground([("base",[])])
 
 Next we run the solver to generate solutions. The solver is run with a callback
-function that is called each time a solution is found. Note: the solution of an
-ASP program is typically called an *answer set* or simply a *model*.
+function that is called each time a solution (technically an *answer set* or
+simply a *model*) is found.
 
 .. code-block:: python
 
@@ -254,11 +257,10 @@ use Clorm see the `documentation <https://clorm.readthedocs.io/en/latest/>`_.
 Other Clorm Features
 --------------------
 
-The ORM interface is the heart of Clorm. However, beyond the basics outlined
-above there are other useful features that build on the ORM interface. These
-include:
+Beyond the basic features outlined above there are many other features of the
+Clorm library. These include:
 
-* You can define new sub-classes of ``RawField`` for specific data
+* You can define new sub-classes of ``RawField`` for custom data
   conversions. For example, you can define a ``DateField`` that represents dates
   in clingo in YYYY-MM-DD format and then use it in a predicate definition.
 
@@ -298,10 +300,10 @@ include:
 
 * Field definitions can be specified as part of a function signature to perform
   automatic type conversion for writing Python functions that can be called from
-  an ASP program using @-syntax.
+  an ASP program using the @-syntax.
 
   Here function ``add`` is decorated with an automatic data conversion signature
-  to add two integers and return the resulting integer.
+  that accepts two input integers and expects an output integer.
 
 .. code-block:: python
 
@@ -312,13 +314,16 @@ include:
 
     f(@add(5,6)).    % grounds to f(11).
 
-* Function signatures follow the functionality of the clingo API (so can deal
-  with tuples and functions that return list of items). However, the behaviour
-  of the clingo API is ad-hoc when it comes to automatic data conversion. That
-  is it can automatically convert numbers and strings but not other types such
-  as constants or more complex terms. The Clorm conversion signatures provide a
-  more principled and transparent approach, since all data conversions are
-  specified as part of the signature.
+* Function signatures follow the functionality of the clingo API (so you can
+  specify tuples and provide functions that return list of items).
+
+  However, the behaviour of the clingo API is ad-hoc when it comes to automatic
+  data conversion. That is, it will automatically convert numbers and strings,
+  but cannot deal with other types such as constants or more complex terms.
+
+  The Clorm mechanism of a data conversion signatures provide a more principled
+  and transparent approach; it can deal with arbitrary conversions and all data
+  conversions are clear since they are specified as part of the signature.
 
 
 Development

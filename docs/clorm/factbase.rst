@@ -56,12 +56,12 @@ Querying
 --------
 
 An important motivation for providing a specialised container class for storing
-facts, instead of simply using a Python ``list`` or ``set`` object, is to
-support a rich mechanism to query the contents of a fact base.
+facts, as opposed to simply using a Python ``list`` or ``set`` object, is to
+support a rich mechanism for querying the contents of a fact base.
 
 When an ASP model is returned by the solver the application developer needs to
 process the model in order to extract the relevant facts. The simplest mechanism
-to do this to simply loop through the facts in the model. This loop will
+to do this is to simply loop through the facts in the model. This loop will
 typically contain a number of conditional statements to determine what action to
 take for the given fact; and to store it if some sort of matching needs to take
 place.
@@ -85,8 +85,8 @@ can create ``Select`` query objects:
 A query object needs to be executed in order to return the results. There are
 three member functions to execute a query: ``get()``, ``get_unique()``, and
 ``count()``. ``get()`` returns a list of results, while ``get_unique()`` returns
-exactly one results and will raise a ``ValueError`` if there is not exactly one
-result. Finally, ``count()`` returns the number of matching entries.
+exactly one result and will raise a ``ValueError`` if this is not the
+case. Finally, ``count()`` returns the number of matching entries.
 
 .. code-block:: python
 

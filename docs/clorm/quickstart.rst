@@ -164,12 +164,13 @@ Next we generate a problem instance by generating a lists of ``Driver`` and
     items = [ Item(name="item{}".format(i)) for i in range(1,6) ]
     instance = FactBase(drivers + items)
 
-The ``Driver`` and ``Item`` constructors require named parameters that match the
-declared term names. Note, a design decision was taken to disallow "normal"
-Python positional arguments as it would make it too easy to write brittle code;
-for example, the code would break if the order of the fields was changed.
+The ``Driver`` and ``Item`` constructors use named parameters that match the
+declared field names. Note: while you can use positional arguments to initialise
+instances, doing so will potentially make the code harder to refactor. So in
+general you should avoid using positional arguments except for a few cases (eg.,
+simple pairs where the order is unlikely to change).
 
-The facts can now be added to the control object and the combined ASP program
+These facts can now be added to the control object and the combined ASP program
 grounded.
 
 .. code-block:: python
@@ -265,7 +266,7 @@ Python data model to the defined ASP predicates. However, beyond the basics
 outlined above there are other useful features that build on the ORM
 interface. These include:
 
-* You can define new sub-classes of ``RawField`` for specific data
+* You can define new sub-classes of ``RawField`` for custom data
   conversions. For example, you can define a ``DateField`` that represents dates
   in clingo in YYYY-MM-DD format and then use it in a predicate definition.
 
@@ -305,10 +306,10 @@ interface. These include:
 
 * Field definitions can be specified as part of a function signature to perform
   automatic type conversion for writing Python functions that can be called from
-  an ASP program using @-syntax.
+  an ASP program using the @-syntax.
 
   Here function ``add`` is decorated with an automatic data conversion signature
-  to add two integers and return the resulting integer.
+  that accepts two input integers and expects an output integer.
 
 .. code-block:: python
 
@@ -319,11 +320,14 @@ interface. These include:
 
     f(@add(5,6)).    % grounds to f(11).
 
-* Function signatures follow the functionality of the clingo API (so can deal
-  with tuples and functions that return list of items). However, the behaviour
-  of the clingo API is ad-hoc when it comes to automatic data conversion. That
-  is it can automatically convert numbers and strings but not other types such
-  as constants or more complex terms. The Clorm conversion signatures provide a
-  more principled and transparent approach, since all data conversions are
-  specified as part of the signature.
+* Function signatures follow the functionality of the clingo API (so you can
+  specify tuples and provide functions that return list of items).
+
+  However, the behaviour of the clingo API is ad-hoc when it comes to automatic
+  data conversion. That is, it will automatically convert numbers and strings,
+  but cannot deal with other types such as constants or more complex terms.
+
+  The Clorm mechanism of a data conversion signatures provide a more principled
+  and transparent approach; it can deal with arbitrary conversions and all data
+  conversions are clear since they are specified as part of the signature.
 

@@ -249,17 +249,17 @@ encoded string into an actual ``datetime.date`` object:
 
    nyedate = datetime.datetime.strptime(str(nyepart.date), "%Y%m%d")
 
-However, the problem with the above code is that the process of creating and
-using the date in the ``Booking`` object is cumbersome and error-prone. You have
-to remember to make the correct translation both in creating and reading the
+The problem with the above code is that the process of creating and using the
+date in the ``Booking`` object is cumbersome and error-prone. You have to
+remember to make the correct translation both in creating and reading the
 date. Furthermore the places in the code where these translations are made may
 be far apart, leading to potential problems when code needs to be refactored.
 
 The solution to this problem is to create a sub-class of ``RawField`` that
-performs the appropriate data conversion. However, sub-classing
-``Rawfield``directly requires dealing with raw Clingo ``Symbol`` objects. A
-better alternative is to sub-class the ``StringField`` class and then you can
-deal with the string to date conversion directly.
+performs the appropriate data conversion. However, sub-classing ``Rawfield``
+directly requires dealing with raw Clingo ``Symbol`` objects. A better
+alternative is to sub-class the ``StringField`` class so you need to only deal
+with the string to date conversion.
 
 .. code-block:: python
 
@@ -304,7 +304,7 @@ Restricted Sub-class of a Field Definition
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Another reason to sub-class a field definition is to restrict the set of values
-that a field can hold. For example if you have an application where an argument
+that the field can hold. For example if you have an application where an argument
 of a predicate is restricted to a specific set of constants, such as the days of
 the week.
 
@@ -529,8 +529,8 @@ tuple as part of an event predicate.
    e2 = Event(edt=EnumDate(idx=5, dt=datetime.date(2018, 10, 5)), details="Holidays")
 
 Here the index associated with the date could be used to capture a sequence of
-dates and used to calcuate the number of days between certain dates (which is
-information that does not arise directly from the date encoded string).
+dates and used to calculate the number of days between two dates (note: this
+information cannot be easily extracted from the date encoded string).
 
 In any case, the two generated Event objects will correspond to the ASP facts:
 
@@ -540,9 +540,10 @@ In any case, the two generated Event objects will correspond to the ASP facts:
    event((5,"20181005"), "Holidays").
 
 Now, declaring and using the ``EnumDate`` class can be quite cumbersome,
-considering that it really corresponds to a very simple tuple. Clorm supports a
-special syntax, using a tuple of field definitions, for dealing with cases of
-simple tuples.  The above Python code could be replaced with:
+considering that it really corresponds to a very simple tuple. Consequently,
+Clorm supports a modified syntax, using a tuple of field definitions, for
+dealing with cases of simple tuples.  The above Python code could be replaced
+with:
 
 .. code-block:: python
 
@@ -559,8 +560,8 @@ simple tuples.  The above Python code could be replaced with:
 Internally, Clorm will generate an anonymously named complex term class that is
 declared similarly to ``EnumDate``. The fields of this class will be given
 automatically generated names ``arg1`` and ``arg2`` (up to ``arg<n>`` for a
-tuple of arity n), although in maybe more convenient to access the values using
-positional arguments.
+tuple of arity n), although in this case it may be more convenient to access the
+values using positional arguments.
 
 .. code-block:: python
 
