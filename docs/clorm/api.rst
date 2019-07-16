@@ -81,10 +81,12 @@ query mechanism for accessing elements.
 Calling Python From an ASP Program
 ----------------------------------
 
-Clorm provides two decorator functions that make it easy to call Python from
-within an ASP program. These decorators wrap a function (or method) with some
-type conversion code that takes care of converting from intutive Python types to
-Clingo acceptable types.
+Clorm provides a number of decorators that can make it easier to call Python
+from within an ASP program. The basic idea is that Clorm provides all the
+information required to convert data between native Python types and
+clingo.Symbol objects. Therefore functions can be written by only dealing with
+Python data and the Clorm decorators will wrap these functions with the
+appropriate data conversions based on a given signature.
 
 .. autofunction:: clorm.make_function_asp_callable
 
@@ -95,6 +97,12 @@ It may also be useful to deal with a predeclared type cast signature.
 .. autoclass:: clorm.TypeCastSignature
    :members:
 
+From Clingo 5.4 onwards, the Clingo grounding function allows a `context`
+parameter to be specified. This parameter defines a context object for the
+methods that are called by ASP using the @-syntax.
+
+.. autoclass:: clorm.ContextBuilder
+   :members:
 
 .. _api_clingo_integration:
 

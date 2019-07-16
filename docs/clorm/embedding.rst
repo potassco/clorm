@@ -122,7 +122,9 @@ arguments:
 The important point is that the type cast signature provides a mechanism to
 specify arbitrary data conversions both for the input and output data; including
 conversions generated from very complex terms specified as Clorm ``ComplexTerm``
-subclasses. Consequently, the programmer does not have to waste time performing type conversions and even existing functions could be decorated to be used as callable ASP functions.
+subclasses. Consequently, the programmer does not have to waste time performing
+type conversions and even existing functions could be decorated to be used as
+callable ASP functions.
 
 Another point to note is that the Clorm specification is also able to use the
 simplified tuple syntax from the Clingo API to specify the enumerated pairs.  In
@@ -156,17 +158,128 @@ the limited ad-hoc approach of the built-in clingo API. Secondly, by making this
 type conversion specification explicit it is clear what conversions will be
 performed and therefore makes for clearer and more re-usable code.
 
+Specifying a Grounding Context
+------------------------------
+
+From Clingo 5.4 onwards, the Clingo grounding function allows a `context`
+parameter to be specified. This parameter defines a context object for the
+methods that are called by ASP using the @-syntax.
+
+While this context feature can be used in a number of different ways, one way is
+simply as a convenient namespace for encapsulating the external Python functions
+that are callable from within an ASP program. Clorm provides support for this
+use-case through the use of context builders.
+
+``ContextBuilder`` allows arbitrary functions to be captured within a context
+and assigned a data conversion signature (where the data conversion signature is
+specified in the same way as the ``make_function_asp_callable`` and
+``make_method_asp_callable`` functions). It also allows the function to be given
+a different name when called from within the context.
+
+Also like ``make_function_asp_callable`` and ``make_method_asp_callable``, the
+context builder's ``register`` and ``register_name`` member functions can be
+called as decorators or as normal functions. However, unlike the standalone
+functions, a useful feature of the ``ContextBuilder`` member functions is that
+when called as decorators they do not decorate the original functions but
+instead return the original function and only decorate the function when called
+from within the context.
+
+Consider the decorated ``date_range`` function defined earlier. One issue with
+this function is that it can only be called from within an ASP program (unless
+you use clingo.Symbol inputs and outputs). However, a function that generates an
+enumerated date range is fairly useful in itself so it might be desireable to be
+called from other Python functions.
+
+The ``ContextBuilder`` can be used to solve this problem.
+
+.. code-block:: python
+
+   from clorm import ContextBuilder
+
+   cb=ContextBuilder()
+
+   # decorator that registers the function with the context
+   @cb.register(DateField, DateField, [(IntegerField, DateField)])
+   def date_range(start, end):
+       inc = timedelta(days=1)
+       tmp = []
+       while start < end:
+           tmp.append(start)
+	   start += inc
+       return list(enumerate(tmp))
+
+   # Use the function as normal to calculate a date range
+   sd=datetime.date(2010,1,5)
+   ed=datetime.date(2010,1,8)
+   dr=date_range(sd,ed)
+
+   ctx=cb.make_context()
+
+   # Use the decorated version from within the context
+   cl_dr = ctx.date_range(clingo.String("20100105"),clingo.String("20100108"))
+
+The above example show how the original ``date_range`` function is untouched but
+instead the context version is wrapped using the data conversion signature. The
+created context can then be passed as an argument during the grounding phase.
+
+.. code-block:: python
+
+   import clingo
+
+   ctrl=clingo.Control()
+
+   # Define an ASP program and import it into the control object
+   prgstr="""date(@date_range("20101010", "20101013")."""
+
+   with ctrl.builder() as b:
+      clingo.parse_program(prgstr, lambda s: b.add(s))
+
+   # Ground using the context defined earlier
+   ctrl.ground([("base",[])],context=ctx)
+
+   # Solve
+   ctrl.solve()
+
+The program defined in the string uses the ``date_range`` function defined by
+the earlier context and when solved will produce the expected answer set:
+
+.. code-block:: prolog
+
+   date("2001010"). date("2001011"). date("2001012").
+
+Of course multiple functions can be registered with a ``ContextBuilder`` and it
+can also be used as a from of code re-use to define multiple versions of a
+function with different signatures.
+
+.. code-block:: python
+
+   def add(a,b): a+b
+
+   # Register two versions using the same function - one to add numbers and one
+   # to concat strings. Note: first argument is the new function name, last
+   # argument is the function; the middle arguments define the signature.
+   cb.register_name("addi", IntegerField, IntegerField, IntegerField, add)
+   cb.register_name("adds", StringField, StringField, StringField, add)
+
+   ctx=cb.make_context()
+
+   n1=clingo.Number(1); n2=clingo.Number(2); n3=clingo.Number(3)
+   s1=clingo.String("ab"); s2=clingo.String("cd"); s3=clingo.String("abcd")
+
+   assert ctx.addi(n1,n2) == n3
+   assert ctx.adds(s1,s2) == s3
+
 Re-usable Components
 --------------------
 
 Building on the easy with which predicates and complex terms can be defined
-using Clorm, a second goal of this project is to maintain a library of re-usable
-ASP components.
+using Clorm, a possible goal of this project is to maintain a library of
+re-usable ASP components.
 
 While it remains to be seen whether or not there is a genuine need or desire for
-a library of re-usable ASP components, we would argue that using such components
-can make ASP programs easier to use and easier to debug. For example, a library
-containing enumerated dates allows the ASP code to deal with the index (since it
+a library of re-usable ASP components, using such components could make ASP
+programs easier to use and easier to debug. For example, a library containing
+enumerated dates allows the ASP code to deal with the index (since it
 establishes the ordering), but also make the inputs and outputs of the program
 more readable because it explicitly includes the date represented in a human
 readable form.

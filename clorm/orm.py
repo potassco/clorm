@@ -2741,17 +2741,18 @@ class ContextBuilder(object):
     provided to the grounding function. The context encapsulates the external
     Python functions that can be called from within an ASP program.
 
-    ContextBuilder allows arbitrary functions to be captured within a context
-    and assigned a conversion signature. It also allows the function to be
-    given a different name when called from ASP.
+    ``ContextBuilder`` allows arbitrary functions to be captured within a context
+    and assigned a conversion signature. It also allows the function to be given
+    a different name when called from within the context.
 
-    The ContextBuilder's 'register' and 'register_name' can be called as
-    decorators or as normal functions. A useful feature of these functions is
-    that when called as decorators they do not wrap the original function but
-    instead return the original function and only wrap the function when called
-    from within the context. This is unlike the `make_function_asp_callable` and
-    `make_method_asp_callable` function which when call as decorators will
-    replace the original function with the wrapped function.
+    The context builder's ``register`` and ``register_name`` member functions
+    can be called as decorators or as normal functions. A useful feature of
+    these functions is that when called as decorators they do not wrap the
+    original function but instead return the original function and only wrap the
+    function when called from within the context. This is unlike the
+    ``make_function_asp_callable`` and ``make_method_asp_callable`` functions
+    which when called as decorators will replace the original function with the
+    wrapped version.
 
     Example:
 
@@ -2760,9 +2761,11 @@ class ContextBuilder(object):
     register functions can be called). A context object is then created by the
     context builder and used during grounding. It will produce the answer set:
 
-      f(5), g(6), h("abcd").
-
        .. code-block:: prolog
+
+          f(5), g(6), h("abcd").
+
+       .. code-block:: python
 
            f(@addi(1,4)).
            g(@addi_alt(2,4)).
@@ -2776,12 +2779,16 @@ class ContextBuilder(object):
            SF=StringField
            cb=ContextBuilder()
 
+           # Uses the function annotation to define the conversion signature
            @cb.register
            def addi(a : IF, b : IF) -> IF : return a+b
 
+           # Register with a different name
            @cb.register_name("addi_alt")
            def add2(a : IF, b : IF) -> IF : return a+b
 
+           # Register with a different name and override the signature in the
+           # function annotation
            cb._register_name("adds", SF, SF, SF, addi)
 
            ctx=cb.make_context()
@@ -2815,6 +2822,17 @@ class ContextBuilder(object):
         return _decorator
 
     def register(self, *args):
+        '''Register a function with the context builder.
+
+    Args:
+
+      *args: the last argument must be the function to be registered. If there
+        is more than one argument then the earlier arguments define the data
+        conversion signature. If there are no earlier arguments then the
+        signature is extracted from the function annotations.
+
+        '''
+
         # Called as a decorator with no signature arguments so decorator needs
         # to use function annotations
         if len(args) == 0: return self._make_decorator()
@@ -2832,6 +2850,18 @@ class ContextBuilder(object):
         return self._make_decorator(None,*sigargs)(args[-1])
 
     def register_name(self, func_name, *args):
+        '''Register a function with assigning it a new name witin the context.
+
+    Args:
+
+      func_name: the new name for the function within the context.
+
+      *args: the last argument must be the function to be registered. If there
+        is more than one argument then the earlier arguments define the data
+        conversion signature. If there are no earlier arguments then the
+        signature is extracted from the function annotations.
+        '''
+
         if not func_name: raise ValueError("Specified an empty function name")
 
         # Called as a decorator with no signature arguments so decorator needs
@@ -2851,6 +2881,8 @@ class ContextBuilder(object):
         return self._make_decorator(func_name,*sigargs)(args[-1])
 
     def make_context(self, cls_name="Context"):
+        '''Return a context object that encapsulates the registered functions'''
+
         tmp = { n : fn for n,fn in self._funcs.items() }
         return type(cls_name, (object,), tmp)()
 
