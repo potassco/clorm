@@ -14,7 +14,7 @@ refactor the python code as the ASP program evolves.
 
 The documentation is available online `here <https://clorm.readthedocs.io>`_.
 
-Note: Clorm currently only works with Python 3.x.
+Note: Clorm only works with Python 3.x.
 
 Installation
 ------------
@@ -251,18 +251,87 @@ The above example shows some of the main features of Clorm and how to match the
 Python data model to the defined ASP predicates. For more details about how to
 use Clorm see the `documentation <https://clorm.readthedocs.io/en/latest/>`_.
 
+Other Clorm Features
+--------------------
+
+The ORM interface is the heart of Clorm. However, beyond the basics outlined
+above there are other useful features that build on the ORM interface. These
+include:
+
+* You can define new sub-classes of ``RawField`` for specific data
+  conversions. For example, you can define a ``DateField`` that represents dates
+  in clingo in YYYY-MM-DD format and then use it in a predicate definition.
+
+.. code-block:: python
+
+    from clorm import StringField          # StringField is a sub-class of RawField
+    from datetime import datetime
+
+    class DateField(StringField):
+        pytocl = lambda dt: dt.strftime("%Y%m%d")
+        cltopy = lambda s: datetime.datetime.strptime(s,"%Y%m%d").date()
+
+    class DeliveryDate(Predicate):
+        item=ConstantField()
+        date=DateField()
+
+* Clorm supports predicate definitions with complex-terms; using a
+  ``ComplexTerm`` class (which is in fact an alias for Predicate) and Python
+  tuples. Every defined complex term has an associated ``RawField`` sub-class
+  that can be accessed as a ``Field`` property of the complex term class.
+
+.. code-block:: python
+
+    from clorm import ComplexTerm
+
+    class Event(ComplexTerm):
+        date=DateField
+	name=StringField
+
+    class Log(Predicate):
+        event=Event.Field()
+	level=IntegerField()
+
+.. code-block:: prolog
+
+    log(event("20190405", "goto shops"), 0).
+
+* Field definitions can be specified as part of a function signature to perform
+  automatic type conversion for writing Python functions that can be called from
+  an ASP program using @-syntax.
+
+  Here function ``add`` is decorated with an automatic data conversion signature
+  to add two integers and return the resulting integer.
+
+.. code-block:: python
+
+    @make_function_asp_callable(IntegerField, IntegerField, IntegerField)
+    def add(a,b): a+b
+
+.. code-block:: prolog
+
+    f(@add(5,6)).    % grounds to f(11).
+
+* Function signatures follow the functionality of the clingo API (so can deal
+  with tuples and functions that return list of items). However, the behaviour
+  of the clingo API is ad-hoc when it comes to automatic data conversion. That
+  is it can automatically convert numbers and strings but not other types such
+  as constants or more complex terms. The Clorm conversion signatures provide a
+  more principled and transparent approach, since all data conversions are
+  specified as part of the signature.
+
+
 Development
 -----------
 * Python version: Clorm was developed using Python 3.7 and has been tested with Python 3.6.
-* Clingo version: Clorm has been tested with Clingo version 5.3.0 and 5.3.1
+* Clingo version: Clorm has been tested with Clingo version 5.3 and 5.4 (development release)
 
 TODO
 ----
-* complete Sphinx documentation
 * add more examples
-
-* add a library of resuable ASP integration components (started).
-* add a debug library -- my ideas on this are still vague.
+* build library of resuable ASP integration components (started - still unsure
+  how useful it would be).
+* add a debug library? -- only vague ideas at this stage.
 
 Alternatives
 ------------

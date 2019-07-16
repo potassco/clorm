@@ -30,7 +30,10 @@ able to make some assumptions. In particular:
 
 While the automatic data conversion behaviour of the clingo API can be
 convenient it is however a somewhat ad-hoc approach. In the first place there is
-no automatic conversions for the inputs to the external function. Secondly it cannot deal with arbitrary outputs. For example, it is not possible to specify that a string should be interpreted as a constant object rather than a string object. Also complex terms other than a tuples cannot be automatically handled.
+no automatic conversions for the inputs to the external function. Secondly it
+cannot deal with arbitrary outputs. For example, it is not possible to specify
+that a string should be interpreted as a constant object rather than a string
+object. Also complex terms other than a tuples cannot be automatically handled.
 
 To address these problems Clorm tries to provide a more principled approach that
 allows for a *type cast signature* that defines how to automatically convert
