@@ -331,12 +331,36 @@ Development
 * Python version: Clorm was developed using Python 3.7 and has been tested with Python 3.6.
 * Clingo version: Clorm has been tested with Clingo version 5.3 and 5.4 (development release)
 
-TODO
-----
-* add more examples
-* build library of resuable ASP integration components (started - still unsure
-  how useful it would be).
-* add a debug library? -- only vague ideas at this stage.
+Ideas for the Future
+--------------------
+Here are some thoughts on how to extend the library.
+
+* Add more examples to show how to use the Clorm.
+
+* Build a library of resuable ASP integration components. I've started on this
+  but am unsure how useful it would be. While there are some general concepts
+  that you might consider encoding (e.g., date and time), how you actually want
+  to encode them could be application specific. For example, encoding time down
+  to the second or minute level is probably not what you want for you are doing
+  calendar scheduling. In such a case a higher granularity, say 15 min blocks,
+  is better.
+
+  It could be that rather than a library of components, a set of example
+  templates that could be copied and modified might be more useful.
+
+* Add a debug library. There are two aspects: debugging your Python-ASP
+  integration code, and debugging the ASP code itself. For the first case, I
+  should at least go through Clorm to make sure that exceptions have meaningful
+  the error messages.
+
+  Debugging ASP code itself is trickier. It is often a painful process; when you
+  mess up you often end up with an unsatisfiable problem, which doesn't tell you
+  anything about what went wrong. You then end up commenting out constraints
+  until it becomes satisfiable and you can look at the models being
+  generated. My ideas are only vague at this stage. Maybe a tool that
+  automatically weakens constraints until the problem becomes satisfiable. There
+  are a few papers on debugging ASP so need to chase these up and see if there
+  is something I can use.
 
 Alternatives
 ------------

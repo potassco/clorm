@@ -1,12 +1,13 @@
 .. _liborm:
 
-Reusable ASP Components
+Reusable Components
 =======================
 
-This section highlights the library of re-usable ASP components provided by
-Clorm. The goal is to slowly build up a comprehensive set of components that
-could be used to build readable ASP programs that can be easily integrated into
-Python applications.
+**This is a work in progress**
+
+The goal is to slowly build up a comprehensive set of Clorm components
+(definitions and functions) that could be used to build readable ASP programs
+that can be easily integrated into Python applications.
 
 Library components that are currently in the works:
 
