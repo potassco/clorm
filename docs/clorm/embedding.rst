@@ -272,19 +272,3 @@ function with different signatures.
    assert ctx.addi(n1,n2) == n3
    assert ctx.adds(s1,s2) == s3
 
-Re-usable Components
---------------------
-
-Building on the easy with which predicates and complex terms can be defined
-using Clorm, a possible goal of this project is to maintain a library of
-re-usable ASP components.
-
-While it remains to be seen whether or not there is a genuine need or desire for
-a library of re-usable ASP components, using such components could make ASP
-programs easier to use and easier to debug. For example, a library containing
-enumerated dates allows the ASP code to deal with the index (since it
-establishes the ordering), but also make the inputs and outputs of the program
-more readable because it explicitly includes the date represented in a human
-readable form.
-
-For details of the available libraries see :ref:`liborm`.
