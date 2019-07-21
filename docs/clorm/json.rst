@@ -7,7 +7,7 @@ may want to generate a problem instance as part of a main web application but
 then pass off the problem instance to a worker processes that actually calls the
 solver.
 
-.. note: ``clingo`` command line JSON output
+.. note::
 
    The JSON encoding of the clingo.Symbol objects generated here is not the same
    as running clingo with the ``--outf=2`` argument. The output here is intended
@@ -15,6 +15,11 @@ solver.
    particularly human readable. In contrast the clingo output in more human
    readable but would require parsing to regenerate the original symbol objects.
 
+.. warning::
+
+   The JSON encoding may change. This is only a first-cut and I think it should
+   be possible to have a better more compact JSON encoding. Will aim to keep the
+   API similar but the underlying encoding might change.
 
 The ``FactBaseCoder`` class is a helper class to be able to encode/decode JSON for
 particular Predicate sub-classes. The predicates can be supplied at
