@@ -54,6 +54,7 @@ class ClingoTestCase(unittest.TestCase):
             nonlocal fb2
             self.assertTrue(model.contains(af1))
             self.assertTrue(model.contains(af1.raw))
+            self.assertTrue(model.model_.contains(af1.raw))
             fb2 = model.facts(fbb, atoms=True)
 
             # Check that the known attributes behave the same as the real model
@@ -80,18 +81,18 @@ class ClingoTestCase(unittest.TestCase):
 
         # Check that the known control attributes behave the same as the real control
         cfg1=ctrl.configuration
-        cfg2=ctrl._ctrl.configuration
+        cfg2=ctrl.control_.configuration
         self.assertEqual(len(cfg1),len(cfg2))
         self.assertEqual(set(cfg1.keys),set(cfg2.keys))
         sas1=set(ctrl.symbolic_atoms)
-        sas2=set(ctrl._ctrl.symbolic_atoms)
+        sas2=set(ctrl.control_.symbolic_atoms)
         self.assertEqual(len(sas1),len(sas2))
-        self.assertEqual(ctrl.is_conflicting, ctrl._ctrl.is_conflicting)
+        self.assertEqual(ctrl.is_conflicting, ctrl.control_.is_conflicting)
         stat1=ctrl.statistics
-        stat2=ctrl._ctrl.statistics
+        stat2=ctrl.control_.statistics
         self.assertEqual(len(stat1),len(stat2))
         tas1=ctrl.theory_atoms
-        tas2=ctrl._ctrl.theory_atoms
+        tas2=ctrl.control_.theory_atoms
         self.assertEqual(len(tas1),len(tas2))
 
         # _control_add_facts works with both a list of facts and a FactBase
@@ -175,6 +176,7 @@ class ClingoTestCase(unittest.TestCase):
         with ctrl.solve(yield_=True) as sh:
             self.assertTrue(isinstance(sh, cclingo.SolveHandle))
             self.assertFalse(isinstance(sh, oclingo.SolveHandle))
+            self.assertTrue(sh.solvehandle_)
             num_models=0
             for m in sh:
                 self.assertTrue(isinstance(m, cclingo.Model))

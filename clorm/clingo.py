@@ -71,6 +71,14 @@ class Model(object, metaclass=_ModelMetaClass):
         self._model = model
 
     #------------------------------------------------------------------------------
+    # Return the underlying model object
+    #------------------------------------------------------------------------------
+    @property
+    def model_(self):
+        '''Returns the underlying clingo.Model object.'''
+        return self._model
+
+    #------------------------------------------------------------------------------
     # A new function to return a list of facts - similar to symbols
     #------------------------------------------------------------------------------
 
@@ -145,13 +153,26 @@ class SolveHandle(object, metaclass=_SolveHandleMetaClass):
     Objects mustn't be created manually. Instead they are returned by
     ``clorm.clingo.Control.solve``.
 
-    Behaves like ``clingo.SolveHandle`` but iterates over ``clorm.clingoModel``
+    Behaves like ``clingo.SolveHandle`` but iterates over ``clorm.clingo.Model``
     objects.
 
     '''
 
+
     def __init__(self, handle):
         self._handle = handle
+
+    #------------------------------------------------------------------------------
+    # Return the underlying solvehandle object
+    #------------------------------------------------------------------------------
+    @property
+    def solvehandle_(self):
+        '''Access the underlying clingo.SolveHandle object.'''
+        return self._handle
+
+    #------------------------------------------------------------------------------
+    # Overrides
+    #------------------------------------------------------------------------------
 
     def __iter__(self):
         return self
@@ -208,7 +229,17 @@ class Control(object, metaclass=_ControlMetaClass):
         else:
             self._ctrl = OControl(*args, **kwargs)
 
+    #------------------------------------------------------------------------------
+    # Return the underlying control object
+    #------------------------------------------------------------------------------
+    @property
+    def control_(self):
+        '''Returns the underlying clingo.Control object.'''
+        return self._ctrl
+
+    #------------------------------------------------------------------------------
     # A new function to add facts from a factbase or a list of facts
+    #------------------------------------------------------------------------------
     def add_facts(self, facts):
         '''Add facts to the control object. Note: facts must be added before grounding.
 
@@ -238,21 +269,9 @@ class Control(object, metaclass=_ControlMetaClass):
 #                bknd.add_rule([atm])
 #        return
 
-        # Ugly way is to generate a string and then parse the string
-#        if isinstance(facts, FactBase):
-#            asp_str = facts.asp_str()
-#        else:
-#            out = io.StringIO()
-#            for f in facts:
-#                print("{}.".format(f), file=out)
-#            asp_str = out.getvalue()
-#            out.close()
-
-#        # Parse and add the facts
-#        with self._ctrl.builder() as b:
-#            oclingo.parse_program(asp_str, lambda stmt: b.add(stmt))
-
+    #------------------------------------------------------------------------------
     # Overide assign_external to deal with NonLogicalSymbol object and a Clingo Symbol
+    #------------------------------------------------------------------------------
     def assign_external(self, fact, truth):
         '''Assign a truth value to an external atom (represented as a function symbol
         or program literam or a clorm fact.
@@ -265,7 +284,9 @@ class Control(object, metaclass=_ControlMetaClass):
         else:
             self._ctrl.assign_external(fact, truth)
 
+    #------------------------------------------------------------------------------
     # Overide release_external to deal with NonLogicalSymbol object and a Clingo Symbol
+    #------------------------------------------------------------------------------
     def release_external(self, fact):
         '''Release an external atom represented by the given symbol, program literal, or
         clorm fact.
