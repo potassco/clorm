@@ -317,13 +317,12 @@ Clorm library. These include:
     % Corresponding ASP code
     log(event("2019-04-05", "goto shops"), 0).
 
-* Field definitions can be decorated with a data conversion signature to perform
-  automatic type conversion for writing Python functions that can be called from
-  an ASP program using the @-syntax.
+* Function definitions can be decorated with a data conversion signature to
+  perform automatic type conversion for writing Python functions that can be
+  called from an ASP program using the @-syntax.
 
-  For example a function ``add`` can be decorated with an automatic data
-  conversion signature that accepts two input integers and expects an output
-  integer.
+  For example a function ``add`` can be decorated with an data conversion
+  signature that accepts two input integers and expects an output integer.
 
 .. code-block:: python
 
@@ -335,21 +334,21 @@ Clorm library. These include:
     % Calling the add function from ASP
     f(@add(5,6)).    % grounds to f(11).
 
-* The data conversion signature can be specified using Python 3.x function
+* The data conversion signature can also be specified using Python 3.x function
   annotations. So for an equivalent specification of ``add`` above:
 
 .. code-block:: python
 
     @make_function_asp_callable
-    def add(a : IntegerField ,b : IntegerField) -> IntegerField: a+b
+    def add(a : IntegerField, b : IntegerField) -> IntegerField: a+b
 
 * Data conversion signatures follow the functionality of the clingo API (so you
   can specify tuples and provide functions that return list of items).
 
-  Note, that the behaviour of the clingo API is ad-hoc when it comes to
-  automatic data conversion, in the sense that it will automatically convert
-  numbers and strings, but cannot deal with other types such as constants or
-  more complex terms.
+  Note, the Clingo API will already perform some automatic type
+  conversions. However these conversions are ad-hoc, in the sense that it will
+  automatically convert numbers and strings, but cannot deal with other types
+  such as constants or more complex terms.
 
   In contrast the Clorm mechanism of a data conversion signatures provide a more
   complete and transparent approach; it can deal with arbitrary conversions and
