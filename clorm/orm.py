@@ -549,8 +549,12 @@ class RawField(object, metaclass=_RawFieldMeta):
        object and is must output a Python string object.
 
     Args:
-      default: A default value when instantiating a ``Predicate`` or
-        ``ComplexTerm`` object. Defaults to ``None``.
+
+      default: A default value (or function) to be used when instantiating a
+       ``Predicate`` or ``ComplexTerm`` object. If a Python ``callable`` object is
+       specified (i.e., a function or functor) then it will be called (with no
+       arguments) when the predicate/complex-term object is instantiated.
+
       index (bool): Determine if this field should be indexed by default in a
         ``FactBase```. Defaults to ``False``.
 
@@ -585,9 +589,9 @@ class RawField(object, metaclass=_RawFieldMeta):
 
     @property
     def default(self):
-        """Returns the default value for the field (or None if no default was set).
+        """Returns the default value for the field (or ``None`` if no default was set).
 
-        If a function was specified as the default then call the function and
+        Note: if a function was specified as the default then call this function and
         return the value.
 
         """

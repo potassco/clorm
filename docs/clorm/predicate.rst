@@ -83,6 +83,9 @@ There are some things to note here:
   passed to a constant term satisfies the syntactic restriction.
 * The use of a default value: all term types support the specification of a
   default value.
+* If the specified default is a function then this function will be called (with
+  no arguments) when the predicate/complex-term object is instantiated. This can
+  be used to generated unique ids or a date/time stamp.
 
 
 Overriding the Predicate Name
