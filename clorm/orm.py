@@ -440,8 +440,9 @@ def _sfm_constructor(self, default=None, index=False):
     self._default = default
     self._index = index
 
-    # Check that the default is a valid value
-    if default:
+    # Check that the default is a valid value. If the default is a callable then
+    # we can't do this check.
+    if default and not callable(default):
         try:
             self.pytocl(default)
         except TypeError:
@@ -584,7 +585,14 @@ class RawField(object, metaclass=_RawFieldMeta):
 
     @property
     def default(self):
-        """Returns the specified default value for the term (or None)"""
+        """Returns the default value for the field (or None if no default was set).
+
+        If a function was specified as the default then call the function and
+        return the value.
+
+        """
+        if not self._default: return None
+        if callable(self._default): return self._default()
         return self._default
 
     @property
@@ -972,11 +980,11 @@ def _nls_init_by_keyword_values(self, **kwargs):
     # Construct the clingo function arguments
     for field in self.meta:
         if field.name not in kwargs:
-            if not field.defn.default:
+            default = field.defn.default   # Only get the default once in case it is a function
+            if not default:
                 raise ValueError(("Unspecified field {} has no "
                                   "default value".format(field.name)))
-            self._field_values[field.name] = _preprocess_field_value(
-                field.defn, field.defn.default)
+            self._field_values[field.name] = _preprocess_field_value(field.defn, default)
         else:
             self._field_values[field.name] = _preprocess_field_value(
                 field.defn, kwargs[field.name])

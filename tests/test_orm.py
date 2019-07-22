@@ -47,8 +47,9 @@ class ORMTestCase(unittest.TestCase):
 
 
     #--------------------------------------------------------------------------
-    # Simple test to make sure the default getters and setters are correct
-    #--------------------------------------------------------------------------
+    # Test the Simple Fields conversion functions
+    # (StringField/ConstantField/IntegerField) as well as sub-classing
+    # --------------------------------------------------------------------------
     def test_simpleterms(self):
 
 
@@ -90,7 +91,7 @@ class ORMTestCase(unittest.TestCase):
             self.assertEqual(PartialField.cltopy(symstr), dt)
 
     #--------------------------------------------------------------------------
-    # Simple test to make sure the default getters and setters are correct
+    # Test that the simple field unify functions work as expected
     #--------------------------------------------------------------------------
     def test_pytocl_and_cltopy_and_unifies(self):
         num1 = 1
@@ -378,6 +379,25 @@ class ORMTestCase(unittest.TestCase):
             fld = IntegerField(default="bad")
 
     #--------------------------------------------------------------------------
+    # A default can now take a function that will be called when the Field's
+    # default property is called.
+    # --------------------------------------------------------------------------
+    def test_field_default_function(self):
+        val=0
+        def inc():
+            nonlocal val
+            val +=1
+            return val
+
+        fld1 = IntegerField()
+        fld2 = IntegerField(default=5)
+        fld3 = IntegerField(default=inc)
+        self.assertEqual(fld1.default, None)
+        self.assertEqual(fld2.default, 5)
+        self.assertEqual(fld3.default, 1)
+        self.assertEqual(fld3.default, 2)
+
+    #--------------------------------------------------------------------------
     # Test making a restriction of a field using a list of values
     #--------------------------------------------------------------------------
     def test_refine_field_values(self):
@@ -496,6 +516,32 @@ class ORMTestCase(unittest.TestCase):
         f2=Fact(1,"test")
 
         self.assertEqual(Fact.meta.parent, Fact)
+        self.assertEqual(f1, f2)
+        self.assertEqual(f1.raw, func)
+
+    #--------------------------------------------------------------------------
+    # Test a simple predicate with a field that has a function default
+    # --------------------------------------------------------------------------
+    def test_predicate_with_function_default(self):
+        val=0
+        def inc():
+            nonlocal val
+            val +=1
+            return val
+
+        class Fact(Predicate):
+            anum = IntegerField(default=inc)
+            astr = StringField()
+
+        func=Function("fact",[Number(1),String("test")])
+        f1=Fact(1,"test")
+        f2=Fact(astr="test")        # uses the default
+        f3=Fact(astr="test")        # second use of the default
+        f4=Fact(astr="test")        # third use of the default
+
+        self.assertEqual(f2.anum, 1)
+        self.assertEqual(f3.anum, 2)
+        self.assertEqual(f4.anum, 3)
         self.assertEqual(f1, f2)
         self.assertEqual(f1.raw, func)
 
