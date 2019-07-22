@@ -49,9 +49,11 @@ class Assignment(Predicate):
 #--------------------------------------------------------------------------
 
 def main(ctrl_):
+    # For better integration with Clorm wrap the clingo.Control object with a
+    # clorm.clingo.Control object.
     ctrl = Control(control_=ctrl_)
 
-        # Dynamically generate the instance data
+    # Dynamically generate the instance data
     drivers = [ Driver(name=n) for n in ["dave", "morri", "michael" ] ]
     items = [ Item(name="item{}".format(i)) for i in range(1,6) ]
     instance = FactBase(drivers + items)

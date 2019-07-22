@@ -38,7 +38,13 @@ Quick Start
 The following example highlights the basic features of Clorm. The ASP and Python
 parts of this example are located in the ``examples`` sub-directory in the git
 repository. The ASP program is ``quickstart.lp`` and the Python program is
-``quickstart.py``.
+``quickstart.py``. A clingo callable version with embedded Python is also
+provided and can be run with:
+
+.. code-block:: bash
+
+    $ clingo embedded_quickstart.lp
+
 
 Imagine you are running a courier company and you have drivers and items that
 need to be delivered on a daily basis. An item is delivered during one of four
@@ -97,8 +103,9 @@ Python classes. Clorm introduces two basic concepts for defining the data model:
 classes and must be sub-classed, while ``FactBase`` provides a container for
 storing facts.
 
-A helper class ``FactBaseBuilder`` is provided for alternative ways of creating
-FactBases (e.g., building a fact base from raw Clingo ``Symbol`` objects).
+A helper class ``FactBaseBuilder`` is provided for creating FactBases which has
+convenient support for building a fact base from raw Clingo ``Symbol`` objects
+(such as when you are processing a Clingo generated model).
 
 
 .. code-block:: python
@@ -198,7 +205,7 @@ the predicates that were registered with the ``FactBaseBuilder``. In this case
 it ignores the ``working_driver/1`` instances. These facts are stored and
 returned in a fact base.
 
-The final part of our Python program involves querying the solution to print out
+The final step in this Python program involves querying the solution to print out
 the relevant parts. To do this we call the ``FactBase.select()`` member function
 that returns a suitable ``Select`` object.
 
@@ -212,9 +219,9 @@ such as SQLAlchemy or Peewee.
 
 Here we want to find ``Assignment`` instances that match the ``driver`` field to
 a special placeholder object ``ph1_`` and to return the results sorted by the
-assignment time. The value of ``ph1_`` will be provided when the query is
-actually executed; which allows the query to be re-run multiple times with
-different values.
+assignment time. The value of the ``ph1_`` placeholder will be provided when the
+query is actually executed; separating specification from execution allows the
+query to be re-run multiple times with different values.
 
 In particular, we now iterate over the list of drivers and execute the query for
 each driver and print the result.
@@ -262,23 +269,32 @@ Clorm library. These include:
 
 * You can define new sub-classes of ``RawField`` for custom data
   conversions. For example, you can define a ``DateField`` that represents dates
-  in clingo in YYYY-MM-DD format and then use it in a predicate definition.
+  in clingo in a string YYYY-MM-DD format and then use it in a predicate
+  definition.
 
 .. code-block:: python
 
     from clorm import StringField          # StringField is a sub-class of RawField
-    from datetime import datetime
+    import datetime
 
-    class DateField(StringField):
-        pytocl = lambda dt: dt.strftime("%Y%m%d")
-        cltopy = lambda s: datetime.datetime.strptime(s,"%Y%m%d").date()
+    class DateField(StringField):          # DateField is a sub-class of StringField
+        pytocl = lambda dt: dt.strftime("%Y-%m-%d")
+        cltopy = lambda s: datetime.datetime.strptime(s,"%Y-%m-%d").date()
 
-    class DeliveryDate(Predicate):
+    class Delivery(Predicate):
         item=ConstantField()
         date=DateField()
 
-* Clorm supports predicate definitions with complex-terms; using a
-  ``ComplexTerm`` class (which is in fact an alias for Predicate) and Python
+    dd1=Delivery(item="item1", date=datetime.date(2019,14,5))    # Create delivery
+
+.. code-block:: prolog
+
+    % Corresponding ASP code
+    delivery(item1, "2019-04-05").
+
+
+* Clorm supports predicate definitions with complex-terms; using either a
+  ``ComplexTerm`` class (which is in fact an alias for Predicate) or Python
   tuples. Every defined complex term has an associated ``RawField`` sub-class
   that can be accessed as a ``Field`` property of the complex term class.
 
@@ -294,16 +310,20 @@ Clorm library. These include:
         event=Event.Field()
 	level=IntegerField()
 
+    l1=Log(event=Event(date=datetime.date(2019,4,5),name="goto shops"),level=0)
+
 .. code-block:: prolog
 
-    log(event("20190405", "goto shops"), 0).
+    % Corresponding ASP code
+    log(event("2019-04-05", "goto shops"), 0).
 
-* Field definitions can be specified as part of a function signature to perform
+* Field definitions can be decorated with a data conversion signature to perform
   automatic type conversion for writing Python functions that can be called from
   an ASP program using the @-syntax.
 
-  Here function ``add`` is decorated with an automatic data conversion signature
-  that accepts two input integers and expects an output integer.
+  For example a function ``add`` can be decorated with an automatic data
+  conversion signature that accepts two input integers and expects an output
+  integer.
 
 .. code-block:: python
 
@@ -312,18 +332,29 @@ Clorm library. These include:
 
 .. code-block:: prolog
 
+    % Calling the add function from ASP
     f(@add(5,6)).    % grounds to f(11).
 
-* Function signatures follow the functionality of the clingo API (so you can
-  specify tuples and provide functions that return list of items).
+* The data conversion signature can be specified using Python 3.x function
+  annotations. So for an equivalent specification of ``add`` above:
 
-  However, the behaviour of the clingo API is ad-hoc when it comes to automatic
-  data conversion. That is, it will automatically convert numbers and strings,
-  but cannot deal with other types such as constants or more complex terms.
+.. code-block:: python
 
-  The Clorm mechanism of a data conversion signatures provide a more principled
-  and transparent approach; it can deal with arbitrary conversions and all data
-  conversions are clear since they are specified as part of the signature.
+    @make_function_asp_callable
+    def add(a : IntegerField ,b : IntegerField) -> IntegerField: a+b
+
+* Data conversion signatures follow the functionality of the clingo API (so you
+  can specify tuples and provide functions that return list of items).
+
+  Note, that the behaviour of the clingo API is ad-hoc when it comes to
+  automatic data conversion, in the sense that it will automatically convert
+  numbers and strings, but cannot deal with other types such as constants or
+  more complex terms.
+
+  In contrast the Clorm mechanism of a data conversion signatures provide a more
+  complete and transparent approach; it can deal with arbitrary conversions and
+  all data conversions are clear since they are specified as part of the
+  signature.
 
 
 Development
@@ -339,19 +370,19 @@ Here are some thoughts on how to extend the library.
 
 * Build a library of resuable ASP integration components. I've started on this
   but am unsure how useful it would be. While there are some general concepts
-  that you might consider encoding (e.g., date and time), how you actually want
-  to encode them could be application specific. For example, encoding time down
-  to the second or minute level is probably not what you want for you are doing
-  calendar scheduling. In such a case a higher granularity, say 15 min blocks,
-  is better.
+  that you might consider encoding (e.g., date and time), however, how you
+  actually want to encode them could be application specific. For example,
+  encoding time down to the second or minute level is probably not what you want
+  for a calendar scheduling application. In such a case a higher granularity,
+  say 15 min blocks, is better.
 
   It could be that rather than a library of components, a set of example
   templates that could be copied and modified might be more useful.
 
-* Add a debug library. There are two aspects: debugging your Python-ASP
-  integration code, and debugging the ASP code itself. For the first case, I
-  should at least go through Clorm to make sure that exceptions have meaningful
-  the error messages.
+* Add a debug library. There are two aspects to debugging: debugging your
+  Python-ASP integration code, and debugging the ASP code itself. For the first
+  case, I should at least go through Clorm to make sure that any generated
+  exceptions have meaningful error messages.
 
   Debugging ASP code itself is trickier. It is often a painful process; when you
   mess up you often end up with an unsatisfiable problem, which doesn't tell you
