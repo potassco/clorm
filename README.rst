@@ -342,10 +342,7 @@ Clorm library. These include:
     @make_function_asp_callable
     def add(a : IntegerField, b : IntegerField) -> IntegerField: a+b
 
-* Data conversion signatures follow the functionality of the clingo API (so you
-  can specify tuples and provide functions that return list of items).
-
-  Note, the Clingo API will already perform some automatic type
+* Note, the Clingo API does already perform some automatic data
   conversions. However these conversions are ad-hoc, in the sense that it will
   automatically convert numbers and strings, but cannot deal with other types
   such as constants or more complex terms.
