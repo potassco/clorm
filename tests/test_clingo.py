@@ -112,6 +112,34 @@ class ClingoTestCase(unittest.TestCase):
 
         # Now test a select
 
+    #--------------------------------------------------------------------------
+    # Test processing clingo Model
+    #--------------------------------------------------------------------------
+    def test_clingo_to_clorm_model_integration(self):
+        fbb=FactBaseBuilder()
+        @fbb.register
+        class Afact(Predicate):
+            num1=IntegerField()
+
+        af1 = Afact(1)
+        af2 = Afact(2)
+
+        fb1 = FactBase()
+        fb1.add([af1,af2])
+
+        def on_model(model):
+            cmodel=cclingo.Model(model_=model)
+            self.assertTrue(cmodel.contains(af1))
+            self.assertTrue(model.contains(af1.raw))
+
+
+        # Use the orignal clingo.Control object so that we can test the model wrapper
+        ctrl = cclingo.Control()
+        ctrl.add_facts(fb1)
+        octrl = ctrl.control_
+        octrl.ground([("base",[])])
+        octrl.solve(on_model=on_model)
+
 
     #--------------------------------------------------------------------------
     # Test processing clingo Model

@@ -67,8 +67,8 @@ class Model(object, metaclass=_ModelMetaClass):
 
     '''
 
-    def __init__(self, model):
-        self._model = model
+    def __init__(self, model_):
+        self._model = model_
 
     #------------------------------------------------------------------------------
     # Return the underlying model object
@@ -159,8 +159,8 @@ class SolveHandle(object, metaclass=_SolveHandleMetaClass):
     '''
 
 
-    def __init__(self, handle):
-        self._handle = handle
+    def __init__(self, handle_):
+        self._handle = handle_
 
     #------------------------------------------------------------------------------
     # Return the underlying solvehandle object
