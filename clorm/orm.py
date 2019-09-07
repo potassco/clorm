@@ -837,8 +837,8 @@ class FieldAccessor(object):
 # instance of a RawField then simply return the object. If it is a subclass of
 # RawField then return an instantiation of the object. If it is a tuple then
 # treat it as a recursive definition and return an instantiation of a
-# dynamically created complex-term corresponding to a tuple (which we call a
-# Clorm tuple).
+# dynamically created complex-term corresponding to a tuple (with the class name
+# ClormAnonTuple).
 # ------------------------------------------------------------------------------
 
 def _get_field_defn(defn):
@@ -856,7 +856,7 @@ def _get_field_defn(defn):
 
     proto = { "arg{}".format(i+1) : _get_field_defn(d) for i,d in enumerate(defn) }
     proto['Meta'] = type("Meta", (object,), {"istuple" : True, "_anon" : True})
-    ct = type("AnonymousClormTuple", (NonLogicalSymbol,), proto)
+    ct = type("ClormAnonTuple", (NonLogicalSymbol,), proto)
     return ct.Field()
 
 
