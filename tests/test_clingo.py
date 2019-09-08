@@ -128,7 +128,7 @@ class ClingoTestCase(unittest.TestCase):
         fb1.add([af1,af2])
 
         def on_model(model):
-            cmodel=cclingo.Model(model_=model)
+            cmodel=cclingo.Model(model=model)
             self.assertTrue(cmodel.contains(af1))
             self.assertTrue(model.contains(af1.raw))
 
