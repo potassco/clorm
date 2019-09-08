@@ -14,7 +14,7 @@ refactor the python code as the ASP program evolves.
 
 The documentation is available online `here <https://clorm.readthedocs.io>`_.
 
-Note: Clorm only works with Python 3.x.
+Note: Clorm only works with Python 3.5+
 
 Installation
 ------------
