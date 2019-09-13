@@ -12,7 +12,7 @@ from clingo import Control
 from clorm.orm import \
     NonLogicalSymbol, Predicate, ComplexTerm, \
     IntegerField, StringField, ConstantField, RawField, \
-    _get_field_defn, refine_field, \
+    _get_field_defn, refine_field, define_nls, \
     not_, and_, or_, StaticComparator, \
     ph_, ph1_, ph2_, \
     _FactIndex, _FactMap, FieldPath, FieldPathEval, path, \
@@ -734,6 +734,51 @@ class ORMTestCase(unittest.TestCase):
                 pass
 
 
+    #--------------------------------------------------------------------------
+    # Test the define_nls() function as a mechanism for defining
+    # Predicates/Complex-terms.
+    # --------------------------------------------------------------------------
+    def test_define_nls_function(self):
+        class Pred2(Predicate):
+            astr = StringField()
+            anum = IntegerField()
+            class Meta: name="predicate"
+        class Pred3(Predicate):
+            astr = StringField()
+            anum = IntegerField()
+            aconst = ConstantField()
+            class Meta: name="predicate"
+        class Bad3(Predicate):
+            astr = StringField()
+            anum = IntegerField()
+            aconst = ConstantField()
+            class Meta: name="bad"
+
+        p2 = Pred2("string1",10)
+        p3 = Pred3("string1",10,"constant")
+        b3 = Bad3("string1",10,"constant")
+
+        # Define an anonymous predicate
+        AnonPred3 = define_nls("predicate",3)
+
+        # Should unify
+        ap3 = AnonPred3(raw=p3.raw)
+        self.assertEqual(ap3.raw, p3.raw)
+        self.assertEqual(ap3.arg1, String("string1"))
+        self.assertEqual(ap3[0], String("string1"))
+        self.assertEqual(ap3.arg2, Number(10))
+        self.assertEqual(ap3[1], Number(10))
+
+        # Mismatched arity so unify will fail
+        with self.assertRaises(ValueError) as ctx:
+            fail1 = AnonPred3(raw=p2.raw)
+        # Mismatched predicate name so unify will fail
+        with self.assertRaises(ValueError) as ctx:
+            fail2 = AnonPred3(raw=b3.raw)
+
+    
+
+    
     #--------------------------------------------------------------------------
     # Test the clone operator
     # --------------------------------------------------------------------------

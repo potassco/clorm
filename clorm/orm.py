@@ -32,6 +32,9 @@ __all__ = [
     'Delete',
     'TypeCastSignature',
     'refine_field',
+    'define_nls',
+    'define_predicate',
+    'define_complex_term',
     'desc',
     'unify',
     'path',
@@ -854,7 +857,15 @@ def _get_field_defn(defn):
     if not isinstance(defn, tuple):
         raise TypeError("Unrecognised field definition object {}".format(defn))
 
-    proto = { "arg{}".format(i+1) : _get_field_defn(d) for i,d in enumerate(defn) }
+    # NOTE: I was using a dict rather than OrderedDict which just happened to
+    # work. Apparently, in Python 3.6 this was an implmentation detail and
+    # Python 3.7 it is a language specification (see:
+    # https://stackoverflow.com/questions/1867861/how-to-keep-keys-values-in-same-order-as-declared/39537308#39537308).
+    # However, since Clorm is meant to be Python 3.5 compatible change this to
+    # use an OrderedDict.
+    # proto = { "arg{}".format(i+1) : _get_field_defn(d) for i,d in enumerate(defn) }
+    proto = collections.OrderedDict([("arg{}".format(i+1), _get_field_defn(d))
+                                     for i,d in enumerate(defn)])
     proto['Meta'] = type("Meta", (object,), {"istuple" : True, "_anon" : True})
     ct = type("ClormAnonTuple", (NonLogicalSymbol,), proto)
     return ct.Field()
@@ -1056,7 +1067,9 @@ def _make_nlsdefn(class_name, dct):
 
     reserved = set(["meta", "raw", "clone", "Field"])
 
-    # Generate the fields - NOTE: relies on dct being an OrderedDict()
+    # Generate the fields - NOTE: this relies on dct being an OrderedDict()
+    # which is true from Python 3.5+ (see PEP520
+    # https://www.python.org/dev/peps/pep-0520/)
     fas= []
     idx = 0
     for field_name, field_defn in dct.items():
@@ -1127,7 +1140,6 @@ class _NonLogicalSymbolMeta(type):
         if name == "NonLogicalSymbol":
             dct["_nls"] = None
             dct["__init__"] = _nls_base_constructor
-#            dct["_meta"] = NLSDefn(name="",field_accessors=[], anon=False) # make autodoc happy
             return super(_NonLogicalSymbolMeta, meta).__new__(meta, name, bases, dct)
 
         # Create the metadata AND populate dct - the class dict (including the fields)
@@ -1387,6 +1399,24 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
 
 Predicate=NonLogicalSymbol
 ComplexTerm=NonLogicalSymbol
+
+#------------------------------------------------------------------------------
+# A function for defining NonLogicalSymbol sub-classes containing only RawField
+# parameters. Useful when debugging ASP code and you just want to use the class
+# for easy display/printing.
+# ------------------------------------------------------------------------------
+
+def define_nls(name,arity):
+
+    # Use an OrderedDict to ensure the correct order of the field arguments
+    proto = collections.OrderedDict([("arg{}".format(i+1), RawField())
+                                     for i in range(0,arity)])
+    proto['Meta'] = type("Meta", (object,),
+                         {"name" : name, "istuple" : False, "_anon" : True})
+    return type("ClormAnonNLS", (NonLogicalSymbol,), proto)
+
+define_predicate=define_nls
+define_complex_term=define_nls
 
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
