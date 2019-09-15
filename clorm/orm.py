@@ -93,9 +93,10 @@ class FieldPath(object):
     'Pred[0][1]' or a combination of positional and named arguments
     'Pred.a[b]'. Because of this two different paths may still refer to the same
     field. The FieldPath equality operator only checks that each link in the
-    chain is the same and not whether the does actually refer to the same field
-    (by a different combination of named and positional arguments). Instead an
-    'equivalent()` function is provided to test for semantic equivalence.
+    chain is the same and not whether the two paths actually refer to the same
+    field (by a different combination of named and positional
+    arguments). Instead an 'equivalent()` function is provided to test for
+    semantic equivalence.
 
     FieldPaths are used to identify fields in a query as well as for specifying
     indexes for a FactBase.
@@ -226,13 +227,15 @@ class FieldPath(object):
         return tmp
 
 #------------------------------------------------------------------------------
-# FieldPathBuilder and supporting functions and classes. The builder is the key
-# because allows for the nice user syntax (eg., Pred.a.b or Pred.a[0]). It does
-# this by creating a builder for every NonLogicalSymbol (NLS) sub-class where
-# the corresponding builder creates a attribute for each field names that in
-# turns returns the approriate builder object - a chain of field references.
-# The FieldPathBuilder also overloads the boolean comparison operator to return
-# a comparator. This allows for the nice syntax such as, Pred.a.b == 1
+# FieldPathBuilder and supporting functions and classes. The builder is crucial
+# to the Clorm API because it implements the intuitive syntax for refering to
+# fields and sub-fields of a predicate (eg., Pred.a.b or Pred.a[0]). It does
+# this by creating a builder object for each NonLogicalSymbol (NLS) sub-class.
+# The NLS class' implementation creates an attribute for each field name of a
+# predicate, that in turns returns the approriate builder object - a chain of
+# field references.  The FieldPathBuilder also overloads the boolean comparison
+# operator to return a comparator. This allows for the nice syntax such as,
+# Pred.a.b == 1
 # ------------------------------------------------------------------------------
 
 def _make_fpb_class(field_defn):
