@@ -93,7 +93,7 @@ class ClingoTestCase(unittest.TestCase):
         self.assertEqual(len(stat1),len(stat2))
         tas1=ctrl.theory_atoms
         tas2=ctrl.control_.theory_atoms
-        self.assertEqual(len(tas1),len(tas2))
+        self.assertEqual(len(list(tas1)),len(list(tas2)))
 
         # _control_add_facts works with both a list of facts and a FactBase
         ctrl2 = Control()
