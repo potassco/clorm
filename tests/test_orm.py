@@ -201,9 +201,10 @@ class ORMTestCase(unittest.TestCase):
         self.assertTrue(Tuple.meta.is_tuple)
 
     #--------------------------------------------------------------------------
-    # Test that we can return the arity of a NLS class using len
+    # Test that we can get the arity of a NLS class; using the arity property
+    # and the len function.
     # --------------------------------------------------------------------------
-    def test_len_nonlogicalsymbol(self):
+    def test_arity_len_nonlogicalsymbol(self):
         class Tuple(ComplexTerm):
             a = IntegerField()
             b = StringField()
@@ -211,7 +212,10 @@ class ORMTestCase(unittest.TestCase):
 
         t = Tuple(a=1,b="asd", c=(1,"dfd"))
         self.assertEqual(len(t), 3)
+        self.assertEqual(len(t.meta), 3)
+        self.assertEqual(t.meta.arity, 3)
         self.assertEqual(len(Tuple.meta), 3)
+        self.assertEqual(Tuple.meta.arity, 3)
         self.assertEqual(len(t.c), 2)
         self.assertEqual(len(Tuple.c.meta.path.defn.complex.meta),2)
 

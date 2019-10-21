@@ -903,6 +903,11 @@ class NLSDefn(object):
         return self._name
 
     @property
+    def arity(self):
+        """Returns the arity of the predicate"""
+        return len(self)
+
+    @property
     def is_tuple(self):
         """Returns true if the definition corresponds to a tuple"""
         return self.name == ""
