@@ -24,9 +24,9 @@ copyright = '2018, David Rajaratnam'
 author = 'David Rajaratnam'
 
 # The short X.Y version
-version = '0.8.0'
+version = '0.9.0'
 # The full version, including alpha/beta/rc tags
-release = 'alpha'
+#release = 'alpha'
 
 
 # -- General configuration ---------------------------------------------------
