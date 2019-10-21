@@ -1415,6 +1415,20 @@ ComplexTerm=NonLogicalSymbol
 # ------------------------------------------------------------------------------
 
 def define_nls(name,arity):
+    """Helper function to dynamically define a predicate or complex-term.
+
+    It takes a name and an arity and creates a predicate/complex-term object
+    that is associated with that predicate name and the given arity. It's
+    parameters are all specified as RawFields.
+
+    This function is particularly useful when used for debugging ASP programs as
+    it provides output flexibility.
+
+    Args:
+       name: the name of the predicate to match against
+       arity: the arity for the predicate
+
+    """
 
     # Use an OrderedDict to ensure the correct order of the field arguments
     proto = collections.OrderedDict([("arg{}".format(i+1), RawField())
@@ -1500,6 +1514,7 @@ def _simplify_fact_comparator(comparator):
 # an abstract class that exposes no API other than its existence.
 # ------------------------------------------------------------------------------
 class Placeholder(abc.ABC):
+
     """An abstract class for defining parameterised queries.
 
     Currently, Clorm supports 4 placeholders: ph1\_, ph2\_, ph3\_, ph4\_. These

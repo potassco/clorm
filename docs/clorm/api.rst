@@ -26,6 +26,8 @@ more intuitive Python objects.
 
 .. autofunction:: clorm.refine_field
 
+.. autofunction:: clorm.define_nls
+
 .. _api_predicates:
 
 Predicates and Complex Terms
