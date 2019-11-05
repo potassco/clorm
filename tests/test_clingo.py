@@ -140,6 +140,103 @@ class ClingoTestCase(unittest.TestCase):
         octrl.ground([("base",[])])
         octrl.solve(on_model=on_model)
 
+    #--------------------------------------------------------------------------
+    # Test passing a FactBaseBuilder to the model constructors
+    #--------------------------------------------------------------------------
+    def test_model_default_fbb(self):
+        fbb=FactBaseBuilder()
+        @fbb.register
+        class Afact(Predicate):
+            num1=IntegerField()
+        af1 = Afact(1)
+        af2 = Afact(2)
+
+        # Test that the function works correctly when an fbb is passed to the
+        # Model constructor
+        def on_model1(model):
+            cmodel=cclingo.Model(model=model,fbb=fbb)
+            fb = cmodel.facts(atoms=True)
+            self.assertEqual(len(fb.facts()), 2)
+
+        ctrl = cclingo.Control()
+        ctrl.add_facts([af1,af2])
+        ctrl.ground([("base",[])])
+        ctrl.control_.solve(on_model=on_model1)
+
+        # Test that it fails correctly when no fbb is passed
+        def on_model2(model):
+            cmodel=cclingo.Model(model=model)
+            with self.assertRaises(ValueError) as ctx:
+                fb = cmodel.facts(atoms=True)
+        ctrl.control_.solve(on_model=on_model2)
+
+    #--------------------------------------------------------------------------
+    # Test passing a FactBaseBuilder to the control constructors and using the
+    # on_model callback for solving
+    # --------------------------------------------------------------------------
+    def test_control_on_model_default_fbb(self):
+        fbb=FactBaseBuilder()
+        @fbb.register
+        class Afact(Predicate):
+            num1=IntegerField()
+        af1 = Afact(1)
+        af2 = Afact(2)
+
+        # Test that the function works correctly when an fbb is passed via the
+        # clorm.clingo.Control constructor and using the on_model callback
+        def on_model1(model):
+            fb = model.facts(atoms=True)
+            self.assertEqual(len(fb.facts()), 2)
+
+        ctrl = cclingo.Control(fbb=fbb)
+        ctrl.add_facts([af1,af2])
+        ctrl.ground([("base",[])])
+        ctrl.solve(on_model=on_model1)
+
+        # Test that it fails correctly when no fbb is passed
+        def on_model2(model):
+            with self.assertRaises(ValueError) as ctx:
+                fb = model.facts(atoms=True)
+        ctrl = cclingo.Control()
+        ctrl.add_facts([af1,af2])
+        ctrl.ground([("base",[])])
+        ctrl.solve(on_model=on_model2)
+
+    #--------------------------------------------------------------------------
+    # Test passing a FactBaseBuilder to the control constructors and using a
+    # solvehandle for solving
+    # --------------------------------------------------------------------------
+    def test_control_solvehandle_default_fbb(self):
+        fbb=FactBaseBuilder()
+        @fbb.register
+        class Afact(Predicate):
+            num1=IntegerField()
+        af1 = Afact(1)
+        af2 = Afact(2)
+
+        # Test that the function works correctly when an fbb is passed via the
+        # clorm.clingo.Control constructor and using the solvehandle
+        def on_model1(model):
+            fb = model.facts(atoms=True)
+            self.assertEqual(len(fb.facts()), 2)
+
+        ctrl = cclingo.Control(fbb=fbb)
+        ctrl.add_facts([af1,af2])
+        ctrl.ground([("base",[])])
+        with ctrl.solve(yield_=True) as sh:
+            for m in sh:
+                fb = m.facts(atoms=True)
+                self.assertEqual(len(fb.facts()), 2)
+
+        ctrl = cclingo.Control()
+        ctrl.add_facts([af1,af2])
+        ctrl.ground([("base",[])])
+        with ctrl.solve(yield_=True) as sh:
+            for m in sh:
+                with self.assertRaises(ValueError) as ctx:
+                    fb = m.facts(atoms=True)
+
+
 
     #--------------------------------------------------------------------------
     # Test processing clingo Model

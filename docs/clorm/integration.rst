@@ -45,15 +45,16 @@ solving modes. These featuers are documented in the `Clingo Control API
 <https://potassco.org/clingo/python-api/current/clingo.html#Control>`_ so we
 only highlight the changes that Clorm introduces.
 
-Clorm add, or overloads, the following member functions:
+Clorm adds, or overloads, the following member functions:
 
-* ``__init__()``. Clorm adds an optional ``control_`` parameter that is mutually
-  exclusive with all other parameters. This allows a ``clingo.Control`` object
-  to be passed to the wrapper and is a mechanism to allow Clorm to be used even
-  when Python is embedded within Clingo. See the example
-  ``embedded_quickstart.lp`` for a more detailed example, but the basics are
-  that a Control object is passed to the embedded ``main`` function which is
-  then wrapped in ``clorm.clingo.Control``:
+* ``__init__()``. Clorm adds an optional `fbb` parameter for specifying a
+  default ``FactBaseBuilder``. A parameter `control_` is allowed, but is
+  mutually exclusive with the standard parameters for ``clingo.Control``. The
+  `control_` parameter allows a ``clingo.Control`` object to be passed to the
+  wrapper and is a mechanism to allow Clorm to be used even when Python is
+  embedded within Clingo. See the example ``embedded_quickstart.lp`` for a more
+  detailed example, but the basics are that a Control object is passed to the
+  embedded ``main`` function which is then wrapped in ``clorm.clingo.Control``:
 
 .. code-block:: python
 
@@ -111,12 +112,15 @@ encapsulates an ASP model and the associated meta-data. It is passed to the
 provide a mechanism to extract Clorm facts from the model. The added and
 modified functions are:
 
-* ``facts(self, factbasebuilder, atoms=False, terms=False, shown=False,
-  raise_on_empty=True)``. This function requires a ``FactBaseBuilder`` to be
-  specified as the first argument, as well as allowing for the ``atoms``,
-  ``terms``, and ``shown`` options from the ``Model.symbols()`` function. It
-  creates a fact base object from the passed class and populates it with the
-  selected symbols that are able to unify with the class.
+* ``facts(self, fbb=None, atoms=False, terms=False, shown=False,
+  raise_on_empty=True)``. A ``FactBaseBuilder`` must be provided to extract the
+  facts of interest from the other facts within the model. This object can be
+  passed as the `fbb` parameter or can be passed in the constructor to the
+  ``clorm.clingo.Control`` object. As well as a ``FactBaseBuilder`` the function
+  allows for the ``atoms``, ``terms``, and ``shown`` options from the
+  ``Model.symbols()`` function. It creates a fact base object from the passed
+  class and populates it with the selected symbols that are able to unify with
+  the class.
 
   The ``raise_on_empty`` parameters that a ``ValueError`` will be raised if the
   resulting factbase is empty. This can happen for two reasons: there were no
