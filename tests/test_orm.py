@@ -714,6 +714,32 @@ class ORMTestCase(unittest.TestCase):
         self.assertEqual(af2.atup.aint,4)
 
     #--------------------------------------------------------------------------
+    # Test the mapping of class names to predicate/complex-term names
+    # --------------------------------------------------------------------------
+    def test_nls_default_predicate_names(self):
+
+        # Camel-case example
+        class MyPred1(Predicate): a = StringField()
+        self.assertEqual(MyPred1.meta.name, "myPred1")
+
+        # snake-case example
+        class My_Pred1(Predicate): a = StringField()
+        self.assertEqual(My_Pred1.meta.name, "my_pred1")
+
+        # snake-case example
+        class My_Pred_1(Predicate): a = StringField()
+        self.assertEqual(My_Pred_1.meta.name, "my_pred_1")
+
+        # acronym example
+        class MP1(Predicate): a = StringField()
+        self.assertEqual(MP1.meta.name, "mp1")
+
+        # Do nothing
+        class myPred1(Predicate): a = StringField()
+        self.assertEqual(myPred1.meta.name, "myPred1")
+
+
+    #--------------------------------------------------------------------------
     # Test that the Predicate meta class only allows a single sub-class derived
     # from Predicate.
     # --------------------------------------------------------------------------
@@ -780,9 +806,6 @@ class ORMTestCase(unittest.TestCase):
         with self.assertRaises(ValueError) as ctx:
             fail2 = AnonPred3(raw=b3.raw)
 
-    
-
-    
     #--------------------------------------------------------------------------
     # Test the clone operator
     # --------------------------------------------------------------------------

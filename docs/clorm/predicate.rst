@@ -69,19 +69,34 @@ the following *ground atoms* (i.e., facts):
 
 There are some things to note here:
 
-* Predicate names: by default the name of the predicate is determined from the
-  class name with the first letter translated to lower-case.
-* Field order: the order of declared term defintions in the predicate
+* *Predicate names*: ASP uses standard logic-programming syntax, which requires
+  that the names of all predicate/complex-terms must begin with a lower-case
+  letter. By default the predicate name is determined by transforming the class
+  name in order to match a number of common naming conventions:
+
+  * If the class name includes an underscore then assume the user wants to use
+    "snake-case" and convert everything to lower-case (e.g., ``My_Predicate`` =>
+    ``my_predicate``),
+  * If the first letter of the class name is already in lower case (and it is
+    not snake-case) then it already is a legitimate predicate name so do nothing
+    (e.g., ``myPredicate`` => ``myPredicate``),
+  * If the class name has no lower case letters then assume the class name is an
+    acronym so convert all letters to lower case (e.g., ``TCP`` => ``tcp``),
+  * If the first letter is an upper-case and the class name has no underscores
+    then assume that the user wants to use camel-case (e.g., ``MyPredicate`` =>
+    ``myPredicate``).
+
+* *Field order*: the order of declared term defintions in the predicate
   class is important.
-* Field names: besides the Python keywords, Clorm also disallows the following
+* *Field names*: besides the Python keywords, Clorm also disallows the following
   reserved words: ``raw``, ``meta``, ``clone``, ``Field`` as these are used as
   properties or functions of a ``Predicate`` object.
-* Constant vs string: ``"bob"`` and ``"Sydney uni"`` are both Python strings but
+* *Constant vs string*: ``"bob"`` and ``"Sydney uni"`` are both Python strings but
   because of the declaration of ``entity`` as a ``ConstantField`` this ensures
   that the Python string ``"bob"`` is treated as an ASP constant. Note,
   currently it is the users' responsibility to ensure that the Python string
   passed to a constant term satisfies the syntactic restriction.
-* The use of a default value: all term types support the specification of a
+* The use of a *default value*: all term types support the specification of a
   default value.
 * If the specified default is a function then this function will be called (with
   no arguments) when the predicate/complex-term object is instantiated. This can
@@ -91,12 +106,17 @@ There are some things to note here:
 Overriding the Predicate Name
 -----------------------------
 
+As mentioned above, by default the predicate name is calculated from the
+corresponding class name by transforming the class name to match a number of
+common naming conventions. However, it is also possible to over-ride the default
+predicate name with an explicit name.
+
 There are many reasons why you might not want to use the default predicate name
 mapping. For example, the Python class name that would produce the desired
 predicate name may already be taken. Alternatively, you might want to
-distinguish between predicates with the same name but different arities; having
-predicates with the same name but a different arity is a legitimate and common
-practice with ASP programming.
+distinguish between predicates with the same name but different arities. Note:
+having predicates with the same name and different arities is a legitimate and
+common practice with ASP programming.
 
 Overriding the default predicate name requires declaring a ``Meta`` sub-class
 for the predicate definition.

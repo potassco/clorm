@@ -15,6 +15,7 @@ import abc
 import functools
 import clingo
 import typing
+import re
 
 __all__ = [
     'RawField',
@@ -1048,13 +1049,28 @@ def _nls_base_constructor(self, *args, **kwargs):
 # Metaclass constructor support functions to create the fields
 #------------------------------------------------------------------------------
 
+# Generate a default predicate name from the NonLogicalSymbol class name.
+def _nlsdefn_default_predicate_name(class_name):
+
+    # If has no lower-case letters than assume it is something like an acronym
+    # (eg., TCP or IP) in which case we make all lower-case
+    if not any(c.islower() for c in class_name): return class_name.lower()
+
+    # If it has an underscore then assume the user wants to use "snake-case" (eg.,
+    # 'C' variable names) and make all lower-case
+    if '_' in class_name: return class_name.lower()
+
+    # If we get here assume user wants "camel-case" and simply make sure the
+    # first character is lowercase
+    name = class_name[:1].lower() + class_name[1:]
+    return name
+
 # build the metadata for the NonLogicalSymbol - NOTE: this funtion returns a
 # NLSDefn instance but it also modified the dct paramater to add the fields.
 def _make_nlsdefn(class_name, dct):
 
-    # Generate a default name for the NonLogicalSymbol from the class name and
-    # converting the first character to lowercase
-    name = class_name[:1].lower() + class_name[1:]
+    # Set the default predicate name
+    name = _nlsdefn_default_predicate_name(class_name)
     anon = False
     if "Meta" in dct:
         metadefn = dct["Meta"]
