@@ -2284,12 +2284,7 @@ class FactBaseBuilder(object):
         self._register_predicate(cls)
         return cls
 
-    def new(self, facts=None, symbols=None, delayed_init=False, raise_on_empty=False):
-        if not symbols and (delayed_init or raise_on_empty):
-            raise ValueError("'delayed_init' and 'raise_on_empty' only valid for symbols")
-        if symbols and facts:
-            raise ValueError("'symbols' and 'facts' options are mutually exclusive")
-
+    def new(self, symbols, delayed_init=False, raise_on_empty=False):
         def _populate():
             facts=unify(self.predicates, symbols)
             if not facts and raise_on_empty:
@@ -2298,10 +2293,8 @@ class FactBaseBuilder(object):
 
         if delayed_init:
             return FactBase(facts=_populate, indexes=self._indexes)
-        if symbols:
-            return FactBase(facts=_populate(), indexes=self._indexes)
         else:
-            return FactBase(facts=facts, indexes=self._indexes)
+            return FactBase(facts=_populate(), indexes=self._indexes)
 
     @property
     def predicates(self): return self._predicates
