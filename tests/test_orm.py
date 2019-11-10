@@ -302,7 +302,8 @@ class ORMTestCase(unittest.TestCase):
         self.assertTrue(issubclass(type(b3_field.defn), RawField))
         self.assertEqual(len(b3_complex.meta), 2)
 
-        blahblah2_raw = Function("blahBlah2",[Number(1),Function("",[Number(1),String("b")])])
+        blahblah2_raw = Function("blahBlah2",
+                                 [Number(1),Function("",[Number(1),String("b")])])
         blahblah2 = BlahBlah2(a=1, b=b2_complex(1,"b"))
         self.assertEqual(blahblah2.raw, blahblah2_raw)
         blahblah2 = BlahBlah2(a=1, b=(1,"b"))
@@ -700,7 +701,8 @@ class ORMTestCase(unittest.TestCase):
 #            afunc = ComplexField(defn=Fun,default=Fun(aint=2.0,astr="str"))
 
         af1=Fact(aint=1)
-        af2=Fact(aint=2, atup=MyTuple(aint=4,astr="XXX"), afunc=Fun(aint=5.5,astr="YYY"))
+        af2=Fact(aint=2, atup=MyTuple(aint=4,astr="XXX"),
+                 afunc=Fun(aint=5.5,astr="YYY"))
 
         f1 = Function("fact",[Number(1),
                               Function("",[Number(2),String("str")]),
@@ -1488,21 +1490,26 @@ class FieldPathTestCase(unittest.TestCase):
         self.assertEqual(fp0.meta.path[0], FPL(Cmplx1.Field, None))
 
         fp1 = Cmplx1.b
-        self.assertEqual(list(fp1.meta.path), [FPL(Cmplx1.Field,'b'), FPL(StringField,None)])
+        self.assertEqual(list(fp1.meta.path),
+                         [FPL(Cmplx1.Field,'b'), FPL(StringField,None)])
 
         fp2 = Cmplx1[2]
-        self.assertEqual(list(fp2.meta.path), [FPL(Cmplx1.Field,2), FPL(ConstantField,None)])
+        self.assertEqual(list(fp2.meta.path),
+                         [FPL(Cmplx1.Field,2), FPL(ConstantField,None)])
 
         fp3 = Cmplx2.x
-        self.assertEqual(list(fp3.meta.path), [FPL(Cmplx2.Field,'x'), FPL(Cmplx1.Field,None)])
+        self.assertEqual(list(fp3.meta.path),
+                         [FPL(Cmplx2.Field,'x'), FPL(Cmplx1.Field,None)])
 
         fp4 = Cmplx2.x.a
         self.assertEqual(list(fp4.meta.path),
-                         [FPL(Cmplx2.Field,'x'), FPL(Cmplx1.Field,'a'), FPL(IntegerField,None)])
+                         [FPL(Cmplx2.Field,'x'),
+                          FPL(Cmplx1.Field,'a'), FPL(IntegerField,None)])
 
         fp5 = Cmplx2.x[1]
         self.assertEqual(list(fp5.meta.path),
-                         [FPL(Cmplx2.Field,'x'),FPL(Cmplx1.Field,1),FPL(StringField,None)])
+                         [FPL(Cmplx2.Field,'x'),FPL(Cmplx1.Field,1),
+                          FPL(StringField,None)])
 
         fp6 = Cmplx2.y[1]
         self.assertEqual(fp6.meta.path[0], FPL(Cmplx2.Field,'y'))
@@ -2120,7 +2127,8 @@ class SelectTestCase(unittest.TestCase):
 
         # Test select with placeholders
         s1_ph1 = fm1.select().where(Afact1.num1 == ph_("num1"))
-        s1_ph2 = fm1.select().where(Afact1.str1 == ph_("str1","42"), Afact1.num1 == ph_("num1"))
+        s1_ph2 = fm1.select().where(Afact1.str1 == ph_("str1","42"),
+                                    Afact1.num1 == ph_("num1"))
         self.assertEqual(set(s1_ph1.get(num1=4)), set([f4,f42]))
         self.assertEqual(set(list(s1_ph1.get(num1=3))), set([f3]))
         self.assertEqual(set(list(s1_ph1.get(num1=2))), set([]))

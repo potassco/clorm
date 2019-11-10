@@ -2306,17 +2306,18 @@ class FactBaseBuilder(object):
 #------------------------------------------------------------------------------
 
 class FactBase(object):
-    """A fact base is a container for facts that must be subclassed.
+    """A fact base is a container for facts (i.e., Predicate sub-class instances)
 
-    ``FactBase`` can be thought of as a minimalist database. It stores facts for
-    ``Predicate`` types (where a predicate type loosely corresponding to a
-    *table* in a database) and allows for certain fields to be indexed in order
-    to perform more efficient queries.
+    ``FactBase`` can be behave like a specialised ``set`` object, but can also
+    behave like a minimalist database. It stores facts for ``Predicate`` types
+    (where a predicate type loosely corresponds to a *table* in a database)
+    and allows for certain fields to be indexed in order to perform more
+    efficient queries.
 
     Args:
       facts([Predicate]|callable): a list of facts (predicate instances), or a
-         functor that generates. If a functor is passed then the factbase
-         performs a delayed initialisation.
+         functor that generates a list of facts. If a functor is passed then
+         the factbase performs a delayed initialisation.
       indexes(Field): a list of fields that are to be indexed.
 
     """
@@ -2325,7 +2326,7 @@ class FactBase(object):
     # Internal member functions
     #--------------------------------------------------------------------------
 
-    # A special purpose initialiser so that we can do delayed initialisation
+    # A special purpose initialiser so that we can delayed initialisation
     def _init(self, facts=None, indexes=[]):
 
         # flag that initialisation has taken place
