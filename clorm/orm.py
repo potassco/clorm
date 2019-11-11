@@ -121,7 +121,8 @@ class FieldPath(object):
             self._canon = self._chain
         else:
             raise ValueError(("Parameter {} must be a FieldPath or a Field "
-                              "corresponding to a NonLogicalSymbol").format(arg))
+                              "corresponding to a Predicate/"
+                              "ComplexTerm").format(arg))
 
 
     #--------------------------------------------------------------------------
@@ -354,6 +355,11 @@ class FieldPathBuilder(object, metaclass=_FieldPathBuilderMeta):
         '''Extend the field path by a key to the next field'''
         nfp=self._fp.extend(key)
         return nfp[-1].defn.FieldPathBuilder(nfp)
+
+    def __iter__(self):
+        cmplx=self._fp.defn.complex
+        if not cmplx: return iter([])
+        return iter([self[k] for k in cmplx.meta.keys()])
 
     #--------------------------------------------------------------------------
     # Overload the boolean operators to return a functor
@@ -876,6 +882,38 @@ def _get_field_defn(defn):
 
 
 #------------------------------------------------------------------------------
+# Return the list of field_paths associated with a predicate (ignoring the base
+# predicate path itself).
+# ------------------------------------------------------------------------------
+def _get_field_paths(predicate):
+    def get_subs(fpb):
+        indexes = []
+        for subfpb in fpb:
+            fp = subfpb.meta.path
+            indexes.append(fp)
+            indexes.extend(get_subs(subfpb))
+        return indexes
+
+    return get_subs(path(predicate))
+
+# ------------------------------------------------------------------------------
+# From a FieldPath return the FieldAccessor of the leaf
+# ------------------------------------------------------------------------------
+def _get_leaf_field_defn(field_path):
+    if len(field_path) <= 1: raise ValueError("FieldPath without fields")
+    field_name = field_path[-2].key
+    nls = field_path[-2].defn.complex
+    return nls.meta[field_name].defn
+
+#------------------------------------------------------------------------------
+# Return the list of field_paths that are specified as indexed
+#------------------------------------------------------------------------------
+def _get_indexed_fields(predicate):
+    def is_indexed(field_defn):
+        return _get_leaf_field_defn(field_defn).index
+    return filter(is_indexed, _get_field_paths(predicate))
+
+#------------------------------------------------------------------------------
 # The NonLogicalSymbol base class and supporting functions and classes
 # ------------------------------------------------------------------------------
 
@@ -917,6 +955,10 @@ class NLSDefn(object):
     def anonymous(self):
         """Returns whether definition is anonymous or explicitly user created"""
         return self._anon
+
+    def indexed_fields(self):
+        """Returns the FieldPaths for any indexed fields"""
+        return _get_indexed_fields(self._parent_cls)
 
     def canonical(self, key):
         return self._key2canon[key]
@@ -1043,7 +1085,8 @@ def _nls_constructor(self, *args, **kwargs):
         _nls_init_by_keyword_values(self, **kwargs)
 
 def _nls_base_constructor(self, *args, **kwargs):
-    raise TypeError("NonLogicalSymbol must be sub-classed")
+    raise TypeError(("Predicate/ComplexTerm (aliases for NonLogicalSymbol "
+                    "must be sub-classed"))
 
 #------------------------------------------------------------------------------
 # Metaclass constructor support functions to create the fields
@@ -1206,6 +1249,9 @@ class _NonLogicalSymbolMeta(type):
     def __getitem__(self, idx):
         fp = FieldPath(self.Field).extend(idx)
         return fp[-1].defn.FieldPathBuilder(fp)
+
+    def __iter__(self):
+        return iter([self[k] for k in self.meta.keys()])
 
 #------------------------------------------------------------------------------
 # A base non-logical symbol that all predicate/complex-term declarations must
@@ -2263,12 +2309,8 @@ class FactBaseBuilder(object):
         self._predicates.append(cls)
         if self._suppress_auto_index: return
 
-        # DPR Fixup - add sub-field indexes
-        # Register the fields that have the index flag set
-        for field in cls.meta:
-            # Hmm. can't remember why I might get an attributeerror?
-            with contextlib.suppress(AttributeError):
-                if field.defn.index: self._register_index(field.__get__(None))
+        # Add all fields (and sub-fields) that are specified as indexed
+        for fp in cls.meta.indexed_fields(): self._register_index(fp)
 
     def _register_index(self, fp):
         fp = _to_field_path(fp)

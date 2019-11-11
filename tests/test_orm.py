@@ -20,6 +20,7 @@ from clorm.orm import \
     TypeCastSignature, make_function_asp_callable, make_method_asp_callable, \
     ContextBuilder
 
+
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
 
@@ -171,6 +172,30 @@ class ORMTestCase(unittest.TestCase):
         self.assertTrue(fint2.index)
         self.assertTrue(fstr2.index)
         self.assertTrue(fconst2.index)
+
+    #--------------------------------------------------------------------------
+    # Test fields with a predicate that are specified as indexed
+    #--------------------------------------------------------------------------
+    def test_predicate_defn_containing_indexed_fields(self):
+        class CT(ComplexTerm):
+            a = IntegerField
+            b = StringField(index=True)
+            c = (IntegerField(index=True),ConstantField)
+        class P(Predicate):
+            d = CT.Field(index=True)
+            e = CT.Field()
+
+        # Indexed fields for P are: P.d, P.d.b, P.d.c.arg1, P.e.b, P.e.c.arg1
+        indexed = set(P.meta.indexed_fields())
+        self.assertTrue(len(indexed), 5)
+        self.assertTrue(P.d.meta.path in indexed)
+        self.assertTrue(P.d.b.meta.path in indexed)
+        self.assertTrue(P.d.c.arg1.meta.path in indexed)
+        self.assertTrue(P.e.b.meta.path in indexed)
+        self.assertTrue(P.e.c.arg1.meta.path in indexed)
+        self.assertFalse(P.e.meta.path in indexed)
+        self.assertFalse(P.d.a.meta.path in indexed)
+        self.assertFalse(P.d.c.arg2.meta.path in indexed)
 
     #--------------------------------------------------------------------------
     # Test that we can distinguish between user defined and anonymous
@@ -1321,6 +1346,35 @@ class ORMTestCase(unittest.TestCase):
         self.assertEqual(fbb1.indexes, [Afact.num1,Afact.num1])
         self.assertEqual(fbb2.indexes, [Afact.num1])
         self.assertEqual(fbb3.indexes, [])
+
+    #--------------------------------------------------------------------------
+    # Test the factbasebuilder when there are subfields defined
+    #--------------------------------------------------------------------------
+    def test_factbasebuilder_with_subfields(self):
+        fbb = FactBaseBuilder()
+
+        class CT(ComplexTerm):
+            a = IntegerField
+            b = StringField(index=True)
+            c = (IntegerField(index=True),ConstantField)
+
+        @fbb.register
+        class P(Predicate):
+            d = CT.Field(index=True)
+            e = CT.Field()
+
+        expected=set([P.d.meta.path,
+                      P.d.b.meta.path, P.d.c.arg1.meta.path,
+                      P.e.b.meta.path, P.e.c.arg1.meta.path])
+        self.assertEqual(fbb.predicates, [P])
+        self.assertEqual(set(fbb.indexes), set(expected))
+
+        ct_func=Function("ct",[Number(1),String("aaa"),
+                               Function("",[Number(1),Function("const",[])])])
+        p1=Function("p",[ct_func,ct_func])
+        fb=fbb.new(symbols=[p1],raise_on_empty=True)
+        self.assertEqual(len(fb),1)
+        self.assertEqual(set(fb.indexes), expected)
 
     #--------------------------------------------------------------------------
     # Test that subclass factbase works and we can specify indexes
