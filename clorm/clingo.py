@@ -67,9 +67,9 @@ class Model(object, metaclass=_ModelMetaClass):
 
     '''
 
-    def __init__(self, model,fbb=None):
+    def __init__(self, model,unifier=None):
         self._model = model
-        self._fbb = fbb
+        self._unifier = unifier
 
     #------------------------------------------------------------------------------
     # Return the underlying model object
@@ -83,17 +83,18 @@ class Model(object, metaclass=_ModelMetaClass):
     # A new function to return a list of facts - similar to symbols
     #------------------------------------------------------------------------------
 
-    def facts(self, fbb=None, atoms=False, terms=False, shown=False,
+    def facts(self, unifier=None, atoms=False, terms=False, shown=False,
               raise_on_empty=False):
         '''Returns a FactBase containing the facts in the model that unify with the
         FactBaseBuilder.
 
         This function provides a wrapper around the ``clingo.Model.symbols``
         functions, but instead of returning a list of symbols it returns a
-        FactBase.
+        FactBase containing the facts represented as ``clorm.Predicate``
+        sub-class instances.
 
         Args:
-           fbb(FactBaseBuilder): used to unify and instantiate FactBase (Default: passed
+           unifier(FactBaseBuilder): used to unify and instantiate FactBase (Default: passed
               via the constructor if specified in the `clorm.clingo.Control` object)
            atoms: select all atoms in the model (Default: False)
            terms: select all terms displayed with #show statements (Default: False)
@@ -102,13 +103,13 @@ class Model(object, metaclass=_ModelMetaClass):
                            (Default: False)
 
         '''
-        if not fbb: fbb=self._fbb
-        if not fbb:
-            msg = "Missing FactBaseBuilder in function call " + \
-                "(no default was given model instantiation)"
+        if not unifier: unifier=self._unifier
+        if not unifier:
+            msg = "Missing FactBaseBuilder unifier specification in function call " + \
+                "(no default was given at model instantiation)"
             raise ValueError(msg)
 
-        return fbb.new(
+        return unifier.new(
             symbols=self._model.symbols(atoms=atoms,terms=terms,shown=shown),
             raise_on_empty=raise_on_empty,
             delayed_init=True)
@@ -167,9 +168,9 @@ class SolveHandle(object, metaclass=_SolveHandleMetaClass):
     '''
 
 
-    def __init__(self, handle,fbb=None):
+    def __init__(self, handle,unifier=None):
         self._handle = handle
-        self._fbb = fbb
+        self._unifier = unifier
 
     #------------------------------------------------------------------------------
     # Return the underlying solvehandle object
@@ -187,7 +188,7 @@ class SolveHandle(object, metaclass=_SolveHandleMetaClass):
         return self
 
     def __next__(self):
-        if self._fbb: return Model(self._handle.__next__(),fbb=self._fbb)
+        if self._unifier: return Model(self._handle.__next__(),unifier=self._unifier)
         else: return Model(self._handle.__next__())
 
     def __enter__(self):
@@ -231,8 +232,9 @@ class Control(object, metaclass=_ControlMetaClass):
     Behaves like ``clingo.Control`` but with modifications to deal with Clorm
     facts and fact bases.
 
-    Adds an additional parameter ``fbb`` to set a default FactBaseBuilder which is
-    passed to any generated models.
+    Adds an additional parameter ``unifier`` to specify how any generated clingo
+    models will be unified with the clorm Predicate definitions. The unifier can
+    be specified as a list of predicates or as a FactBaseBuilder object.
 
     An existing ``clingo.Control`` object can be passed using the ``control_``
     parameter.
@@ -240,16 +242,20 @@ class Control(object, metaclass=_ControlMetaClass):
     '''
 
     def __init__(self, *args, **kwargs):
-        self._fbb = None
+        self._unifier = None
         if len(args) == 0 and "control_" in kwargs:
             self._ctrl = kwargs["control_"]
-            if "fbb" in kwargs: self._fbb = kwargs["fbb"]
+            if "unifier" in kwargs:
+                unifier = kwargs["unifier"]
+                if not isinstance(unifier, FactBaseBuilder):
+                    unifier=FactBaseBuilder(predicates=unifier)
+                self._unifier = unifier
         else:
-            # Remove fbb from the arguments that are passed to clingo.Control()
-            if "fbb" in kwargs:
-                self._fbb = kwargs["fbb"]
+            # Remove unifier from the arguments that are passed to clingo.Control()
+            if "unifier" in kwargs:
+                self._unifier = kwargs["unifier"]
                 kwargs2 = dict(kwargs)
-                del kwargs2["fbb"]
+                del kwargs2["unifier"]
                 self._ctrl = OControl(*args, **kwargs2)
             else:
                 self._ctrl = OControl(*args, **kwargs)
@@ -376,13 +382,13 @@ class Control(object, metaclass=_ControlMetaClass):
         on_model=kwargs["on_model"]
         @functools.wraps(on_model)
         def on_model_wrapper(model):
-            if self._fbb: return on_model(Model(model, self._fbb))
+            if self._unifier: return on_model(Model(model, self._unifier))
             else: return on_model(Model(model))
         if on_model: kwargs["on_model"] =  on_model_wrapper
 
         result = self._ctrl.solve(**kwargs)
         if kwargs["yield_"] or kwargs[async_keyword]:
-            if self._fbb: return SolveHandle(result,fbb=self._fbb)
+            if self._unifier: return SolveHandle(result,unifier=self._unifier)
             else: return SolveHandle(result)
         else:
             return result

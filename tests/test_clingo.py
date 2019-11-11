@@ -154,7 +154,7 @@ class ClingoTestCase(unittest.TestCase):
         # Test that the function works correctly when an fbb is passed to the
         # Model constructor
         def on_model1(model):
-            cmodel=cclingo.Model(model=model,fbb=fbb)
+            cmodel=cclingo.Model(model=model,unifier=fbb)
             fb = cmodel.facts(atoms=True)
             self.assertEqual(len(fb.facts()), 2)
 
@@ -188,7 +188,7 @@ class ClingoTestCase(unittest.TestCase):
             fb = model.facts(atoms=True)
             self.assertEqual(len(fb.facts()), 2)
 
-        ctrl = cclingo.Control(fbb=fbb)
+        ctrl = cclingo.Control(unifier=fbb)
         ctrl.add_facts([af1,af2])
         ctrl.ground([("base",[])])
         ctrl.solve(on_model=on_model1)
@@ -220,7 +220,7 @@ class ClingoTestCase(unittest.TestCase):
             fb = model.facts(atoms=True)
             self.assertEqual(len(fb.facts()), 2)
 
-        ctrl = cclingo.Control(fbb=fbb)
+        ctrl = cclingo.Control(unifier=fbb)
         ctrl.add_facts([af1,af2])
         ctrl.ground([("base",[])])
         with ctrl.solve(yield_=True) as sh:
