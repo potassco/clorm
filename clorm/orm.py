@@ -1517,55 +1517,6 @@ define_complex_term=define_nls
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-# Generate facts from an input array of Symbols.  The unifiers argument is
-# contains the names of predicate classes to unify against (order matters) and
-# symbols contains the list of raw clingo.Symbol objects.
-# ------------------------------------------------------------------------------
-
-def unify(unifiers, symbols):
-    '''Unify a collection of symbols against a list of predicate types.
-
-    Symbols are tested against each unifier until a match is found. Since it is
-    possible to define multiple predicate types that can unify with the same
-    symbol, the order the unifiers differently can produce different results.
-
-    Args:
-      unifiers: a list of predicate classes to unify against
-      symbols: the symbols to unify
-
-    '''
-    def unify_single(cls, r):
-        try:
-            return cls._unify(r)
-        except ValueError:
-            return None
-
-    # To make things a little more efficient use the name/arity signature as a
-    # filter. However, Python doesn't have a built in multidict and I don't want
-    # to add an extra dependency - so this is a bit more complex than it needs
-    # to be.
-    sigs = [((cls.meta.name, len(cls.meta)),cls) for cls in unifiers]
-    types = {}
-    for sig,cls in sigs:
-        if sig not in types: types[sig] = [cls]
-        else: types[sig].append(cls)
-
-    facts = []
-    for raw in symbols:
-        classes = types.get((raw.name, len(raw.arguments)))
-        if not classes: continue
-        for cls in classes:
-            f = unify_single(cls,raw)
-            if f:
-                facts.append(f)
-                break
-    return facts
-
-
-#------------------------------------------------------------------------------
-#------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
 # Fact comparator: is a function that determines if a fact (i.e., predicate
 # instance) satisfies some property or condition. Any function that takes a
 # single fact as an argument and returns a bool is a fact comparator. However,
@@ -2292,67 +2243,6 @@ class _FactMap(object):
     def __iter__(self):
         return iter(self._allfacts)
 
-#------------------------------------------------------------------------------
-# FactBaseBuilder offers a decorator interface for gathering predicate and index
-# definitions to be used in defining a FactBase subclass.
-# ------------------------------------------------------------------------------
-class FactBaseBuilder(object):
-    """A fact base builder simplifies the task of unifying raw clingo.Symbol objects
-    with Clorm predicates. Predicates classes are registered using the
-    'register' function (which can be called as a normal function or as a class
-    decorator.
-    """
-
-    def __init__(self, predicates=[], indexes=[], suppress_auto_index=False):
-        self._predicates = []
-        self._indexes = []
-        self._predset = set()
-        self._indset = set()
-        self._suppress_auto_index = suppress_auto_index
-        for pred in predicates: self._register_predicate(pred)
-        for f in indexes: self._register_index(f)
-
-    def _register_predicate(self, cls):
-        if cls in self._predset: return    # ignore if already registered
-        if not issubclass(cls, Predicate):
-            raise TypeError("{} is not a Predicate sub-class".format(cls))
-        self._predset.add(cls)
-        self._predicates.append(cls)
-        if self._suppress_auto_index: return
-
-        # Add all fields (and sub-fields) that are specified as indexed
-        for fp in cls.meta.indexes: self._register_index(fp)
-
-    def _register_index(self, fp):
-        fp = _to_field_path(fp)
-        if fp in self._indset: return    # ignore if already registered
-        if isinstance(fp, FieldPath) and fp.predicate in self.predicates:
-            self._indset.add(fp)
-            self._indexes.append(fp)
-        else:
-            raise TypeError("{} is not a predicate field for one of {}".format(
-                fp, [ p.__name__ for p in self.predicates ]))
-
-    def register(self, cls):
-        self._register_predicate(cls)
-        return cls
-
-    def new(self, symbols, delayed_init=False, raise_on_empty=False):
-        def _populate():
-            facts=unify(self.predicates, symbols)
-            if not facts and raise_on_empty:
-                raise ValueError("FactBase creation: failed to unify any symbols")
-            return facts
-
-        if delayed_init:
-            return FactBase(facts=_populate, indexes=self._indexes)
-        else:
-            return FactBase(facts=_populate(), indexes=self._indexes)
-
-    @property
-    def predicates(self): return self._predicates
-    @property
-    def indexes(self): return self._indexes
 
 #------------------------------------------------------------------------------
 # A FactBase consisting of facts of different types
@@ -2584,9 +2474,120 @@ class FactBase(object):
         tmp = ", ".join([str(f) for f in self])
         return '{' + tmp + '}'
 
+
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------
+# Generate facts from an input array of Symbols.  The `predicates` argument
+# contains the predicate classes to unify against (order matters) and `symbols`
+# contains the list of raw clingo.Symbol objects.
+# ------------------------------------------------------------------------------
+
+def unify(predicates, symbols):
+    '''Unify a collection of symbols against a list of predicate classes.
+
+    Symbols are tested against each unifier until a match is found. Since it is
+    possible to define multiple predicate types that can unify with the same
+    symbol, the order the unifiers differently can produce different results.
+
+    Args:
+      predicates: a list of predicate classes to unify against
+      symbols: the symbols to unify
+
+    '''
+    def unify_single(cls, r):
+        try:
+            return cls._unify(r)
+        except ValueError:
+            return None
+
+    # To make things a little more efficient use the name/arity signature as a
+    # filter. However, Python doesn't have a built in multidict and I don't want
+    # to add an extra dependency - so this is a bit more complex than it needs
+    # to be.
+    sigs = [((cls.meta.name, len(cls.meta)),cls) for cls in predicates]
+    types = {}
+    for sig,cls in sigs:
+        if sig not in types: types[sig] = [cls]
+        else: types[sig].append(cls)
+
+    facts = []
+    for raw in symbols:
+        classes = types.get((raw.name, len(raw.arguments)))
+        if not classes: continue
+        for cls in classes:
+            f = unify_single(cls,raw)
+            if f:
+                facts.append(f)
+                break
+    return facts
+
+
+#------------------------------------------------------------------------------
+# FactBaseBuilder offers a decorator interface for gathering predicate and index
+# definitions to be used in defining a FactBase subclass.
+# ------------------------------------------------------------------------------
+class FactBaseBuilder(object):
+    """A fact base builder simplifies the task of unifying raw clingo.Symbol objects
+    with Clorm predicates. Predicates classes are registered using the
+    'register' function (which can be called as a normal function or as a class
+    decorator.
+    """
+
+    def __init__(self, predicates=[], indexes=[], suppress_auto_index=False):
+        self._predicates = []
+        self._indexes = []
+        self._predset = set()
+        self._indset = set()
+        self._suppress_auto_index = suppress_auto_index
+        for pred in predicates: self._register_predicate(pred)
+        for f in indexes: self._register_index(f)
+
+    def _register_predicate(self, cls):
+        if cls in self._predset: return    # ignore if already registered
+        if not issubclass(cls, Predicate):
+            raise TypeError("{} is not a Predicate sub-class".format(cls))
+        self._predset.add(cls)
+        self._predicates.append(cls)
+        if self._suppress_auto_index: return
+
+        # Add all fields (and sub-fields) that are specified as indexed
+        for fp in cls.meta.indexes: self._register_index(fp)
+
+    def _register_index(self, fp):
+        fp = _to_field_path(fp)
+        if fp in self._indset: return    # ignore if already registered
+        if isinstance(fp, FieldPath) and fp.predicate in self.predicates:
+            self._indset.add(fp)
+            self._indexes.append(fp)
+        else:
+            raise TypeError("{} is not a predicate field for one of {}".format(
+                fp, [ p.__name__ for p in self.predicates ]))
+
+    def register(self, cls):
+        self._register_predicate(cls)
+        return cls
+
+    def new(self, symbols, delayed_init=False, raise_on_empty=False):
+        def _populate():
+            facts=unify(self.predicates, symbols)
+            if not facts and raise_on_empty:
+                raise ValueError("FactBase creation: failed to unify any symbols")
+            return facts
+
+        if delayed_init:
+            return FactBase(facts=_populate, indexes=self._indexes)
+        else:
+            return FactBase(facts=_populate(), indexes=self._indexes)
+
+    @property
+    def predicates(self): return self._predicates
+    @property
+    def indexes(self): return self._indexes
+
+#------------------------------------------------------------------------------
+#------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 # When calling Python functions from ASP you need to do some type
