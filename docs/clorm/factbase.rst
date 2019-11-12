@@ -20,12 +20,12 @@ database-like query mechanism.
    from clorm import *
 
    class Person(Predicate):
-      id = ConstantField()
-      address = StringField()
+      id = ConstantField
+      address = StringField
 
    class Pet(Predicate):
-      owner = ConstantField()
-      petname = StringField()
+      owner = ConstantField
+      petname = StringField
 
    dave = Person(id="dave", address="UNSW")
    morri = Person(id="morri", address="UNSW")
@@ -51,6 +51,36 @@ fact or a list of facts.
 
    fb.add(dave_dog)
    fb.add([morri_cat, morri_cat2])
+
+Indexing
+^^^^^^^^
+
+A typical ASP program has models that contain relatively small numbers of facts
+(e.g., 10-100 facts). With such small numbers of facts, querying these facts
+from a ``FactBase`` can often be done without regard to performance
+considerations.
+
+However, similarly to a traditional database, there can be cases where the
+number of facts that need to be stored can relatively large. In such cases
+querying these facts from a ``FactBase`` can present a performance bottleneck.
+
+In order to alleviate this problem a ``FactBase`` can be defined with indexes
+for specific fields. Extending the above example:
+
+.. code-block:: python
+
+   fb1 = FactBase([dave,morri,dave_cat],indexes=[Person.id, Pet.owner])
+
+Here the fact base ``fb1`` maintains an index on the ``id`` field of the
+``Person`` predicate, as well as the ``owner`` field for the ``Pet`` predicate.
+
+In this case any querying on the ``Person.id`` or ``Pet.owner`` fields will use
+the index and not have to examine every fact of that type.
+
+Note, as with database indexing, specifying indexes should be done sparingly to
+ensure the right balance of the cost of maintaining an index against the cost of
+querying the fact base.
+
 
 Querying
 --------
@@ -274,20 +304,23 @@ latter cases the query would have to examine every fact (of the appropriate
 type) in the fact base and test the function against that fact. Hence it is
 usually preferable to use the Clorm generated clauses where possible.
 
+
 Importing Raw Clingo Symbols and FactBaseBuilder
 ------------------------------------------------
 
 A ``FactBase`` container can only contain predicate objects. However, the Clingo
-reasoner deals in ``Clingo.Symbol`` objects. Clorm provides the ``unify``
-function and the ``FactBaseBuilder`` class to simplify the interaction with
-``Clingo.Symbol`` objects.
+reasoner deals in ``Clingo.Symbol`` objects.  By using the ``clorm.clingo``
+module the need to deal with the underlying symbol objects is eliminated for
+many use-cases. However, there may still be more advanced cases where it is
+useful to deal with the raw symbol objects. Clorm provides functions and classes
+to simplify this interaction.
 
-The ``unify`` function takes two parameters; a list of predicate classes as
-*unifiers* and a list of raw clingo symbols. It then tries to unify the list of
-raw symbols with the list of predicates. This function returns a list of facts
-that represent the unification of the symbols with the first matching
-predicate. If a symbol was not able to unify with any predicate then it is
-ignored.
+A ``unify`` function is provided that takes two parameters; a list of predicate
+classes as *unifiers* and a list of raw clingo symbols. It then tries to unify
+the list of raw symbols with the list of predicates. This function returns a
+list of facts that represent the unification of the symbols with the first
+matching predicate. If a symbol was not able to unify with any predicate then it
+is ignored.
 
 .. code-block:: python
 
@@ -295,8 +328,8 @@ ignored.
    from clorm import *
 
    class Person(Predicate):
-      id = ConstantField()
-      address = StringField()
+      id = ConstantField
+      address = StringField
 
    dave = Person(id="dave", address="UNSW")
    dave_raw = Function("person", [Function("dave",[]),String("UNSW")])
@@ -308,9 +341,11 @@ ignored.
    with multiple predicate definitions then the ``unify`` function will match to
    only the first predicate definition in the list of predicates.
 
+The ``FactBaseBuilder`` provides a helper class to simplify the process of
+turning raw symbols into facts stored within a ``FactBase``.
 
-The ``FactBaseBuilder`` provides a helper class to make it easier to build fact
-bases. It also provides integrated features to make it easier to define field
+
+It also provides integrated features to make it easier to define field
 indexes.
 
 Because defining queries is a potentially common requirement the field

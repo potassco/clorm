@@ -84,7 +84,7 @@ First the relevant libraries need to be imported.
 
 .. code-block:: python
 
-   from clorm import Predicate, ConstantField, IntegerField, FactBaseBuilder, ph1_
+   from clorm import Predicate, ConstantField, IntegerField, ph1_
    from clorm.clingo import Control
 
 Note: Importing from ``clorm.clingo`` instead of ``clingo``.
@@ -103,61 +103,60 @@ Python classes. Clorm introduces two basic concepts for defining the data model:
 classes and must be sub-classed, while ``FactBase`` provides a container for
 storing facts.
 
-A helper class ``FactBaseBuilder`` is provided for creating FactBases which has
-convenient support for building a fact base from raw Clingo ``Symbol`` objects
-(such as when you are processing a Clingo generated model).
-
-
 .. code-block:: python
 
-   fbb = FactBaseBuilder()
-
-   @fbb.register
    class Driver(Predicate):
-       name=ConstantField()
+       name=ConstantField
 
-   @fbb.register
    class Item(Predicate):
-       name=ConstantField()
+       name=ConstantField
 
-   @fbb.register
    class Assignment(Predicate):
-       item=ConstantField()
-       driver=ConstantField(index=True)
-       time=IntegerField()
+       item=ConstantField
+       driver=ConstantField
+       time=IntegerField
 
 The above code defines three classes to match the ASP program's input and output
 predicates.
 
 ``Driver`` maps to the ``driver/1`` predicate, ``Item`` maps to ``item/1``, and
-``Assignment`` maps to ``assignment/3``. A predicate may contain zero or more
-*fields* (using database terminology). Fields can be thought of as *term
-definitions* as they define how a logical *term* is converted to, and from, a
-Python object. The number of fields must match the predicate arity and the order
-in which they are declared must also match the position of each term in the ASP
-predicate.
+``Assignment`` maps to ``assignment/3`` (note: the ``/n`` is a common logic
+programming notation for specifying the arity of a predicate or function). A
+predicate can contain zero or more fields.
 
-The ``FactBaseBulider`` provides a decorator that registers the predicate class
-with the builder. Once a predicate class is registered the builder will use this
-class to try and unify against Clingo symbols. It also ensures that the fact
-base is built with the appropriate indexes as specified by ``index=True`` for
-the field. In the example, the ``driver`` field is indexed allowing for faster
-queries when searching for specific drivers. As with a traditional database
-indexing improves query performance but should be used sparingly.
+The number of fields in the ``Predicate`` declaration must match the predicate
+arity and the order in which they are declared must also match the position of
+each term in the ASP predicate.
 
 Having defined the data model we now show how to dynamically add a problem
 instance, solve the resulting ASP program, and print the solution.
 
-First we create the Clingo ``Control`` object and load the ASP program.
+First the Clingo ``Control`` object needs to be created and initialised, and the
+static problem domain encoding must be loaded.
 
 .. code-block:: python
 
-    ctrl = Control()
+    ctrl = Control(unifier=[Driver,Item,Assigment])
     ctrl.load("quickstart.lp")
 
+The ``clorm.clingo.Control`` object controls how the ASP solver is run. When the
+solver runs it generates *models*. These models constitute the solutions to the
+problem. Facts within a model are encoded as ``clingo.Symbol`` objects. The
+``unifier`` argument defines how these symbols are turned into Predicate
+instances.
+
+For every symbol fact in the model, Clorm will successively attempt to *unify*
+(or match) the symbol against the Predicates in the unifier list. When a match
+is found the symbol is used to define an instance of the matching predicate. Any
+symbol that does not unify against any of the predicates is ignored.
+
+Once the control object is created and the unifiers specified the static ASP
+program is loaded.
 
 Next we generate a problem instance by generating a lists of ``Driver`` and
-``Item`` objects. These items are added to an input fact base.
+``Item`` objects. These items are added to a ``clorm.FactBase`` object. A
+``FactBase`` is a specialised set-like containing for storing facts (i.e.,
+predicate instances).
 
 .. code-block:: python
 
@@ -169,7 +168,7 @@ The ``Driver`` and ``Item`` constructors use named parameters that match the
 declared field names. Note: while you can use positional arguments to initialise
 instances, doing so will potentially make the code harder to refactor. So in
 general you should avoid using positional arguments except for a few cases (eg.,
-simple pairs where the order is unlikely to change).
+simple tuples where the order is unlikely to change).
 
 These facts can now be added to the control object and the combined ASP program
 grounded.
@@ -179,16 +178,18 @@ grounded.
     ctrl.add_facts(instance)
     ctrl.ground([("base",[])])
 
-Next we run the solver to generate solutions. The solver is run with a callback
-function that is called each time a solution (technically an *answer set* or
-simply a *model*) is found.
+At this point the control object is ready to be run and generate
+solutions. There are a number of ways in which the ASP solver can be run (see
+the Clingo documentation). For this example, we run it in a mode where a
+callback function is specified. This function will then be called each time a
+model is found.
 
 .. code-block:: python
 
     solution=None
     def on_model(model):
         nonlocal solution
-        solution = model.facts(fbb, atoms=True)
+        solution = model.facts(atoms=True)
 
     ctrl.solve(on_model=on_model)
     if not solution:
@@ -200,10 +201,11 @@ before an optimal model is found. Also, note that if the problem is
 unsatisfiable then it will never be called and you should always check for this
 case.
 
-The line ``solution = model.facts(fbb, atoms=True)`` extracts only instances of
-the predicates that were registered with the ``FactBaseBuilder``. In this case
-it ignores the ``working_driver/1`` instances. These facts are stored and
-returned in a fact base.
+The line ``solution = model.facts(atoms=True)`` extracts only instances of the
+predicates that were registered with the ``unifier`` parameter. As mentioned
+earlier, any facts that fail to unify are ignored. In this case it ignores the
+``working_driver/1`` instances. The unified facts are stored and returned in
+a ``clingo.FactBase`` object.
 
 The final step in this Python program involves querying the solution to print out
 the relevant parts. To do this we call the ``FactBase.select()`` member function

@@ -40,11 +40,11 @@ The following Python code provides the mapping to the ASP predicates:
    from clorm import *
 
    class Address(Predicate):
-      entity = ConstantField()
-      details = StringField()
+      entity = ConstantField
+      details = StringField
 
    class Pets(Predicate):
-      entity = ConstantField()
+      entity = ConstantField
       num = IntegerField(default=0)
 
 With the above class definitions we can instantiate some objects:
@@ -126,16 +126,16 @@ for the predicate definition.
    from clorm import *
 
    class Address2(Predicate):
-      entity = ConstantField()
-      details = StringField()
+      entity = ConstantField
+      details = StringField
 
       class Meta:
           name = "address"
 
     class Address3(Predicate):
-      entity = ConstantField()
-      details = StringField()
-      country = StringField()
+      entity = ConstantField
+      details = StringField
+      country = StringField
 
       class Meta:
           name = "address"
@@ -249,8 +249,8 @@ sub-class definition:
    from clorm import *
 
    class Booking(Predicate):
-      date = StringField()
-      description = StringField()
+      date = StringField
+      description = StringField
 
 However, since we encoded the date as simply a ``StringField`` it is now up to
 the user of the ``Booking`` class to perform the necessary translations to and
@@ -294,8 +294,8 @@ with the string to date conversion.
        cltopy = lambda s: datetime.datetime.strptime(s,"%Y%m%d").date()
 
    class Booking(Predicate):
-       date=DateField()
-       description = StringField()
+       date=DateField
+       description = StringField
 
 The ``pytocl`` definition specifies the conversion that takes place in the
 direction of converting Python data to Clingo data, and ``cltopy`` handles the
@@ -343,8 +343,8 @@ When defining a predicate corresponding to cooking/2 it is possible to simply us
 .. code-block:: python
 
    class Cooking1(Predicate):
-      dow = ConstantField()
-      person = StringField()
+      dow = ConstantField
+      person = StringField
       class Meta: name = "cooking"
 
 However, this would potentiallly allow for creating erroneous instances that
@@ -366,8 +366,8 @@ a new class that restricts the values of an existing field class.
       ["sunday","monday","tuesday","wednesday","thursday","friday","saturday"])
 
    class Cooking2(Predicate):
-      dow = DowField()
-      person = StringField()
+      dow = DowField
+      person = StringField
       class Meta: name = "cooking"
 
    try:
@@ -404,13 +404,13 @@ from the weekday cooks.
       ["monday","tuesday","wednesday","thursday","friday"])
 
    class WeekendCooking(Predicate):
-      dow = WeekendField()
-      person = StringField()
+      dow = WeekendField
+      person = StringField
       class Meta: name = "cooking"
 
    class WeekdayCooking(Predicate):
-      dow = WeekdayField()
-      person = StringField()
+      dow = WeekdayField
+      person = StringField
       class Meta: name = "cooking"
 
 Dealing with Complex Terms
@@ -431,20 +431,20 @@ or a tuple
     booking2(20181231, ("Sydney", "Australia)).
 
 To support this flexibility Clorm introduces a ``ComplexTerm`` class.  A complex
-term is defined identically to a predicate, and similarly needs to be
-sub-classed.
+term is defined identically to a Predicate (in fact they are both simply aliases
+for the ``NonLogicalSymbol`` class), and similarly needs to be sub-classed.
 
 .. code-block:: python
 
    from clorm import *
 
    class Location(ComplexTerm):
-      city = StringField()
-      country = StringField()
+      city = StringField
+      country = StringField
 
    class LocationTuple(ComplexTerm):
-      city = StringField()
-      country = StringField()
+      city = StringField
+      country = StringField
       class Meta:
          istuple = True
 
@@ -465,12 +465,12 @@ property.
    from clorm import *
 
    class Booking(Predicate):
-       date=DateField()
-       location=Location.Field()
+       date=DateField
+       location=Location.Field
 
    class Booking2(Predicate):
-       date=DateField()
-       location=LocationTuple.Field()
+       date=DateField
+       location=LocationTuple.Field
 
 The ``Booking`` and ``Booking2`` Python classes correspond to the
 signature of the above example predicates ``booking/2`` and ``booking2/2``.
@@ -500,8 +500,8 @@ via the fields as named properties.
    from clorm import *
 
    class Contact(Predicate):
-       cid=IntegerField()
-       name=StringField()
+       cid=IntegerField
+       name=StringField
 
    c1 = Contact(cid=1, name="Bob")
 
@@ -540,13 +540,13 @@ tuple as part of an event predicate.
    from clorm import *
 
    class EnumDate(ComplexTerm):
-      idx = IntegerField()
-      dt = DateField()
+      idx = IntegerField
+      dt = DateField
       class Meta: istuple=True
 
    class Event(Predicate):
-      edt = EnumDate.Field()
-      details = StringField()
+      edt = EnumDate.Field
+      details = StringField
 
    e1 = Event(edt=EnumDate(idx=1, dt=datetime.date(2018, 10, 1)), details="Bill's Party")
    e2 = Event(edt=EnumDate(idx=5, dt=datetime.date(2018, 10, 5)), details="Holidays")
@@ -574,8 +574,8 @@ with:
    from clorm import *
 
    class Event(Predicate):
-      edt = (IntegerField(), DateField())
-      details = StringField()
+      edt = (IntegerField, DateField)
+      details = StringField
 
    e1 = Event(edt=(1, datetime.date(2018, 10, 1)), details="Bill's Party")
    e2 = Event(edt=(5, datetime.date(2018, 10, 5)), details="Holidays")
@@ -683,8 +683,8 @@ Clingo symbol objects.
    from clorm import *
 
    class True(Predicate):
-      fluent = RawField()
-      time = IntegerField()
+      fluent = RawField
+      time = IntegerField
 
 Accessing the value of the ``fluent`` simply returns the raw Clingo symbol. Also
 the ``RawField`` has the useful property that it will unify with any
