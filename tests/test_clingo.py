@@ -163,6 +163,18 @@ class ClingoTestCase(unittest.TestCase):
         ctrl.ground([("base",[])])
         ctrl.control_.solve(on_model=on_model1)
 
+        # Test that the function works correctly when a unifier list is passed
+        # to the Model constructor
+        def on_model1(model):
+            cmodel=cclingo.Model(model=model,unifier=[Afact])
+            fb = cmodel.facts(atoms=True)
+            self.assertEqual(len(fb.facts()), 2)
+
+        ctrl = cclingo.Control()
+        ctrl.add_facts([af1,af2])
+        ctrl.ground([("base",[])])
+        ctrl.control_.solve(on_model=on_model1)
+
         # Test that it fails correctly when no fbb is passed
         def on_model2(model):
             cmodel=cclingo.Model(model=model)
@@ -189,6 +201,18 @@ class ClingoTestCase(unittest.TestCase):
             self.assertEqual(len(fb.facts()), 2)
 
         ctrl = cclingo.Control(unifier=fbb)
+        ctrl.add_facts([af1,af2])
+        ctrl.ground([("base",[])])
+        ctrl.solve(on_model=on_model1)
+
+        # Test that the function works correctly when a unifier list is passed
+        # via the clorm.clingo.Control constructor and using the on_model
+        # callback
+        def on_model1(model):
+            fb = model.facts(atoms=True)
+            self.assertEqual(len(fb.facts()), 2)
+
+        ctrl = cclingo.Control(unifier=[Afact])
         ctrl.add_facts([af1,af2])
         ctrl.ground([("base",[])])
         ctrl.solve(on_model=on_model1)

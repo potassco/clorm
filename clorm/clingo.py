@@ -30,6 +30,16 @@ __all__ = list([ k for k in oclingo.__dict__.keys() if k[0] != '_'])
 __version__ = oclingo.__version__
 
 # ------------------------------------------------------------------------------
+# Helper function to smartly build a unifier if only a list of predicates have
+# been provided.
+# ------------------------------------------------------------------------------
+
+def _build_unifier(unifier):
+    if not unifier: return unifier
+    if isinstance(unifier, FactBaseBuilder): return unifier
+    return FactBaseBuilder(predicates=unifier)
+
+# ------------------------------------------------------------------------------
 # Wrap clingo.Model and override some functions
 # ------------------------------------------------------------------------------
 def _model_wrapper(fn):
@@ -69,7 +79,7 @@ class Model(object, metaclass=_ModelMetaClass):
 
     def __init__(self, model,unifier=None):
         self._model = model
-        self._unifier = unifier
+        self._unifier = _build_unifier(unifier)
 
     #------------------------------------------------------------------------------
     # Return the underlying model object
@@ -94,8 +104,9 @@ class Model(object, metaclass=_ModelMetaClass):
         sub-class instances.
 
         Args:
-           unifier(FactBaseBuilder): used to unify and instantiate FactBase (Default: passed
-              via the constructor if specified in the `clorm.clingo.Control` object)
+           unifier(list | FactBaseBuilder): used to unify and instantiate
+              FactBase (Default: passed via the constructor if specified in the
+              `clorm.clingo.Control` object)
            atoms: select all atoms in the model (Default: False)
            terms: select all terms displayed with #show statements (Default: False)
            shown: select all atoms and terms (Default: False)
@@ -103,9 +114,10 @@ class Model(object, metaclass=_ModelMetaClass):
                            (Default: False)
 
         '''
-        if not unifier: unifier=self._unifier
+        if unifier: unifier=_build_unifier(unifier)
+        else: unifier=self._unifier
         if not unifier:
-            msg = "Missing FactBaseBuilder unifier specification in function call " + \
+            msg = "Missing a predicate unifier specification in function call " + \
                 "(no default was given at model instantiation)"
             raise ValueError(msg)
 
@@ -170,7 +182,7 @@ class SolveHandle(object, metaclass=_SolveHandleMetaClass):
 
     def __init__(self, handle,unifier=None):
         self._handle = handle
-        self._unifier = unifier
+        self._unifier = _build_unifier(unifier)
 
     #------------------------------------------------------------------------------
     # Return the underlying solvehandle object
@@ -243,22 +255,15 @@ class Control(object, metaclass=_ControlMetaClass):
 
     def __init__(self, *args, **kwargs):
         self._unifier = None
+        if "unifier" in kwargs: self._unifier = _build_unifier(kwargs["unifier"])
+
+        # Do we need to build a clingo.Control object or use an existing one
         if len(args) == 0 and "control_" in kwargs:
             self._ctrl = kwargs["control_"]
-            if "unifier" in kwargs:
-                unifier = kwargs["unifier"]
-                if not isinstance(unifier, FactBaseBuilder):
-                    unifier=FactBaseBuilder(predicates=unifier)
-                self._unifier = unifier
         else:
-            # Remove unifier from the arguments that are passed to clingo.Control()
-            if "unifier" in kwargs:
-                self._unifier = kwargs["unifier"]
-                kwargs2 = dict(kwargs)
-                del kwargs2["unifier"]
-                self._ctrl = OControl(*args, **kwargs2)
-            else:
-                self._ctrl = OControl(*args, **kwargs)
+            kwargs2 = dict(kwargs)
+            if "unifier" in kwargs2: del kwargs2["unifier"]
+            self._ctrl = OControl(*args, **kwargs2)
 
     #------------------------------------------------------------------------------
     # Return the underlying control object

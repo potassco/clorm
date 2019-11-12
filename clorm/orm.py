@@ -887,7 +887,7 @@ def _get_field_defn(defn):
 # ------------------------------------------------------------------------------
 def _get_field_paths(predicate):
     def get_subs(fpb):
-        indexes = []
+        indexes=[]
         for subfpb in fpb:
             fp = subfpb.meta.path
             indexes.append(fp)
@@ -935,6 +935,7 @@ class NLSDefn(object):
         self._key2canon = { f.index : f.name for f in field_accessors }
         self._key2canon.update({f.name : f.name for f in field_accessors })
         self._parent_cls = None
+        self._indexed_fields = None
 
     @property
     def name(self):
@@ -956,11 +957,8 @@ class NLSDefn(object):
         """Returns whether definition is anonymous or explicitly user created"""
         return self._anon
 
-    def indexed_fields(self):
-        """Returns the FieldPaths for any indexed fields"""
-        return _get_indexed_fields(self._parent_cls)
-
     def canonical(self, key):
+        """Returns the canonical name for a field"""
         return self._key2canon[key]
 
     def keys(self):
@@ -968,7 +966,20 @@ class NLSDefn(object):
         return self._byname.keys()
 
     @property
+    def indexes(self):
+        """Return the list of fields that have been specified as indexed"""
+        return list(self._indexed_fields)
+
+    @indexes.setter
+    def indexes(self,indexed_fields):
+        if self._indexed_fields:
+            raise RuntimeError(("Trying to reset the indexed fields for a "
+                                "NLSDefn doesn't make sense"))
+        self._indexed_fields = indexed_fields
+
+    @property
     def parent(self):
+        """Return the Predicate/Complex-term associated with this definition"""
         return self._parent_cls
 
     @parent.setter
@@ -1210,12 +1221,11 @@ class _NonLogicalSymbolMeta(type):
             return super(_NonLogicalSymbolMeta, meta).__new__(meta, name, bases, dct)
 
         # Create the metadata AND populate dct - the class dict (including the fields)
-        md = _make_nlsdefn(name, dct)
 
         # Set the _meta attribute and constuctor
-        dct["_meta"] = md
         dct["__init__"] = _nls_constructor
         dct["_fieldcontainer"] = _FieldContainer()
+        dct["_meta"] = _make_nlsdefn(name, dct)
 
         parents = [ b for b in bases if issubclass(b, NonLogicalSymbol) ]
         if len(parents) == 0:
@@ -1236,10 +1246,11 @@ class _NonLogicalSymbolMeta(type):
         # The property attribute for each field can only be created in __new__
         # but the class itself does not get created until after __new__. Hence
         # we have to set the pointer within the field back to the this class
-        # here.
+        # here. Similar argument applies for generating the field indexes
         md.parent = cls
         for field in md:
             dct[field.name].parent = cls
+        md.indexes=list(_get_indexed_fields(cls))
 
         return super(_NonLogicalSymbolMeta, cls).__init__(name, bases, dct)
 
@@ -2310,7 +2321,7 @@ class FactBaseBuilder(object):
         if self._suppress_auto_index: return
 
         # Add all fields (and sub-fields) that are specified as indexed
-        for fp in cls.meta.indexed_fields(): self._register_index(fp)
+        for fp in cls.meta.indexes: self._register_index(fp)
 
     def _register_index(self, fp):
         fp = _to_field_path(fp)

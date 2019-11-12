@@ -185,17 +185,17 @@ class ORMTestCase(unittest.TestCase):
             d = CT.Field(index=True)
             e = CT.Field()
 
-        # Indexed fields for P are: P.d, P.d.b, P.d.c.arg1, P.e.b, P.e.c.arg1
-        indexed = set(P.meta.indexed_fields())
-        self.assertTrue(len(indexed), 5)
-        self.assertTrue(P.d.meta.path in indexed)
-        self.assertTrue(P.d.b.meta.path in indexed)
-        self.assertTrue(P.d.c.arg1.meta.path in indexed)
-        self.assertTrue(P.e.b.meta.path in indexed)
-        self.assertTrue(P.e.c.arg1.meta.path in indexed)
-        self.assertFalse(P.e.meta.path in indexed)
-        self.assertFalse(P.d.a.meta.path in indexed)
-        self.assertFalse(P.d.c.arg2.meta.path in indexed)
+        # Indexes fields for P are: P.d, P.d.b, P.d.c.arg1, P.e.b, P.e.c.arg1
+        indexes = set(P.meta.indexes)
+        self.assertTrue(len(indexes), 5)
+        self.assertTrue(P.d.meta.path in indexes)
+        self.assertTrue(P.d.b.meta.path in indexes)
+        self.assertTrue(P.d.c.arg1.meta.path in indexes)
+        self.assertTrue(P.e.b.meta.path in indexes)
+        self.assertTrue(P.e.c.arg1.meta.path in indexes)
+        self.assertFalse(P.e.meta.path in indexes)
+        self.assertFalse(P.d.a.meta.path in indexes)
+        self.assertFalse(P.d.c.arg2.meta.path in indexes)
 
     #--------------------------------------------------------------------------
     # Test that we can distinguish between user defined and anonymous

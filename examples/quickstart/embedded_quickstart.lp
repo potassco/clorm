@@ -1,45 +1,53 @@
-#!/usr/bin/env python
+%----------------------------------------------------------------------------------
+% Domain encoding for a simple scheduling problem. Drivers need to make
+% deliveries.  Every driver has a fixed base cost and every delivery has a
+% cost. We also need deliveries within a time limit.
+% ----------------------------------------------------------------------------------
 
-from clorm import monkey; monkey.patch() # must call this before importing clingo
 
-from clorm import Predicate, ConstantField, IntegerField, FactBase, FactBaseBuilder
+time(1..4).
+
+1 { assignment(I, D, T) : driver(D), time(T) } 1 :- item(I).
+:- assignment(I1, D, T), assignment(I2, D, T), I1 != I2.
+
+working_driver(D) :- assignment(_,D,_).
+
+#minimize { 1@2,D : working_driver(D) }.
+#minimize { T@1,D : assignment(_,D,T) }.
+
+
+#script(python).
+
+from clorm.clingo import Control
+from clorm import Predicate, ConstantField, IntegerField, FactBase
 from clorm import ph1_
 
-from clingo import Control
-
-
-ASP_PROGRAM="quickstart.lp"
 
 #--------------------------------------------------------------------------
 # Define a data model - we only care about defining the input and output
 # predicates.
 #--------------------------------------------------------------------------
 
-fbb = FactBaseBuilder()
-
-@fbb.register
 class Driver(Predicate):
-    name=ConstantField()
+    name=ConstantField
 
-@fbb.register
 class Item(Predicate):
-    name=ConstantField()
+    name=ConstantField
 
-@fbb.register
 class Assignment(Predicate):
-    item=ConstantField()
-    driver=ConstantField(index=True)
-    time=IntegerField()
-
+    item=ConstantField
+    driver=ConstantField
+    time=IntegerField
 
 #--------------------------------------------------------------------------
-#
+# main
 #--------------------------------------------------------------------------
 
-def main():
-    # Create and load asp file that encodes the problem domain
-    ctrl = Control()
-    ctrl.load(ASP_PROGRAM)
+def main(ctrl_):
+    # For better integration with Clorm wrap the clingo.Control object with a
+    # clorm.clingo.Control object and pass the unifier list of predicates that
+    # are used to unify the symbols and predicates.
+    ctrl = Control(control_=ctrl_, unifier=[Driver,Item,Assignment])
 
     # Dynamically generate the instance data
     drivers = [ Driver(name=n) for n in ["dave", "morri", "michael" ] ]
@@ -54,7 +62,7 @@ def main():
     solution=None
     def on_model(model):
         nonlocal solution
-        solution = model.facts(fbb, atoms=True)
+        solution = model.facts(atoms=True)
 
     ctrl.solve(on_model=on_model)
     if not solution:
@@ -62,10 +70,7 @@ def main():
 
     # Do something with the solution - create a query so we can print out the
     # assignments for each driver.
-
-    #    query=solution.select(Assignment).where(lambda x,o: x.driver == o)
     query=solution.select(Assignment).where(Assignment.driver == ph1_).order_by(Assignment.time)
-
     for d in drivers:
         assignments = query.get(d.name)
         if not assignments:
@@ -75,9 +80,4 @@ def main():
             for a in assignments:
                 print("\t Item {} at time {}".format(a.item, a.time))
 
-#------------------------------------------------------------------------------
-# main
-#------------------------------------------------------------------------------
-if __name__ == "__main__":
-    main()
-
+#end.
