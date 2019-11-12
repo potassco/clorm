@@ -9,8 +9,8 @@ is designed to supplement and not replace the existing Clingo API.
 When integrating an ASP program into an application you typically want to model
 the domain as a statically written ASP program, but then to generate problem
 instances and process the results dynamically. Clorm makes this integration
-cleaner, both in terms of code readability but also by making it easier to
-refactor the python code as the ASP program evolves.
+cleaner, both in terms of code readability but also by providing a framework
+that makes it easier to refactor the python code as the ASP program evolves.
 
 The documentation is available online `here <https://clorm.readthedocs.io>`_.
 
@@ -71,16 +71,15 @@ The above crieria can be encoded with the following simple ASP program:
    #minimize { 1@2,D : working_driver(D) }.
    #minimize { T@1,D : assignment(_,D,T) }.
 
-
-This ASP program encodes the problem domain and can be used to solve the problem
-for arbitrary instances (i.e., arbitrary combinations of drivers and items).
+This above ASP program encodes the *problem domain* and can be used to solve the
+problem for arbitrary instances by combining it with an *problem instance*
+(i.e., some combination of drivers and items).
 
 We now use a Python program to dynamically generate the problem instance and to
 process the generated solutions. Each solution will be an assignment of drivers
 to items for a time slot.
 
 First the relevant libraries need to be imported.
-
 
 .. code-block:: python
 
@@ -98,10 +97,15 @@ Note: Importing from ``clorm.clingo`` instead of ``clingo``.
    <https://clorm.readthedocs.io/en/latest/>`_).
 
 The next step is to define a data model that maps the Clingo predicates to
-Python classes. Clorm introduces two basic concepts for defining the data model:
-``Predicate`` and ``FactBase``. ``Predicate`` maps the ASP predicates to Python
-classes and must be sub-classed, while ``FactBase`` provides a container for
-storing facts.
+Python classes. Clorm introduces a number basic concepts for defining the data
+model: a ``Predicate`` class that must be sub-classed, and various *Field*
+classes that correspond to definitions of allowable *logical terms* that form
+the parameters of predicates.
+
+Clorm provides three standard field classes, ``ConstantField``, ``StringField``,
+and ``IntegerField``, that correspond to the standard *logic programming* data
+types of integer, constant, and string. These fields are sub-classed from
+``RawField``.
 
 .. code-block:: python
 
@@ -154,9 +158,12 @@ Once the control object is created and the unifiers specified the static ASP
 program is loaded.
 
 Next we generate a problem instance by generating a lists of ``Driver`` and
-``Item`` objects. These items are added to a ``clorm.FactBase`` object. A
-``FactBase`` is a specialised set-like containing for storing facts (i.e.,
-predicate instances).
+``Item`` objects. These items are added to a ``clorm.FactBase`` object.
+
+The ``clorm.FactBase`` class provides a specialised set-like container for
+storing facts (i.e., predicate instances). It provides the standard set
+operations but also implements a querying mechanism for a more database-like
+interface.
 
 .. code-block:: python
 
@@ -180,9 +187,10 @@ grounded.
 
 At this point the control object is ready to be run and generate
 solutions. There are a number of ways in which the ASP solver can be run (see
-the Clingo documentation). For this example, we run it in a mode where a
-callback function is specified. This function will then be called each time a
-model is found.
+the `Clingo API documentation
+<https://potassco.org/clingo/python-api/5.4/#clingo.Control.solve>`_).  For this
+example, we use a mode where a callback function is specified. This
+function will then be called each time a model is found.
 
 .. code-block:: python
 

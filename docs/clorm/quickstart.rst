@@ -184,9 +184,10 @@ grounded.
 
 At this point the control object is ready to be run and generate
 solutions. There are a number of ways in which the ASP solver can be run (see
-the Clingo documentation). For this example, we run it in a mode where a
-callback function is specified. This function will then be called each time a
-model is found.
+the `Clingo API documentation
+<https://potassco.org/clingo/python-api/5.4/#clingo.Control.solve>`_). For this
+example, we run it in a mode where a callback function is specified. This
+function will then be called each time a model is found.
 
 .. code-block:: python
 

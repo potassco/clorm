@@ -413,26 +413,20 @@ from the weekday cooks.
       person = StringField
       class Meta: name = "cooking"
 
-Dealing with Complex Terms
---------------------------
+Complex Terms
+-------------
 
 So far we have shown how to create Python definitions that match predicates with
 simple terms or some sub-class that reduces to a simple term. However, in ASP it
-is common to also use complex terms within a predicate.
+is common to also use complex terms within a predicate. For example:
 
 .. code-block:: none
 
     booking(20181231, location("Sydney", "Australia)).
 
-or a tuple
-
-.. code-block:: none
-
-    booking2(20181231, ("Sydney", "Australia)).
-
 To support this flexibility Clorm introduces a ``ComplexTerm`` class.  A complex
 term is defined identically to a Predicate (in fact they are both simply aliases
-for the ``NonLogicalSymbol`` class), and similarly needs to be sub-classed.
+for the ``NonLogicalSymbol`` class). and similarly needs to be sub-classed.
 
 .. code-block:: python
 
@@ -442,23 +436,8 @@ for the ``NonLogicalSymbol`` class), and similarly needs to be sub-classed.
       city = StringField
       country = StringField
 
-   class LocationTuple(ComplexTerm):
-      city = StringField
-      country = StringField
-      class Meta:
-         istuple = True
-
-These complex term definitions then need to be included within a Predicate
-definition.  Just like with simple terms, when specifying a field as part of a
-predicate (or within another complex term) it is necessary to specify the term's
-field definition. This field then encodes the translation from a
-``Clingo.Symbol`` object to the ``ComplexTerm`` object.
-
-While it is possible to specify this translation manually (i.e., sub-classing
-``RawField`` and specifying the translation functions), fortunately Clorm is
-able generate a ``RawField`` sub-class automatically from the complex term
-definition. This class is exposed as the complex term's class ``Field``
-property.
+The definition for the complex term can then be included within the Predicate
+definition by using the ``ComplexTerm.Field`` property.
 
 .. code-block:: python
 
@@ -468,12 +447,13 @@ property.
        date=DateField
        location=Location.Field
 
-   class Booking2(Predicate):
-       date=DateField
-       location=LocationTuple.Field
+This ``Field`` property returns a ``RawField`` sub-class that is generated
+automatically when the ``Predicate`` sub-class is defined. It provides the
+functions to automatically convert to, and from, the Predicate sub-class
+instances and the clingo symbol objects.
 
-The ``Booking`` and ``Booking2`` Python classes correspond to the
-signature of the above example predicates ``booking/2`` and ``booking2/2``.
+With this in mind the ``Booking`` Python classes correspond to the signature of
+the above example predicates ``booking/2``.
 
 Note: as with the simple term definitions it is possible to provide an optional
 ``default`` or ``index`` parameter. For example, the above ``Booking`` class
@@ -484,7 +464,7 @@ could be replaced with:
    from clorm import *
 
    class Booking(Predicate):
-       date=DateField()
+       date=DateField
        location=Location.Field(index=True,
 		default=LocationTuple(city="Sydney", country="Australia"))
 
@@ -519,7 +499,7 @@ arguments.
    assert c2[0] == 2
    assert c2[1] == "Bill"
 
-However, in general using positional arguments is discouraged as it can lead to
+Note, in general using positional arguments is discouraged as it can lead to
 brittle code that can be harder to debug, and can also be more difficult to
 refactor as the ASP program changes. But, there are some cases where it can be
 convenient to use positional arguments. In particular when defining very simple
@@ -529,75 +509,77 @@ changes. We discuss Clorm's support for these cases in the following section.
 Working with Tuples
 -------------------
 
-The previous sections have shown the syntax for declaring a Clorm
-predicate/complex-term that corresponds to an ASP tuple. For example, assuming
-the previously defined ``DateField``, we can consider using an enumerate date
-tuple as part of an event predicate.
+Tuples are another a special case of a complex term that often appear in ASP
+programs. For example:
+
+.. code-block:: none
+
+    booking2(20181231, ("Sydney", "Australia)).
+
+Although tuples are simply special cases of ComplexTerms, Clorm provides
+specialised support for defining predicates that contain tuples. For example, a
+Predicate definition that unifies with the above fact can be defined simply:
 
 .. code-block:: python
 
-   import datetime
    from clorm import *
 
-   class EnumDate(ComplexTerm):
-      idx = IntegerField
-      dt = DateField
-      class Meta: istuple=True
+   class Booking2(Predicate):
+       date=DateField
+       location=(StringField,StringField)
 
-   class Event(Predicate):
-      edt = EnumDate.Field
-      details = StringField
 
-   e1 = Event(edt=EnumDate(idx=1, dt=datetime.date(2018, 10, 1)), details="Bill's Party")
-   e2 = Event(edt=EnumDate(idx=5, dt=datetime.date(2018, 10, 5)), details="Holidays")
+Here the ``location`` field is defined as a pair of string fields. Conveniently
+it is unnecessary to define a separate ComplexTerm sub-class that corresponds to
+this pair.
 
-Here the index associated with the date could be used to capture a sequence of
-dates and used to calculate the number of days between two dates (note: this
-information cannot be easily extracted from the date encoded string).
-
-In any case, the two generated Event objects will correspond to the ASP facts:
-
-.. code-block:: prolog
-
-   event((1,"20181001"), "Bill's Party").
-   event((5,"20181005"), "Holidays").
-
-Now, declaring and using the ``EnumDate`` class can be quite cumbersome,
-considering that it really corresponds to a very simple tuple. Consequently,
-Clorm supports a modified syntax, using a tuple of field definitions, for
-dealing with cases of simple tuples.  The above Python code could be replaced
-with:
+To generate a ``Booking2`` instance that corresponds to the ``booking/2`` fact
+above, simple instantiate ``Booking2`` in the most intuitive way.
 
 .. code-block:: python
 
-   import datetime
-   from clorm import *
+   f = Booking2(date=datetime.date(2018,12,31),
+		location=("Sydney","Australia"))
 
-   class Event(Predicate):
-      edt = (IntegerField, DateField)
-      details = StringField
 
-   e1 = Event(edt=(1, datetime.date(2018, 10, 1)), details="Bill's Party")
-   e2 = Event(edt=(5, datetime.date(2018, 10, 5)), details="Holidays")
-
-Internally, Clorm will generate an anonymously named complex term class that is
-declared similarly to ``EnumDate``. The fields of this class will be given
-automatically generated names ``arg1`` and ``arg2`` (up to ``arg<n>`` for a
-tuple of arity n), although in this case it may be more convenient to access the
-values using positional arguments.
+Note, while it is unnecessary to define a seperate ComplexTerm sub-class
+corresponding to the tuple, internally this is exactly what Clorm does. Clorm
+will transform the above definition to something like:
 
 .. code-block:: python
 
-   assert e2.edt[0] == 5
-   assert e2.edt[1] == datetime.date(2018, 10, 5)
+   class SomeAnonymousName(ComplexTerm):
+      city = StringField
+      country = StringField
+      class Meta:
+         istuple = True
+
+   class Booking2(Predicate):
+       date=DateField
+       location=SomeAnonymousName.Field
+
+Here the ``ComplexTerm`` has an internal ``Meta`` class with the property
+``istuple`` set to ``True``. This means that the ComplexTerm will be treated as
+a tuple rather than a complex term with a function name.
+
+The main difference between the implicit and explicitly defined tuples is that
+with the implicit tuple will have automatically generated field names. However,
+in cases of simple implicitly defined tuples it would be typical to use
+positional arguments instead of names to refer to the apppropiate field.
+
+.. code-block:: python
+
+   f = Booking2(date=datetime.date(2018,12,31),
+		location=("Sydney","Australia"))
+
+   assert f.location[0] == "Sydney"
 
 .. note::
 
-   As mentioned in the previous section, using positional arguments is something
-   that should be used sparingly as it can lead to brittle code that is more
-   difficult to refactor. Particularly it should be used only for cases where
-   the ordering of fields in the tuple is unlikely to change as the ASP program
-   is refactored.
+   As mentioned previously, using positional arguments is something that should
+   be used sparingly as it can lead to brittle code that is more difficult to
+   refactor. Particularly it should be used only for cases where the ordering of
+   fields in the tuple is unlikely to change as the ASP program is refactored.
 
 Dealing with Raw Clingo Symbols
 -------------------------------
