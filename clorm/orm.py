@@ -887,12 +887,12 @@ def _get_field_defn(defn):
 # ------------------------------------------------------------------------------
 def _get_field_paths(predicate):
     def get_subs(fpb):
-        indexes=[]
+        paths=[]
         for subfpb in fpb:
             fp = subfpb.meta.path
-            indexes.append(fp)
-            indexes.extend(get_subs(subfpb))
-        return indexes
+            paths.append(fp)
+            paths.extend(get_subs(subfpb))
+        return paths
 
     return get_subs(path(predicate))
 
@@ -2257,10 +2257,24 @@ class FactBase(object):
     and allows for certain fields to be indexed in order to perform more
     efficient queries.
 
+    The initaliser can be given a collection of predicates. If it is passed
+    another FactBase then it simply makes a copy (including the indexed fields).
+
+    FactBase also has a special mode when it is passed a functor instead of a
+    collection. In this case it performs a delayed initialisation. This means
+    that the internal data structures are only populated when the FactBase is
+    actually used. This mode is particularly useful when extracting facts from
+    models. Often a program will only want to keep the data from the final model
+    (for example, with optimisation we often want the best model before a
+    timeout). Delayed initialisation is useful will save computation as only the
+    last model will be properly initialised.
+
     Args:
-      facts([Predicate]|callable): a list of facts (predicate instances), or a
-         functor that generates a list of facts. If a functor is passed then
-         the factbase performs a delayed initialisation.
+      facts([Predicate]|FactBase|callable): a list of facts (predicate
+         instances), a fact base, or a functor that generates a list of
+         facts. If a functor is passed then the fact base performs a delayed
+         initialisation. If a fact base is passed and no index is specified then
+         an index will be created matching in input fact base.
       indexes(Field): a list of fields that are to be indexed.
 
     """
@@ -2270,13 +2284,17 @@ class FactBase(object):
     #--------------------------------------------------------------------------
 
     # A special purpose initialiser so that we can delayed initialisation
-    def _init(self, facts=None, indexes=[]):
+    def _init(self, facts=None, indexes=None):
 
         # flag that initialisation has taken place
         self._delayed_init = None
 
         # If it is delayed initialisation then get the facts
-        if facts and callable(facts): facts = facts()
+        if facts and callable(facts):
+            facts = facts()
+        elif facts and isinstance(facts, FactBase) and indexes is None:
+            indexes = facts.indexes
+        if indexes is None: indexes=[]
 
         # Create _FactMaps for the predicate types with indexed fields
         grouped = {}
@@ -2370,7 +2388,7 @@ class FactBase(object):
     #--------------------------------------------------------------------------
     # Initiliser
     #--------------------------------------------------------------------------
-    def __init__(self, facts=None, indexes=[]):
+    def __init__(self, facts=None, indexes=None):
         self._delayed_init=None
         if callable(facts):
             def delayed_init():

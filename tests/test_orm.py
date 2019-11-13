@@ -1464,6 +1464,33 @@ class ORMTestCase(unittest.TestCase):
         self.assertEqual(s.get_unique(), bf1)
 
 
+    #--------------------------------------------------------------------------
+    # Test that subclass factbase works and we can specify indexes
+    #--------------------------------------------------------------------------
+
+    def test_factbase_copy(self):
+        class Afact(Predicate):
+            num=IntegerField(index=True)
+            pair=(IntegerField, IntegerField(index=True))
+
+        af1=Afact(num=5,pair=(1,2))
+        af2=Afact(num=6,pair=(1,2))
+        af3=Afact(num=5,pair=(2,3))
+
+        fb1=FactBase([af1,af2,af3],indexes=Afact.meta.indexes)
+        fb2=FactBase(list(fb1))
+        fb3=FactBase(fb1)
+
+        # The data is the same so they are all equal
+        self.assertEqual(fb1, fb2)
+        self.assertEqual(fb2, fb3)
+
+        # But the indexes can be different
+        self.assertEqual(fb1.indexes, Afact.meta.indexes)
+        self.assertEqual(fb2.indexes, [])
+        self.assertEqual(fb3.indexes, fb1.indexes)
+
+
 #------------------------------------------------------------------------------
 # Test the FieldPathBuilder class
 #------------------------------------------------------------------------------
