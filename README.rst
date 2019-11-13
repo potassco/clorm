@@ -213,7 +213,7 @@ The line ``solution = model.facts(atoms=True)`` extracts only instances of the
 predicates that were registered with the ``unifier`` parameter. As mentioned
 earlier, any facts that fail to unify are ignored. In this case it ignores the
 ``working_driver/1`` instances. The unified facts are stored and returned in
-a ``clingo.FactBase`` object.
+a ``clorm.FactBase`` object.
 
 The final step in this Python program involves querying the solution to print out
 the relevant parts. To do this we call the ``FactBase.select()`` member function
@@ -292,8 +292,8 @@ Clorm library. These include:
         cltopy = lambda s: datetime.datetime.strptime(s,"%Y-%m-%d").date()
 
     class Delivery(Predicate):
-        item=ConstantField()
-        date=DateField()
+        item=ConstantField
+        date=DateField
 
     dd1=Delivery(item="item1", date=datetime.date(2019,14,5))    # Create delivery
 
@@ -317,8 +317,8 @@ Clorm library. These include:
 	name=StringField
 
     class Log(Predicate):
-        event=Event.Field()
-	level=IntegerField()
+        event=Event.Field
+	level=IntegerField
 
     l1=Log(event=Event(date=datetime.date(2019,4,5),name="goto shops"),level=0)
 
