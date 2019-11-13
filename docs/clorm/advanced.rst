@@ -35,124 +35,113 @@ Firstly the name and arities of the complex term and predicate can be examined:
    assert Person.meta.name == "person"
    assert Person.meta.arity == 2
 
-The fields, and sub-fields, of a predicate that are specified as indexed can
-also be easily queried:
+The fields, and sub-fields, of a predicate that are specified as being indexed
+are also available:
 
 .. code-block:: python
 
    assert set(Person.meta.indexes) == set([Person.name, Address.city])
 
+It is possible to introspect the field names of a predicate:
 
-Raw Clingo Symbols and Clorm Facts
-----------------------------------
+.. code-block:: python
 
-The Clingo reasoner deals in ``Clingo.Symbol`` objects while Clorm facts provide
-an intutive abstraction on top of the underlying raw symbols. However, despite
-this abstraction, there may be use-cases where it is useful to deal explicitly
-with the underlying raw clingo symbol objects.
+   assert set(Person.meta.keys()) == set(["name","city"])
+
+
+Raw Clingo and Clorm Facts
+--------------------------
+
+The Clingo reasoner deals in ``clingo.Symbol`` objects while Clorm facts provide
+an intuitive abstraction on top of the underlying raw symbols.  Clorm and the
+Clingo integration library ``clorm.clingo`` minimises the need to deal with
+explicitly coverting between the two.
+
+However, there may still be use-cases where it is useful to deal explicitly with
+the underlying raw clingo symbol objects. For example, if the user choses not to
+use the ``clorm.clingo`` integration module but instead to use the main
+``clingo`` module.
 
 Unification
 ^^^^^^^^^^^
 
 In logical terms, unification involves transforming one expression into another
 through term substitution. We co-op this terminology for the process of
-transforming ``Clingo.Symbol`` objects into Clorm facts.
+transforming ``Clingo.Symbol`` objects into Clorm facts. This unification
+process is integral to using Clorm since it is the main process by which the
+symbols within a Clingo model are transformed into Clorm facts.
 
-A ``unify`` function is provided that takes two parameters; a list of predicate
-classes as *unifiers* and a list of raw clingo symbols. It then tries to unify
-the list of raw symbols with the list of predicates. This function returns a
-list of facts that represent the unification of the symbols with the first
-matching predicate. If a symbol was not able to unify with any predicate then it
-is ignored.
+A ``unify`` function is provided that takes two parameters; a *unifier* and a
+list of raw clingo symbols. It then tries to unify the list of raw symbols with
+the predicates in the unifier. The function then returns a ``FactBase``
+containing the facts that resulted from the unification of the symbols with the
+first matching predicate. If a symbol was not able to unify with any predicate
+it is ignored.
 
 .. code-block:: python
 
    from clingo import Function, String
-   from clorm import Predicate, ConstantField, StringField, unify
+   from clorm import Predicate, StringField, unify
 
    class Person(Predicate):
-      id = ConstantField
+      name = StringField(index=True)
       address = StringField
 
-   dave = Person(id="dave", address="UNSW")
-   dave_raw = Function("person", [Function("dave",[]),String("UNSW")])
-   facts = unify([Person], [dave_raw])
-   assert facts == [dave]
+   good_raw = Function("person", [String("Dave"),String("UNSW")])
+   bad_raw = Function("nonperson", [])
+   fb = unify([Person], [bad_raw, good_raw])
+   assert list(fb) == [Person(name="Dave", address="UNSW")]
+   assert len(fb.indexes) == 1
+
 
 .. note:: In general it is a good idea to avoid defining multiple predicate
    definitions that can unify to the same symbol. However, if a symbol can unify
    with multiple predicate definitions then the ``unify`` function will match
    only the first predicate definition in the list of predicates.
 
+By default, the fact base object returned by the ``unify`` function will be
+initialised with any indexed fields as specified by the matching predicate
+declaration.
 
-Unification Helper Class
-^^^^^^^^^^^^^^^^^^^^^^^^
-
-Clorm also provides features to make it easier to use the ``unify`` function
-within the larger context of turning a set of raw clingo symbols, such as those
-in a model, into a facts stored within a fact base. The
-``SymbolPredicateUnfier`` helper class provides these features.
-
-Because defining queries is a potentially common requirement the field
-definition within the predicate can include the option ``index=True`` which will
-be used by the ``SymbolPredicateUnifier``.
-
-So the earlier definition can be modified:
+To get more fined grained behaviour, such as controlling which fields are
+indexed, the user can also use a ``SymbolPredicateUnfier`` helper function.
+This class also provides a decorator function that can be used to register the
+class and any indexes at the point where the predicate is defined. The symbol
+predicate unifer can then be passed to the unify function instead of a list of
+predicates.
 
 .. code-block:: python
 
-   from clorm import Predicate, ConstantField, StringField
+   from clingo import Function, String
+   from clorm import Predicate, StringField, unify
 
-   class Person(Predicate):
-      id = ConstantField
-      address = StringField
-
-   class Pet(Predicate):
-      owner = ConstantField(index=True)
-      petname = StringField()
-
-``SymbolPredicateUnifier`` provides a decorator function that can be used to register
-the class and index option with the builder.
-
-.. code-block:: python
-
-   from clorm import *
-
-   spu = SymbolPredicateUnifier()
+   spu = SymbolPredicateUnifier(supress_auto_index=True)
 
    @spu.register
+   class Person(Predicate):
+      name = StringField(index=True)
+      address = StringField
+
    class Person(Predicate):
       id = ConstantField()
       address = StringField()
 
-   @spu.register
-   class Pet(Predicate):
-      owner = ConstantField(index=True)
-      petname = StringField()
-
-   dave_raw = Function("person", [Function("dave",[]),String("UNSW")])
-   fb1 = spu.new(symbols=[dave_raw])
-
-
-Once a ``SymbolPredicateUnifier`` object has registered a number of predicates then the
-``SymbolPredicateUnifier.new()`` member function can be used to create a ``FactBase``
-object containing the facts that were generated by unifying the
-``Clingo.Symbol`` objects against the registered predicates. The generated
-``FactBase`` will also have the appropriate indexes specified by the
-registration of the predicates.
+   good_raw = Function("person", [String("Dave"),String("UNSW")])
+   bad_raw = Function("nonperson", [])
+   fb = spu.unify([bad_raw, good_raw])
+   assert list(fb) == [Person(name="Dave", address="UNSW")]
+   assert len(fb.indexes) == 0
 
 This function has two other useful features. Firtly, the option
 ``raise_on_empty=True`` will throw an error if no clingo symbols unify with the
-registered predicates. While there are legitimate cases where a symbol doesn't
-unify with the builder there are also many cases where this indicates an error
-in the definition of the predicates or in the ASP program itself.
+registered predicates, which can be useful for debugging purposes.
 
 The final option is the ``delayed_init=True`` option that allow for a delayed
 initialisation of the ``FactBase``. What this means is that the symbols are only
 processed (i.e., they are not unified agaist the predicates to generate facts)
 when the ``FactBase`` object is actually used.
 
-This is useful because there are cases where a fact base object is never
+This is also useful because there are cases where a fact base object is never
 actually used and is simply discarded. In particular this can happen when the
 ASP solver generates models as part of the ``on_model()`` callback function. If
 applications only cares about an optimal model or there is a timeout being
