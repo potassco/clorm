@@ -228,6 +228,9 @@ class FieldPath(object):
                 tmp += ".{}".format(f.key)
         return tmp
 
+    def __repr__(self):
+        return self.__str__()
+
 #------------------------------------------------------------------------------
 # FieldPathBuilder and supporting functions and classes. The builder is crucial
 # to the Clorm API because it implements the intuitive syntax for refering to
@@ -381,6 +384,9 @@ class FieldPathBuilder(object, metaclass=_FieldPathBuilderMeta):
         if len(self._fp) < 1: return "FieldPathBuilder(<partial>)"
         return str(self.meta.path)
 
+    def __repr__(self):
+        return self.__str__()
+
 #------------------------------------------------------------------------------
 # FieldPathEval evaluates a FieldPath with respect to a fact (a predicate
 # instance).  It is a functor that extracts a component from a fact based on a
@@ -410,6 +416,9 @@ class FieldPathEval(object):
 
     def __str__(self):
         return str(self._fpspec)
+
+    def __repr__(self):
+        return self.__str__()
 
 #------------------------------------------------------------------------------
 # API function to generate a field path builder for the predicate class
@@ -487,18 +496,24 @@ class _RawFieldMeta(type):
         dct["_parentclass"] = parents[0]
 
         # When a conversion is not specified raise a NotImplementedError
-        def _raise_nie(cls,v):
-            raise NotImplementedError("No implemented conversion")
+        def _raise_cltopy_nie(cls,v):
+            msg=("'{}' is only partially specified and has no "
+                 "Clingo to Python (cltopy) conversion").format(name)
+            raise NotImplementedError(msg)
+        def _raise_pytocl_nie(cls,v):
+            msg=("'{}' is only partially specified and has no "
+                 "Python to Clingo (cltopy) conversion").format(name)
+            raise NotImplementedError(msg)
 
         if "cltopy" in dct:
             dct["cltopy"] = classmethod(_make_cltopy(dct["cltopy"]))
         else:
-            dct["cltopy"] = classmethod(_raise_nie)
+            dct["cltopy"] = classmethod(_raise_cltopy_nie)
 
         if "pytocl" in dct:
             dct["pytocl"] = classmethod(_make_pytocl(dct["pytocl"]))
         else:
-            dct["pytocl"] = classmethod(_raise_nie)
+            dct["pytocl"] = classmethod(_raise_pytocl_nie)
 
 
         # For complex-terms provide an interface to the underlying complex term
@@ -787,6 +802,9 @@ class FieldOrderBy(object):
 
     def __str__(self):
         return "FieldOrderBy(field={},asc={})".format(self._fp, self.asc)
+
+    def __repr__(self):
+        return self.__str__()
 
 #------------------------------------------------------------------------------
 # A helper function to return a FieldOrderBy descending object. Input is a
@@ -1561,6 +1579,8 @@ class _NamedPlaceholder(Placeholder):
     def __str__(self):
         tmpstr = "" if not self._default else ",{}"
         return "ph_({}{})".format(self._name, tmpstr)
+    def __repr__(self):
+        return self.__str__()
 
 class _PositionalPlaceholder(Placeholder):
     def __init__(self, posn):
@@ -1573,6 +1593,8 @@ class _PositionalPlaceholder(Placeholder):
         self._value = None
     def __str__(self):
         return "ph{}_".format(self._posn+1)
+    def __repr__(self):
+        return self.__str__()
 
 def ph_(value,default=None):
     ''' A function for building new placeholders, either named or positional.'''
@@ -1621,6 +1643,8 @@ class StaticComparator(Comparator):
     def __str__(self):
         if self._value: return "True"
         return "False"
+    def __repr__(self):
+        return self.__str__()
 
 #------------------------------------------------------------------------------
 # A fact comparator functor that tests whether a fact satisfies a comparision
@@ -1706,8 +1730,10 @@ class FieldQueryComparator(Comparator):
         elif self._compop == operator.gt: opstr = ">"
         elif self._compop == operator.et: opstr = ">="
         else: opstr = "<unknown>"
-
         return "{} {} {}".format(self._arg1, opstr, self._arg2)
+
+    def __repr__(self):
+        return self.__str__()
 
 #------------------------------------------------------------------------------
 # A fact comparator that is a boolean operator over other Fact comparators
@@ -1775,9 +1801,11 @@ class BoolComparator(Comparator):
         elif self._boolop == operator.and_: opstr = "and_"
         elif self._boolop == operator.or_: opstr = "or_"
         else: opstr = "<unknown>"
-
         argsstr=", ".join([str(a) for a in self._args])
         return "{}({})".format(opstr,argsstr)
+
+    def __repr__(self):
+        return self.__str__()
 
 # ------------------------------------------------------------------------------
 # Functions to build BoolComparator instances
@@ -2226,6 +2254,9 @@ class _FactMap(object):
     def __str__(self):
         return self.asp_str()
 
+    def __repr__(self):
+        return self.__str__()
+
     #--------------------------------------------------------------------------
     # Special functions to support container operations
     #--------------------------------------------------------------------------
@@ -2491,6 +2522,9 @@ class FactBase(object):
     def __str__(self):
         tmp = ", ".join([str(f) for f in self])
         return '{' + tmp + '}'
+
+    def __repr__(self):
+        return self.__str__()
 
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
@@ -2768,6 +2802,9 @@ class TypeCastSignature(object):
     def __str__(self):
         insigstr=", ".join([str(s) for s in self._insigs])
         return "{} -> {}".format(insigstr, self._outsig)
+
+    def __repr__(self):
+        return self.__str__()
 
 #------------------------------------------------------------------------------
 # return and check that function has complete signature
