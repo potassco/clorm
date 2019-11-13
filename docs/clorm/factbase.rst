@@ -60,9 +60,10 @@ A typical ASP program has models that contain relatively small numbers of facts
 from a ``FactBase`` can often be done without regard to performance
 considerations.
 
-However, similarly to a traditional database, there can be cases where the
-number of facts that need to be stored can relatively large. In such cases
-querying these facts from a ``FactBase`` can present a performance bottleneck.
+However, in a similar manner to a traditional database, there can be cases where
+the number of facts that need to be stored can be relatively large. In such
+cases querying these facts from a ``FactBase`` can present a performance
+bottleneck.
 
 In order to alleviate this problem a ``FactBase`` can be defined with indexes
 for specific fields. Extending the above example:
@@ -72,7 +73,7 @@ for specific fields. Extending the above example:
    fb1 = FactBase([dave,morri,dave_cat],indexes=[Person.id, Pet.owner])
 
 Here the fact base ``fb1`` maintains an index on the ``id`` field of the
-``Person`` predicate, as well as the ``owner`` field for the ``Pet`` predicate.
+``Person`` predicate, as well as the ``owner`` field of the ``Pet`` predicate.
 
 In this case any querying on the ``Person.id`` or ``Pet.owner`` fields will use
 the index and not have to examine every fact of that type.
@@ -109,8 +110,8 @@ can create ``Select`` query objects:
 
 .. code-block:: python
 
-       query1=facts.select(Person).where(Person.id == "dave")
-       query2=facts.select(Pet).where(Pet.owner == "dave")
+       query1=fb.select(Person).where(Person.id == "dave")
+       query2=fb.select(Pet).where(Pet.owner == "dave")
 
 A query object needs to be executed in order to return the results. There are
 three member functions to execute a query: ``get()``, ``get_unique()``, and
@@ -124,8 +125,8 @@ case. Finally, ``count()`` returns the number of matching entries.
        for pet in query2.get():
            assert pet.owner == "dave"
 
-Indexing
-^^^^^^^^
+Queries that use Indexes
+^^^^^^^^^^^^^^^^^^^^^^^^
 
 Querying can be a relatively expensive process as it has to potentially to
 examine every fact in the ``FactBase``. However, if you know that you will be
@@ -135,9 +136,9 @@ then it is useful to define an index on that field (or fields) when the
 
 .. code-block:: python
 
-   fb = FactBase([dave,morri,dave_cat], index=[Pet.owner])
+   fb3 = FactBase([dave,morri,dave_cat], index=[Pet.owner])
 
-   query=facts.select(Pet).where(Pet.owner == ph1_)
+   query=fb3.select(Pet).where(Pet.owner == ph1_)
 
 
 Queries with Parameters
@@ -150,8 +151,8 @@ or ``count()`` function calls.
 
 .. code-block:: python
 
-       query1=facts.select(Person)
-       query2=facts.select(Pet).where(Pet.owner == ph1_)
+       query1=fb.select(Person)
+       query2=fb.select(Pet).where(Pet.owner == ph1_)
 
        for person in query1.get():
           print("Pets owned by: {}".format(person.id))
@@ -170,7 +171,7 @@ placeholders is that they allow for a default value to be set.
 
 .. code-block:: python
 
-   query2=facts.select(Pet).where(Pet.owner == ph_("owner", "dave"))
+   query2=fb.select(Pet).where(Pet.owner == ph_("owner", "dave"))
 
    # Find pets owned by "morri"
    for pet in query2.get(owner="morri"):
@@ -181,8 +182,8 @@ placeholders is that they allow for a default value to be set.
        print("\t pet named {}".format(pet.petname))
 
 
-Ordering Queries
-^^^^^^^^^^^^^^^^
+Queries with Output Ordering
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Queries allow for ordering the result by setting order options using the
 ``order_by`` member function. Multiple fields can be listed as well as being
@@ -191,7 +192,7 @@ the default).
 
 .. code-block:: python
 
-       query2=facts.select(Pet).order_by(Pet.owner, Pet.petname)
+       query2=fb.select(Pet).order_by(Pet.owner, Pet.petname)
 
 The above will list all pets, first sorted by the owner's name and then sorted in
 by the pet's name.
@@ -203,7 +204,7 @@ for the above example to sort by the pet's name in descending order:
 
 	from clorm import desc
 
-	query2=facts.select(Pet).order_by(Pet.owner, desc(Pet.petname))
+	query2=fb.select(Pet).order_by(Pet.owner, desc(Pet.petname))
 
 
 Querying by Positional Arguments
@@ -214,7 +215,7 @@ the field position.
 
 .. code-block:: python
 
-       query2=facts.select(Pet).where(Pet[0] == "dave").order_by(Pet[1])
+       query2=fb.select(Pet).where(Pet[0] == "dave").order_by(Pet[1])
 
 However, the warning from the previous section still holds; to use positional
 arguments sparingly and only in cases where the order of elements will not
@@ -235,14 +236,14 @@ Instead a helper function ``path()`` is provided for this special case.
        from clorm import path
 
        p1=Pet(owner="dave", petname="bob")
-       query3=facts.select(Pet).where(path(Pet) <= p1)
+       query3=fb.select(Pet).where(path(Pet) <= p1)
 
 Here the query will return all pet objects that are less than ``p1``, based on
 the ordering of the underlying Clingo Symbol objects. Note, querying by the
 predicate itself is a boundary case and it is not necessarily clear when this
 feature is required. For example, when testing for equality it is usually
 simpler to not use the query mechanism and instead to use the basic Python set
-inclusion operation.
+inclusion operation:
 
 .. code-block:: python
 
@@ -250,38 +251,77 @@ inclusion operation.
 
 .. note::
 
-   The technical reason for not providing the intuitive syntax is that it would
-   require overloading the boolean comparison operators for the
-   NonLogicalSymbol's metaclass. However, this would likely cause unexpected
-   behaviour when using the NonLogicalSymbol class in a variety of
-   contexts. Because of this it was thought better to provide a special syntax
-   for this boundary case.
+   The technical reason for not providing the intuitive syntax when querying on
+   the Predicate itself is that this would require overloading the boolean
+   comparison operators for the NonLogicalSymbol's metaclass. This would likely
+   cause unexpected behaviour when using the NonLogicalSymbol class in a variety
+   of contexts. Furthermore, the use-case for querying on the predicate instance
+   itself is limited, so it was deemed preferable to simply provide a special
+   syntax for this boundary case.
 
 
 Complex Query Expressions and Indexing
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-In the simple case where the ``Select`` query object contains a ``where`` clause
-that corresponds to a field that is indexed then Clorm is able to use this index
-to make query execution more efficient.
-
-However, a ``where`` clause can consist of more than one clause and these are
-treated as a conjunction. Its is also possible to construct more complex clauses
-using Clorm supplied ``and_``, ``or_``, and ``not_`` constructs.
+So far we have seen Clorm's supports for queiries with simple where clauses,
+such as:
 
 .. code-block:: python
 
-       query1=facts.select(Person).where(or_(Person.id == "dave", Person.address == "UNSW"))
+   query=fb.select(Pet).where(Pet.owner == "dave")
 
-Here when ``query1`` is execute it will return any person who is either
-``"dave""`` or based at ``"UNSW"``.
+or with a single placeholder:
+
+.. code-block:: python
+
+   query=facts.select(Pet).where(Pet.owner == ph1_)
+
+However, more complex queries can be specified, including with multiple
+placehoders. Firstly, a ``where`` clause can consist of a comma seperated list
+of clauses, which are treated as a conjunction:
+
+.. code-block:: python
+
+       query1=fb.select(Pet).where(Pet.name == _ph1, Pet.owner == _ph2)
+
+       # Count facts for pets named "Fido" with owner "morri"
+       assert query1.count("Fido","morri")) == 1
+
+It is also possible to specify arbitrarily complex queries using the Clorm
+supplied ``and_``, ``or_``, and ``not_`` constructs.
+
+.. code-block:: python
+
+       # Find the Person with id "dave" or with address "UNSW"
+       query1=fb.select(Person).where(or_(Person.id == "dave",
+                                          Person.address == "UNSW"))
+
+       # Count facts for people with id "dave" or address "UNSW"
+       assert query1.count() == 2
+
+Here when ``query1`` is execute it will counts the number of people who are
+either ``"dave""`` or based at ``"UNSW"``. Based on the earlier created fact
+base ``fb1`` both the "dave" and "morri" person facts match this criteria.
+
+.. note::
+
+   *Limitations*. Clorm has some current implementation limitations when it
+   comes to complex queries and indexing. Currently, if complex query contains
+   multiple fields, and those fields are indexed, Clorm is only able to use the
+   index of the first field in the query. This is an implementation, rather than
+   a design, limitation and could be improved if there is a genuine need.
 
 Functors and Lambdas
 ^^^^^^^^^^^^^^^^^^^^
 
-Finally, it should be noted that the specification of a select ``where`` clause
-is in reality a mechanism for generating functors. Therefore it is possible to
-simply provide a function or lambda statement instead.
+Finally, it should be noted that the specification of a ``where`` clause is in
+reality a mechanism for generating functors. Therefore, instead of using the
+intuitive field syntax, it is possible to simply provide a function or lambda
+statement instead. The signature of such a function requires at least a single
+argument corresponding to the fact object and must return ``True`` if that fact
+matches the search criteria and ``False`` otherwise. If the ``get()`` member
+function is called with additional parameters then these parameters will also be
+passed to the ``where`` function.
 
 For example to find a specific owner from the set of pet facts, the following
 two queries will generate the same results.
@@ -297,123 +337,12 @@ two queries will generate the same results.
 
 However, while both these queries do generate the same result they are not
 equivalent in behaviour. In particular, the Clorm generated functor has a
-structure that the system is able to analyse and can therefore potentially use
-indexing to improve query efficiency. In contrast, there is no mechanism to
-analyse the internal make up of a lambda or function. Consequently in these
-latter cases the query would have to examine every fact (of the appropriate
-type) in the fact base and test the function against that fact. Hence it is
-usually preferable to use the Clorm generated clauses where possible.
+structure that the system is able to analyse and can therefore take advantage of
+any indexed fields to improve query efficiency.
 
-
-Importing Raw Clingo Symbols and FactBaseBuilder
-------------------------------------------------
-
-A ``FactBase`` container can only contain predicate objects. However, the Clingo
-reasoner deals in ``Clingo.Symbol`` objects.  By using the ``clorm.clingo``
-module the need to deal with the underlying symbol objects is eliminated for
-many use-cases. However, there may still be more advanced cases where it is
-useful to deal with the raw symbol objects. Clorm provides functions and classes
-to simplify this interaction.
-
-A ``unify`` function is provided that takes two parameters; a list of predicate
-classes as *unifiers* and a list of raw clingo symbols. It then tries to unify
-the list of raw symbols with the list of predicates. This function returns a
-list of facts that represent the unification of the symbols with the first
-matching predicate. If a symbol was not able to unify with any predicate then it
-is ignored.
-
-.. code-block:: python
-
-   from clingo import *
-   from clorm import *
-
-   class Person(Predicate):
-      id = ConstantField
-      address = StringField
-
-   dave = Person(id="dave", address="UNSW")
-   dave_raw = Function("person", [Function("dave",[]),String("UNSW")])
-   facts = unify([Person], [dave_raw])
-   assert facts == [dave]
-
-.. note:: In general it is a good idea to avoid defining multiple predicate
-   definitions that can unify to the same symbol. However, if a symbol can unify
-   with multiple predicate definitions then the ``unify`` function will match to
-   only the first predicate definition in the list of predicates.
-
-The ``FactBaseBuilder`` provides a helper class to simplify the process of
-turning raw symbols into facts stored within a ``FactBase``.
-
-
-It also provides integrated features to make it easier to define field
-indexes.
-
-Because defining queries is a potentially common requirement the field
-definition within the predicate can include the option ``index=True`` which will
-be used by the ``FactBaseBuilder``.
-
-So the earlier definition can be modified:
-
-.. code-block:: python
-
-   class Pet(Predicate):
-      owner = ConstantField(index=True)
-      petname = StringField()
-
-``FactBaseBuilder`` provides a decorator function that can be used to register
-the class and index option with the builder.
-
-.. code-block:: python
-
-   from clorm import *
-
-   fbb = FactBaseBuilder()
-
-   @fbb.register
-   class Person(Predicate):
-      id = ConstantField()
-      address = StringField()
-
-   @fbb.register
-   class Pet(Predicate):
-      owner = ConstantField(index=True)
-      petname = StringField()
-
-   dave_raw = Function("person", [Function("dave",[]),String("UNSW")])
-   fb1 = fbb.new(symbols=[dave_raw])
-
-
-Once a ``FactBaseBuilder`` object has registered a number of predicates then the
-``FactBaseBuilder.new()`` member function can be used to create a ``FactBase``
-object containing the facts that were generated by unifying the
-``Clingo.Symbol`` objects against the registered predicates. The generated
-``FactBase`` will also have the appropriate indexes specified by the
-registration of the predicates.
-
-This function has two other useful features. Firtly, the option
-``raise_on_empty=True`` will throw an error if no clingo symbols unify with the
-registered predicates. While there are legitimate cases where a symbol doesn't
-unify with the builder there are also many cases where this indicates an error
-in the definition of the predicates or in the ASP program itself.
-
-The final option is the ``delayed_init=True`` option that allow for a delayed
-initialisation of the ``FactBase``. What this means is that the symbols are only
-processed (i.e., they are not unified agaist the predicates to generate facts)
-when the ``FactBase`` object is actually used.
-
-This is useful because there are cases where a fact base object is never
-actually used and is simply discarded. In particular this can happen when the
-ASP solver generates models as part of the ``on_model()`` callback function. If
-applications only cares about an optimal model or there is a timeout being
-applied then only the last model generated will actually be processed and all
-the earlier models may be discarded (see :ref:`api_clingo_integration`).
-
-
-
-
-
-
-
-
-
-
+In contrast, there is no simple mechanism to analyse the internal make up of a
+lambda statement or function. Consequently in these latter cases the query would
+have to examine every fact in the fact base, of that predicate type, and test
+the function against that fact. In a large fact base this could result in a
+significant performance penalty. Hence it is usually preferable to use the Clorm
+generated clauses where possible.

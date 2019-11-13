@@ -30,16 +30,16 @@ class ClingoPatchTestCase(unittest.TestCase):
     #--------------------------------------------------------------------------
     def test_monkey(self):
         from clingo import Control
-        from clorm import Predicate, IntegerField, StringField, FactBase, FactBaseBuilder
+        from clorm import Predicate, IntegerField, StringField, FactBase, SymbolPredicateUnifier
 
-        fbb = FactBaseBuilder()
+        spu = SymbolPredicateUnifier()
 
-        @fbb.register
+        @spu.register
         class Afact(Predicate):
             num1=IntegerField()
             str1=StringField()
 
-        @fbb.register
+        @spu.register
         class Bfact(Predicate):
             num1=IntegerField()
             str1=StringField()
@@ -54,7 +54,7 @@ class ClingoPatchTestCase(unittest.TestCase):
         fb2 = None
         def on_model(model):
             nonlocal fb2
-            fb2 = model.facts(fbb, atoms=True)
+            fb2 = model.facts(spu, atoms=True)
 
         fb1 = FactBase([af1,af2,af3,bf1,bf2])
         ctrl = Control()

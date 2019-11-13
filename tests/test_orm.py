@@ -16,7 +16,7 @@ from clorm.orm import \
     not_, and_, or_, StaticComparator, \
     ph_, ph1_, ph2_, \
     _FactIndex, _FactMap, FieldPath, FieldPathEval, path, \
-    unify, desc, FactBase, FactBaseBuilder, FieldPathLink, \
+    unify, desc, FactBase, SymbolPredicateUnifier, FieldPathLink, \
     TypeCastSignature, make_function_asp_callable, make_method_asp_callable, \
     ContextBuilder
 
@@ -1061,6 +1061,11 @@ class ORMTestCase(unittest.TestCase):
         self.assertEqual([bf_1], g4)
         self.assertEqual([af1_1,bf_1], g5)
 
+        # Test the ordered option that returns a list of facts that preserves
+        # the order of the original symbols.
+        g1=unify([Afact1,Afact2,Bfact], raws, ordered=True)
+        self.assertEqual(g1, [af1_1,af2_1,bf_1])
+
     #--------------------------------------------------------------------------
     #   Test unifying between predicates which have the same name-arity
     #   signature. There was a bug in the unify() function where only of the
@@ -1124,22 +1129,22 @@ class ORMTestCase(unittest.TestCase):
         self.assertEqual(f1.raw, r1)
         with self.assertRaises(ValueError) as ctx:
             f2 = Fact1(raw=r2)
-        f1 = Fact2(raw=r1)
-        self.assertEqual(f1.raw, r1)
+        f1_alt = Fact2(raw=r1)
+        self.assertEqual(f1_alt.raw, r1)
         f2 = Fact2(raw=r2)
         self.assertEqual(f2.raw, r2)
 
-        # unify() should unify r1 with Fact1 and r2 with Fact2
+        # unify() unifies r1 with Fact1 (f1) and r2 with Fact2 (f2)
         res = unify([Fact1,Fact2],[r1,r2])
         self.assertEqual(len(res), 2)
-        self.assertTrue(isinstance(res[0],Fact1))
-        self.assertTrue(isinstance(res[1],Fact2))
+        self.assertTrue(f1 in res)
+        self.assertTrue(f2 in res)
 
-        # unify() should unify r1 and r2 with Fact2
+        # unify() unifies r1 and r2 with Fact2 (f1_alt and f2)
         res = unify([Fact2,Fact1],[r1,r2])
         self.assertEqual(len(res), 2)
-        self.assertTrue(isinstance(res[0],Fact2))
-        self.assertTrue(isinstance(res[1],Fact2))
+        self.assertTrue(f1_alt in res)
+        self.assertTrue(f2 in res)
 
     #--------------------------------------------------------------------------
     #  Test that the fact comparators work
@@ -1320,45 +1325,45 @@ class ORMTestCase(unittest.TestCase):
     #--------------------------------------------------------------------------
     def test_factbasebuilder(self):
 
-        # Using the FactBaseBuilder as a decorator
-        fbb1 = FactBaseBuilder()
-        fbb2 = FactBaseBuilder()
-        fbb3 = FactBaseBuilder(suppress_auto_index=True)
+        # Using the SymbolPredicateUnifier as a decorator
+        spu1 = SymbolPredicateUnifier()
+        spu2 = SymbolPredicateUnifier()
+        spu3 = SymbolPredicateUnifier(suppress_auto_index=True)
 
         # decorator both
-        @fbb3.register
-        @fbb2.register
-        @fbb1.register
+        @spu3.register
+        @spu2.register
+        @spu1.register
         class Afact(Predicate):
             num1=IntegerField(index=True)
             num2=IntegerField()
             str1=StringField()
 
         # decorator without argument
-        @fbb1.register
+        @spu1.register
         class Bfact(Predicate):
             num1=IntegerField(index=True)
             str1=StringField()
 
-        self.assertEqual(fbb1.predicates, [Afact,Bfact])
-        self.assertEqual(fbb2.predicates, [Afact])
-        self.assertEqual(fbb3.predicates, [Afact])
-        self.assertEqual(fbb1.indexes, [Afact.num1,Afact.num1])
-        self.assertEqual(fbb2.indexes, [Afact.num1])
-        self.assertEqual(fbb3.indexes, [])
+        self.assertEqual(spu1.predicates, [Afact,Bfact])
+        self.assertEqual(spu2.predicates, [Afact])
+        self.assertEqual(spu3.predicates, [Afact])
+        self.assertEqual(spu1.indexes, [Afact.num1,Afact.num1])
+        self.assertEqual(spu2.indexes, [Afact.num1])
+        self.assertEqual(spu3.indexes, [])
 
     #--------------------------------------------------------------------------
     # Test the factbasebuilder when there are subfields defined
     #--------------------------------------------------------------------------
     def test_factbasebuilder_with_subfields(self):
-        fbb = FactBaseBuilder()
+        spu = SymbolPredicateUnifier()
 
         class CT(ComplexTerm):
             a = IntegerField
             b = StringField(index=True)
             c = (IntegerField(index=True),ConstantField)
 
-        @fbb.register
+        @spu.register
         class P(Predicate):
             d = CT.Field(index=True)
             e = CT.Field()
@@ -1366,13 +1371,13 @@ class ORMTestCase(unittest.TestCase):
         expected=set([P.d.meta.path,
                       P.d.b.meta.path, P.d.c.arg1.meta.path,
                       P.e.b.meta.path, P.e.c.arg1.meta.path])
-        self.assertEqual(fbb.predicates, [P])
-        self.assertEqual(set(fbb.indexes), set(expected))
+        self.assertEqual(spu.predicates, [P])
+        self.assertEqual(set(spu.indexes), set(expected))
 
         ct_func=Function("ct",[Number(1),String("aaa"),
                                Function("",[Number(1),Function("const",[])])])
         p1=Function("p",[ct_func,ct_func])
-        fb=fbb.new(symbols=[p1],raise_on_empty=True)
+        fb=spu.unify(symbols=[p1],raise_on_empty=True)
         self.assertEqual(len(fb),1)
         self.assertEqual(set(fb.indexes), expected)
 
@@ -1407,16 +1412,16 @@ class ORMTestCase(unittest.TestCase):
             Function("bfact",[Number(2),String("bbb")]),
             Function("cfact",[Number(1)])
             ]
-        fbb = FactBaseBuilder(predicates=[Afact,Bfact,Cfact])
+        spu = SymbolPredicateUnifier(predicates=[Afact,Bfact,Cfact])
 
         # Test the different ways that facts can be added
-        fb = fbb.new(symbols=raws)
+        fb = spu.unify(symbols=raws)
         self.assertFalse(fb._delayed_init)
         self.assertEqual(set(fb.predicates), set([Afact,Bfact,Cfact]))
         s_af_all = fb.select(Afact)
         self.assertEqual(set(s_af_all.get()), set([af1,af2,af3]))
 
-        fb = fbb.new(symbols=raws, delayed_init=True)
+        fb = spu.unify(symbols=raws, delayed_init=True)
         self.assertTrue(fb._delayed_init)
         self.assertEqual(set(fb.predicates), set([Afact,Bfact,Cfact]))
         s_af_all = fb.select(Afact)
@@ -1439,7 +1444,7 @@ class ORMTestCase(unittest.TestCase):
         self.assertEqual(set(s_af_all.get()), set([af1,af2,af3]))
 
         # Test that adding symbols can handle symbols that don't unify
-        fb = fbb.new(symbols=raws)
+        fb = spu.unify(symbols=raws)
         s_af_all = fb.select(Afact)
         self.assertEqual(set(s_af_all.get()), set([af1,af2,af3]))
 
@@ -1449,10 +1454,10 @@ class ORMTestCase(unittest.TestCase):
         class MyFactBase3(FactBase):
             predicates = [Afact, Bfact]
 
-        fbb = FactBaseBuilder(predicates=[Afact,Bfact,Cfact],
-                              indexes=[Afact.num1, Bfact.num1])
+        spu = SymbolPredicateUnifier(predicates=[Afact,Bfact,Cfact],
+                                     indexes=[Afact.num1, Bfact.num1])
 
-        fb = fbb.new(symbols=raws)
+        fb = spu.unify(symbols=raws)
         s = fb.select(Afact).where(Afact.num1 == 1)
         self.assertEqual(s.get_unique(), af1)
         s = fb.select(Bfact).where(Bfact.num1 == 1)

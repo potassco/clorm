@@ -36,8 +36,8 @@ __version__ = oclingo.__version__
 
 def _build_unifier(unifier):
     if not unifier: return unifier
-    if isinstance(unifier, FactBaseBuilder): return unifier
-    return FactBaseBuilder(predicates=unifier)
+    if isinstance(unifier, SymbolPredicateUnifier): return unifier
+    return SymbolPredicateUnifier(predicates=unifier)
 
 # ------------------------------------------------------------------------------
 # Wrap clingo.Model and override some functions
@@ -96,7 +96,7 @@ class Model(object, metaclass=_ModelMetaClass):
     def facts(self, unifier=None, atoms=False, terms=False, shown=False,
               raise_on_empty=False):
         '''Returns a FactBase containing the facts in the model that unify with the
-        FactBaseBuilder.
+        SymbolPredicateUnifier.
 
         This function provides a wrapper around the ``clingo.Model.symbols``
         functions, but instead of returning a list of symbols it returns a
@@ -104,7 +104,7 @@ class Model(object, metaclass=_ModelMetaClass):
         sub-class instances.
 
         Args:
-           unifier(list | FactBaseBuilder): used to unify and instantiate
+           unifier(list | SymbolPredicateUnifier): used to unify and instantiate
               FactBase (Default: passed via the constructor if specified in the
               `clorm.clingo.Control` object)
            atoms: select all atoms in the model (Default: False)
@@ -121,7 +121,7 @@ class Model(object, metaclass=_ModelMetaClass):
                 "(no default was given at model instantiation)"
             raise ValueError(msg)
 
-        return unifier.new(
+        return unifier.unify(
             symbols=self._model.symbols(atoms=atoms,terms=terms,shown=shown),
             raise_on_empty=raise_on_empty,
             delayed_init=True)
@@ -246,7 +246,7 @@ class Control(object, metaclass=_ControlMetaClass):
 
     Adds an additional parameter ``unifier`` to specify how any generated clingo
     models will be unified with the clorm Predicate definitions. The unifier can
-    be specified as a list of predicates or as a FactBaseBuilder object.
+    be specified as a list of predicates or as a SymbolPredicateUnifier object.
 
     An existing ``clingo.Control`` object can be passed using the ``control_``
     parameter.

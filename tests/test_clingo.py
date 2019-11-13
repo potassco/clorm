@@ -9,7 +9,7 @@ import clorm.clingo as cclingo
 from clorm.clingo import Number, String, Function, parse_program, Control
 
 from clorm import Predicate, IntegerField, StringField, FactBase,\
-    FactBaseBuilder, ph1_
+    SymbolPredicateUnifier, ph1_
 
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
@@ -29,13 +29,13 @@ class ClingoTestCase(unittest.TestCase):
     # Test processing clingo Model
     #--------------------------------------------------------------------------
     def test_control_model_integration(self):
-        fbb=FactBaseBuilder()
-        @fbb.register
+        spu=SymbolPredicateUnifier()
+        @spu.register
         class Afact(Predicate):
             num1=IntegerField()
             num2=IntegerField()
             str1=StringField()
-        @fbb.register
+        @spu.register
         class Bfact(Predicate):
             num1=IntegerField()
             str1=StringField()
@@ -55,7 +55,7 @@ class ClingoTestCase(unittest.TestCase):
             self.assertTrue(model.contains(af1))
             self.assertTrue(model.contains(af1.raw))
             self.assertTrue(model.model_.contains(af1.raw))
-            fb2 = model.facts(fbb, atoms=True)
+            fb2 = model.facts(spu, atoms=True)
 
             # Check that the known attributes behave the same as the real model
             self.assertEqual(model.cost, model._model.cost)
@@ -116,8 +116,8 @@ class ClingoTestCase(unittest.TestCase):
     # Test processing clingo Model
     #--------------------------------------------------------------------------
     def test_clingo_to_clorm_model_integration(self):
-        fbb=FactBaseBuilder()
-        @fbb.register
+        spu=SymbolPredicateUnifier()
+        @spu.register
         class Afact(Predicate):
             num1=IntegerField()
 
@@ -141,20 +141,20 @@ class ClingoTestCase(unittest.TestCase):
         octrl.solve(on_model=on_model)
 
     #--------------------------------------------------------------------------
-    # Test passing a FactBaseBuilder to the model constructors
+    # Test passing a SymbolPredicateUnifier to the model constructors
     #--------------------------------------------------------------------------
-    def test_model_default_fbb(self):
-        fbb=FactBaseBuilder()
-        @fbb.register
+    def test_model_default_spu(self):
+        spu=SymbolPredicateUnifier()
+        @spu.register
         class Afact(Predicate):
             num1=IntegerField()
         af1 = Afact(1)
         af2 = Afact(2)
 
-        # Test that the function works correctly when an fbb is passed to the
+        # Test that the function works correctly when an spu is passed to the
         # Model constructor
         def on_model1(model):
-            cmodel=cclingo.Model(model=model,unifier=fbb)
+            cmodel=cclingo.Model(model=model,unifier=spu)
             fb = cmodel.facts(atoms=True)
             self.assertEqual(len(fb.facts()), 2)
 
@@ -175,7 +175,7 @@ class ClingoTestCase(unittest.TestCase):
         ctrl.ground([("base",[])])
         ctrl.control_.solve(on_model=on_model1)
 
-        # Test that it fails correctly when no fbb is passed
+        # Test that it fails correctly when no spu is passed
         def on_model2(model):
             cmodel=cclingo.Model(model=model)
             with self.assertRaises(ValueError) as ctx:
@@ -183,24 +183,24 @@ class ClingoTestCase(unittest.TestCase):
         ctrl.control_.solve(on_model=on_model2)
 
     #--------------------------------------------------------------------------
-    # Test passing a FactBaseBuilder to the control constructors and using the
+    # Test passing a SymbolPredicateUnifier to the control constructors and using the
     # on_model callback for solving
     # --------------------------------------------------------------------------
-    def test_control_on_model_default_fbb(self):
-        fbb=FactBaseBuilder()
-        @fbb.register
+    def test_control_on_model_default_spu(self):
+        spu=SymbolPredicateUnifier()
+        @spu.register
         class Afact(Predicate):
             num1=IntegerField()
         af1 = Afact(1)
         af2 = Afact(2)
 
-        # Test that the function works correctly when an fbb is passed via the
+        # Test that the function works correctly when an spu is passed via the
         # clorm.clingo.Control constructor and using the on_model callback
         def on_model1(model):
             fb = model.facts(atoms=True)
             self.assertEqual(len(fb.facts()), 2)
 
-        ctrl = cclingo.Control(unifier=fbb)
+        ctrl = cclingo.Control(unifier=spu)
         ctrl.add_facts([af1,af2])
         ctrl.ground([("base",[])])
         ctrl.solve(on_model=on_model1)
@@ -217,7 +217,7 @@ class ClingoTestCase(unittest.TestCase):
         ctrl.ground([("base",[])])
         ctrl.solve(on_model=on_model1)
 
-        # Test that it fails correctly when no fbb is passed
+        # Test that it fails correctly when no spu is passed
         def on_model2(model):
             with self.assertRaises(ValueError) as ctx:
                 fb = model.facts(atoms=True)
@@ -227,24 +227,24 @@ class ClingoTestCase(unittest.TestCase):
         ctrl.solve(on_model=on_model2)
 
     #--------------------------------------------------------------------------
-    # Test passing a FactBaseBuilder to the control constructors and using a
+    # Test passing a SymbolPredicateUnifier to the control constructors and using a
     # solvehandle for solving
     # --------------------------------------------------------------------------
-    def test_control_solvehandle_default_fbb(self):
-        fbb=FactBaseBuilder()
-        @fbb.register
+    def test_control_solvehandle_default_spu(self):
+        spu=SymbolPredicateUnifier()
+        @spu.register
         class Afact(Predicate):
             num1=IntegerField()
         af1 = Afact(1)
         af2 = Afact(2)
 
-        # Test that the function works correctly when an fbb is passed via the
+        # Test that the function works correctly when an spu is passed via the
         # clorm.clingo.Control constructor and using the solvehandle
         def on_model1(model):
             fb = model.facts(atoms=True)
             self.assertEqual(len(fb.facts()), 2)
 
-        ctrl = cclingo.Control(unifier=fbb)
+        ctrl = cclingo.Control(unifier=spu)
         ctrl.add_facts([af1,af2])
         ctrl.ground([("base",[])])
         with ctrl.solve(yield_=True) as sh:
@@ -266,8 +266,8 @@ class ClingoTestCase(unittest.TestCase):
     # Test processing clingo Model
     #--------------------------------------------------------------------------
     def test_model_facts(self):
-        fbb=FactBaseBuilder()
-        @fbb.register
+        spu=SymbolPredicateUnifier()
+        @spu.register
         class Afact(Predicate):
             num1=IntegerField()
             num2=IntegerField()
@@ -283,20 +283,20 @@ class ClingoTestCase(unittest.TestCase):
         bf2 = Bfact(2,"bbb")
 
         def on_model1(model):
-            fb = model.facts(fbb, atoms=True, raise_on_empty=True)
-            self.assertEqual(len(fb.facts()), 3)  # fbb only imports Afact
+            fb = model.facts(spu, atoms=True, raise_on_empty=True)
+            self.assertEqual(len(fb.facts()), 3)  # spu only imports Afact
 
         ctrl = cclingo.Control()
         ctrl.add_facts([af1,af2,af3,bf1,bf2])
         ctrl.ground([("base",[])])
         ctrl.solve(on_model=on_model1)
 
-        fbb2=FactBaseBuilder()
+        spu2=SymbolPredicateUnifier()
         def on_model2(model):
             # Note: because of the delayed initialisation you have to do
             # something with the factbase to get it to raise the error.
             with self.assertRaises(ValueError) as ctx:
-                fb = model.facts(fbb2, atoms=True, raise_on_empty=True)
+                fb = model.facts(spu2, atoms=True, raise_on_empty=True)
                 self.assertEqual(len(fb.facts()),0)
 
         ctrl = cclingo.Control()
@@ -308,8 +308,8 @@ class ClingoTestCase(unittest.TestCase):
     # Test the solvehandle
     #--------------------------------------------------------------------------
     def test_solvehandle_wrapper(self):
-        fbb=FactBaseBuilder()
-        @fbb.register
+        spu=SymbolPredicateUnifier()
+        @spu.register
         class Fact(Predicate):
             num1=IntegerField()
             class Meta: name="f"
@@ -337,11 +337,11 @@ class ClingoTestCase(unittest.TestCase):
     # Test the solvehandle
     #--------------------------------------------------------------------------
     def test_solve_with_assumptions(self):
-        fbb=FactBaseBuilder()
-        @fbb.register
+        spu=SymbolPredicateUnifier()
+        @spu.register
         class F(Predicate):
             num1=IntegerField()
-        @fbb.register
+        @spu.register
         class G(Predicate):
             num1=IntegerField()
 
@@ -357,13 +357,13 @@ class ClingoTestCase(unittest.TestCase):
         num_models=0
         def on_modelT(m):
             nonlocal num_models
-            fb = m.facts(fbb,atoms=True)
+            fb = m.facts(spu,atoms=True)
             self.assertTrue(g1 in fb)
             num_models += 1
 
         def on_modelF(m):
             nonlocal num_models
-            fb = m.facts(fbb,atoms=True)
+            fb = m.facts(spu,atoms=True)
             self.assertTrue(g1 not in fb)
             self.assertFalse(g1 in fb)
             num_models += 1
@@ -387,8 +387,8 @@ class ClingoTestCase(unittest.TestCase):
     # Test the solvehandle
     #--------------------------------------------------------------------------
     def test_solve_with_on_finish(self):
-        fbb=FactBaseBuilder()
-        @fbb.register
+        spu=SymbolPredicateUnifier()
+        @spu.register
         class F(Predicate):
             num1=IntegerField()
 
@@ -401,7 +401,7 @@ class ClingoTestCase(unittest.TestCase):
         called=False
         def on_model(m):
             nonlocal called
-            outfb = m.facts(fbb,atoms=True)
+            outfb = m.facts(spu,atoms=True)
             self.assertEqual(infb,outfb)
             self.assertFalse(called)
             called=True
@@ -418,8 +418,8 @@ class ClingoTestCase(unittest.TestCase):
     # Test the solvehandle
     #--------------------------------------------------------------------------
     def test_solve_returning_solvehandle(self):
-        fbb=FactBaseBuilder()
-        @fbb.register
+        spu=SymbolPredicateUnifier()
+        @spu.register
         class F(Predicate):
             num1=IntegerField()
         f1 = F(1) ; f2 = F(2) ; f3 = F(3)
@@ -431,7 +431,7 @@ class ClingoTestCase(unittest.TestCase):
         done=False
         def on_model(m):
             nonlocal done
-            outfb = m.facts(fbb,atoms=True)
+            outfb = m.facts(spu,atoms=True)
             self.assertEqual(infb,outfb)
             self.assertFalse(done)
             done=True
@@ -457,7 +457,7 @@ class ClingoTestCase(unittest.TestCase):
         count=0
         for m in sh:
             count += 1
-            outfb = m.facts(fbb,atoms=True)
+            outfb = m.facts(spu,atoms=True)
             self.assertEqual(infb,outfb)
         self.assertEqual(count,1)
         self.assertTrue(done)
@@ -470,7 +470,7 @@ class ClingoTestCase(unittest.TestCase):
         count=0
         for m in sh:
             count += 1
-            outfb = m.facts(fbb,atoms=True)
+            outfb = m.facts(spu,atoms=True)
             self.assertEqual(infb,outfb)
         self.assertEqual(count,1)
         self.assertTrue(done)
@@ -480,8 +480,8 @@ class ClingoTestCase(unittest.TestCase):
     # Test bad arguments
     #--------------------------------------------------------------------------
     def test_bad_arguments(self):
-        fbb=FactBaseBuilder()
-        @fbb.register
+        spu=SymbolPredicateUnifier()
+        @spu.register
         class Fact(Predicate):
             num1=IntegerField()
             class Meta: name="f"

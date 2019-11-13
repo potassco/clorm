@@ -27,7 +27,7 @@ __all__ = [
     'Predicate',
     'ComplexTerm',
     'FactBase',
-    'FactBaseBuilder',
+    'SymbolPredicateUnifier',
     'ContextBuilder',
     'Select',
     'Delete',
@@ -2474,28 +2474,15 @@ class FactBase(object):
         tmp = ", ".join([str(f) for f in self])
         return '{' + tmp + '}'
 
-
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-# Generate facts from an input array of Symbols.  The `predicates` argument
-# contains the predicate classes to unify against (order matters) and `symbols`
-# contains the list of raw clingo.Symbol objects.
+# A fact generator that takes a list of predicates to unify against (order
+# matters) and a set of raw clingo symbols against this list.
 # ------------------------------------------------------------------------------
 
-def unify(predicates, symbols):
-    '''Unify a collection of symbols against a list of predicate classes.
-
-    Symbols are tested against each unifier until a match is found. Since it is
-    possible to define multiple predicate types that can unify with the same
-    symbol, the order the unifiers differently can produce different results.
-
-    Args:
-      predicates: a list of predicate classes to unify against
-      symbols: the symbols to unify
-
-    '''
+def _unify(predicates, symbols):
     def unify_single(cls, r):
         try:
             return cls._unify(r)
@@ -2503,32 +2490,31 @@ def unify(predicates, symbols):
             return None
 
     # To make things a little more efficient use the name/arity signature as a
-    # filter. However, Python doesn't have a built in multidict and I don't want
-    # to add an extra dependency - so this is a bit more complex than it needs
-    # to be.
+    # filter. However, Python doesn't have a built in multidict class, and I
+    # don't want to add a dependency to an external library just for one small
+    # feature, so implement a simple structure here.
     sigs = [((cls.meta.name, len(cls.meta)),cls) for cls in predicates]
     types = {}
     for sig,cls in sigs:
         if sig not in types: types[sig] = [cls]
         else: types[sig].append(cls)
 
-    facts = []
+    # Loop through symbols and yield when we have a match
     for raw in symbols:
         classes = types.get((raw.name, len(raw.arguments)))
         if not classes: continue
         for cls in classes:
             f = unify_single(cls,raw)
             if f:
-                facts.append(f)
+                yield f
                 break
-    return facts
 
 
 #------------------------------------------------------------------------------
-# FactBaseBuilder offers a decorator interface for gathering predicate and index
+# SymbolPredicateUnifier offers a decorator interface for gathering predicate and index
 # definitions to be used in defining a FactBase subclass.
 # ------------------------------------------------------------------------------
-class FactBaseBuilder(object):
+class SymbolPredicateUnifier(object):
     """A fact base builder simplifies the task of unifying raw clingo.Symbol objects
     with Clorm predicates. Predicates classes are registered using the
     'register' function (which can be called as a normal function or as a class
@@ -2569,9 +2555,9 @@ class FactBaseBuilder(object):
         self._register_predicate(cls)
         return cls
 
-    def new(self, symbols, delayed_init=False, raise_on_empty=False):
+    def unify(self, symbols, delayed_init=False, raise_on_empty=False):
         def _populate():
-            facts=unify(self.predicates, symbols)
+            facts=list(_unify(self.predicates, symbols))
             if not facts and raise_on_empty:
                 raise ValueError("FactBase creation: failed to unify any symbols")
             return facts
@@ -2585,6 +2571,42 @@ class FactBaseBuilder(object):
     def predicates(self): return self._predicates
     @property
     def indexes(self): return self._indexes
+
+#------------------------------------------------------------------------------
+# Generate facts from an input array of Symbols.  The `unifier` argument takes a
+# list of predicate classes or a SymbolPredicateUnifer object to unify against
+# the symbol object contained in `symbols`.
+# ------------------------------------------------------------------------------
+
+def unify(unifier,symbols,ordered=False):
+    '''Unify raw symbols against a list of predicates or a SymbolPredicateUnifier.
+
+    Symbols are tested against each predicate unifier until a match is
+    found. Since it is possible to define multiple predicate types that can
+    unify with the same symbol, the order of the predicates in the unifier
+    matters. With the `ordered` option set to `True` a list is returned that
+    preserves the order of the input symbols.
+
+    Args:
+      unifier: a list of predicate classes or a SymbolPredicateUnifier object.
+      symbols: the symbols to unify.
+      ordered (default: False): optional to return a list rather than a FactBase.
+    Return:
+      a FactBase containing the unified facts, indexed by any specified indexes,
+         or a list if the ordered option is specified
+
+    '''
+    if not unifier:
+        raise ValueError(("The unifier must be a list of predicates "
+                          "or a SymbolPredicateUnifier"))
+    if ordered:
+        if isinstance(unifier, SymbolPredicateUnifier):
+            unifier=unifier.predicates
+        return list(_unify(unifier,symbols))
+    else:
+        if not isinstance(unifier, SymbolPredicateUnifier):
+            unifier=SymbolPredicateUnifier(predicates=unifier)
+        return unifier.unify(symbols)
 
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------

@@ -1,6 +1,14 @@
 JSON Encoding and Decoding
 ==========================
 
+.. warning::
+
+   This API is still experimental and may change between minor version
+   increments. It is only a first-cut and it should be possible to have a better
+   more compact JSON encoding. Will aim to keep the API similar but the
+   underlying encoding might change.
+
+
 Clorm provides functions for encoding and decoding facts as JSON. The motivation
 is to be able to pass around facts between different processes. For example, you
 may want to generate a problem instance as part of a main web application but
@@ -14,12 +22,6 @@ solver.
    as an format for passing around facts between processes and not to be
    particularly human readable. In contrast the clingo output in more human
    readable but would require parsing to regenerate the original symbol objects.
-
-.. warning::
-
-   The JSON encoding may change. This is only a first-cut and I think it should
-   be possible to have a better more compact JSON encoding. Will aim to keep the
-   API similar but the underlying encoding might change.
 
 The ``FactBaseCoder`` class is a helper class to be able to encode/decode JSON for
 particular Predicate sub-classes. The predicates can be supplied at
@@ -37,7 +39,7 @@ construction.
    fb_coder = FactBaseCoder([Afact])
 
 Alternatively, the ``FactBaseCoder`` can also be used as a decorator to register
-predicates (just like the ``FactBaseBuilder``).
+predicates.
 
 .. code-block:: python
 

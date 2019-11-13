@@ -6,13 +6,10 @@
 
 #script(python).
 import datetime
-from clorm import IntegerField, Predicate, FactBase, FactBaseBuilder, ph1_
+from clorm import IntegerField, Predicate, FactBase, ph1_
 from clorm.clingo import Control
 from clorm.lib.date import EnumDate, EnumDateRange
 
-fbb=FactBaseBuilder()
-
-@fbb.register
 class Assignment(Predicate):
     res = IntegerField()
     ed = EnumDate.Field()
@@ -45,7 +42,7 @@ end_date(D) :- date(D), not middle_date(D).
 #script(python).
 
 def on_model(model):
-    solution = model.facts(fbb, atoms=True, raise_on_empty=True)
+    solution = model.facts(atoms=True, raise_on_empty=True)
     q1 = solution.select(Assignment).where(Assignment.ed == ph1_)
 
     for ed in dr.enumdate_range():
@@ -53,7 +50,7 @@ def on_model(model):
 
 
 def main(ctrl_):
-    ctrl = Control(control_=ctrl_)
+    ctrl = Control(control_=ctrl_,unifier=[Assignment])
     ctrl.ground([("base",[])])
     ctrl.solve(on_model=on_model)
 

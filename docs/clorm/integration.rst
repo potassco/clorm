@@ -48,7 +48,7 @@ only highlight the changes that Clorm introduces.
 Clorm adds, or overloads, the following member functions:
 
 * ``__init__()``. Clorm adds an optional `fbb` parameter for specifying a
-  default ``FactBaseBuilder``. A parameter `control_` is allowed, but is
+  default ``SymbolPredicateUnifier``. A parameter `control_` is allowed, but is
   mutually exclusive with the standard parameters for ``clingo.Control``. The
   `control_` parameter allows a ``clingo.Control`` object to be passed to the
   wrapper and is a mechanism to allow Clorm to be used even when Python is
@@ -112,11 +112,11 @@ encapsulates an ASP model and the associated meta-data. It is passed to the
 provide a mechanism to extract Clorm facts from the model. The added and
 modified functions are:
 
-* ``facts(self, fbb=None, atoms=False, terms=False, shown=False,
-  raise_on_empty=True)``. A ``FactBaseBuilder`` must be provided to extract the
+* ``facts(self, unifier=None, atoms=False, terms=False, shown=False,
+  raise_on_empty=True)``. A ``SymbolPredicateUnifier`` must be provided to extract the
   facts of interest from the other facts within the model. This object can be
-  passed as the `fbb` parameter or can be passed in the constructor to the
-  ``clorm.clingo.Control`` object. As well as a ``FactBaseBuilder`` the function
+  passed as the `unifier` parameter or can be passed in the constructor to the
+  ``clorm.clingo.Control`` object. As well as a ``SymbolPredicateUnifier`` the function
   allows for the ``atoms``, ``terms``, and ``shown`` options from the
   ``Model.symbols()`` function. It creates a fact base object from the passed
   class and populates it with the selected symbols that are able to unify with
