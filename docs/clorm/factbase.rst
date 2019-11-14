@@ -10,14 +10,14 @@ application typically does not simply deal with individual facts in isolation.
 A Container for Facts
 ---------------------
 
-Clorm provides the ``FactBase`` as a container class for storing and querying
-facts. ``FactBase`` behaves much like a normal Python container except that it
-can only contain instances of Predicate (or it's sub-classes) and has
-database-like query mechanism.
+Clorm provides the ``FactBase`` class as a container for storing and querying
+facts. A ``FactBase`` can behave much like a normal Python ``set`` object except
+for two caveats: firstly, it can only contain instances of ``Predicate``
+sub-classes, and secondly, it has a database-like query mechanism.
 
 .. code-block:: python
 
-   from clorm import *
+   from clorm import Predicate, ConstantField, StringField, FactBase
 
    class Person(Predicate):
       id = ConstantField
@@ -33,15 +33,15 @@ database-like query mechanism.
 
    fb = FactBase([dave,morri,dave_cat])
 
-   # The in and len operators work as expected
+   # The "in" and "len" operators work as expected
    assert dave in fb
    assert len(fb) == 3
 
-The fact base can be populated at object construction time or later. Like a
-Python ``set`` object a ``FactBase`` has an ``add`` member function for adding
-facts. However, because it can only store ``Predicate`` instances the function
-is able to be more flexible and has been overloaded to accept either a single
-fact or a list of facts.
+A fact base can be populated at object construction time or later. Like a Python
+``set`` object it has an ``add`` member function for adding facts. However,
+because it can only store ``Predicate`` instances this function is able to be
+more flexible and has been overloaded to accept either a single fact or a list
+of facts.
 
 .. code-block:: python
 
@@ -51,6 +51,10 @@ fact or a list of facts.
 
    fb.add(dave_dog)
    fb.add([morri_cat, morri_cat2])
+
+   assert dave_dog in fb
+   assert morri_cat in fb
+   assert morri_cat2 in fb
 
 Indexing
 ^^^^^^^^
@@ -75,12 +79,13 @@ for specific fields. Extending the above example:
 Here the fact base ``fb1`` maintains an index on the ``id`` field of the
 ``Person`` predicate, as well as the ``owner`` field of the ``Pet`` predicate.
 
-In this case any querying on the ``Person.id`` or ``Pet.owner`` fields will use
-the index and not have to examine every fact of that type.
+With these indexes any querying on the ``Person.id`` or ``Pet.owner`` fields
+will be able to use the appropriate index and not have to examine every fact of
+that type.
 
-Note, as with database indexing, specifying indexes should be done sparingly to
-ensure the right balance of the cost of maintaining an index against the cost of
-querying the fact base.
+Of course, as with database indexing, specifying indexes should be done
+sparingly to ensure the right balance between the cost of maintaining the index
+against the cost of querying the fact base.
 
 
 Querying
@@ -106,7 +111,7 @@ Simple Queries
 ^^^^^^^^^^^^^^
 
 Assuming the definitions and the ``fb`` instance above, a ``FactBase`` object
-can create ``Select`` query objects:
+can be used to create ``Select`` query objects:
 
 .. code-block:: python
 
@@ -117,7 +122,7 @@ A query object needs to be executed in order to return the results. There are
 three member functions to execute a query: ``get()``, ``get_unique()``, and
 ``count()``. ``get()`` returns a list of results, while ``get_unique()`` returns
 exactly one result and will raise a ``ValueError`` if this is not the
-case. Finally, ``count()`` returns the number of matching entries.
+case. Finally, ``count()`` returns the number of matched entries.
 
 .. code-block:: python
 
@@ -138,7 +143,8 @@ then it is useful to define an index on that field (or fields) when the
 
    fb3 = FactBase([dave,morri,dave_cat], index=[Pet.owner])
 
-   query=fb3.select(Pet).where(Pet.owner == ph1_)
+   # Using an indexed field in a query
+   query=fb3.select(Pet).where(Pet.owner == "dave")
 
 
 Queries with Parameters
@@ -192,7 +198,7 @@ the default).
 
 .. code-block:: python
 
-       query2=fb.select(Pet).order_by(Pet.owner, Pet.petname)
+   query2=fb.select(Pet).order_by(Pet.owner, Pet.petname)
 
 The above will list all pets, first sorted by the owner's name and then sorted in
 by the pet's name.
@@ -202,9 +208,9 @@ for the above example to sort by the pet's name in descending order:
 
 .. code-block:: python
 
-	from clorm import desc
+   from clorm import desc
 
-	query2=fb.select(Pet).order_by(Pet.owner, desc(Pet.petname))
+   query2=fb.select(Pet).order_by(Pet.owner, desc(Pet.petname))
 
 
 Querying by Positional Arguments
@@ -215,11 +221,34 @@ the field position.
 
 .. code-block:: python
 
-       query2=fb.select(Pet).where(Pet[0] == "dave").order_by(Pet[1])
+   query2=fb.select(Pet).where(Pet[0] == "dave").order_by(Pet[1])
 
 However, the warning from the previous section still holds; to use positional
 arguments sparingly and only in cases where the order of elements will not
 change as the ASP code evolves.
+
+Querying Predicates with Complex Terms
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Querying Predicates with complex terms is no different to the simple case. A
+chain of "." notation expressions and positional arguments can be used to
+identified the appropriate field. For example we can replace the the ``Person``
+definition earlier to something with tuples:
+
+.. code-block:: python
+
+   from clorm import Predicate, ConstantField, StringField, FactBase
+
+   class Person(Predicate):
+      id = ConstantField
+      address = (StringField,StringField)
+
+   dave = Person(id="dave", address=("Newcastle","UNSW"))
+   morri = Person(id="morri", address="Sydney","UNSW"))
+
+   query2=fb.select(Person).where(Person.address[1] == "UNSW")
+
+   assert query2.count() == 2
 
 Querying the Predicate Itself
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -260,11 +289,11 @@ inclusion operation:
    syntax for this boundary case.
 
 
-Complex Query Expressions and Indexing
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Complex Query Expressions
+^^^^^^^^^^^^^^^^^^^^^^^^^
 
-So far we have seen Clorm's supports for queiries with simple where clauses,
-such as:
+So far we have only seen Clorm's support for queiries with a single where
+clause, such as:
 
 .. code-block:: python
 
@@ -277,36 +306,35 @@ or with a single placeholder:
    query=facts.select(Pet).where(Pet.owner == ph1_)
 
 However, more complex queries can be specified, including with multiple
-placehoders. Firstly, a ``where`` clause can consist of a comma seperated list
-of clauses, which are treated as a conjunction:
+placeholders. Firstly, a ``where`` clause can consist of a comma seperated list
+of clauses. These are treated as a conjunction:
 
 .. code-block:: python
 
-       query1=fb.select(Pet).where(Pet.name == _ph1, Pet.owner == _ph2)
+   query1=fb.select(Pet).where(Pet.name == _ph1, Pet.owner == _ph2)
 
-       # Count facts for pets named "Fido" with owner "morri"
-       assert query1.count("Fido","morri")) == 1
+   # Count facts for pets named "Fido" with owner "morri"
+   assert query1.count("Fido","morri")) == 1
 
 It is also possible to specify arbitrarily complex queries using the Clorm
 supplied ``and_``, ``or_``, and ``not_`` constructs.
 
 .. code-block:: python
 
-       # Find the Person with id "dave" or with address "UNSW"
-       query1=fb.select(Person).where(or_(Person.id == "dave",
-                                          Person.address == "UNSW"))
+   # Find the Person with id "dave" or with address "UNSW"
+   query1=fb.select(Person).where(or_(Person.id == "dave", Person.address == "UNSW"))
 
-       # Count facts for people with id "dave" or address "UNSW"
-       assert query1.count() == 2
+   # Count facts for people with id "dave" or address "UNSW"
+   assert query1.count() == 2
 
 Here when ``query1`` is execute it will counts the number of people who are
-either ``"dave""`` or based at ``"UNSW"``. Based on the earlier created fact
+either ``"dave"`` or based at ``"UNSW"``. Based on the earlier created fact
 base ``fb1`` both the "dave" and "morri" person facts match this criteria.
 
 .. note::
 
    *Limitations*. Clorm has some current implementation limitations when it
-   comes to complex queries and indexing. Currently, if complex query contains
+   comes to complex queries and indexing. Currently, if a complex query contains
    multiple fields, and those fields are indexed, Clorm is only able to use the
    index of the first field in the query. This is an implementation, rather than
    a design, limitation and could be improved if there is a genuine need.
@@ -336,9 +364,9 @@ two queries will generate the same results.
        results2 = list(query2.get("dave"))
 
 However, while both these queries do generate the same result they are not
-equivalent in behaviour. In particular, the Clorm generated functor has a
-structure that the system is able to analyse and can therefore take advantage of
-any indexed fields to improve query efficiency.
+necessarily equivalent in behaviour. In particular, the Clorm generated functor
+has a structure that the system is able to analyse and can therefore take
+advantage of any indexed fields to improve query efficiency.
 
 In contrast, there is no simple mechanism to analyse the internal make up of a
 lambda statement or function. Consequently in these latter cases the query would

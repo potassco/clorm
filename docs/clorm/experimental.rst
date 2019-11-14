@@ -1,13 +1,33 @@
-JSON Encoding and Decoding
-==========================
+.. _experimental:
+
+Experimental Features
+=====================
 
 .. warning::
 
-   This API is still experimental and may change between minor version
-   increments. It is only a first-cut and it should be possible to have a better
-   more compact JSON encoding. Will aim to keep the API similar but the
-   underlying encoding might change.
+   The following are experimental features that may change between minor library
+   version increments. They shouldn't be considered part of the official Clorm
+   API.
 
+Reusable Components
+-------------------
+
+**This is a work in progress**
+
+The goal is to slowly build up a comprehensive set of Clorm components
+(definitions and functions) that could be used to build readable ASP programs
+that can be easily integrated into Python applications.
+
+Library components that are currently in the works:
+
+- **date**: Contains definitions and functions for dealing with dates and
+  enumerated dates.
+- **timeslot**: This library will help to deal with blocks of time; for example
+  dividing a day into 15 minute blocks.
+
+
+JSON Encoding and Decoding
+--------------------------
 
 Clorm provides functions for encoding and decoding facts as JSON. The motivation
 is to be able to pass around facts between different processes. For example, you

@@ -31,13 +31,16 @@ specifies that the address of the entity ``dave`` is ``"UNSW Sydney"`` and
 
    ASP syntax also supports *complex terms* (also called *functions* but we will
    avoid this usage to prevent confusion with Python functions) which we will
-   discuss later. Note however that ASP does not support real number values.
+   discuss later. Note, however that ASP does not support real number values.
 
-The following Python code provides the mapping to the ASP predicates:
+To provide a mapping that satisfies the above predicate we need to sub-class the
+``Predicate`` class and use the ``ConstantField`` and ``StringField``
+classes. These field classes, including the ``IntegerField``, are all
+sub-classes of the base ``RawField`` class.
 
 .. code-block:: python
 
-   from clorm import *
+   from clorm import Predicate, ConstantField, StringField
 
    class Address(Predicate):
       entity = ConstantField
@@ -47,16 +50,16 @@ The following Python code provides the mapping to the ASP predicates:
       entity = ConstantField
       num = IntegerField(default=0)
 
-With the above class definitions we can instantiate some objects:
+Typically, when instantiating a predicate all field values must be provided. The
+exception is when the field has been defined with a default value, such as with
+the above definition for the ``num`` field of the ``Pets``. So, with the above
+class definitions we can instantiate some objects:
 
 .. code-block:: python
 
    fact1 = Address(entity="bob", details="Sydney uni")
    fact2 = Pets(entity="bob")
    fact3 = Pets(entity="bill", num=2)
-
-When instantiating a predicate all field values must be specified, unless the
-field has a default value, such as with the ``fact2`` instantiation of ``Pets``.
 
 When this Python code is imported into the Clingo solver it will correspond to
 the following *ground atoms* (i.e., facts):
@@ -101,7 +104,6 @@ There are some things to note here:
 * If the specified default is a function then this function will be called (with
   no arguments) when the predicate/complex-term object is instantiated. This can
   be used to generated unique ids or a date/time stamp.
-
 
 Overriding the Predicate Name
 -----------------------------
@@ -176,20 +178,81 @@ Here every instantiation of ``AUnary`` corresponds to the ASP fact:
 
     aUnary.
 
+Complex Terms
+-------------
+
+So far we have shown how to create Python definitions that match predicates with
+simple terms. However, in ASP it is common to also use complex terms within a
+predicate, such as:
+
+.. code-block:: none
+
+    booking("2018-12-31", location("Sydney", "Australia")).
+
+To support this flexibility Clorm introduces a ``ComplexTerm`` class.  It is
+defined identically to a Predicate (in fact they are both simply aliases for
+the ``NonLogicalSymbol`` class).
+
+.. code-block:: python
+
+   from clorm import Predicate, ComplexTerm, StringField
+
+   class Location(ComplexTerm):
+      city = StringField
+      country = StringField
+
+The definition for a complex term can be included within a new ``Predicate``
+definition by using the ``Field`` property of the ``ComplexTerm`` sub-class.
+
+.. code-block:: python
+
+   class Booking(Predicate):
+       date=StringField
+       location=Location.Field
+
+This ``Field`` property returns a ``RawField`` sub-class that is generated
+automatically when the ``Predicate`` sub-class is defined. It provides the
+functions to automatically convert to, and from, the Predicate sub-class
+instances and the Clingo symbol objects.
+
+The predicate class containing complex terms can be instantiated as expected:
+
+.. code-block:: python
+
+   booking=Booking(date="2018-12-31",
+                   location=Location(city="Sydney","Australia"))
+
+Note: as with the field definition for simple terms it is possible to specify a
+complex field definition with ``default`` or ``index`` parameters. For example,
+the above ``Booking`` class could be replaced with:
+
+.. code-block:: python
+
+   class Booking(Predicate):
+       date=StringField
+       location=Location.Field(index=True,
+		default=LocationTuple(city="Sydney", country="Australia"))
+
+
 Field Definitions
 -----------------
 
 Clorm provides a number of standard definitions that specify the mapping between
 Clingo's internal representation (some form of ``Clingo.Symbol``) to more
 natural Python representations.  ASP has three *simple terms*: *integer*,
-*string*, and *constant*, and Clorm provides three definition classes to provide
-a mapping to these fields: ``IntegerField``, ``StringField``, and
+*string*, and *constant*, and Clorm provides three standard definition classes
+to provide a mapping to these fields: ``IntegerField``, ``StringField``, and
 ``ConstantField``.
 
-Note, these classes do not represent instances of the actual fields but rather
-they implement functions to perform the necessary data conversions. When
-instantiated as part of a predicate definition they also specify a number of
-options.
+.. note::
+
+   It is worth highlighting that in the above predicate declarations, the field
+   classes do not represent instances of the actual fields. For example, the
+   date string "2018-12-31" is not stored in a ``StringField`` object. Rather
+   the field classes provide the implementation of the functions that perform
+   the necessary data conversions. Instantiating a field class in a predicate
+   definition is only necessary to allow options to be specified, such as
+   default values or indexing.
 
 Simple Term Definition Options
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -198,12 +261,11 @@ There are currently two options when specifying the Python fields for a
 predicate. We have already seen the ``default`` option, but there is also the
 ``index`` option.
 
-Specifying ``index = True`` can affect the behaviour when a ``FactBase`` is
-created. We introduce fact bases in the next chapter, surfice to say they are
-simply a convenience container for storing sets of facts. They can be thought of
-as mini-databases and have some indexing support for improved query performance.
-
-We will discuss fact bases and the index options in the following chapter.
+Specifying ``index = True`` can affect the behaviour when a ``FactBase``
+container objects are created. While the ``FactBase`` class will be discussed in
+greater detail in the next chapter, here we simply note that it is a convenience
+container for storing sets of facts. They can be thought of as mini-databases
+and have some indexing support for improved query performance.
 
 Sub-classing Field Definitions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -211,12 +273,13 @@ Sub-classing Field Definitions
 All field classes inherit from a base class ``RawField`` and it's possible to
 define arbitrary data conversions by sub-classing ``RawField``. Clorm provides
 the standard sub-classes ``StringField``, ``ConstantField``, and
-``IntegerField``.
+``IntegerField``. Clorm also automatically generates an appropriate sub-class
+for every ``ComplexTerm`` definition.
 
-As well as sub-classing ``RawField`` directly it is also possible to sub-class a
-sub-class, which makes it possible to form a *data conversion chain*. To
-understand why this is useful we consider an example of specifying a date
-field.
+However, it is sometimes also useful to explicitly sub-class the ``RawField``
+class, or sub-class one of its sub-classes. By sub-classing a sub-class it is
+possible to form a *data conversion chain*. To understand why this is useful we
+consider an example of specifying a date field.
 
 Consider the example of an application that needs a date term for an event
 tracking application. From the Python code perspective it would be natural to
@@ -231,7 +294,7 @@ expected results (e.g., ``"20180101" < "20180204"``). A string is also
 preferable to using a similiarly encoded integer value.  For example, encoding
 the date in the same way as an integer would allow incrementing or subtracting a
 date encoded number, which could lead to unwanted values (e.g., ``20180131 + 1 =
-20180132``, which does not correspond to a valid date).
+20180132`` does not correspond to a valid date).
 
 So, adopting a date encoded string we can consider a date based fact for the
 booking application that simply encodes that there is a New Year's eve party on
@@ -239,7 +302,7 @@ the 31st December 2018.
 
 .. code-block:: prolog
 
-    booking("20181231", "NYE party").
+    booking("2018-12-31", "NYE party").
 
 Using Clorm this fact can be captured by the following Python ``Predicate``
 sub-class definition:
@@ -260,7 +323,7 @@ from a Python ``datetime.date`` objects when necessary. For example:
 
    import datetime
    nye = datetime.date(2018, 12, 31)
-   nyeparty = Booking(date=int(nye.strftime("%Y%m%d")), description="NYE Party")
+   nyeparty = Booking(date=int(nye.strftime("%Y-%m-%d")), description="NYE Party")
 
 Here the Python ``nyeparty`` variable corresponds to the encoded ASP event, with
 the ``date`` term capturing the string encoding of the date.
@@ -270,7 +333,7 @@ encoded string into an actual ``datetime.date`` object:
 
 .. code-block:: python
 
-   nyedate = datetime.datetime.strptime(str(nyepart.date), "%Y%m%d")
+   nyedate = datetime.datetime.strptime(str(nyepart.date), "%Y-%m-%d")
 
 The problem with the above code is that the process of creating and using the
 date in the ``Booking`` object is cumbersome and error-prone. You have to
@@ -290,8 +353,8 @@ with the string to date conversion.
    from clorm import *
 
    class DateField(StringField):
-       pytocl = lambda dt: dt.strftime("%Y%m%d")
-       cltopy = lambda s: datetime.datetime.strptime(s,"%Y%m%d").date()
+       pytocl = lambda dt: dt.strftime("%Y-%m-%d")
+       cltopy = lambda s: datetime.datetime.strptime(s,"%Y-%m-%d").date()
 
    class Booking(Predicate):
        date=DateField
@@ -327,9 +390,9 @@ Restricted Sub-class of a Field Definition
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Another reason to sub-class a field definition is to restrict the set of values
-that the field can hold. For example if you have an application where an argument
-of a predicate is restricted to a specific set of constants, such as the days of
-the week.
+that the field can hold. For example you could have an application where an
+argument of a predicate is restricted to a specific set of constants, such as
+the days of the week.
 
 .. code-block:: prolog
 
@@ -348,7 +411,7 @@ When defining a predicate corresponding to cooking/2 it is possible to simply us
       class Meta: name = "cooking"
 
 However, this would potentiallly allow for creating erroneous instances that
-don't correspond to real days of the week (for example, with a spelling
+don't correspond to actual days of the week (for example, with a spelling
 mistake):
 
 .. code-block:: python
@@ -356,9 +419,9 @@ mistake):
    ck = Cooking1(dow="mnday",person="Bob")
 
 In order to avoid these errors it is necessary to subclass the ``ConstantField``
-in order to restrict the set of values. Clorm provides a helper function
-``refine_field`` specifically for this case. It dynamically defines
-a new class that restricts the values of an existing field class.
+in order to restrict the set of values to the desired set. Clorm provides a
+helper function ``refine_field`` for this use-case. It dynamically defines a new
+class that restricts the values of an existing field class.
 
 .. code-block:: python
 
@@ -375,14 +438,17 @@ a new class that restricts the values of an existing field class.
    except TypeError:
       print("Caught exception")
 
-Note: the ``refine_field`` function can also be called with only 2
-arguments, ignoring the name for the generated class. An anonymously generated
-name will be used.
+.. note::
 
-For a more general approach, instead of passing a set of valid values, the
-``refine_field`` function can instead be passed a function/functor
-that takes a value and returns true if the value is valid. For example, to
-define a field that accepts only positive integers:
+   The ``refine_field`` function can also be called with only two arguments,
+   rather than three, by ignoring the name for the generated class. In this case
+   an anonymously generated name will be used.
+
+As well as explictly specifying the set of refinement values, ``refine_field``
+also provides a more general approach where a function/functor/lambda can be
+provided. This function must take a single input and return ``True`` if that
+value is valid for the field. For example, to define a field that accepts only
+positive integers:
 
 .. code-block:: python
 
@@ -413,67 +479,13 @@ from the weekday cooks.
       person = StringField
       class Meta: name = "cooking"
 
-Complex Terms
--------------
-
-So far we have shown how to create Python definitions that match predicates with
-simple terms or some sub-class that reduces to a simple term. However, in ASP it
-is common to also use complex terms within a predicate. For example:
-
-.. code-block:: none
-
-    booking(20181231, location("Sydney", "Australia)).
-
-To support this flexibility Clorm introduces a ``ComplexTerm`` class.  A complex
-term is defined identically to a Predicate (in fact they are both simply aliases
-for the ``NonLogicalSymbol`` class). and similarly needs to be sub-classed.
-
-.. code-block:: python
-
-   from clorm import *
-
-   class Location(ComplexTerm):
-      city = StringField
-      country = StringField
-
-The definition for the complex term can then be included within the Predicate
-definition by using the ``ComplexTerm.Field`` property.
-
-.. code-block:: python
-
-   from clorm import *
-
-   class Booking(Predicate):
-       date=DateField
-       location=Location.Field
-
-This ``Field`` property returns a ``RawField`` sub-class that is generated
-automatically when the ``Predicate`` sub-class is defined. It provides the
-functions to automatically convert to, and from, the Predicate sub-class
-instances and the clingo symbol objects.
-
-With this in mind the ``Booking`` Python classes correspond to the signature of
-the above example predicates ``booking/2``.
-
-Note: as with the simple term definitions it is possible to provide an optional
-``default`` or ``index`` parameter. For example, the above ``Booking`` class
-could be replaced with:
-
-.. code-block:: python
-
-   from clorm import *
-
-   class Booking(Predicate):
-       date=DateField
-       location=Location.Field(index=True,
-		default=LocationTuple(city="Sydney", country="Australia"))
 
 Using Positional Arguments
 --------------------------
 
-So far we have shown how creating Clorm predicate and complex term objects using
-keyword arguments that match the field names, as well as accessing the arguments
-via the fields as named properties.
+So far we have shown how to create Clorm predicate and complex term instances
+using keyword arguments that match their defined field names, as well as
+accessing the arguments via the fields as named properties. For example:
 
 .. code-block:: python
 
@@ -488,8 +500,8 @@ via the fields as named properties.
    assert c1.cid == 1
    assert c1.name == "Bob"
 
-Clorm also supports creating and accessing the field data using positional
-arguments.
+However, Clorm also supports creating and accessing the field data using
+positional arguments:
 
 
 .. code-block:: python
@@ -499,32 +511,33 @@ arguments.
    assert c2[0] == 2
    assert c2[1] == "Bill"
 
-Note, in general using positional arguments is discouraged as it can lead to
-brittle code that can be harder to debug, and can also be more difficult to
-refactor as the ASP program changes. But, there are some cases where it can be
-convenient to use positional arguments. In particular when defining very simple
-tuples, where the position of arguments is unlikely to change as the ASP program
+While Clorm does support the use of positional arguments for predicates,
+nevertheless it should be used sparingly because it can lead to brittle code
+that can be hard to debug, and can also be more difficult to refactor as the ASP
+program changes. However, there are genuine use-cases where it can be convenient
+to use positional arguments. In particular when defining very simple tuples,
+where the position of arguments is unlikely to change as the ASP program
 changes. We discuss Clorm's support for these cases in the following section.
 
 Working with Tuples
 -------------------
 
-Tuples are another a special case of a complex term that often appear in ASP
+Tuples are a special case of complex terms that often appear in ASP
 programs. For example:
 
 .. code-block:: none
 
-    booking2(20181231, ("Sydney", "Australia)).
+    booking("2018-12-31", ("Sydney", "Australia)).
 
-Although tuples are simply special cases of ComplexTerms, Clorm provides
-specialised support for defining predicates that contain tuples. For example, a
-Predicate definition that unifies with the above fact can be defined simply:
+For Clorm tuples are also a special case of the ``ComplexTerm``
+class. However, Clorm provides specialised syntactic support for defining
+predicates containing tuples. For example, a predicate definition that unifies
+with the above fact can be defined simply (using the ``DateField`` defined
+earlier):
 
 .. code-block:: python
 
-   from clorm import *
-
-   class Booking2(Predicate):
+   class Booking(Predicate):
        date=DateField
        location=(StringField,StringField)
 
@@ -533,18 +546,18 @@ Here the ``location`` field is defined as a pair of string fields. Conveniently
 it is unnecessary to define a separate ComplexTerm sub-class that corresponds to
 this pair.
 
-To generate a ``Booking2`` instance that corresponds to the ``booking/2`` fact
-above, simple instantiate ``Booking2`` in the most intuitive way.
+To generate a ``Booking`` instance that corresponds to the ``booking/2`` fact
+above, simply instantiate ``Booking`` in the obvious way.
 
 .. code-block:: python
 
-   f = Booking2(date=datetime.date(2018,12,31),
-		location=("Sydney","Australia"))
+   f = Booking(date=datetime.date(2018,12,31), location=("Sydney","Australia"))
 
 
-Note, while it is unnecessary to define a seperate ComplexTerm sub-class
-corresponding to the tuple, internally this is exactly what Clorm does. Clorm
-will transform the above definition to something like:
+While it is unnecessary to define a seperate ``ComplexTerm`` sub-class
+corresponding to the tuple, internally this is in fact exactly what Clorm
+does. Clorm will transform the above definition into something similar to the
+following:
 
 .. code-block:: python
 
@@ -554,7 +567,7 @@ will transform the above definition to something like:
       class Meta:
          istuple = True
 
-   class Booking2(Predicate):
+   class Booking(Predicate):
        date=DateField
        location=SomeAnonymousName.Field
 
@@ -562,15 +575,16 @@ Here the ``ComplexTerm`` has an internal ``Meta`` class with the property
 ``istuple`` set to ``True``. This means that the ComplexTerm will be treated as
 a tuple rather than a complex term with a function name.
 
-The main difference between the implicit and explicitly defined tuples is that
-with the implicit tuple will have automatically generated field names. However,
-in cases of simple implicitly defined tuples it would be typical to use
-positional arguments instead of names to refer to the apppropiate field.
+One important difference between the implicitly defined and explicitly defined
+versions of a tuple is that the explicit version allows for field names to be
+given, while the implicit version will have automatically generated
+names. However, for simple implicitly defined tuples it would be more common to
+use positional arguments anyway, so in many cases it can be the preferred
+alternative. For example:
 
 .. code-block:: python
 
-   f = Booking2(date=datetime.date(2018,12,31),
-		location=("Sydney","Australia"))
+   f = Booking2(date=datetime.date(2018,12,31), location=("Sydney","Australia"))
 
    assert f.location[0] == "Sydney"
 
@@ -578,14 +592,15 @@ positional arguments instead of names to refer to the apppropiate field.
 
    As mentioned previously, using positional arguments is something that should
    be used sparingly as it can lead to brittle code that is more difficult to
-   refactor. Particularly it should be used only for cases where the ordering of
-   fields in the tuple is unlikely to change as the ASP program is refactored.
+   refactor. It should mainly be used for cases where the ordering of the fields
+   in the tuple is unlikely to change when the ASP program is refactored.
 
 Dealing with Raw Clingo Symbols
 -------------------------------
 
 As well as supporting simple and complex terms it is sometimes useful to deal
-with the objects created through the underlying Clingo Python API.
+with the raw ``clingo.Symbol`` objects created through the underlying Clingo
+Python API.
 
 .. _raw-symbol-label:
 
@@ -653,12 +668,12 @@ allow the fluents themselves to have an arbitrary form.
    true(light(on), 0).
    true(robotlocation(roby,kitchen), 0).
 
-In this example the two instances of the ``true`` predicate have a different
-signature for the first term (i.e., ``light/1`` and ``robotlocation/2``). While
-the definition of the fluent is important at the ASP level, however, at the
-Python level we may not be interested in the structure of the fluent, only
-whether it is true or not. Hence we can treat the fluents themselves as raw
-Clingo symbol objects.
+In this example instances of the ``true/2`` predicate can have two distinctly
+different signatures for the first term (i.e., ``light/1`` and
+``robotlocation/2``). While the definition of the fluent is important at the ASP
+level, however, at the Python level we may not be interested in the structure of
+the fluent, only whether it is true or not. In such a case we can simply treat
+the fluents themselves as raw Clingo symbol objects.
 
 .. code-block:: python
 
@@ -670,7 +685,7 @@ Clingo symbol objects.
 
 Accessing the value of the ``fluent`` simply returns the raw Clingo symbol. Also
 the ``RawField`` has the useful property that it will unify with any
-``Clingo.Symbol`` object so the can be used to capture the ``light/1`` and
-``robotlocation/2`` complex terms.
+``Clingo.Symbol`` object and therefore can be used to capture both the
+``light/1`` and ``robotlocation/2`` complex terms.
 
 

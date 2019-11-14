@@ -1,13 +1,13 @@
 Quick Start
 ===========
 
-We now highlight the basic features of Clorm by way of a simple example. This
-example covers:
+This section highlights the basic features of Clorm by way of a simple
+example. This example covers:
 
-* Defining a simple data model
-* Combining a statically written ASP program with dynamically generated data
-* Running the Clingo solver
-* Querying and processing the solution returned by the solver
+* Defining a simple data model,
+* Combining a statically written ASP program with dynamically generated data,
+* Running the Clingo solver,
+* Querying and processing the solution returned by the solver.
 
 This example is located in the project's ``examples/quickstart`` sub-directory;
 where the ASP program is ``quickstart.lp`` and the Python program is
@@ -18,7 +18,7 @@ be called directly from Clingo:
 
    $ clingo embedded_quickstart.lp
 
-This document is about the Clingo ORM API and we therefore assume that the
+This document is about the Clingo ORM API and it is therefore assumed that the
 reader is reasonably familiar with ASP syntax and how to write an ASP
 program. However, if this is not the case it is worth going to the `Clingo docs
 <https://potassco.org/doc/start>`_ for links to some good reference material.
@@ -33,13 +33,13 @@ for more detailed documentation see the `Clingo API
 An Example Scenario
 -------------------
 
-Imagine you are running a courier company and you have drivers that deliver
-items on a daily basis. An item is delivered during one of four time slots, and
-you want to assign a driver to deliver each item, while also ensuring that all
-items are assigned and drivers aren't double-booked for a time slot.
+Imagine you are running a courier company and you have drivers that need to make
+daily deliveries.  An item is delivered during one of four time slots, and you
+want to assign a driver to deliver each item, while also ensuring that all items
+are assigned and drivers aren't double-booked for a time slot.
 
 You also want to apply some optimisation criteria. Firstly, you want to minimise
-the number of drivers that you use (for example, because bringing a driver on
+the number of drivers that you use (for example, because bringing on a driver
 for a day has some fixed cost). Secondly, you want to deliver items as early in
 the day as possible.
 
@@ -62,8 +62,8 @@ The above crieria can be encoded with the following simple ASP program:
 
 
 You will notice that while the above ASP program encodes the *problem domain*,
-it does not specify the *problem instance*, which in this case means specifying
-the individual delivery drivers and items to be delivered.
+but it does not specify the *problem instance*, which in this case means
+specifying the individual delivery drivers and items to be delivered.
 
 The Python Program
 ------------------
@@ -72,7 +72,7 @@ Unlike the ASP encoding of the *problem domain*, which is largely static and
 changes only if the requirements change, the *problem instance* changes
 daily. Hence it cannot be a simple static encoding but must instead be generated
 as part of the Python application that calls the ASP solver and processes the
-solution.
+solution. Clorm is designed with this use-case in mind.
 
 First the relevant libraries need to be imported.
 
@@ -95,14 +95,16 @@ Defining the Data Model
 -----------------------
 
 The most important step is to define a *data model* that maps the Clingo
-predicates to Python classes. Clorm provides the ``Predicate`` class, which must
-be sub-classed, for this purpose. A Predicate sub-class defines a direct mapping
-to an underlying ASP logical predicate. The parameters of the predicate are
-specified using a number of *field* classes. Fields can be thought of as *term
-definitions* as they define how a logical *term* is converted to, and from, a
-Python object. Clorm provides three standard field classes, ``ConstantField``,
-``StringField``, and ``IntegerField``, that correspond to the standard *logic
-programming* data types of integer, constant, and string.
+predicates to Python classes. Clorm provides the ``Predicate`` and
+``ComplexTerm`` classes for this purpose (although, for this example only the
+``Predicate`` class is needed). These classes must be sub-classed; a
+``Predicate`` sub-class defines a direct mapping to an underlying ASP logical
+predicate. The parameters of the predicate are specified using a number of
+*field* classes. Fields can be thought of as *term definitions* as they define
+how a logical *term* is converted to, and from, a Python object. Clorm provides
+three standard field classes, ``ConstantField``, ``StringField``, and
+``IntegerField``, that correspond to the standard *logic programming* data types
+of constant, integer, and string.
 
 .. code-block:: python
 
@@ -129,11 +131,20 @@ The number of fields in the ``Predicate`` declaration must match the predicate
 arity and the order in which they are declared must also match the position of
 each term in the ASP predicate.
 
+One thing to note here is that there is no ``Predicate`` sub-class that was
+defined corresponding to the ``working_driver/1`` predicate. Clorm does not
+require that *all* ASP predicates to have a corresponding Python ``Predicate``
+sub-class. In this case ``working_driver/1`` is only of interest within the ASP
+program itself and is not used for defining the relevant inputs and outputs of
+the solver, so there is no need to define any Python interface.
+
 Using the Data Model to Generate Solutions
 ------------------------------------------
 
-Having defined the data model we now show how to dynamically add a problem
-instance, solve the resulting ASP program, and print the solution.
+Once the data model has been defined it can be used to instantiate facts that
+are asserted to, or extract from, the ASP solver. In particular, it will be used
+to dynamically add the facts that make up a problem instance, and then to
+extract and print the *models* that correspond to solutions to the problem.
 
 First the Clingo ``Control`` object needs to be created and initialised, and the
 static problem domain encoding must be loaded.
@@ -146,21 +157,20 @@ static problem domain encoding must be loaded.
 The ``clorm.clingo.Control`` object controls how the ASP solver is run. When the
 solver runs it generates *models*. These models constitute the solutions to the
 problem. Facts within a model are encoded as ``clingo.Symbol`` objects. The
-``unifier`` argument defines how these symbols are turned into Predicate
-instances.
+``unifier`` argument is important as it defines which symbols are turned into
+``Predicate`` instances.
 
 For every symbol fact in the model, Clorm will successively attempt to *unify*
-(or match) the symbol against the Predicates in the unifier list. When a match
+(or match) the symbol against the predicates in the unifier list. When a match
 is found the symbol is used to define an instance of the matching predicate. Any
 symbol that does not unify against any of the predicates is ignored.
 
-Once the control object is created and the unifiers specified the static ASP
-program is loaded.
+Once the control object is created and the unifier predicates specified the
+static ASP program is loaded.
 
 Next we generate a problem instance by generating a lists of ``Driver`` and
-``Item`` objects. These items are added to a ``clorm.FactBase`` object. A
-``FactBase`` is a specialised set-like containing for storing facts (i.e.,
-predicate instances).
+``Item`` objects. These items are added to a ``clorm.FactBase`` object, which is
+a specialised set-like container for storing facts (i.e., predicate instances).
 
 .. code-block:: python
 
@@ -169,13 +179,13 @@ predicate instances).
     instance = FactBase(drivers + items)
 
 The ``Driver`` and ``Item`` constructors use named parameters that match the
-declared field names. Note: while you can use positional arguments to initialise
-instances, doing so will potentially make the code harder to refactor. So in
-general you should avoid using positional arguments except for a few cases (eg.,
-simple tuples where the order is unlikely to change).
+declared field names. While Clorm supports the use of positional arguments to
+initialise instances, doing so will potentially make the code harder to
+refactor. So in general you should avoid using positional arguments except for a
+few cases (eg., simple tuples where the order is unlikely to change).
 
-These facts can now be added to the control object and the combined ASP program
-grounded.
+Now, these input facts can be added to the control object and the combined with
+the previously loaded ASP program to produce a *grounded* ASP program.
 
 .. code-block:: python
 
@@ -186,8 +196,8 @@ At this point the control object is ready to be run and generate
 solutions. There are a number of ways in which the ASP solver can be run (see
 the `Clingo API documentation
 <https://potassco.org/clingo/python-api/5.4/#clingo.Control.solve>`_). For this
-example, we run it in a mode where a callback function is specified. This
-function will then be called each time a model is found.
+example we run it using a callback function, which is called each time a model
+is found.
 
 .. code-block:: python
 
@@ -207,17 +217,18 @@ unsatisfiable then it will never be called and you should always check for this
 case.
 
 The line ``solution = model.facts(atoms=True)`` extracts only instances of the
-predicates that were registered with the ``unifier`` parameter. As mentioned
-earlier, any facts that fail to unify are ignored. In this case it ignores the
-``working_driver/1`` instances. The unified facts are stored and returned in
-a ``clingo.FactBase`` object.
+predicates that were registered with the ``unifier`` parameter that was passed
+down through the ``Control`` object constructor. As mentioned earlier, any facts
+that fail to unify are ignored. In this case it ignores the ``working_driver/1``
+instances. The unified facts are stored and returned in a ``clingo.FactBase``
+object.
 
 Querying
 --------
 
 The final part of our Python program involves querying the solution to print out
 the relevant facts. To do this we call the ``FactBase.select()`` member function
-that returns a suitable fact base query object.
+that returns a suitable query object.
 
 .. code-block:: python
 
@@ -275,7 +286,7 @@ Python data model to the defined ASP predicates. However, beyond the basics
 outlined above there are other important features that will be useful for more
 complex interactions. These include:
 
-* Defining complex-terms. Many ASP program include complex terms (i.e., either
+* Defining complex-terms. Many ASP programs include complex terms (i.e., either
   tuples or functional objects). Clorm supports predicate definitions that
   include complex-terms using a ``ComplexTerm`` class. Every defined complex
   term has an associated ``Field`` property that can be used within a Predicate
@@ -293,7 +304,7 @@ complex interactions. These include:
         event=Event.Field
 	level=IntegerField
 
-The above definition can be used to match against an ASP predicate containing a
+The above definition can be used to match against an ASP fact containing a
 complex term.
 
 .. code-block:: prolog

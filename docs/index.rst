@@ -35,11 +35,10 @@ easier to refactor the python code as the ASP program evolves.
    clorm/quickstart
    clorm/predicate
    clorm/factbase
-   clorm/advanced
    clorm/integration
    clorm/embedding
-   clorm/liborm
-   clorm/json
+   clorm/advanced
+   clorm/experimental
    clorm/api
 
 Indices and tables
