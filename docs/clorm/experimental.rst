@@ -75,7 +75,7 @@ predicates.
    class Tup(ComplexTerm):
 	aint = IntegerField()
         astr = StringField()
-        class Meta: istuple = True
+        class Meta: is_tuple = True
 
    @fb_coder.register
    class Afact(Predicate):

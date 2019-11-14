@@ -150,7 +150,7 @@ class JSONPredicateTestCase(unittest.TestCase):
         class Tup(ComplexTerm):
             aint = IntegerField()
             astr = StringField()
-            class Meta: istuple = True
+            class Meta: is_tuple = True
 
         class Afact(Predicate):
             aint = IntegerField()

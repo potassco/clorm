@@ -17,7 +17,7 @@ class Apredicate(Predicate):
 
 def main():
 
-    # Introspect name and arity of predicate/complex-term and istuple
+    # Introspect name and arity of predicate/complex-term and is_tuple
     assert Acomplex.meta.name == "acomplex"
     assert Acomplex.meta.arity == 2
     assert Acomplex.meta.is_tuple == False

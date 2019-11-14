@@ -45,7 +45,7 @@ class EnumDate(ComplexTerm):
     '''
     idx = IntegerField()
     date = DateField()
-    class Meta: istuple=True
+    class Meta: is_tuple=True
 
 #------------------------------------------------------------------------------
 # An enumerated date range class

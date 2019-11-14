@@ -894,7 +894,7 @@ def _get_field_defn(defn):
     # proto = { "arg{}".format(i+1) : _get_field_defn(d) for i,d in enumerate(defn) }
     proto = collections.OrderedDict([("arg{}".format(i+1), _get_field_defn(d))
                                      for i,d in enumerate(defn)])
-    proto['Meta'] = type("Meta", (object,), {"istuple" : True, "_anon" : True})
+    proto['Meta'] = type("Meta", (object,), {"is_tuple" : True, "_anon" : True})
     ct = type("ClormAnonTuple", (NonLogicalSymbol,), proto)
     return ct.Field()
 
@@ -1149,16 +1149,16 @@ def _make_nlsdefn(class_name, dct):
         if not inspect.isclass(metadefn):
             raise TypeError("'Meta' attribute is not an inner class")
         name_def="name" in metadefn.__dict__
-        istuple_def="istuple" in metadefn.__dict__
+        is_tuple_def="is_tuple" in metadefn.__dict__
         if name_def : name = metadefn.__dict__["name"]
-        istuple = metadefn.__dict__["istuple"] if istuple_def else False
+        is_tuple = metadefn.__dict__["is_tuple"] if is_tuple_def else False
         if "_anon" in metadefn.__dict__:
             anon = metadefn.__dict__["_anon"]
 
-        if name_def and istuple:
+        if name_def and is_tuple:
             raise AttributeError(("Mutually exclusive meta attibutes "
-                                  "'name' and 'istuple' "))
-        elif istuple: name = ""
+                                  "'name' and 'is_tuple' "))
+        elif is_tuple: name = ""
 
 
     reserved = set(["meta", "raw", "clone", "Field"])
@@ -1525,7 +1525,7 @@ def define_nls(name,arity):
     proto = collections.OrderedDict([("arg{}".format(i+1), RawField())
                                      for i in range(0,arity)])
     proto['Meta'] = type("Meta", (object,),
-                         {"name" : name, "istuple" : False, "_anon" : True})
+                         {"name" : name, "is_tuple" : False, "_anon" : True})
     return type("ClormAnonNLS", (NonLogicalSymbol,), proto)
 
 define_predicate=define_nls

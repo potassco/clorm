@@ -103,7 +103,7 @@ class TimeSlot(ComplexTerm):
     '''
     idx = IntegerField()
     start = TimeField()
-    class Meta: istuple=True
+    class Meta: is_tuple=True
 
 #------------------------------------------------------------------------------
 # An enumerated date range class

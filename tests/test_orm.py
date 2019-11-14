@@ -220,7 +220,7 @@ class ORMTestCase(unittest.TestCase):
         class Tuple(ComplexTerm):
             a = IntegerField()
             b = StringField()
-            class Meta: istuple=True
+            class Meta: is_tuple=True
 
         self.assertFalse(NotTuple.meta.is_tuple)
         self.assertTrue(Tuple.meta.is_tuple)
@@ -709,7 +709,7 @@ class ORMTestCase(unittest.TestCase):
         class MyTuple(ComplexTerm):
             aint = IntegerField()
             astr = StringField()
-            class Meta: istuple = True
+            class Meta: is_tuple = True
 
         # Check the automatically generated term definition class
         mtd = MyTuple.Field
@@ -1075,7 +1075,7 @@ class ORMTestCase(unittest.TestCase):
         class ATuple(ComplexTerm):
             aconst=ConstantField()
             bint = IntegerField()
-            class Meta: istuple = True
+            class Meta: is_tuple = True
 
         class Fact1(Predicate):
             aint = IntegerField()

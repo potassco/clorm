@@ -565,14 +565,14 @@ following:
       city = StringField
       country = StringField
       class Meta:
-         istuple = True
+         is_tuple = True
 
    class Booking(Predicate):
        date=DateField
        location=SomeAnonymousName.Field
 
 Here the ``ComplexTerm`` has an internal ``Meta`` class with the property
-``istuple`` set to ``True``. This means that the ComplexTerm will be treated as
+``is_tuple`` set to ``True``. This means that the ComplexTerm will be treated as
 a tuple rather than a complex term with a function name.
 
 One important difference between the implicitly defined and explicitly defined
