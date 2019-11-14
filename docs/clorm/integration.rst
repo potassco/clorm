@@ -33,8 +33,8 @@ providing wrapper classes around the key Clingo classes:
   the ``Model`` class it should not be instantiated explicitly and is instead
   returned from the ``Control.solve`` function.
 
-Clingo ``Control``
-^^^^^^^^^^^^^^^^^^
+``Control``
+^^^^^^^^^^^
 
 ``Control`` is the main object for interacting with the ASP grounder and solver
 and provides a rich set of features. It allows an ASP program that is stored in
@@ -42,19 +42,23 @@ a file to be loaded. It can then be grounded and solved and the generated models
 returned. It also allows for incremental solving, where a ground program can be
 extended and solved repeatedly, as well as both synchronous and asynchronous
 solving modes. These featuers are documented in the `Clingo Control API
-<https://potassco.org/clingo/python-api/current/clingo.html#Control>`_ so we
+<https://potassco.org/clingo/python-api/current/#clingo.Control>`_ so we
 only highlight the changes that Clorm introduces.
 
 Clorm adds, or overloads, the following member functions:
 
-* ``__init__()``. Clorm adds an optional `fbb` parameter for specifying a
-  default ``SymbolPredicateUnifier``. A parameter `control_` is allowed, but is
-  mutually exclusive with the standard parameters for ``clingo.Control``. The
-  `control_` parameter allows a ``clingo.Control`` object to be passed to the
-  wrapper and is a mechanism to allow Clorm to be used even when Python is
-  embedded within Clingo. See the example ``embedded_quickstart.lp`` for a more
-  detailed example, but the basics are that a Control object is passed to the
-  embedded ``main`` function which is then wrapped in ``clorm.clingo.Control``:
+* ``__init__()``. Clorm adds an optional ``unifier`` parameter for specifying a
+  default list of ``Predicate`` sub-classes (or a single
+  ``SymbolPredicateUnifier`` object). This parameter is passed to any generated
+  ``Model`` objects and is used during the unification process of converting raw
+  symbols to Clorm facts. A second parameter ``control_`` is introduced. This
+  parameter is mutually exclusive with the standard parameters for
+  ``clingo.Control``. The ``control_`` parameter allows an existing
+  ``clingo.Control`` object to be passed to the wrapper and is a mechanism to
+  allow Clorm to be used even when Python is embedded within Clingo. See the
+  example ``embedded_quickstart.lp`` for a more detailed example, but the basics
+  are that a Control object is passed to the embedded ``main`` function which is
+  then wrapped in ``clorm.clingo.Control``:
 
 .. code-block:: python
 
@@ -89,7 +93,7 @@ Clorm adds, or overloads, the following member functions:
 
   - ``assumptions`` parameter. As well as taking a list of ``clingo.Symbol``
     objects, Clorm also allows the assumptions to be specified as a list of
-    ``clorm.Predicate`` objects or a single ``clorm.FactBase`` object.
+    ``clorm.Predicate`` instances or a single ``clorm.FactBase`` object.
   - ``on_model`` callback parameter. Clorm modifies this interface so that a
     ``clorm.clingo.Model`` is pass to the callback function.
   - If the parameter ``yield_=True`` is specified then the return value of the
@@ -97,51 +101,53 @@ Clorm adds, or overloads, the following member functions:
     ``clorm.clingo.Model`` objects.
 
 * ``assign_external()`` is modified so that the ``fact`` parameter can take a
-  ``clorm.Predicate`` object.
+  ``clorm.Predicate`` instance.
 
 * ``release_external()`` is modified so that the ``fact`` parameter can take a
-  ``clorm.Predicate`` object.
+  ``clorm.Predicate`` instance.
 
-Clingo ``Model``
-^^^^^^^^^^^^^^^^
+``Model``
+^^^^^^^^^
 
 The `Clingo Model
-<https://potassco.org/clingo/python-api/current/clingo.html#Model>`_ object
+<https://potassco.org/clingo/python-api/current/#clingo.Model>`_ object
 encapsulates an ASP model and the associated meta-data. It is passed to the
 ``Clingo.solve(on_model=on_model)`` callback. Clorm wraps the ``Model`` class to
-provide a mechanism to extract Clorm facts from the model. The added and
+provide a mechanism to extract Clorm facts from the model. The additional and
 modified functions are:
 
 * ``facts(self, unifier=None, atoms=False, terms=False, shown=False,
-  raise_on_empty=True)``. A ``SymbolPredicateUnifier`` must be provided to extract the
-  facts of interest from the other facts within the model. This object can be
-  passed as the `unifier` parameter or can be passed in the constructor to the
-  ``clorm.clingo.Control`` object. As well as a ``SymbolPredicateUnifier`` the function
-  allows for the ``atoms``, ``terms``, and ``shown`` options from the
-  ``Model.symbols()`` function. It creates a fact base object from the passed
-  class and populates it with the selected symbols that are able to unify with
-  the class.
+  raise_on_empty=True)``. returns a fact base object constructed from unifying
+  against the raw Clingo symbols within the model.
+
+  The ``unifier`` parameter takes a list of ``Predicate`` sub-classes or a
+  single ``SymbolPredicateUnifier`` which defines the predicates to unify
+  against. If no ``unifier`` parameter is provided then a ``unifier`` must have
+  been passed to the ``clorm.clingo.Control`` object.
 
   The ``raise_on_empty`` parameters that a ``ValueError`` will be raised if the
-  resulting factbase is empty. This can happen for two reasons: there were no
+  returned factbase is empty. This can happen for two reasons: there were no
   selected elements in the model or there were elements from the model but none
   of them was able to unify with the factbase. While these can be legimate
-  expectations for some applications, however in many cases this would indicate a
-  problem; either in the ASP program or in the declaration of the predicates to
-  unify against.
+  expectations for some applications, however in many cases this would indicate
+  a problem; either in the ASP program or in the declaration of the predicates
+  to unify against.
+
+  Apart from the ``unifier`` and ``raise_on_empty`` parameters the remaining
+  parameters are the same as for the ``Model.symbols()`` function.
 
 * ``contains(self,fact)``. Extends ``clingo.Model.contains`` to allow for a
   clorm facts as well as a clingo symbols.
 
-Clingo ``SolveHandle``
-^^^^^^^^^^^^^^^^^^^^^^
+
+``SolveHandle``
+^^^^^^^^^^^^^^^
 
 The `Clingo SolveHandle
-<https://potassco.org/clingo/python-api/current/clingo.html#Model>`_ object
-provides a mechanism for iterating over the models when the ``yield_=True``
-options is specified to the ``Control.solve`` function. The various iterator
-functions are modified by Clorm, but its operations should be transparent to the
-user.
+<https://potassco.org/clingo/python-api/current/#clingo.Model>`_ object provides
+a mechanism for iterating over the models when the ``yield_=True`` option is
+specified in the ``Control.solve`` function call. The various iterator functions
+are modified by Clorm, but its operations should be transparent to the user.
 
 Monkey-patching
 ---------------

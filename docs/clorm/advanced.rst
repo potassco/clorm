@@ -2,7 +2,7 @@ Advanced Features
 =================
 
 This chapter provides details of more advanced Clorm features. Clorm implements
-a number of functions and classes to provide its abstraction over the raw clingo
+a number of functions and classes to provide its abstraction over the raw Clingo
 symbol objects. There may be more advanced use-cases where it is useful to have
 access to these features. Or at the very least it may help to provide a better
 understanding of the internal operations of Clorm.
@@ -10,9 +10,9 @@ understanding of the internal operations of Clorm.
 Introspection of Predicate Definitions
 --------------------------------------
 
-A number of properties of a Predicate or ComplexTerm definition can be accessed
-through the ``meta`` property of the class. To highlight these features we
-assume the following definitions:
+A number of properties of a ``Predicate`` or ``ComplexTerm`` definition can be
+accessed through the ``meta`` property of the class. To highlight these features
+we assume the following definitions:
 
 .. code-block:: python
 
