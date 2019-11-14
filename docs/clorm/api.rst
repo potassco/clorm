@@ -16,7 +16,7 @@ Fields provide a specification for how to convert ``Clingo.Symbol`` objects into
 more intuitive Python objects.
 
 .. autoclass:: clorm.RawField
-   :members:
+   :members: cltopy, pytocl, unifies, default, index
 
 .. autoclass:: clorm.StringField
 
@@ -25,8 +25,6 @@ more intuitive Python objects.
 .. autoclass:: clorm.IntegerField
 
 .. autofunction:: clorm.refine_field
-
-.. autofunction:: clorm.define_nls
 
 .. _api_predicates:
 
@@ -57,6 +55,7 @@ aliases.
 .. autoclass:: clorm.ComplexTerm
    :members:
 
+.. autofunction:: clorm.define_nls
 
 .. _api_factbase:
 
@@ -149,8 +148,13 @@ documentation for more details.
 .. autoclass:: clorm.clingo.SolveHandle
    :members:
 
+Experimental Features
+---------------------
+
+The following can change between Clorm minor versions.
+
 JSON Encoding and Decoding
---------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Clorm allows clingo.Symbols, Predicates, and FactBases to be translated to/from
 JSON.

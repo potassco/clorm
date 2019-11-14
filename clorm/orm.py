@@ -675,7 +675,6 @@ class ConstantField(RawField):
 # sub-class). It restricts the set of allowable values based on a functor or an
 # explicit set of values.
 # ------------------------------------------------------------------------------
-
 #------------------------------------------------------------------------------
 # Helper function to define a sub-class of a RawField (or sub-class) that
 # restricts the allowable values.
@@ -940,8 +939,8 @@ def _get_indexed_fields(predicate):
 #--------------------------------------------------------------------------
 class NLSDefn(object):
     """Encapsulates some meta-data for a NonLogicalSymbol (NLS) definition. Each NLS
-    class will have a corresponding NLSDefn object that provides some
-    specifies some introspective properties of the predicate/complex-term.
+    class will have a corresponding NLSDefn object that specifies some
+    introspective properties of the predicate/complex-term.
 
     """
 
@@ -970,9 +969,10 @@ class NLSDefn(object):
         """Returns true if the definition corresponds to a tuple"""
         return self.name == ""
 
+    # Not sure if this property serves any useful purpose - but it probably
+    # shouldn't be user accessible so shouldn't be documented.
     @property
     def anonymous(self):
-        """Returns whether definition is anonymous or explicitly user created"""
         return self._anon
 
     def canonical(self, key):
