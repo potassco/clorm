@@ -45,7 +45,8 @@ solving modes. These featuers are documented in the `Clingo Control API
 <https://potassco.org/clingo/python-api/current/#clingo.Control>`_ so we
 only highlight the changes that Clorm introduces.
 
-Clorm adds, or overloads, the following member functions:
+Clorm adds some new member functions as well as overloading some existing
+functions:
 
 * ``__init__()``. Clorm adds an optional ``unifier`` parameter for specifying a
   default list of ``Predicate`` sub-classes (or a single
@@ -60,6 +61,9 @@ Clorm adds, or overloads, the following member functions:
   are that a Control object is passed to the embedded ``main`` function which is
   then wrapped in ``clorm.clingo.Control``:
 
+* ``set_unifier()``. A new function to allow the unifier to be set (or changed)
+  even after the ``clorm.clingo.Control`` object has been instantiated.
+
 .. code-block:: python
 
     #script(python).
@@ -73,10 +77,10 @@ Clorm adds, or overloads, the following member functions:
     #end.
 
 
-* ``add_facts(facts)``.  This function adds facts to an ASP program. The facts
-  can be either a list of predicate objects or a fact base. Because the initial
-  facts in an ASP program will affect the grounding, new facts should only be
-  added to the program **before** grounding.
+* ``add_facts(facts)``.  A new function that adds facts to an ASP program. The
+  facts can be either a list of predicate objects or a fact base. Because the
+  initial facts in an ASP program will affect the grounding, new facts should
+  only be added to the program **before** grounding.
 
 .. code-block:: python
 
@@ -100,10 +104,10 @@ Clorm adds, or overloads, the following member functions:
     function is a ``clorm.clingo.SolveHandle`` object. This object iterates over
     ``clorm.clingo.Model`` objects.
 
-* ``assign_external()`` is modified so that the ``fact`` parameter can take a
+* ``assign_external()`` is overloaded so that the ``fact`` parameter can take a
   ``clorm.Predicate`` instance.
 
-* ``release_external()`` is modified so that the ``fact`` parameter can take a
+* ``release_external()`` is overloaded so that the ``fact`` parameter can take a
   ``clorm.Predicate`` instance.
 
 ``Model``

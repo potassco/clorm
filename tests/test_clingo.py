@@ -226,6 +226,11 @@ class ClingoTestCase(unittest.TestCase):
         ctrl.ground([("base",[])])
         ctrl.solve(on_model=on_model2)
 
+        # Now set the unifier and re-run to show that it works
+        ctrl.set_unifier([Afact])
+        ctrl.solve(on_model=on_model1)
+
+
     #--------------------------------------------------------------------------
     # Test passing a SymbolPredicateUnifier to the control constructors and using a
     # solvehandle for solving

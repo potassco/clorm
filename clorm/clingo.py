@@ -274,6 +274,20 @@ class Control(object, metaclass=_ControlMetaClass):
         return self._ctrl
 
     #------------------------------------------------------------------------------
+    # A new function to set the unifier
+    #------------------------------------------------------------------------------
+    def set_unifier(self,unifier):
+        '''Set the unifier which is used when extracting facts from the model.
+
+        Replaces any previously set unifier
+
+        Args:
+            unifier: a list of ``clorm.Predicate`` sub-classes of a
+              SymbolPredicateUnifer instance.
+        '''
+        self._unifier = _build_unifier(unifier)
+
+    #------------------------------------------------------------------------------
     # A new function to add facts from a factbase or a list of facts
     #------------------------------------------------------------------------------
     def add_facts(self, facts):
