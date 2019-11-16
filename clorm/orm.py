@@ -2220,10 +2220,14 @@ class _FactMap(object):
             if len(prts) != 1 or prts != set([ptype]):
                 raise TypeError("Fields in {} do not belong to {}".format(index,prts))
 
-    def add(self, fact):
+    def _add_fact(self,fact):
         self._allfacts.add(fact)
         if self._findexes:
             for findex in self._findexes.values(): findex.add(fact)
+
+    def add(self, arg):
+        if isinstance(arg, Predicate): return self._add_fact(arg)
+        for f in arg: self._add_fact(f)
 
     def discard(self, fact):
         self.remove(fact, False)
@@ -2264,6 +2268,12 @@ class _FactMap(object):
         out.close()
         return data
 
+    def pop(self):
+        if not self._allfacts: raise KeyError("Cannot pop() an empty _FactMap")
+        fact = next(iter(self._allfacts))
+        self.remove(fact)
+        return fact
+
     def __str__(self):
         return self.asp_str()
 
@@ -2287,6 +2297,23 @@ class _FactMap(object):
     def __iter__(self):
         return iter(self._allfacts)
 
+    def __eq__(self,other):
+        return self._allfacts == other._allfacts
+
+    def __ne__(self,other):
+        return self._allfacts != other._allfacts
+
+    def __lt__(self,other):
+        return self._allfacts < other._allfacts
+
+    def __le__(self,other):
+        return self._allfacts <= other._allfacts
+
+    def __gt__(self,other):
+        return self._allfacts > other._allfacts
+
+    def __ge__(self,other):
+        return self._allfacts >= other._allfacts
 
 #------------------------------------------------------------------------------
 # A FactBase consisting of facts of different types
@@ -2429,6 +2456,15 @@ class FactBase(object):
         if result is NotImplemented: return NotImplemented
         return not result
 
+    def __lt__(self,other):
+        """Overloaded boolean operator."""
+        if not isinstance(other, self.__class__): return NotImplemented
+
+        # Always check if we have delayed initialisation
+        if self._delayed_init: self._delayed_init()
+
+        pass
+
     #--------------------------------------------------------------------------
     # Initiliser
     #--------------------------------------------------------------------------
@@ -2459,6 +2495,13 @@ class FactBase(object):
         # Always check if we have delayed initialisation
         if self._delayed_init: self._delayed_init()
         return self._remove(arg, raise_on_missing=False)
+
+    def pop(self):
+        # Always check if we have delayed initialisation
+        if self._delayed_init: self._delayed_init()
+        for pt, fm in self._factmaps.items():
+            if fm: return fm.pop()
+        raise KeyError("Cannot pop() from an empty FactBase")
 
     def clear(self):
         """Clear the fact base of all facts."""

@@ -1962,6 +1962,41 @@ class FactMapTestCase(unittest.TestCase):
         self.assertFalse(af3a in fm)
         self.assertFalse(af3b in fm)
 
+    def test_comparison_ops(self):
+        Afact = self.Afact
+        fm1 = _FactMap(Afact)
+        fm2 = _FactMap(Afact)
+        fm3 = _FactMap(Afact)
+        fm1_alt = _FactMap(Afact)
+
+        af1 = Afact(num1=1, str1="a", str2="a")
+        af2 = Afact(num1=2, str1="a", str2="a")
+        af3 = Afact(num1=3, str1="b", str2="a")
+        af4 = Afact(num1=4, str1="a", str2="c")
+        af5 = Afact(num1=5, str1="b", str2="c")
+
+        fm1.add([af1,af2])
+        fm2.add([af1,af2,af3])
+        fm3.add([af1,af2,af3,af4])
+
+        fm1_alt.add([af1,af2])
+
+        # Test __eq__ and __ne__
+        self.assertTrue(fm1 == fm1_alt)
+        self.assertTrue(fm1 != fm2)
+
+        # Test __lt__, __le__, __gt__, __ge__
+        self.assertFalse(fm1 < fm1_alt)
+        self.assertFalse(fm1 > fm1_alt)
+        self.assertTrue(fm1 <= fm1_alt)
+        self.assertTrue(fm1 >= fm1_alt)
+        self.assertTrue(fm1 < fm2)
+        self.assertFalse(fm1 > fm2)
+        self.assertTrue(fm1 <= fm2)
+        self.assertFalse(fm1 >= fm2)
+        self.assertFalse(fm2 < fm1)
+        self.assertFalse(fm2 <= fm1)
+
 #------------------------------------------------------------------------------
 # Test the FactBase
 #------------------------------------------------------------------------------
@@ -2087,6 +2122,23 @@ class FactBaseTestCase(unittest.TestCase):
         self.assertEqual(set(FactBase(input)), input)
         input = set([af1,af2,bf1])
         self.assertEqual(set(FactBase(facts=lambda: input)), input)
+
+        # Test pop()
+        fb1 = FactBase([af1])
+        fb2 = FactBase([bf1])
+        fb3 = FactBase([af1,bf1])
+        f = fb3.pop()
+        if f == af1:
+            self.assertEqual(fb3,fb2)
+            self.assertEqual(fb3.pop(), bf1)
+        else:
+            self.assertEqual(fb3,fb1)
+            self.assertEqual(fb3.pop(), af1)
+        self.assertFalse(fb3)
+
+        # popping from an empty factbase should raise error
+        with self.assertRaises(KeyError) as ctx: fb3.pop()
+
 
     #--------------------------------------------------------------------------
     #
