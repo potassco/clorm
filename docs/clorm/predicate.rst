@@ -219,8 +219,7 @@ The predicate class containing complex terms can be instantiated as expected:
 
 .. code-block:: python
 
-   booking=Booking(date="2018-12-31",
-                   location=Location(city="Sydney","Australia"))
+   bk=Booking(date="2018-12-31", location=Location(city="Sydney",country="Australia"))
 
 Note: as with the field definition for simple terms it is possible to specify a
 complex field definition with ``default`` or ``index`` parameters. For example,
@@ -551,7 +550,7 @@ above, simply instantiate ``Booking`` in the obvious way.
 
 .. code-block:: python
 
-   f = Booking(date=datetime.date(2018,12,31), location=("Sydney","Australia"))
+   bk = Booking(date=datetime.date(2018,12,31), location=("Sydney","Australia"))
 
 
 While it is unnecessary to define a seperate ``ComplexTerm`` sub-class
@@ -584,9 +583,9 @@ alternative. For example:
 
 .. code-block:: python
 
-   f = Booking2(date=datetime.date(2018,12,31), location=("Sydney","Australia"))
+   bk = Booking(date=datetime.date(2018,12,31), location=("Sydney","Australia"))
 
-   assert f.location[0] == "Sydney"
+   assert bk.location[0] == "Sydney"
 
 .. note::
 
@@ -594,6 +593,41 @@ alternative. For example:
    be used sparingly as it can lead to brittle code that is more difficult to
    refactor. It should mainly be used for cases where the ordering of the fields
    in the tuple is unlikely to change when the ASP program is refactored.
+
+Debugging Auxiliary Predicates
+------------------------------
+
+When integrating an ASP program into a Python based application there will be a
+set of predicates that are important for inputting a problem instance and
+outputting a solution. Clorm is intended to provide a clean way of interacting
+with these predicates.
+
+However, there will typically be other auxiliary predicates that are used as
+part of the problem formalisation. While they may not be important from the
+Python application point of view they do become important during the process of
+developing and debugging the ASP program. During this process it can be
+cumbersome to build a detailed Clorm predicate definition for each one of these,
+especially when all you need to do is print the predicate instances to the
+screen, possibly sorted in some order.
+
+Clorm solves this issue by providing a factory helper function
+``simple_predicate()`` that returns a ``Predicate`` sub-class that will map to
+any predicate instance with that name and arity.
+
+For example this function could be used for the above booking example if we
+wanted to extract the ``booking/2`` facts from the model but didn't care about
+mapping the data types for the individual parameters. Using the earlier
+``Booking`` definition and ``bk`` instance:
+
+.. code-block:: python
+
+   from clorm.clingo import Symbol
+   from clorm import _simple_predicate
+
+   Booking_alt = simple_predicate("booking",2)
+   bk_alt=Booking_alt(raw=bk.raw)
+   assert type(bk_alt[0]) == Symbol)
+
 
 Dealing with Raw Clingo Symbols
 -------------------------------

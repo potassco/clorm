@@ -33,9 +33,7 @@ __all__ = [
     'Delete',
     'TypeCastSignature',
     'refine_field',
-    'define_nls',
-    'define_predicate',
-    'define_complex_term',
+    'simple_predicate',
     'desc',
     'unify',
     'path',
@@ -574,7 +572,7 @@ class RawField(object, metaclass=_RawFieldMeta):
        Here the ``DateField.cltopy`` is called at the end of the chain of
        translations, so it expects a Python string object as input and outputs a
        date object. ``DateField.pytocl`` does the opposite and inputs a date
-       object and is must output a Python string object.
+       object and is expected to output a Python string object.
 
     Args:
 
@@ -715,11 +713,11 @@ def _refine_field_collection(subclass_name, field_class, values):
                   "cltopy": _test_value})
 
 def refine_field(*args):
-    """Helper function to define a field sub-class that restricts the set of values.
+    """Factory function that returns a field sub-class with restricted values.
 
-    A helper function to define a sub-class of a RawField (or sub-class) that
-    restricts the allowable values. For example, if you have a constant in a
-    predicate that is restricted to the days of the week ("monday", ...,
+    A helper factory function to define a sub-class of a RawField (or sub-class)
+    that restricts the allowable values. For example, if you have a constant in
+    a predicate that is restricted to the days of the week ("monday", ...,
     "sunday"), you then want the Python code to respect that restriction and
     throw an error if the user enters the wrong value (e.g. a spelling error
     such as "wednsday"). Restrictions are also useful for unification if you
@@ -747,8 +745,8 @@ def refine_field(*args):
 
     The function must be called using positional arguments with either 2 or 3
     arguments. For the 3 argument case a class name is specified for the name of
-    the new field. For the 2 argument case the field class name is automatically
-    generated.
+    the new field. For the 2 argument case an anonymous field class name is
+    automatically generated.
 
     Example:
        .. code-block:: python
@@ -757,9 +755,9 @@ def refine_field(*args):
               ["monday", "tuesday", "wednesday", "thursday", "friday"])
 
     Args:
-       subclass_name: the name of the new sub-class (name generated if none specified).
+       optional subclass_name: new sub-class name (anonymous if none specified).
        field_class: the field that is being sub-classed
-       values or value functor: a list of values or a functor to determine validity
+       values|functor: a list of values or a functor to determine validity
 
     """
     largs = len(args)
@@ -1505,21 +1503,39 @@ ComplexTerm=NonLogicalSymbol
 # for easy display/printing.
 # ------------------------------------------------------------------------------
 
-def define_nls(name,arity):
-    """Helper function to dynamically define a predicate or complex-term.
+def simple_predicate(*args):
+    """Factory function to define a predicate with only RawField arguments.
 
-    It takes a name and an arity and creates a predicate/complex-term object
-    that is associated with that predicate name and the given arity. It's
-    parameters are all specified as RawFields.
+    A helper factory function that takes a name and an arity and returns a
+    predicate class that is suitable for unifying with predicate instances of
+    that name and arity. It's parameters are all specified as RawFields.
 
-    This function is particularly useful when used for debugging ASP programs as
-    it provides output flexibility.
+    This function is useful for debugging ASP programs. There may be some
+    auxillary predicates that you aren't interested in extracting their values
+    but instead you simply want to print them to the screen in some order.
+
+    The function must be called using positional arguments with either 2 or 3
+    arguments. For the 3 argument case a class name is specified for the name of
+    the new predicate. For the 2 argument case an anonymous predicate class name
+    is automatically generated.
 
     Args:
+       optional subclass_name: new sub-class name (anonymous if none specified).
        name: the name of the predicate to match against
        arity: the arity for the predicate
 
     """
+    largs = len(args)
+    if largs == 2:
+        subclass_name = "ClormAnonNLS"
+        name = args[0]
+        arity = args[1]
+    elif largs == 3:
+        subclass_name = args[0]
+        name = args[1]
+        arity = args[2]
+    else:
+        raise TypeError("simple_predicate() missing required positional arguments")
 
     # Use an OrderedDict to ensure the correct order of the field arguments
     proto = collections.OrderedDict([("arg{}".format(i+1), RawField())
@@ -1527,9 +1543,6 @@ def define_nls(name,arity):
     proto['Meta'] = type("Meta", (object,),
                          {"name" : name, "is_tuple" : False, "_anon" : True})
     return type("ClormAnonNLS", (NonLogicalSymbol,), proto)
-
-define_predicate=define_nls
-define_complex_term=define_nls
 
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------

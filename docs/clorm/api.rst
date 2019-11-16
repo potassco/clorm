@@ -5,14 +5,14 @@ The heart of the Clorm ORM involves defining the mapping from *ground
 predicates* to member variables of a Python object. There are two aspects to
 this: *fields*, that define how *logical terms* are mapped to Python objects,
 and *predicate* definitions, that define predicate and function names, their
-arities and the field for each of the parameter.
+arities and the appropriate field for each of the parameters.
 
 .. _api_fields:
 
 Fields
 ------
 
-Fields provide a specification for how to convert ``Clingo.Symbol`` objects into
+Fields provide a specification for how to convert ``clingo.Symbol`` objects into
 more intuitive Python objects.
 
 .. autoclass:: clorm.RawField
@@ -31,10 +31,11 @@ more intuitive Python objects.
 Predicates and Complex Terms
 ----------------------------
 
-In logical terminology predicates and complex terms are both instances of *non
-logical symbols*. The Clorm implementation captures this in the
-``NonLogicalSymbol`` class with ``Predicate`` and ``ComplexTerm`` simply being
-aliases.
+In logical terminology predicates and complex terms are both considered *non
+logical symbols*; where logical symbols are the symbols for *conjunction*,
+*negation*, *implication*, etc. Clorm sticks to this terminology with the
+``NonLogicalSymbol`` class, where ``Predicate`` and ``ComplexTerm`` simply
+aliases to this class.
 
 .. autoclass:: clorm.NonLogicalSymbol
    :members:
@@ -46,8 +47,20 @@ aliases.
 
    .. attribute:: meta
 
-      The meta data (definitional information) for the Predicate/Complex-term
+      Meta data (definitional information) for the predicate/complex-term. This
+      includes:
 
+      .. attribute:: name
+
+         The name of the ASP predicate/complex-term. Empty if it is a tuple.
+
+      .. attribute:: is_tuple
+
+         Is the ASP predicate/complex-term a tuple.
+
+      .. attribute:: arity
+
+         Arity of the predicate/complex-term.
 
 .. autoclass:: clorm.Predicate
    :members:
@@ -55,7 +68,10 @@ aliases.
 .. autoclass:: clorm.ComplexTerm
    :members:
 
-.. autofunction:: clorm.define_nls
+.. autofunction:: clorm.simple_predicate
+
+
+
 
 .. _api_factbase:
 

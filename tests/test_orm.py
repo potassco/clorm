@@ -12,7 +12,7 @@ from clingo import Control
 from clorm.orm import \
     NonLogicalSymbol, Predicate, ComplexTerm, \
     IntegerField, StringField, ConstantField, RawField, \
-    _get_field_defn, refine_field, define_nls, \
+    _get_field_defn, refine_field, simple_predicate, \
     not_, and_, or_, StaticComparator, \
     ph_, ph1_, ph2_, \
     _FactIndex, _FactMap, FieldPath, FieldPathEval, path, \
@@ -792,10 +792,10 @@ class ORMTestCase(unittest.TestCase):
 
 
     #--------------------------------------------------------------------------
-    # Test the define_nls() function as a mechanism for defining
-    # Predicates/Complex-terms.
+    # Test the simple_predicate function as a mechanism for defining
+    # predicates
     # --------------------------------------------------------------------------
-    def test_define_nls_function(self):
+    def test_simple_predicate_function(self):
         class Pred2(Predicate):
             astr = StringField()
             anum = IntegerField()
@@ -816,7 +816,7 @@ class ORMTestCase(unittest.TestCase):
         b3 = Bad3("string1",10,"constant")
 
         # Define an anonymous predicate
-        AnonPred3 = define_nls("predicate",3)
+        AnonPred3 = simple_predicate("predicate",3)
 
         # Should unify
         ap3 = AnonPred3(raw=p3.raw)
@@ -832,6 +832,14 @@ class ORMTestCase(unittest.TestCase):
         # Mismatched predicate name so unify will fail
         with self.assertRaises(ValueError) as ctx:
             fail2 = AnonPred3(raw=b3.raw)
+
+
+        # Define predicate with a class name
+        AnonPred4 = simple_predicate("AnonPred4", "predicate",3)
+
+        # Should unify
+        ap4 = AnonPred4(raw=p3.raw)
+        self.assertEqual(ap4.raw, p3.raw)
 
     #--------------------------------------------------------------------------
     # Test the clone operator
