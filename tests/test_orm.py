@@ -2191,16 +2191,20 @@ class FactBaseTestCase(unittest.TestCase):
         af2 = Afact(num1=1, str1="1", str2="b")
         bf1 = Bfact(num1=1, str1="1", str2="a")
 
-        delayed_init=lambda: [af1,af2]
-
         fb1 = FactBase([af1,af2])
         fb2 = FactBase([af1,af2,bf1])
         fb3 = FactBase([af1,af2,bf1])
-        fb4 = FactBase(facts=delayed_init)
+        fb4 = FactBase(facts=lambda: [af1,af2])
+        fb5 = FactBase([af2, bf1])
 
         self.assertTrue(fb1 != fb2)
+        self.assertFalse(fb1 == fb2)
+        self.assertFalse(fb2 == fb5) # a case with same predicates keys
+
         self.assertTrue(fb1 == fb4)
+        self.assertFalse(fb1 != fb4)
         self.assertTrue(fb2 == fb3)
+        self.assertFalse(fb2 != fb3)
 
         # Test comparison against sets and lists
         self.assertTrue(fb2 == [af1,af2,bf1])
@@ -2273,6 +2277,7 @@ class FactBaseTestCase(unittest.TestCase):
         r=fb1.union(fb1_alt); self.assertEqual(r,fb1)
         r=fb0.union(fb1,fb2); self.assertEqual(r,fb5)
         r=fb1.union(fb2,[af2,bf3]); self.assertEqual(r,fb4)
+        r = fb1 | fb2 | [af2,bf3]; self.assertEqual(r,fb4)  # overload version
 
         # Test intersection
         r=fb0.intersection(fb1); self.assertEqual(r,fb0)
@@ -2280,16 +2285,19 @@ class FactBaseTestCase(unittest.TestCase):
         r=fb1.intersection(fb2); self.assertEqual(r,FactBase([bf1]))
         r=fb4.intersection(fb2,fb3); self.assertEqual(r,fb0)
         r=fb4.intersection([af2,bf3]); self.assertEqual(r,fb3)
+        r = fb5 & [af1,af2,bf1] ; self.assertEqual(r,[af1,bf1])
 
         # Test difference
         r=fb0.difference(fb1); self.assertEqual(r,fb0)
         r=fb1.difference(fb1_alt); self.assertEqual(r,fb0)
         r=fb2.difference([af1,bf1]); self.assertEqual(r,FactBase([bf2]))
         r=fb4.difference(fb5); self.assertEqual(r, FactBase([af2,bf3]))
+        r = fb4 - fb5;  self.assertEqual(r, FactBase([af2,bf3]))
 
         # Test symmetric difference
         r=fb1.symmetric_difference(fb1_alt); self.assertEqual(r,fb0)
-        r=fb1.symmetric_difference([af2,bf3]); self.assertEqual(r,FactBase([af1,bf1,af3,bf3]))
+        r=fb1.symmetric_difference([af2,bf3]); self.assertEqual(r,FactBase([af1,bf1,af2,bf3]))
+        r =fb1 ^ [af2,bf3]; self.assertEqual(r,FactBase([af1,bf1,af2,bf3]))
 
         # Test copy
         r=fb1.copy(); self.assertEqual(r,fb1)

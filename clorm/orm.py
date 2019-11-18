@@ -2552,7 +2552,7 @@ class FactBase(object):
         return self.__str__()
 
     #--------------------------------------------------------------------------
-    # Special functions to support container operations
+    # Special functions to support set and container operations
     #--------------------------------------------------------------------------
 
     def __contains__(self, fact):
@@ -2589,10 +2589,11 @@ class FactBase(object):
 
         self_fms = { p: fm for p,fm in self._factmaps.items() if fm }
         other_fms = { p: fm for p,fm in other._factmaps.items() if fm }
-        if len(self_fms) != len(other_fms): return False
+        if self_fms.keys() != other_fms.keys(): return False
 
-        for p, spfm in self_fms.items():
-            if spfm != self_fms[p]: return False
+        for p, fm1 in self_fms.items():
+            fm2 = other_fms[p]
+            if fm1.facts() != fm2.facts(): return False
         return True
 
     def __ne__(self, other):
@@ -2647,6 +2648,19 @@ class FactBase(object):
         """Overloaded boolean operator."""
         if not isinstance(other, self.__class__): other=FactBase(other)
         return other.__le__(self)
+
+    def __or__(self,other):
+        return self.union(other)
+
+    def __and__(self,other):
+        return self.intersection(other)
+
+    def __sub__(self,other):
+        return self.difference(other)
+
+    def __xor__(self,other):
+        return self.symmetric_difference(other)
+
 
     #--------------------------------------------------------------------------
     # Set functions
@@ -2717,7 +2731,7 @@ class FactBase(object):
         self._check_init() # Check for delayed init
         fb=FactBase()
         for p,fm in self._factmaps.items():
-            fb._factmaps[p] = self._factmaps[p].copy
+            fb._factmaps[p] = self._factmaps[p].copy()
         return fb
 
 #------------------------------------------------------------------------------
