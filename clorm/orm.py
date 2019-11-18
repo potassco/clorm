@@ -13,6 +13,7 @@ import collections
 import bisect
 import abc
 import functools
+import itertools
 import clingo
 import typing
 import re
@@ -2239,6 +2240,10 @@ class _FactMap(object):
             for findex in self._findexes.values(): findex.remove(fact,raise_on_missing)
 
     @property
+    def predicate(self):
+        return self._ptype
+
+    @property
     def indexes(self):
         if not self._findexes: return []
         return [ f for f, vs in self._findexes.items() ]
@@ -2315,6 +2320,42 @@ class _FactMap(object):
     def __ge__(self,other):
         return self._allfacts >= other._allfacts
 
+
+    #--------------------------------------------------------------------------
+    # Set functions
+    #--------------------------------------------------------------------------
+    def union(self,*others):
+        nfm = _FactMap(self.predicate, self.indexes)
+        tmpothers = [o.facts() for o in others]
+        tmp = self.facts().union(*tmpothers)
+        nfm.add(tmp)
+        return nfm
+
+    def intersection(self,*others):
+        nfm = _FactMap(self.predicate, self.indexes)
+        tmpothers = [o.facts() for o in others]
+        tmp = self.facts().intersection(*tmpothers)
+        nfm.add(tmp)
+        return nfm
+
+    def difference(self,*others):
+        nfm = _FactMap(self.predicate, self.indexes)
+        tmpothers = [o.facts() for o in others]
+        tmp = self.facts().difference(*tmpothers)
+        nfm.add(tmp)
+        return nfm
+
+    def symmetric_difference(self,other):
+        nfm = _FactMap(self.predicate, self.indexes)
+        tmp = self.facts().symmetric_difference(other)
+        nfm.add(tmp)
+        return nfm
+
+    def copy(self):
+        nfm = _FactMap(self.predicate, self.indexes)
+        nfm.add(self.facts())
+        return nfm
+
 #------------------------------------------------------------------------------
 # A FactBase consisting of facts of different types
 #------------------------------------------------------------------------------
@@ -2379,6 +2420,10 @@ class FactBase(object):
         if facts is None: return
         self._add(facts)
 
+    # Make sure the FactBase has been initialised
+    def _check_init(self):
+        if self._delayed_init: self._delayed_init()  # Check for delayed init
+
     #--------------------------------------------------------------------------
     #
     #--------------------------------------------------------------------------
@@ -2405,67 +2450,6 @@ class FactBase(object):
         return self._factmaps[ptype].delete()
 
     #--------------------------------------------------------------------------
-    # Special functions to support container operations
-    #--------------------------------------------------------------------------
-
-    def __contains__(self, fact):
-        # Always check if we have delayed initialisation
-        if self._delayed_init: self._delayed_init()
-
-        if not isinstance(fact,Predicate): return False
-        ptype = type(fact)
-        if ptype not in self._factmaps: return False
-        return fact in self._factmaps[ptype].facts()
-
-    def __bool__(self):
-        # Always check if we have delayed initialisation
-        if self._delayed_init: self._delayed_init()
-
-        for fm in self._factmaps.values():
-            if fm: return True
-        return False
-
-    def __len__(self):
-        # Always check if we have delayed initialisation
-        if self._delayed_init: self._delayed_init()
-
-        return sum([len(fm) for fm in self._factmaps.values()])
-
-    def __iter__(self):
-        # Always check if we have delayed initialisation
-        if self._delayed_init: self._delayed_init()
-
-        for fm in self._factmaps.values():
-            for f in fm: yield f
-
-    def __eq__(self, other):
-        """Overloaded boolean operator."""
-        if not isinstance(other, self.__class__): return NotImplemented
-
-        # Always check if we have delayed initialisation
-        if self._delayed_init: self._delayed_init()
-
-        if len(self) != len(other): return False
-        for f in self:
-            if f not in other: return False
-        return True
-
-    def __ne__(self, other):
-        """Overloaded boolean operator."""
-        result = self.__eq__(other)
-        if result is NotImplemented: return NotImplemented
-        return not result
-
-    def __lt__(self,other):
-        """Overloaded boolean operator."""
-        if not isinstance(other, self.__class__): return NotImplemented
-
-        # Always check if we have delayed initialisation
-        if self._delayed_init: self._delayed_init()
-
-        pass
-
-    #--------------------------------------------------------------------------
     # Initiliser
     #--------------------------------------------------------------------------
     def __init__(self, facts=None, indexes=None):
@@ -2482,23 +2466,19 @@ class FactBase(object):
     # Set member functions
     #--------------------------------------------------------------------------
     def add(self, arg):
-        # Always check if we have delayed initialisation
-        if self._delayed_init: self._delayed_init()
+        self._check_init()  # Check for delayed init
         return self._add(arg)
 
     def remove(self, arg):
-        # Always check if we have delayed initialisation
-        if self._delayed_init: self._delayed_init()
+        self._check_init()  # Check for delayed init
         return self._remove(arg, raise_on_missing=True)
 
     def discard(self, arg):
-        # Always check if we have delayed initialisation
-        if self._delayed_init: self._delayed_init()
+        self._check_init()  # Check for delayed init
         return self._remove(arg, raise_on_missing=False)
 
     def pop(self):
-        # Always check if we have delayed initialisation
-        if self._delayed_init: self._delayed_init()
+        self._check_init()  # Check for delayed init
         for pt, fm in self._factmaps.items():
             if fm: return fm.pop()
         raise KeyError("Cannot pop() from an empty FactBase")
@@ -2506,8 +2486,7 @@ class FactBase(object):
     def clear(self):
         """Clear the fact base of all facts."""
 
-        # Always check if we have delayed initialisation
-        if self._delayed_init: self._delayed_init()
+        self._check_init()  # Check for delayed init
         for pt, fm in self._factmaps.items(): fm.clear()
 
     #--------------------------------------------------------------------------
@@ -2516,9 +2495,7 @@ class FactBase(object):
     def select(self, ptype):
         """Create a Select query for a predicate type."""
 
-        # Always check if we have delayed initialisation
-        if self._delayed_init: self._delayed_init()
-
+        self._check_init()  # Check for delayed init
         if ptype not in self._factmaps:
             self._factmaps[ptype] = _FactMap(ptype)
         return self._factmaps[ptype].select()
@@ -2526,9 +2503,7 @@ class FactBase(object):
     def delete(self, ptype):
         """Create a Select query for a predicate type."""
 
-        # Always check if we have delayed initialisation
-        if self._delayed_init: self._delayed_init()
-
+        self._check_init()  # Check for delayed init
         if ptype not in self._factmaps:
             self._factmaps[ptype] = _FactMap(ptype)
         return self._factmaps[ptype].delete()
@@ -2536,13 +2511,13 @@ class FactBase(object):
     @property
     def predicates(self):
         """Return the list of predicate types that this fact base contains."""
-        # Always check if we have delayed initialisation
-        if self._delayed_init: self._delayed_init()
+
+        self._check_init()  # Check for delayed init
         return [pt for pt, fm in self._factmaps.items() if fm.facts()]
 
     @property
     def indexes(self):
-        if self._delayed_init: self._delayed_init()
+        self._check_init()  # Check for delayed init
         tmp = []
         for fm in self._factmaps.values():
             tmp.extend(fm.indexes)
@@ -2551,8 +2526,7 @@ class FactBase(object):
     def facts(self):
         """Return all facts."""
 
-        # Always check if we have delayed initialisation
-        if self._delayed_init: self._delayed_init()
+        self._check_init()  # Check for delayed init
         fcts = []
         for fm in self._factmaps.values():
             fcts.extend(fm.facts())
@@ -2564,9 +2538,7 @@ class FactBase(object):
 
         """
 
-        # Always check if we have delayed initialisation
-        if self._delayed_init: self._delayed_init()
-
+        self._check_init()  # Check for delayed init
         out = io.StringIO()
         for fm in self._factmaps.values():
             for f in fm:
@@ -2576,11 +2548,182 @@ class FactBase(object):
         return data
 
     def __str__(self):
+        self._check_init()  # Check for delayed init
         tmp = ", ".join([str(f) for f in self])
         return '{' + tmp + '}'
 
     def __repr__(self):
         return self.__str__()
+
+    #--------------------------------------------------------------------------
+    # Special functions to support container operations
+    #--------------------------------------------------------------------------
+
+    def __contains__(self, fact):
+        self._check_init() # Check for delayed init
+
+        if not isinstance(fact,Predicate): return False
+        ptype = type(fact)
+        if ptype not in self._factmaps: return False
+        return fact in self._factmaps[ptype].facts()
+
+    def __bool__(self):
+        self._check_init() # Check for delayed init
+
+        for fm in self._factmaps.values():
+            if fm: return True
+        return False
+
+    def __len__(self):
+        self._check_init() # Check for delayed init
+
+        return sum([len(fm) for fm in self._factmaps.values()])
+
+    def __iter__(self):
+        self._check_init() # Check for delayed init
+
+        for fm in self._factmaps.values():
+            for f in fm: yield f
+
+    def __eq__(self, other):
+        """Overloaded boolean operator."""
+
+        # If other is not a FactBase then create one
+        if not isinstance(other, self.__class__): other=FactBase(other)
+        self._check_init(); other._check_init() # Check for delayed init
+
+        self_fms = { p: fm for p,fm in self._factmaps.items() if fm }
+        other_fms = { p: fm for p,fm in other._factmaps.items() if fm }
+        if len(self_fms) != len(other_fms): return False
+
+        for p, spfm in self_fms.items():
+            if spfm != self_fms[p]: return False
+        return True
+
+    def __ne__(self, other):
+        """Overloaded boolean operator."""
+        result = self.__eq__(other)
+        if result is NotImplemented: return NotImplemented
+        return not result
+
+    def __lt__(self,other):
+        """Overloaded boolean operator."""
+
+        # If other is not a FactBase then create one
+        if not isinstance(other, self.__class__): other=FactBase(other)
+        self._check_init() ; other._check_init() # Check for delayed init
+
+        self_fms = { p: fm for p,fm in self._factmaps.items() if fm }
+        other_fms = { p: fm for p,fm in other._factmaps.items() if fm }
+        if len(self_fms) > len(other_fms): return False
+
+        known_ne=False
+        for p, spfm in self_fms.items():
+            if p not in other_fms: return False
+            opfm = other_fms[p]
+            if spfm < opfm: known_ne=True
+            elif spfm > opfm: return False
+
+        if known_ne: return True
+        return False
+
+    def __le__(self,other):
+        """Overloaded boolean operator."""
+
+        if not isinstance(other, self.__class__): other=FactBase(other)
+        self._check_init() ; other._check_init() # Check for delayed init
+
+        self_fms = { p: fm for p,fm in self._factmaps.items() if fm }
+        other_fms = { p: fm for p,fm in other._factmaps.items() if fm }
+        if len(self_fms) > len(other_fms): return False
+
+        for p, spfm in self_fms.items():
+            if p not in other_fms: return False
+            opfm = other_fms[p]
+            if spfm > opfm: return False
+        return True
+
+    def __gt__(self,other):
+        """Overloaded boolean operator."""
+        if not isinstance(other, self.__class__): other=FactBase(other)
+        return other.__lt__(self)
+
+    def __ge__(self,other):
+        """Overloaded boolean operator."""
+        if not isinstance(other, self.__class__): other=FactBase(other)
+        return other.__le__(self)
+
+    #--------------------------------------------------------------------------
+    # Set functions
+    #--------------------------------------------------------------------------
+    def union(self,*others):
+        others=[o if isinstance(o, self.__class__) else FactBase(o) for o in others]
+        self._check_init() # Check for delayed init
+        for o in others: o._check_init()
+
+        fb=FactBase()
+        predicates = set(self._factmaps.keys())
+        for o in others: predicates.update(o._factmaps.keys())
+
+        for p in predicates:
+            pothers=[ o._factmaps[p] for o in others if p in o._factmaps]
+            if p in self._factmaps:
+                fb._factmaps[p] = self._factmaps[p].union(*pothers)
+            else:
+                fb._factmaps[p] = _FactMap(p).union(*pothers)
+        return fb
+
+    def intersection(self,*others):
+        others=[o if isinstance(o, self.__class__) else FactBase(o) for o in others]
+        self._check_init() # Check for delayed init
+        for o in others: o._check_init()
+
+        fb=FactBase()
+        predicates = set(self._factmaps.keys())
+        for o in others: predicates.intersection_update(o._factmaps.keys())
+
+        for p in predicates:
+            pothers=[ o._factmaps[p] for o in others if p in o._factmaps]
+            fb._factmaps[p] = self._factmaps[p].intersection(*pothers)
+        return fb
+
+    def difference(self,*others):
+        others=[o if isinstance(o, self.__class__) else FactBase(o) for o in others]
+        self._check_init() # Check for delayed init
+        for o in others: o._check_init()
+
+        fb=FactBase()
+        predicates = set(self._factmaps.keys())
+
+        for p in predicates:
+            pothers=[ o._factmaps[p] for o in others if p in o._factmaps]
+            fb._factmaps[p] = self._factmaps[p].difference(*pothers)
+        return fb
+
+    def symmetric_difference(self,other):
+        if not isinstance(other, self.__class__): other=FactBase(other)
+        self._check_init() # Check for delayed init
+        other._check_init()
+
+        fb=FactBase()
+        predicates = set(self._factmaps.keys())
+        predicates.update(other._factmaps.keys())
+
+        for p in predicates:
+            if p in self._factmaps and p in other._factmaps:
+                fb._factmaps[p] = self._factmaps[p].symmetric_difference(other._factmaps[p])
+            else:
+                if p in self._factmaps: fb._factmaps[p] = self._factmaps[p].copy()
+                fb._factmaps[p] = other._factmaps[p].copy()
+
+        return fb
+
+    def copy(self):
+        self._check_init() # Check for delayed init
+        fb=FactBase()
+        for p,fm in self._factmaps.items():
+            fb._factmaps[p] = self._factmaps[p].copy
+        return fb
 
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------

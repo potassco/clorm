@@ -1962,7 +1962,7 @@ class FactMapTestCase(unittest.TestCase):
         self.assertFalse(af3a in fm)
         self.assertFalse(af3b in fm)
 
-    def test_comparison_ops(self):
+    def test_set_comparison_ops(self):
         Afact = self.Afact
         fm1 = _FactMap(Afact)
         fm2 = _FactMap(Afact)
@@ -1996,6 +1996,46 @@ class FactMapTestCase(unittest.TestCase):
         self.assertFalse(fm1 >= fm2)
         self.assertFalse(fm2 < fm1)
         self.assertFalse(fm2 <= fm1)
+
+    def test_set_ops(self):
+        Afact = self.Afact
+        fm1 = _FactMap(Afact)
+        fm2 = _FactMap(Afact)
+        fm3 = _FactMap(Afact)
+        fm4 = _FactMap(Afact)
+        fm5 = _FactMap(Afact)
+        fm6 = _FactMap(Afact)
+        fm7 = _FactMap(Afact)
+
+        af1 = Afact(num1=1, str1="a", str2="a")
+        af2 = Afact(num1=2, str1="b", str2="b")
+        af3 = Afact(num1=3, str1="c", str2="c")
+        af4 = Afact(num1=4, str1="d", str2="d")
+        af5 = Afact(num1=5, str1="e", str2="e")
+
+        fm1.add([af1,af2])
+        fm2.add([af2,af3])
+        fm3.add([af3,af4])
+        fm4.add([af1,af2,af3,af4])
+        fm5.add([])
+        fm6.add([af1])
+        fm7.add([af1,af3])
+
+        fmo1=fm1.union(fm2,fm3)
+        fmo2=fm1.intersection(fm2,fm3)
+        fmo3=fm1.difference(fm2)
+        fmo4=fm1.symmetric_difference(fm2)
+        self.assertEqual(fm4,fmo1)
+        self.assertEqual(fm5,fmo2)
+        self.assertEqual(fm6,fmo3)
+        self.assertEqual(fm7,fmo4)
+
+        # Symmetric difference too many arguments
+        with self.assertRaises(TypeError) as ctx:
+            fmo4=fm3.symmetric_difference(fm1,fm4)
+
+        # Test copy function
+        r=fm1.copy() ; self.assertEqual(fm1,r)
 
 #------------------------------------------------------------------------------
 # Test the FactBase
@@ -2161,6 +2201,85 @@ class FactBaseTestCase(unittest.TestCase):
         self.assertTrue(fb1 != fb2)
         self.assertTrue(fb1 == fb4)
         self.assertTrue(fb2 == fb3)
+
+
+    #--------------------------------------------------------------------------
+    #
+    #--------------------------------------------------------------------------
+    def test_set_comparison_ops(self):
+        Afact = self._Afact
+        Bfact = self._Bfact
+
+        af1 = Afact(num1=1, str1="1", str2="a")
+        af2 = Afact(num1=1, str1="1", str2="b")
+        af3 = Afact(num1=1, str1="1", str2="c")
+        bf1 = Bfact(num1=1, str1="1", str2="a")
+        bf2 = Bfact(num1=1, str1="1", str2="b")
+        bf3 = Bfact(num1=1, str1="1", str2="c")
+
+        fb1 = FactBase([af1,af2,bf1])
+        fb2 = FactBase([af1,af2,bf1,bf2])
+        fb3 = FactBase()
+
+        self.assertTrue(fb1 <= fb1)
+        self.assertTrue(fb1 < fb2)
+        self.assertTrue(fb1 <= fb2)
+        self.assertTrue(fb2 > fb1)
+        self.assertTrue(fb2 >= fb1)
+
+        self.assertFalse(fb1 > fb1)
+        self.assertFalse(fb1 >= fb2)
+        self.assertFalse(fb1 > fb2)
+        self.assertFalse(fb2 <= fb1)
+        self.assertFalse(fb2 < fb1)
+
+    #--------------------------------------------------------------------------
+    #
+    #--------------------------------------------------------------------------
+    def test_set_ops(self):
+        Afact = self._Afact
+        Bfact = self._Bfact
+
+        af1 = Afact(num1=1, str1="1", str2="a")
+        af2 = Afact(num1=1, str1="1", str2="b")
+        af3 = Afact(num1=1, str1="1", str2="c")
+        bf1 = Bfact(num1=1, str1="1", str2="a")
+        bf2 = Bfact(num1=1, str1="1", str2="b")
+        bf3 = Bfact(num1=1, str1="1", str2="c")
+
+        fb0 = FactBase()
+        fb1 = FactBase([af1,bf1])
+        fb1_alt = FactBase(lambda: [af1,bf1])
+        fb2 = FactBase([bf1,bf2])
+        fb3 = FactBase([af2,bf3])
+        fb4 = FactBase([af1,af2,bf1,bf2,bf3])
+        fb5 = FactBase([af1,bf1,bf2])
+
+        # Test union
+        r=fb1.union(fb1); self.assertEqual(r,fb1)
+        r=fb1.union(fb1_alt); self.assertEqual(r,fb1)
+        r=fb0.union(fb1,fb2); self.assertEqual(r,fb5)
+        r=fb1.union(fb2,fb3); self.assertEqual(r,fb4)
+
+        # Test intersection
+        r=fb0.intersection(fb1); self.assertEqual(r,fb0)
+        r=fb1.intersection(fb1_alt); self.assertEqual(r,fb1)
+        r=fb1.intersection(fb2); self.assertEqual(r,FactBase([bf1]))
+        r=fb4.intersection(fb2,fb3); self.assertEqual(r,fb0)
+        r=fb4.intersection(fb3); self.assertEqual(r,fb3)
+
+        # Test difference
+        r=fb0.difference(fb1); self.assertEqual(r,fb0)
+        r=fb1.difference(fb1_alt); self.assertEqual(r,fb0)
+        r=fb2.difference(fb1); self.assertEqual(r,FactBase([bf2]))
+        r=fb4.difference(fb5); self.assertEqual(r, FactBase([af2,bf3]))
+
+        # Test symmetric difference
+        r=fb1.symmetric_difference(fb1_alt); self.assertEqual(r,fb0)
+        r=fb1.symmetric_difference(fb3); self.assertEqual(r,FactBase([af1,bf1,af3,bf3]))
+
+        # Test copy
+        r=fb1.copy(); self.assertEqual(r,fb1)
 
 #------------------------------------------------------------------------------
 # Test the _Select class
