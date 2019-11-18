@@ -8,6 +8,7 @@ for more details.
 import io
 import sys
 import functools
+import itertools
 from .orm import *
 #import clorm as orm
 
@@ -237,6 +238,39 @@ class _ControlMetaClass(type):
 
         return super(_ControlMetaClass, meta).__new__(meta, name, bases, dct)
 
+# ------------------------------------------------------------------------------
+# Helper functions to expand the assumptions list as part of a solve() call
+# ------------------------------------------------------------------------------
+def _expand_assumptions(assumptions):
+    pos_assump = set()
+    neg_assump = set()
+
+    def _add_raw(raw,bval):
+        nonlocal pos_assump, neg_assump
+        if bval: pos_assump.add(raw)
+        else: neg_assump.add(raw)
+
+    try:
+        for (arg,bval) in assumptions:
+            if isinstance(arg, Predicate): _add_raw(arg.raw,bval)
+            elif isinstance(arg, Symbol): _add_raw(arg,bval)
+            else:
+                for a in arg:
+                    if isinstance(a, Predicate): _add_raw(a.raw,bval)
+                    else: _add_raw(a,bval)
+    except (TypeError, ValueError) as e:
+        raise TypeError(("Invalid solve assumptions. Expecting list of arg-bool "
+                         "pairs (arg is a raw-symbol/predicate or a collection "
+                         "of raw-symbols/predicates). Got: {}").format(assumptions))
+
+    # Now returned a list of raw assumptions combining pos and neg
+    pos = [ (raw,True) for raw in pos_assump ]
+    neg = [ (raw,False) for raw in neg_assump ]
+    return list(itertools.chain(pos,neg))
+
+# ------------------------------------------------------------------------------
+# Control class
+# ------------------------------------------------------------------------------
 
 class Control(object, metaclass=_ControlMetaClass):
     '''Control object for the grounding/solving process.
@@ -359,18 +393,24 @@ class Control(object, metaclass=_ControlMetaClass):
     def solve(self, **kwargs):
         '''Run the clingo solver.
 
-        This function extends ``clingo.Control.solve`` to take assumptions that
-        are facts or a fact base, and return clorm.clingo.SolveHandle and
-        clorm.clingo.Model objects.
+        This function extends ``clingo.Control.solve()`` in two ways:
+
+        1) The ``assumptions`` argument is generalised so that in the list of
+        argument-boolean pairs the argument can be be a clingo symbol, or clorm
+        predicate instance, or a collection of clingo symbols or clorm
+        predicates.
+
+        2) It returns either a ``clorm.clingo.SolveHandle`` wrapper object or a
+        ``clorm.clingo.Model`` wrapper objects as appropriate (depending on the
+        ``yield_`` and ``on_model`` parameters).
 
         '''
 
-        # validargs stores the valid arguments and their default values
+        # Build the list of valid arguments and their default values. We use
+        # "async" or "async_" depending on clingo version. Note: "async" is a
+        # keyword for Python 3.7+.
         validargs = { "assumptions": [], "on_model" : None,
                         "on_finish": None, "yield_" : False }
-
-        # Use "async" or "async_" depending on clingo version. Note: "async" is
-        # a keyword for Python 3.7+.
         async_keyword="async"
         if oclingo.__version__ > '5.3.1': async_keyword="async_"
         validargs[async_keyword] = False
@@ -385,17 +425,9 @@ class Control(object, metaclass=_ControlMetaClass):
         for k,v in validargs.items():
             if k not in kwargs: kwargs[k]=v
 
-        # check and process if we have a assumption pair or single literal
-        def _process_assumption(a):
-            if isinstance(a[0], NonLogicalSymbol): return (a[0].raw, a[1])
-            return a
-
         # generate a new assumptions list if necesary
-        assumptions = kwargs["assumptions"]
-        if isinstance(assumptions, FactBase):
-            kwargs["assumptions"] = [(f.raw, True) for f in assumptions.facts()]
-        else:
-            kwargs["assumptions"] = [_process_assumption(a) for a in assumptions]
+        if "assumptions" in kwargs and not kwargs["assumptions"] is None:
+            kwargs["assumptions"] = _expand_assumptions(kwargs["assumptions"])
 
         # generate a new on_model function if necessary
         on_model=kwargs["on_model"]

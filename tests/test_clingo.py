@@ -7,6 +7,7 @@ import clingo as oclingo
 import clorm.clingo as cclingo
 #from clorm.clingo import *
 from clorm.clingo import Number, String, Function, parse_program, Control
+from clorm.clingo import _expand_assumptions
 
 from clorm import Predicate, IntegerField, StringField, FactBase,\
     SymbolPredicateUnifier, ph1_
@@ -338,10 +339,33 @@ class ClingoTestCase(unittest.TestCase):
                 num_models+=1
             self.assertEqual(num_models,3)
 
+
     #--------------------------------------------------------------------------
     # Test the solvehandle
     #--------------------------------------------------------------------------
-    def test_solve_with_assumptions(self):
+    def test_expand_assumptions(self):
+        class F(Predicate):
+            num1=IntegerField()
+        class G(Predicate):
+            num1=IntegerField()
+        f1=F(1); g1=G(1);
+
+        r = set(_expand_assumptions([(f1,True), (g1,False)]))
+        self.assertEqual(r, set([(f1.raw,True), (g1.raw,False)]))
+
+        r = set(_expand_assumptions([(FactBase([f1]),True), (set([g1]),False)]))
+        self.assertEqual(r, set([(f1.raw,True), (g1.raw,False)]))
+
+        with self.assertRaises(TypeError) as ctx:
+            _expand_assumptions([g1])
+        with self.assertRaises(TypeError) as ctx:
+            _expand_assumptions(g1)
+
+
+    #--------------------------------------------------------------------------
+    # Test the solvehandle
+    #--------------------------------------------------------------------------
+    def test_solve_with_assumptions_simple(self):
         spu=SymbolPredicateUnifier()
         @spu.register
         class F(Predicate):
@@ -382,11 +406,64 @@ class ClingoTestCase(unittest.TestCase):
         num_models=0
         ctrl.solve(on_model=on_modelF, assumptions=[(g1,False)])
         self.assertEqual(num_models, 2)
-
         fb2 = FactBase([g1])
         num_models=0
-        ctrl.solve(on_model=on_modelT, assumptions=fb2)
+        ctrl.solve(on_model=on_modelT, assumptions=[(fb2,True)])
         self.assertEqual(num_models, 1)
+
+    #--------------------------------------------------------------------------
+    # Test the solvehandle
+    #--------------------------------------------------------------------------
+    def test_solve_with_assumptions_complex(self):
+        class F(Predicate):
+            num1=IntegerField()
+        class G(Predicate):
+            num1=IntegerField()
+
+        prgstr = """ 1 { g(N) : f(N) } 2."""
+        f1 = F(1) ; f2 = F(2) ; f3 = F(3)
+        g1 = G(1) ; g2 = G(2) ; g3 = G(3)
+        ctrl = cclingo.Control(['-n 0'],unifier=[G])
+        with ctrl.builder() as b:
+            oclingo.parse_program(prgstr, lambda stm: b.add(stm))
+        ctrl.add_facts([f1,f2,f3])
+        ctrl.ground([("base",[])])
+
+        num_models=0
+        def on_model(m):
+            nonlocal num_models
+            fb = m.facts(atoms=True)
+            self.assertTrue(len(fb) <= 2)
+            self.assertTrue(len(fb) >= 1)
+            num_models += 1
+
+        num_models=0
+        ctrl.solve(on_model=on_model, assumptions=None)
+        self.assertEqual(num_models, 6)
+        num_models=0
+        ctrl.solve(on_model=on_model)
+        self.assertEqual(num_models, 6)
+
+        num_models=0
+        ctrl.solve(on_model=on_model, assumptions=[(g1,True)])
+        self.assertEqual(num_models, 3)
+
+        # Mixing raw symbol and predicate in a set
+        num_models=0
+        ctrl.solve(on_model=on_model, assumptions=[(set([g1.raw,g2]),True)])
+        self.assertEqual(num_models, 1)
+        num_models=0
+        ctrl.solve(on_model=on_model, assumptions=[(FactBase([g1,g2]),True)])
+        self.assertEqual(num_models, 1)
+        num_models=0
+        ctrl.solve(on_model=on_model, assumptions=[(FactBase([g1]),True),(set([g2]),False)])
+        self.assertEqual(num_models, 2)
+
+        num_models=0
+        ctrl.solve(on_model=on_model, assumptions=[(FactBase([g1]),True),(set([g2]),False)])
+        self.assertEqual(num_models, 2)
+
+
 
     #--------------------------------------------------------------------------
     # Test the solvehandle

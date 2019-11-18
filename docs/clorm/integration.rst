@@ -94,10 +94,14 @@ functions:
 * ``solve()``. This function provides a rich set of options for calling the
   solver and returning the results. These parameters are documented in the
   Clingo API. Clorm modifies this interface in three ways:
-
-  - ``assumptions`` parameter. As well as taking a list of ``clingo.Symbol``
-    objects, Clorm also allows the assumptions to be specified as a list of
-    ``clorm.Predicate`` instances or a single ``clorm.FactBase`` object.
+ 
+  - ``assumptions`` parameter. This parameter restricts the returned models to
+    only those satisfying the given assumptions. This parameter must consist of
+    a list of argument-boolean pairs. As well as ``clingo.Symbol`` objects the
+    argument element is extended to allow ``clorm.Predicate`` instances or a
+    collection of clingo symbols or clorm predicates. This makes it flexible so
+    that, for example, a ``FactBase`` object can be used to specified as being
+    either True or False in the model.
   - ``on_model`` callback parameter. Clorm modifies this interface so that a
     ``clorm.clingo.Model`` is pass to the callback function.
   - If the parameter ``yield_=True`` is specified then the return value of the
