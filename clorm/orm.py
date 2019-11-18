@@ -2437,7 +2437,7 @@ class FactBase(object):
         ptype = type(fact)
         if not issubclass(ptype,Predicate):
             raise TypeError(("type of object {} is not a Predicate "
-                             "subclass").format(fact))
+                             "(or sub-class)").format(fact))
         if ptype not in self._factmaps:
             self._factmaps[ptype] = _FactMap(ptype)
         self._factmaps[ptype].add(fact)
@@ -2513,24 +2513,20 @@ class FactBase(object):
         """Return the list of predicate types that this fact base contains."""
 
         self._check_init()  # Check for delayed init
-        return [pt for pt, fm in self._factmaps.items() if fm.facts()]
+        return [pt for pt, fm in self._factmaps.items() if fm]
 
     @property
     def indexes(self):
         self._check_init()  # Check for delayed init
-        tmp = []
-        for fm in self._factmaps.values():
-            tmp.extend(fm.indexes)
-        return tmp
+        tmp = [ fm.indexes for fm in self._factmaps.values()]
+        return list(itertools.chain(*tmp))
 
     def facts(self):
         """Return all facts."""
 
         self._check_init()  # Check for delayed init
-        fcts = []
-        for fm in self._factmaps.values():
-            fcts.extend(fm.facts())
-        return fcts
+        tmp = [ fm.facts() for fm in self._factmaps.values() if fm]
+        return list(itertools.chain(*tmp))
 
     def asp_str(self):
         """Return a string representation of the fact base that is suitable for adding
@@ -2576,7 +2572,6 @@ class FactBase(object):
 
     def __len__(self):
         self._check_init() # Check for delayed init
-
         return sum([len(fm) for fm in self._factmaps.values()])
 
     def __iter__(self):
