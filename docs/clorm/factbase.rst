@@ -37,11 +37,12 @@ sub-classes, and secondly, it has a database-like query mechanism.
    assert dave in fb
    assert len(fb) == 3
 
-A fact base can be populated at object construction time or later. Like a Python
-``set`` object it has an ``add`` member function for adding facts. However,
-because it can only store ``Predicate`` instances this function is able to be
-more flexible and has been overloaded to accept either a single fact or a list
-of facts.
+A fact base can be populated at object construction time or later. It can also
+be manipulated using the standard Python set operators and member
+functions. Like a Python ``set`` object it has an ``add`` member function for
+adding facts. However, because it can only store ``Predicate`` instances this
+function is able to be more flexible and has been overloaded to accept either a
+single fact or a list of facts.
 
 .. code-block:: python
 

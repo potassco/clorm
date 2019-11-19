@@ -2037,6 +2037,28 @@ class FactMapTestCase(unittest.TestCase):
         # Test copy function
         r=fm1.copy() ; self.assertEqual(fm1,r)
 
+        # Update function
+        fm6.update(fm3,fm7)
+        self.assertEqual(fm6.facts(), set([af1,af3,af3,af4]))
+
+        # Intersection update function
+        fm6.intersection_update(fm3,fm7)
+        self.assertEqual(fm6.facts(), set([af3]))
+
+        # Difference update function
+        fm7.difference_update(fm6,fm5)
+        self.assertEqual(fm7.facts(), set([af1]))
+        fm7.difference_update(fm3)
+        self.assertEqual(fm7.facts(), set([af1]))
+
+        # Symmetric difference update function
+        fm1 = _FactMap(Afact)
+        fm2 = _FactMap(Afact)
+        fm1.add([af1,af2,af3])
+        fm2.add([af2,af3,af4])
+        fm1.symmetric_difference_update(fm2)
+        self.assertEqual(fm1.facts(), set([af1,af4]))
+
 #------------------------------------------------------------------------------
 # Test the FactBase
 #------------------------------------------------------------------------------
@@ -2256,6 +2278,7 @@ class FactBaseTestCase(unittest.TestCase):
     def test_set_ops(self):
         Afact = self._Afact
         Bfact = self._Bfact
+        Cfact = self._Cfact
 
         af1 = Afact(num1=1, str1="1", str2="a")
         af2 = Afact(num1=1, str1="1", str2="b")
@@ -2263,6 +2286,9 @@ class FactBaseTestCase(unittest.TestCase):
         bf1 = Bfact(num1=1, str1="1", str2="a")
         bf2 = Bfact(num1=1, str1="1", str2="b")
         bf3 = Bfact(num1=1, str1="1", str2="c")
+        cf1 = Cfact(num1=1)
+        cf2 = Cfact(num1=2)
+        cf3 = Cfact(num1=3)
 
         fb0 = FactBase()
         fb1 = FactBase([af1,bf1])
@@ -2285,6 +2311,8 @@ class FactBaseTestCase(unittest.TestCase):
         r=fb1.intersection(fb2); self.assertEqual(r,FactBase([bf1]))
         r=fb4.intersection(fb2,fb3); self.assertEqual(r,fb0)
         r=fb4.intersection([af2,bf3]); self.assertEqual(r,fb3)
+        r=fb4.intersection(FactBase([af1])); self.assertEqual(r,FactBase([af1]))
+
         r = fb5 & [af1,af2,bf1] ; self.assertEqual(r,[af1,bf1])
 
         # Test difference
@@ -2301,6 +2329,42 @@ class FactBaseTestCase(unittest.TestCase):
 
         # Test copy
         r=fb1.copy(); self.assertEqual(r,fb1)
+
+        # Test update()
+        fb=FactBase([af1,af2])
+        fb.update(FactBase([af3,bf1]),[cf1,cf2])
+        self.assertEqual(fb, FactBase([af1,af2,af3,bf1,cf1,cf2]))
+        fb=FactBase([af1,af2])
+        fb |= [af3,bf1]
+        self.assertEqual(fb,FactBase([af1,af2,af3,bf1]))
+
+        # Test intersection()
+        fb=FactBase([af1,af2,bf1,cf1])
+        fb.intersection_update(FactBase([af1,bf2]))
+        self.assertEqual(fb, FactBase([af1]))
+        fb=FactBase([af1,af2,bf1,cf1])
+        fb.intersection_update(FactBase([af1,bf2]),[af1])
+        self.assertEqual(fb, FactBase([af1]))
+        fb=FactBase([af1,af2,bf1,cf1])
+        fb &= [af1,bf2]
+        self.assertEqual(fb, FactBase([af1]))
+
+        # Test difference_update()
+        fb=FactBase([af1,af2,bf1])
+        fb.difference_update(FactBase([af2,bf2]),[bf3,cf1])
+        self.assertEqual(fb, FactBase([af1,bf1]))
+        fb=FactBase([af1,af2,bf1])
+        fb -= [af2,bf1]
+        self.assertEqual(fb, FactBase([af1]))
+
+        # Test symmetric_difference_update()
+        fb=FactBase([af1,af2,bf1])
+        fb.symmetric_difference_update(FactBase([af2,bf2]))
+        self.assertEqual(fb, FactBase([af1,bf1,bf2]))
+        fb=FactBase([af1,af2,bf1])
+        fb ^= FactBase([cf2])
+        self.assertEqual(fb, FactBase([af1,af2,bf1,cf2]))
+
 
 #------------------------------------------------------------------------------
 # Test the _Select class

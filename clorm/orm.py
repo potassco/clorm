@@ -2351,6 +2351,29 @@ class _FactMap(object):
         nfm.add(tmp)
         return nfm
 
+    def update(self,*others):
+        for f in itertools.chain(*[o.facts() for o in others]):
+            self._add_fact(f)
+
+    def intersection_update(self,*others):
+        for f in set(self.facts()):
+            for o in others:
+                if f not in o: self.discard(f)
+
+    def difference_update(self,*others):
+        for f in itertools.chain(*[o.facts() for o in others]):
+            self.discard(f)
+
+    def symmetric_difference_update(self, other):
+        to_remove=set()
+        to_add=set()
+        for f in self._allfacts:
+            if f in other._allfacts: to_remove.add(f)
+        for f in other._allfacts:
+            if f not in self._allfacts: to_add.add(f)
+        for f in to_remove: self.discard(f)
+        for f in to_add: self._add_fact(f)
+
     def copy(self):
         nfm = _FactMap(self.predicate, self.indexes)
         nfm.add(self.facts())
@@ -2556,6 +2579,8 @@ class FactBase(object):
     #--------------------------------------------------------------------------
 
     def __contains__(self, fact):
+        """Implemement set 'in' operator."""
+
         self._check_init() # Check for delayed init
 
         if not isinstance(fact,Predicate): return False
@@ -2564,6 +2589,8 @@ class FactBase(object):
         return fact in self._factmaps[ptype].facts()
 
     def __bool__(self):
+        """Implemement set bool operator."""
+
         self._check_init() # Check for delayed init
 
         for fm in self._factmaps.values():
@@ -2603,7 +2630,7 @@ class FactBase(object):
         return not result
 
     def __lt__(self,other):
-        """Overloaded boolean operator."""
+        """Implemement set < operator."""
 
         # If other is not a FactBase then create one
         if not isinstance(other, self.__class__): other=FactBase(other)
@@ -2624,7 +2651,7 @@ class FactBase(object):
         return False
 
     def __le__(self,other):
-        """Overloaded boolean operator."""
+        """Implemement set <= operator."""
 
         if not isinstance(other, self.__class__): other=FactBase(other)
         self._check_init() ; other._check_init() # Check for delayed init
@@ -2640,32 +2667,57 @@ class FactBase(object):
         return True
 
     def __gt__(self,other):
-        """Overloaded boolean operator."""
+        """Implemement set > operator."""
         if not isinstance(other, self.__class__): other=FactBase(other)
         return other.__lt__(self)
 
     def __ge__(self,other):
-        """Overloaded boolean operator."""
+        """Implemement set >= operator."""
         if not isinstance(other, self.__class__): other=FactBase(other)
         return other.__le__(self)
 
     def __or__(self,other):
+        """Implemement set | operator."""
         return self.union(other)
 
     def __and__(self,other):
+        """Implemement set & operator."""
         return self.intersection(other)
 
     def __sub__(self,other):
+        """Implemement set - operator."""
         return self.difference(other)
 
     def __xor__(self,other):
+        """Implemement set ^ operator."""
         return self.symmetric_difference(other)
+
+    def __ior__(self,other):
+        """Implemement set |= operator."""
+        self.update(other)
+        return self
+
+    def __iand__(self,other):
+        """Implemement set &= operator."""
+        self.intersection_update(other)
+        return self
+
+    def __isub__(self,other):
+        """Implemement set -= operator."""
+        self.difference_update(other)
+        return self
+
+    def __ixor__(self,other):
+        """Implemement set ^= operator."""
+        self.symmetric_difference_update(other)
+        return self
 
 
     #--------------------------------------------------------------------------
     # Set functions
     #--------------------------------------------------------------------------
     def union(self,*others):
+        """Implements the set union() function"""
         others=[o if isinstance(o, self.__class__) else FactBase(o) for o in others]
         self._check_init() # Check for delayed init
         for o in others: o._check_init()
@@ -2683,6 +2735,7 @@ class FactBase(object):
         return fb
 
     def intersection(self,*others):
+        """Implements the set intersection() function"""
         others=[o if isinstance(o, self.__class__) else FactBase(o) for o in others]
         self._check_init() # Check for delayed init
         for o in others: o._check_init()
@@ -2697,6 +2750,7 @@ class FactBase(object):
         return fb
 
     def difference(self,*others):
+        """Implements the set difference() function"""
         others=[o if isinstance(o, self.__class__) else FactBase(o) for o in others]
         self._check_init() # Check for delayed init
         for o in others: o._check_init()
@@ -2710,6 +2764,7 @@ class FactBase(object):
         return fb
 
     def symmetric_difference(self,other):
+        """Implements the set symmetric_difference() function"""
         if not isinstance(other, self.__class__): other=FactBase(other)
         self._check_init() # Check for delayed init
         other._check_init()
@@ -2727,7 +2782,61 @@ class FactBase(object):
 
         return fb
 
+    def update(self,*others):
+        """Implements the set update() function"""
+        others=[o if isinstance(o, self.__class__) else FactBase(o) for o in others]
+        self._check_init() # Check for delayed init
+        for o in others: o._check_init()
+
+        for o in others:
+            for p,fm in o._factmaps.items():
+                if p in self._factmaps: self._factmaps[p].update(fm)
+                else: self._factmaps[p] = fm.copy()
+
+    def intersection_update(self,*others):
+        """Implements the set intersection_update() function"""
+        others=[o if isinstance(o, self.__class__) else FactBase(o) for o in others]
+        self._check_init() # Check for delayed init
+        for o in others: o._check_init()
+        num = len(others)
+
+        predicates = set(self._factmaps.keys())
+        for o in others: predicates.intersection_update(o._factmaps.keys())
+        pred_to_delete = set(self._factmaps.keys()) - predicates
+
+        for p in pred_to_delete: self._factmaps[p].clear()
+        for p in predicates:
+            pothers=[ o._factmaps[p] for o in others if p in o._factmaps]
+            self._factmaps[p].intersection_update(*pothers)
+
+    def difference_update(self,*others):
+        """Implements the set difference_update() function"""
+        others=[o if isinstance(o, self.__class__) else FactBase(o) for o in others]
+        self._check_init() # Check for delayed init
+        for o in others: o._check_init()
+
+        for p in self._factmaps.keys():
+            pothers=[ o._factmaps[p] for o in others if p in o._factmaps ]
+            self._factmaps[p].difference_update(*pothers)
+
+    def symmetric_difference_update(self,other):
+        """Implements the set symmetric_difference_update() function"""
+        if not isinstance(other, self.__class__): other=FactBase(other)
+        self._check_init() # Check for delayed init
+        other._check_init()
+
+        predicates = set(self._factmaps.keys())
+        predicates.update(other._factmaps.keys())
+
+        for p in predicates:
+            if p in self._factmaps and p in other._factmaps:
+                self._factmaps[p].symmetric_difference_update(other._factmaps[p])
+            else:
+                if p in other._factmaps: self._factmaps[p] = other._factmaps[p].copy()
+
+
     def copy(self):
+        """Implements the set copy() function"""
         self._check_init() # Check for delayed init
         fb=FactBase()
         for p,fm in self._factmaps.items():
