@@ -36,7 +36,7 @@ __version__ = oclingo.__version__
 # ------------------------------------------------------------------------------
 
 def _build_unifier(unifier):
-    if not unifier: return unifier
+    if not unifier: return None
     if isinstance(unifier, SymbolPredicateUnifier): return unifier
     return SymbolPredicateUnifier(predicates=unifier)
 
@@ -308,12 +308,16 @@ class Control(object, metaclass=_ControlMetaClass):
         return self._ctrl
 
     #------------------------------------------------------------------------------
-    # A new function to set the unifier
+    # Make the unifier a property with a getter and setter
     #------------------------------------------------------------------------------
-    def set_unifier(self,unifier):
-        '''Set the unifier which is used when extracting facts from the model.
+    @property
+    def unifier(self):
+        """Get the unifier. Returns a SymbolPredicateUnifier object or None"""
+        return self._unifier
 
-        Replaces any previously set unifier
+    @unifier.setter
+    def unifier(self,unifier):
+        '''Set the unifier for extracting facts from models. Replace previous value"""
 
         Args:
             unifier: a list of ``clorm.Predicate`` sub-classes of a

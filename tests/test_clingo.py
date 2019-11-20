@@ -227,8 +227,13 @@ class ClingoTestCase(unittest.TestCase):
         ctrl.ground([("base",[])])
         ctrl.solve(on_model=on_model2)
 
-        # Now set the unifier and re-run to show that it works
-        ctrl.set_unifier([Afact])
+        # Now set the unifier and (checking the getter and setter) then re-run
+        # the solver to show that it works
+        ctrl.unifier = [Afact]
+        spu = ctrl.unifier
+        self.assertTrue(type(spu), SymbolPredicateUnifier)
+        self.assertEqual(spu.predicates,[Afact])
+        self.assertEqual(spu.indexes,[])
         ctrl.solve(on_model=on_model1)
 
 
