@@ -312,17 +312,16 @@ class Control(object, metaclass=_ControlMetaClass):
     #------------------------------------------------------------------------------
     @property
     def unifier(self):
-        """Get the unifier. Returns a SymbolPredicateUnifier object or None"""
+        """Get/set the unifier.
+
+        Unifier can be specified as a SymbolPredicateUnifier or a collection of
+        Predicates. Always returns a SymbolPredicateUnifier (or None).
+
+        """
         return self._unifier
 
     @unifier.setter
     def unifier(self,unifier):
-        '''Set the unifier for extracting facts from models. Replace previous value"""
-
-        Args:
-            unifier: a list of ``clorm.Predicate`` sub-classes of a
-              SymbolPredicateUnifer instance.
-        '''
         self._unifier = _build_unifier(unifier)
 
     #------------------------------------------------------------------------------

@@ -61,8 +61,8 @@ functions:
   are that a Control object is passed to the embedded ``main`` function which is
   then wrapped in ``clorm.clingo.Control``:
 
-* ``set_unifier()``. A new function to allow the unifier to be set (or changed)
-  even after the ``clorm.clingo.Control`` object has been instantiated.
+* ``unifier``. A property to get and set the unifier even after the
+  ``clorm.clingo.Control`` object has been instantiated.
 
 .. code-block:: python
 
