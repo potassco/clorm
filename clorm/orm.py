@@ -152,13 +152,14 @@ class FieldPath(object):
     # allows the field to by extended with the intutive syntax of refering to
     # the key as a property or as an index.
     # --------------------------------------------------------------------------
-    # def extend(self): return self.defn.FieldPathBuilder(self)
+#    @property
+#    def extend(self): return self.defn.FieldPathBuilder(self)
 
     #--------------------------------------------------------------------------
     # Return a FieldPath that extends this field path.
     # If given a key
     #--------------------------------------------------------------------------
-    def extend(self,key):
+    def extend_by_key(self,key):
         nls_cls = self._chain[-1].defn.complex
         if not nls_cls:
             raise TypeError("The path {} cannot be extended any further".format(self))
@@ -367,7 +368,7 @@ class FieldPathBuilder(object, metaclass=_FieldPathBuilderMeta):
     # --------------------------------------------------------------------------
     def __getitem__(self, key):
         '''Extend the field path by a key to the next field'''
-        nfp=self._fp.extend(key)
+        nfp=self._fp.extend_by_key(key)
         return nfp[-1].defn.FieldPathBuilder(nfp)
 
     def __iter__(self):
@@ -860,7 +861,7 @@ class FieldAccessor(object):
         self._parent_cls = pc
 
     def fpb(self):
-        fp = FieldPath(self.parent.Field).extend(self._name)
+        fp = FieldPath(self.parent.Field).extend_by_key(self._name)
         return self._defn.FieldPathBuilder(fp)
 
     def __get__(self, instance, owner=None):
@@ -1290,7 +1291,7 @@ class _NonLogicalSymbolMeta(type):
     # provide querying of a NonLogicalSymbol subclass Blah by a positional
     # argument we need to implement __getitem__ for the metaclass.
     def __getitem__(self, idx):
-        fp = FieldPath(self.Field).extend(idx)
+        fp = FieldPath(self.Field).extend_by_key(idx)
         return fp[-1].defn.FieldPathBuilder(fp)
 
     def __iter__(self):

@@ -1521,33 +1521,33 @@ class FieldPathTestCase(unittest.TestCase):
 
         fp1=FieldPath(Cmplx2.Field)
         self.assertEqual(fp1[0], FieldPathLink(Cmplx2.Field,None))
-        fp2=fp1.extend('x')
+        fp2=fp1.extend_by_key('x')
         self.assertEqual(fp2[0], FieldPathLink(Cmplx2.Field,'x'))
         self.assertEqual(fp2[1], FieldPathLink(Cmplx1.Field,None))
-        fp3=fp2.extend('b')
+        fp3=fp2.extend_by_key('b')
         self.assertEqual(fp3[1], FieldPathLink(Cmplx1.Field,'b'))
         self.assertEqual(fp3[2], FieldPathLink(StringField,None))
 
         # some failed extensions
         with self.assertRaises(KeyError) as ctx:
-            fpf=fp1.extend('z')
+            fpf=fp1.extend_by_key('z')
         with self.assertRaises(KeyError) as ctx:
-            fpf=fp1.extend(2)
+            fpf=fp1.extend_by_key(2)
         with self.assertRaises(KeyError) as ctx:
-            fpf=fp2.extend('d')
+            fpf=fp2.extend_by_key('d')
         with self.assertRaises(KeyError) as ctx:
-            fpf=fp2.extend(3)
+            fpf=fp2.extend_by_key(3)
         with self.assertRaises(TypeError) as ctx:
-            fpf=fp3.extend(0)
+            fpf=fp3.extend_by_key(0)
 
         # Test equaility and equivalence
-        fp2b=fp1.extend(0)
+        fp2b=fp1.extend_by_key(0)
         self.assertTrue(fp2 != fp2b)
         self.assertTrue(fp2.equivalent(fp2b))
         self.assertTrue(fp2b.equivalent(fp2))
 
-        fp3b=fp2b.extend('b')
-        fp3c=fp2b.extend(1)
+        fp3b=fp2b.extend_by_key('b')
+        fp3c=fp2b.extend_by_key(1)
         fp3d=fp3c.canonical()
         self.assertTrue(fp3 != fp3b)
         self.assertTrue(fp3 != fp3c)
