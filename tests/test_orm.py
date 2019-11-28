@@ -1353,12 +1353,12 @@ class ORMTestCase(unittest.TestCase):
             num1=IntegerField(index=True)
             str1=StringField()
 
-        self.assertEqual(spu1.predicates, [Afact,Bfact])
-        self.assertEqual(spu2.predicates, [Afact])
-        self.assertEqual(spu3.predicates, [Afact])
-        self.assertEqual(spu1.indexes, [Afact.num1,Afact.num1])
-        self.assertEqual(spu2.indexes, [Afact.num1])
-        self.assertEqual(spu3.indexes, [])
+        self.assertEqual(spu1.predicates, (Afact,Bfact))
+        self.assertEqual(spu2.predicates, (Afact,))
+        self.assertEqual(spu3.predicates, (Afact,))
+        self.assertEqual(spu1.indexes, (Afact.num1,Afact.num1))
+        self.assertEqual(spu2.indexes, (Afact.num1,))
+        self.assertEqual(spu3.indexes, ())
 
     #--------------------------------------------------------------------------
     # Test the factbasebuilder when there are subfields defined
@@ -1379,7 +1379,7 @@ class ORMTestCase(unittest.TestCase):
         expected=set([P.d.meta.path,
                       P.d.b.meta.path, P.d.c.arg1.meta.path,
                       P.e.b.meta.path, P.e.c.arg1.meta.path])
-        self.assertEqual(spu.predicates, [P])
+        self.assertEqual(spu.predicates, (P,))
         self.assertEqual(set(spu.indexes), set(expected))
 
         ct_func=Function("ct",[Number(1),String("aaa"),
@@ -1494,9 +1494,9 @@ class ORMTestCase(unittest.TestCase):
         self.assertEqual(fb2, fb3)
 
         # But the indexes can be different
-        self.assertEqual(fb1.indexes, Afact.meta.indexes)
-        self.assertEqual(fb2.indexes, [])
-        self.assertEqual(fb3.indexes, fb1.indexes)
+        self.assertEqual(list(fb1.indexes), list(Afact.meta.indexes))
+        self.assertEqual(list(fb2.indexes), [])
+        self.assertEqual(list(fb3.indexes), list(fb1.indexes))
 
 
 #------------------------------------------------------------------------------
@@ -1893,10 +1893,10 @@ class FactMapTestCase(unittest.TestCase):
         Bfact = self.Bfact
 
         fm1 = _FactMap(Afact)
-        self.assertEqual(fm1.indexes, [])
+        self.assertEqual(fm1.indexes, ())
 
         fm1 = _FactMap(Afact, [Afact.num1, Afact.str1])
-        self.assertEqual(fm1.indexes, [Afact.num1, Afact.str1])
+        self.assertEqual(fm1.indexes, (Afact.num1, Afact.str1))
 
         with self.assertRaises(TypeError) as ctx:
             fm = _FactMap(1)

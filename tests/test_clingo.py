@@ -232,8 +232,8 @@ class ClingoTestCase(unittest.TestCase):
         ctrl.unifier = [Afact]
         spu = ctrl.unifier
         self.assertTrue(type(spu), SymbolPredicateUnifier)
-        self.assertEqual(spu.predicates,[Afact])
-        self.assertEqual(spu.indexes,[])
+        self.assertEqual(spu.predicates,(Afact,))
+        self.assertEqual(spu.indexes,())
         ctrl.solve(on_model=on_model1)
 
 

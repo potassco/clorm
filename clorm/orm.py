@@ -951,7 +951,7 @@ class NLSDefn(object):
         self._key2canon = { f.index : f.name for f in field_accessors }
         self._key2canon.update({f.name : f.name for f in field_accessors })
         self._parent_cls = None
-        self._indexed_fields = None
+        self._indexed_fields = ()
 
     @property
     def name(self):
@@ -985,14 +985,14 @@ class NLSDefn(object):
     @property
     def indexes(self):
         """Return the list of fields that have been specified as indexed"""
-        return list(self._indexed_fields)
+        return self._indexed_fields
 
     @indexes.setter
     def indexes(self,indexed_fields):
         if self._indexed_fields:
             raise RuntimeError(("Trying to reset the indexed fields for a "
                                 "NLSDefn doesn't make sense"))
-        self._indexed_fields = indexed_fields
+        self._indexed_fields = tuple(indexed_fields)
 
     @property
     def parent(self):
@@ -1267,7 +1267,7 @@ class _NonLogicalSymbolMeta(type):
         md.parent = cls
         for field in md:
             dct[field.name].parent = cls
-        md.indexes=list(_get_indexed_fields(cls))
+        md.indexes=_get_indexed_fields(cls)
 
         return super(_NonLogicalSymbolMeta, cls).__init__(name, bases, dct)
 
@@ -2212,14 +2212,16 @@ class _FactMap(object):
         self._ptype = ptype
         self._allfacts = set()
         self._findexes = None
+        self._indexed_fields = ()
         if not issubclass(ptype, Predicate):
             raise TypeError("{} is not a subclass of Predicate".format(ptype))
         if index:
-            clean = [ _to_field_path(f) for f in index ]
-            self._findexes = collections.OrderedDict( (f, _FactIndex(f)) for f in clean )
-            prts = set([f.predicate for f in clean])
-            if len(prts) != 1 or prts != set([ptype]):
-                raise TypeError("Fields in {} do not belong to {}".format(index,prts))
+            self._indexed_fields = tuple([ _to_field_path(f) for f in index ])
+            self._findexes = collections.OrderedDict(
+                (f, _FactIndex(f)) for f in self._indexed_fields )
+            preds = set([f.predicate for f in self._indexed_fields])
+            if len(preds) != 1 or preds != set([ptype]):
+                raise TypeError("Fields in {} do not belong to {}".format(index,preds))
 
     def _add_fact(self,fact):
         self._allfacts.add(fact)
@@ -2245,8 +2247,7 @@ class _FactMap(object):
 
     @property
     def indexes(self):
-        if not self._findexes: return []
-        return [ f for f, vs in self._findexes.items() ]
+        return self._indexed_fields
 
     def get_factindex(self, field):
         return self._findexes[field.path]
@@ -2434,8 +2435,8 @@ class FactBase(object):
         # Create _FactMaps for the predicate types with indexed fields
         grouped = {}
 
-        clean = [ _to_field_path(f) for f in indexes ]
-        for fp in clean:
+        self._indexed_fields = tuple([ _to_field_path(f) for f in indexes ])
+        for fp in self._indexed_fields:
             if fp.predicate not in grouped: grouped[fp.predicate] = []
             grouped[fp.predicate].append(fp)
         self._factmaps = { pt : _FactMap(pt, fps) for pt, fps in grouped.items() }
@@ -2536,13 +2537,12 @@ class FactBase(object):
         """Return the list of predicate types that this fact base contains."""
 
         self._check_init()  # Check for delayed init
-        return [pt for pt, fm in self._factmaps.items() if fm]
+        return tuple([pt for pt, fm in self._factmaps.items() if fm])
 
     @property
     def indexes(self):
         self._check_init()  # Check for delayed init
-        tmp = [ fm.indexes for fm in self._factmaps.values()]
-        return list(itertools.chain(*tmp))
+        return self._indexed_fields
 
     def facts(self):
         """Return all facts."""
@@ -2891,37 +2891,51 @@ class SymbolPredicateUnifier(object):
     """
 
     def __init__(self, predicates=[], indexes=[], suppress_auto_index=False):
-        self._predicates = []
-        self._indexes = []
-        self._predset = set()
-        self._indset = set()
+        self._predicates = ()
+        self._indexes = ()
         self._suppress_auto_index = suppress_auto_index
-        for pred in predicates: self._register_predicate(pred)
-        for f in indexes: self._register_index(f)
+        tmppreds = []
+        tmpinds = []
+        tmppredset = set()
+        tmpindset = set()
+        for pred in predicates:
+                self._register_predicate(pred,tmppreds,tmpinds,tmppredset,tmpindset)
+        for fld in indexes:
+                self._register_index(fld,tmppreds,tmpinds,tmppredset,tmpindset)
+        self._predicates = tuple(tmppreds)
+        self._indexes = tuple(tmpinds)
 
-    def _register_predicate(self, cls):
-        if cls in self._predset: return    # ignore if already registered
+    def _register_predicate(self, cls, predicates, indexes, predicateset, indexset):
         if not issubclass(cls, Predicate):
             raise TypeError("{} is not a Predicate sub-class".format(cls))
-        self._predset.add(cls)
-        self._predicates.append(cls)
+        if cls in predicateset: return
+        predicates.append(cls)
+        predicateset.add(cls)
         if self._suppress_auto_index: return
 
         # Add all fields (and sub-fields) that are specified as indexed
-        for fp in cls.meta.indexes: self._register_index(fp)
+        for fp in cls.meta.indexes:
+            self._register_index(fp,predicates,indexes,predicateset,indexset)
 
-    def _register_index(self, fp):
+    def _register_index(self, fp, predicates, indexes, predicateset, indexset):
         fp = _to_field_path(fp)
-        if fp in self._indset: return    # ignore if already registered
-        if isinstance(fp, FieldPath) and fp.predicate in self.predicates:
-            self._indset.add(fp)
-            self._indexes.append(fp)
+        if fp in indexset: return
+        if isinstance(fp, FieldPath) and fp.predicate in predicateset:
+            indexset.add(fp)
+            indexes.append(fp)
         else:
             raise TypeError("{} is not a predicate field for one of {}".format(
-                fp, [ p.__name__ for p in self.predicates ]))
+                fp, [ p.__name__ for p in predicates ]))
 
     def register(self, cls):
-        self._register_predicate(cls)
+        if cls in self._predicates: return cls
+        predicates = list(self._predicates)
+        indexes = list(self._indexes)
+        tmppredset = set(self._predicates)
+        tmpindset = set(self._indexes)
+        self._register_predicate(cls,predicates,indexes,tmppredset,tmpindset)
+        self._predicates = tuple(predicates)
+        self._indexes = tuple(indexes)
         return cls
 
     def unify(self, symbols, delayed_init=False, raise_on_empty=False):
