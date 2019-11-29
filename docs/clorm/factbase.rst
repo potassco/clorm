@@ -1,19 +1,20 @@
 Fact Bases and Querying
 =======================
 
-As well as offering a higher-level interface for mapping ASP facts to Python
+As well as offering a high-level interface for mapping ASP facts to Python
 objects, Clorm also provides facilities for dealing with collections of facts.
-Whether they are the set of facts that make up the problem instance or,
-alternatively, the facts that constitute the *model* of a problem, an ASP
-application typically does not simply deal with individual facts in isolation.
+An ASP application typically does not simply deal with individual facts in
+isolation, but instead needs to deal in a collection of facts; whether they are
+the set of facts that make up the *problem instance* or, alternatively, the facts
+that constitute the *model* of a problem,
 
 A Container for Facts
 ---------------------
 
 Clorm provides the ``FactBase`` class as a container for storing and querying
-facts. A ``FactBase`` can behave much like a normal Python ``set`` object except
-for two caveats: firstly, it can only contain instances of ``Predicate``
-sub-classes, and secondly, it has a database-like query mechanism.
+facts. A ``FactBase`` behaves much like a normal Python ``set`` object with two
+caveats: firstly, it can only contain instances of ``Predicate`` sub-classes,
+and secondly, it has a database-like query mechanism.
 
 .. code-block:: python
 
@@ -42,7 +43,7 @@ be manipulated using the standard Python set operators and member
 functions. Like a Python ``set`` object it has an ``add`` member function for
 adding facts. However, because it can only store ``Predicate`` instances this
 function is able to be more flexible and has been overloaded to accept either a
-single fact or a list of facts.
+single fact or a collection of facts.
 
 .. code-block:: python
 
@@ -201,7 +202,7 @@ the default).
 
    query2=fb.select(Pet).order_by(Pet.owner, Pet.petname)
 
-The above will list all pets, first sorted by the owner's name and then sorted in
+The above will list all pets, first sorted by the owner's name and then sorted
 by the pet's name.
 
 In order to specify descending order you need to use the ``desc`` function. So
@@ -224,7 +225,7 @@ the field position.
 
    query2=fb.select(Pet).where(Pet[0] == "dave").order_by(Pet[1])
 
-However, the warning from the previous section still holds; to use positional
+However, the warning from the previous section still holds; use positional
 arguments sparingly and only in cases where the order of elements will not
 change as the ASP code evolves.
 
@@ -245,7 +246,10 @@ definition earlier to something with tuples:
       address = (StringField,StringField)
 
    dave = Person(id="dave", address=("Newcastle","UNSW"))
-   morri = Person(id="morri", address="Sydney","UNSW"))
+   morri = Person(id="morri", address=("Sydney","UNSW"))
+   torsten = Person(id="torsten", address=("Potsdam","UP"))
+
+   fb = FactBase([dave,morri,torsten])
 
    query2=fb.select(Person).where(Person.address[1] == "UNSW")
 
@@ -283,9 +287,9 @@ inclusion operation:
 
    The technical reason for not providing the intuitive syntax when querying on
    the Predicate itself is that this would require overloading the boolean
-   comparison operators for the NonLogicalSymbol's metaclass. This would likely
-   cause unexpected behaviour when using the NonLogicalSymbol class in a variety
-   of contexts. Furthermore, the use-case for querying on the predicate instance
+   comparison operators for the Predicate's metaclass. This would likely cause
+   unexpected behaviour when using the Predicate class in a variety of
+   contexts. Furthermore, the use-case for querying on the predicate instance
    itself is limited, so it was deemed preferable to simply provide a special
    syntax for this boundary case.
 
@@ -293,7 +297,7 @@ inclusion operation:
 Complex Query Expressions
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
-So far we have only seen Clorm's support for queiries with a single where
+So far we have only seen Clorm's support for queiries with a single ``where``
 clause, such as:
 
 .. code-block:: python
@@ -328,9 +332,9 @@ supplied ``and_``, ``or_``, and ``not_`` constructs.
    # Count facts for people with id "dave" or address "UNSW"
    assert query1.count() == 2
 
-Here when ``query1`` is execute it will counts the number of people who are
-either ``"dave"`` or based at ``"UNSW"``. Based on the earlier created fact
-base ``fb1`` both the "dave" and "morri" person facts match this criteria.
+Here when ``query1`` is execute it counts the number of people who are either
+``"dave"`` or based at ``"UNSW"``. Based on the earlier created fact base
+``fb1`` both the "dave" and "morri" person facts match this criteria.
 
 .. note::
 

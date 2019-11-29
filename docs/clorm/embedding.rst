@@ -15,7 +15,7 @@ Clingo system then expects a return value of either a single ``Clingo.Symbol``
 object or a list of ``Clingo.Symbol`` objects. It is the responsibility of the
 programmer to perform any necessary data type conversions.
 
-For convenience Clingo does *some* provide some exceptions to this basic
+For convenience Clingo does provide *some* exceptions to this basic
 procedure. These exceptions are to do with the output values where Clingo is
 able to make some assumptions. In particular:
 
@@ -24,7 +24,7 @@ able to make some assumptions. In particular:
   will be converted using the ``clingo.String()`` function.
 
 * Python tuples will automatically be converted using the ``clingo.Function()``
-  function, with an empty string as the name parameter which is how Clingo
+  function, with an empty string as the name parameter, which is how Clingo
   internally represents tuples.
 
 While this automatic data conversion behaviour of the Clingo API can be
@@ -82,7 +82,7 @@ Here the string objects that encode the two dates are first converted into
 Python date objects. Then when the appropriate dates are calculated they are
 translated back into strings and enumerated into list of pairs with the first
 element of each pair being the enumeration index and the second element being
-the data encoded string. Note: that the above Python code does takes advantage
+the date encoded string. Note: that the above Python code does takes advantage
 of the automatic clingo API type conversions.
 
 Clorm provides a way to simplify this data translation through the use of a
@@ -193,8 +193,8 @@ from within the context.
 Consider the decorated ``date_range`` function defined earlier. One issue with
 this function is that it can only be called from within an ASP program (unless
 you use ``clingo.Symbol`` inputs and outputs). However, a function that
-generates an enumerated date range is fairly useful in itself so it might be
-desireable to be called from other Python functions.
+generates an enumerated date range is fairly useful in and of itself so it might
+be desireable to be called from other Python functions.
 
 The ``ContextBuilder`` can be used to solve this problem.
 

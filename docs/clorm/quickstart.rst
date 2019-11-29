@@ -104,7 +104,7 @@ predicate. The parameters of the predicate are specified using a number of
 how a logical *term* is converted to, and from, a Python object. Clorm provides
 three standard field classes, ``ConstantField``, ``StringField``, and
 ``IntegerField``, that correspond to the standard *logic programming* data types
-of constant, integer, and string.
+of constant, string, and integer.
 
 .. code-block:: python
 
@@ -120,7 +120,8 @@ of constant, integer, and string.
        time=IntegerField
 
 The above code defines three classes to match the ASP program's input and output
-predicates.
+predicates, where the name of the predicate to map to is derived from the
+declared class name.
 
 ``Driver`` maps to the ``driver/1`` predicate, ``Item`` maps to ``item/1``, and
 ``Assignment`` maps to ``assignment/3`` (note: the ``/n`` is a common logic
@@ -133,7 +134,7 @@ each term in the ASP predicate.
 
 One thing to note here is that there is no ``Predicate`` sub-class that was
 defined corresponding to the ``working_driver/1`` predicate. Clorm does not
-require that *all* ASP predicates to have a corresponding Python ``Predicate``
+require that *all* ASP predicates have a corresponding Python ``Predicate``
 sub-class. In this case ``working_driver/1`` is only of interest within the ASP
 program itself and is not used for defining the relevant inputs and outputs of
 the solver, so there is no need to define any Python interface.
@@ -184,8 +185,8 @@ initialise instances, doing so will potentially make the code harder to
 refactor. So in general you should avoid using positional arguments except for a
 few cases (eg., simple tuples where the order is unlikely to change).
 
-Now, these input facts can be added to the control object and the combined with
-the previously loaded ASP program to produce a *grounded* ASP program.
+Now, these input facts can be added to the control object and combined with the
+previously loaded ASP program to produce a *grounded* ASP program.
 
 .. code-block:: python
 
@@ -311,11 +312,12 @@ complex term.
 
     log(event("2019-04-05", "goto shops"), 0).
 
-* Custom fields. Each field must be a ``RawField`` class or
-  sub-class. Additional fields can be defined for custom data conversions by
-  sub-classing ``RawField`` directly, or by sub-classing one of its existing
-  sub-classes. For example, a ``DateField`` can be defined that represents dates
-  in clingo in YYYY-MM-DD formatted strings.
+* Custom fields. The ``IntegerField``, ``StringField``, and ``ConstantField``
+  classes are in fact sub-classes of a ``RawField`` class. Custom data
+  conversions can be performed by sub-classing ``RawField`` directly, or by
+  sub-classing one of its existing sub-classes. For example, a ``DateField`` can
+  be defined that converts Python date objects into Clingo strings with
+  YYYY-MM-DD formatting.
 
 .. code-block:: python
 
@@ -330,12 +332,17 @@ complex term.
         item=ConstantField()
         date=DateField()
 
-* Field definitions can be specified as part of a function signature to perform
-  automatic type conversion for writing Python functions that can be called from
-  an ASP program using the @-syntax.
+* Clingo allows Python functions to be called from within an ASP program using
+  the @-syntax. Values are passed to these Python functions as ``clingo.Symbol``
+  objects and it is up to the Python code to perform all appropriate data
+  conversions.
 
-  Here function ``add`` is decorated with an automatic data conversion signature
-  that accepts two input integers and requires an output integer.
+  Clorm provides a number of mechanisms to automate this data conversion process
+  through the specification of a *data conversion signature*.
+
+  In the following example the function ``add`` is decorated with an automatic
+  data conversion signature that accepts two input integers and returns an
+  output integer.
 
 .. code-block:: python
 
@@ -346,14 +353,12 @@ complex term.
 
     f(@add(5,6)).    % grounds to f(11).
 
-* Function signatures follow the functionality of the clingo API (so you can
-  specify tuples and provide functions that return list of items).
+The default behaviour of the Clingo API does infact provide some minimal
+automatic data conversion for the @-functions. In particular, it will
+automatically convert numbers and strings, however it cannot deal with other
+types such as constants or more complex terms.
 
-  However, the behaviour of the clingo API is ad-hoc when it comes to automatic
-  data conversion. That is, it will automatically convert numbers and strings,
-  but cannot deal with other types such as constants or more complex terms.
-
-  The Clorm mechanism of a data conversion signatures provide a more principled
-  and transparent approach; it can deal with arbitrary conversions and all data
-  conversions are clear since they are specified as part of the signature.
+The Clorm mechanism of a data conversion signatures provide a more principled
+and transparent approach; it can deal with arbitrary conversions and all data
+conversions are clear since they are specified as part of the signature.
 

@@ -61,8 +61,7 @@ class definitions we can instantiate some objects:
    fact2 = Pets(entity="bob")
    fact3 = Pets(entity="bill", num=2)
 
-When this Python code is imported into the Clingo solver it will correspond to
-the following *ground atoms* (i.e., facts):
+These object correspond to the following ASP *ground atoms* (i.e., facts):
 
 .. code-block:: prolog
 
@@ -74,31 +73,36 @@ There are some things to note here:
 
 * *Predicate names*: ASP uses standard logic-programming syntax, which requires
   that the names of all predicate/complex-terms must begin with a lower-case
-  letter. By default the predicate name is determined by transforming the class
-  name in order to match a number of common naming conventions:
+  letter and can contain only alphanumeric characters or underscore. Unless
+  overriden, Clorm will automatically generate a predicate name for a
+  ``Predicate`` sub-class by transforming the class name based on a number of
+  common naming conventions:
 
-  * If the class name includes an underscore then assume the user wants to use
-    "snake-case" and convert everything to lower-case (e.g., ``My_Predicate`` =>
-    ``my_predicate``),
+  * If the class name includes an underscore then it assumes that the user wants
+    to use "snake-case" and so converts everything to lower-case (e.g.,
+    ``My_Predicate`` => ``my_predicate``),
   * If the first letter of the class name is already in lower case (and it is
-    not snake-case) then it already is a legitimate predicate name so do nothing
-    (e.g., ``myPredicate`` => ``myPredicate``),
-  * If the class name has no lower case letters then assume the class name is an
-    acronym so convert all letters to lower case (e.g., ``TCP`` => ``tcp``),
+    not snake-case) then it already is a legitimate predicate name so no
+    additional transformation is performed (e.g., ``myPredicate`` =>
+    ``myPredicate``),
+  * If the class name has no lower case letters then it assumes that the class
+    name is an acronym so it convert all letters to lower case (e.g., ``TCP`` =>
+    ``tcp``),
   * If the first letter is an upper-case and the class name has no underscores
-    then assume that the user wants to use camel-case (e.g., ``MyPredicate`` =>
-    ``myPredicate``).
+    then it assume that the user wants to use camel-case (e.g., ``MyPredicate``
+    => ``myPredicate``).
 
 * *Field order*: the order of declared term defintions in the predicate
   class is important.
 * *Field names*: besides the Python keywords, Clorm also disallows the following
   reserved words: ``raw``, ``meta``, ``clone``, ``Field`` as these are used as
   properties or functions of a ``Predicate`` object.
-* *Constant vs string*: ``"bob"`` and ``"Sydney uni"`` are both Python strings but
-  because of the declaration of ``entity`` as a ``ConstantField`` this ensures
-  that the Python string ``"bob"`` is treated as an ASP constant. Note,
-  currently it is the users' responsibility to ensure that the Python string
-  passed to a constant term satisfies the syntactic restriction.
+* *Constant vs string*: In the above example ``"bob"`` and ``"Sydney uni"`` are
+  both Python strings but because of the ``entity`` field is declared as a
+  ``ConstantField`` this ensures that the Python string ``"bob"`` is treated as
+  an ASP constant. Note, currently it is the users' responsibility to ensure
+  that the Python string passed to a constant term satisfies the syntactic
+  restriction.
 * The use of a *default value*: all term types support the specification of a
   default value.
 * If the specified default is a function then this function will be called (with
@@ -172,7 +176,8 @@ is straightforward:
 
    fact = AUnary()
 
-Here every instantiation of ``AUnary`` corresponds to the ASP fact:
+The important thing to note here is that every instantiation of ``AUnary``
+will correspond to the same ASP fact:
 
 .. code-block:: prolog
 
@@ -185,7 +190,7 @@ So far we have shown how to create Python definitions that match predicates with
 simple terms. However, in ASP it is common to also use complex terms within a
 predicate, such as:
 
-.. code-block:: none
+.. code-block:: prolog
 
     booking("2018-12-31", location("Sydney", "Australia")).
 
@@ -215,7 +220,8 @@ automatically when the ``Predicate`` sub-class is defined. It provides the
 functions to automatically convert to, and from, the Predicate sub-class
 instances and the Clingo symbol objects.
 
-The predicate class containing complex terms can be instantiated as expected:
+The predicate class containing complex terms can be instantiated in the obvious
+way:
 
 .. code-block:: python
 
@@ -301,7 +307,7 @@ the 31st December 2018.
 
 .. code-block:: prolog
 
-    booking("2018-12-31", "NYE party").
+   booking("2018-12-31", "NYE party").
 
 Using Clorm this fact can be captured by the following Python ``Predicate``
 sub-class definition:
@@ -526,13 +532,14 @@ programs. For example:
 
 .. code-block:: none
 
-    booking("2018-12-31", ("Sydney", "Australia)).
+   booking("2018-12-31", ("Sydney", "Australia)).
 
-For Clorm tuples are also a special case of the ``ComplexTerm``
-class. However, Clorm provides specialised syntactic support for defining
-predicates containing tuples. For example, a predicate definition that unifies
-with the above fact can be defined simply (using the ``DateField`` defined
-earlier):
+For Clorm tuples are simply a ``ComplexTerm`` sub-class where the name of the
+corresponding predicate is empty. While this can be set using an ``is_tuple``
+property of the complex term's meta class, Clorm also provides specialised
+support using the more intuitive syntax of a Python tuple. For example, a
+predicate definition that unifies with the above fact can be defined simply
+(using the ``DateField`` defined earlier):
 
 .. code-block:: python
 
@@ -540,13 +547,11 @@ earlier):
        date=DateField
        location=(StringField,StringField)
 
-
-Here the ``location`` field is defined as a pair of string fields. Conveniently
-it is unnecessary to define a separate ComplexTerm sub-class that corresponds to
-this pair.
-
-To generate a ``Booking`` instance that corresponds to the ``booking/2`` fact
-above, simply instantiate ``Booking`` in the obvious way.
+Here the ``location`` field is defined as a pair of string fields, without
+having to explictly define a separate ``ComplexTerm`` sub-class that corresponds
+to this pair. To instantiate the ``Booking`` class a Python tuple can also be
+used for the values of ``location`` field. For example, the following creates a
+``Boooking`` instance corresponding to the ``booking/2`` fact above:
 
 .. code-block:: python
 
@@ -571,8 +576,8 @@ following:
        location=SomeAnonymousName.Field
 
 Here the ``ComplexTerm`` has an internal ``Meta`` class with the property
-``is_tuple`` set to ``True``. This means that the ComplexTerm will be treated as
-a tuple rather than a complex term with a function name.
+``is_tuple`` set to ``True``. This means that the ``ComplexTerm`` will be
+treated as a tuple rather than a complex term with a function name.
 
 One important difference between the implicitly defined and explicitly defined
 versions of a tuple is that the explicit version allows for field names to be
@@ -616,17 +621,27 @@ any predicate instance with that name and arity.
 
 For example this function could be used for the above booking example if we
 wanted to extract the ``booking/2`` facts from the model but didn't care about
-mapping the data types for the individual parameters. Using the earlier
-``Booking`` definition and ``bk`` instance:
+mapping the data types for the individual parameters. For example to match the
+ASP fact:
+
+.. code-block:: none
+
+   booking("2018-12-31", ("Sydney", "Australia)).
+
+instead of the explicit ``Booking`` definition above we could use the
+``simple_predicate`` function:
 
 .. code-block:: python
 
-   from clorm.clingo import Symbol
+   from clorm.clingo import Symbol, Function, String
    from clorm import _simple_predicate
 
    Booking_alt = simple_predicate("booking",2)
-   bk_alt=Booking_alt(raw=bk.raw)
-   assert type(bk_alt[0]) == Symbol)
+   bk_alt = Booking_alt(String("2018-12-31"), Function("",[String("Sydney"),String("Australia")]))
+
+Note, in this case in order to create these objects within Python it is
+necessary to use the Clingo functions to explictly create ``clingo.Symbol``
+objects.
 
 
 Dealing with Raw Clingo Symbols
