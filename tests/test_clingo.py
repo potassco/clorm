@@ -353,13 +353,13 @@ class ClingoTestCase(unittest.TestCase):
             num1=IntegerField()
         class G(Predicate):
             num1=IntegerField()
-        f1=F(1); g1=G(1);
+        f1=F(1); f2 = F(2); g1=G(1);
 
         r = set(_expand_assumptions([(f1,True), (g1,False)]))
         self.assertEqual(r, set([(f1.raw,True), (g1.raw,False)]))
 
-        r = set(_expand_assumptions([(FactBase([f1]),True), (set([g1]),False)]))
-        self.assertEqual(r, set([(f1.raw,True), (g1.raw,False)]))
+        r = set(_expand_assumptions([(FactBase([f1,f2]),True), (set([g1]),False)]))
+        self.assertEqual(r, set([(f1.raw,True), (f2.raw,True), (g1.raw,False)]))
 
         with self.assertRaises(TypeError) as ctx:
             _expand_assumptions([g1])
@@ -566,7 +566,7 @@ class ClingoTestCase(unittest.TestCase):
     #--------------------------------------------------------------------------
     # Test bad arguments
     #--------------------------------------------------------------------------
-    def test_bad_arguments(self):
+    def test_bad_solve_arguments(self):
         spu=SymbolPredicateUnifier()
         @spu.register
         class Fact(Predicate):
@@ -580,6 +580,76 @@ class ClingoTestCase(unittest.TestCase):
 
         with self.assertRaises(ValueError) as ctx:
             ctrl.solve(assump=[f1])
+
+    #--------------------------------------------------------------------------
+    # Test assign external
+    #--------------------------------------------------------------------------
+    def test_assign_and_release_external(self):
+        class F(Predicate):
+            num1=IntegerField()
+        class G(Predicate):
+            num1=IntegerField()
+
+        prgstr = """
+#external f(1..3).
+g(N) :- f(N)."""
+
+        f1 = F(1) ; f2 = F(2) ; f3 = F(3)
+        g1 = G(1) ; g2 = G(2) ; g3 = G(3)
+        ctrl = cclingo.Control(unifier=[F,G])
+        with ctrl.builder() as b:
+            oclingo.parse_program(prgstr, lambda stm: b.add(stm))
+        ctrl.ground([("base",[])])
+
+        # Assign external for a factbase
+        ctrl.assign_external(FactBase([f1,f2,f3]),True)
+        with ctrl.solve(yield_=True) as sh:
+            m = list(sh)[0]
+            fb = m.facts(atoms=True)
+            self.assertEqual(fb,FactBase([f1,f2,f3,g1,g2,g3]))
+
+        # Assign external for a single clorm fact
+        ctrl.assign_external(f1,False)
+        with ctrl.solve(yield_=True) as sh:
+            m = list(sh)[0]
+            fb = m.facts(atoms=True)
+            self.assertEqual(fb,FactBase([f2,f3,g2,g3]))
+
+        # Assign external for a single clingo symbol
+        ctrl.assign_external(f2.raw,False)
+        with ctrl.solve(yield_=True) as sh:
+            m = list(sh)[0]
+            fb = m.facts(atoms=True)
+            self.assertEqual(fb,FactBase([f3,g3]))
+
+        # Back to all true so we can test release_external
+        # Assign external for a factbase
+        ctrl.assign_external(FactBase([f1,f2,f3]),True)
+        with ctrl.solve(yield_=True) as sh:
+            m = list(sh)[0]
+            fb = m.facts(atoms=True)
+            self.assertEqual(fb,FactBase([f1,f2,f3,g1,g2,g3]))
+
+        # Release external for a FactBase
+        ctrl.release_external(FactBase([f1]))
+        with ctrl.solve(yield_=True) as sh:
+            m = list(sh)[0]
+            fb = m.facts(atoms=True)
+            self.assertEqual(fb,FactBase([f2,f3,g2,g3]))
+
+        # Release external for a single clorm fact
+        ctrl.release_external(f2)
+        with ctrl.solve(yield_=True) as sh:
+            m = list(sh)[0]
+            fb = m.facts(atoms=True)
+            self.assertEqual(fb,FactBase([f3,g3]))
+
+        # Release external for a single clingo symbol
+        ctrl.release_external(f3.raw)
+        with ctrl.solve(yield_=True) as sh:
+            m = list(sh)[0]
+            fb = m.facts(atoms=True)
+            self.assertEqual(fb,FactBase())
 
 #------------------------------------------------------------------------------
 # main

@@ -9,6 +9,7 @@ import io
 import sys
 import functools
 import itertools
+from collections.abc import Iterable
 from .orm import *
 #import clorm as orm
 
@@ -137,7 +138,7 @@ class Model(object, metaclass=_ModelMetaClass):
         symbols.
 
         '''
-        if isinstance(fact, NonLogicalSymbol):
+        if isinstance(fact, Predicate):
             return self._model.contains(fact.raw)
         return self._model.contains(fact)
 
@@ -245,19 +246,19 @@ def _expand_assumptions(assumptions):
     pos_assump = set()
     neg_assump = set()
 
-    def _add_raw(raw,bval):
+    def _add_fact(fact,bval):
         nonlocal pos_assump, neg_assump
+        if isinstance(fact, Predicate): raw = fact.raw
+        else: raw = fact
         if bval: pos_assump.add(raw)
         else: neg_assump.add(raw)
 
     try:
         for (arg,bval) in assumptions:
-            if isinstance(arg, Predicate): _add_raw(arg.raw,bval)
-            elif isinstance(arg, Symbol): _add_raw(arg,bval)
+            if isinstance(arg, Iterable):
+                for f in arg: _add_fact(f,bval)
             else:
-                for a in arg:
-                    if isinstance(a, Predicate): _add_raw(a.raw,bval)
-                    else: _add_raw(a,bval)
+                _add_fact(arg,bval)
     except (TypeError, ValueError) as e:
         raise TypeError(("Invalid solve assumptions. Expecting list of arg-bool "
                          "pairs (arg is a raw-symbol/predicate or a collection "
@@ -357,34 +358,52 @@ class Control(object, metaclass=_ControlMetaClass):
 #        return
 
     #------------------------------------------------------------------------------
-    # Overide assign_external to deal with NonLogicalSymbol object and a Clingo Symbol
+    # Overide assign_external to deal with Predicate object and a Clingo Symbol
     #------------------------------------------------------------------------------
-    def assign_external(self, fact, truth):
-        '''Assign a truth value to an external atom (represented as a function symbol
-        or program literam or a clorm fact.
+    def assign_external(self, external, truth):
+        '''Assign a truth value to an external fact (or collection of facts)
+
+        A fact can be a raw clingo.Symbol object, a clorm.Predicate instance, or
+        a program literal (an int). If the external is a collection then the
+        truth value is assigned to all elements in the collection.
 
         This function extends ``clingo.Control.release_external``.
 
         '''
-        if isinstance(fact, NonLogicalSymbol):
-            self._ctrl.assign_external(fact.raw, truth)
+        def _assign_fact(fact):
+            if isinstance(fact, Predicate):
+                self._ctrl.assign_external(fact.raw, truth)
+            else:
+                self._ctrl.assign_external(fact, truth)
+
+        if isinstance(external, Iterable):
+            for f in external: _assign_fact(f)
         else:
-            self._ctrl.assign_external(fact, truth)
+            _assign_fact(external)
 
     #------------------------------------------------------------------------------
-    # Overide release_external to deal with NonLogicalSymbol object and a Clingo Symbol
+    # Overide release_external to deal with Predicate object and a Clingo Symbol
     #------------------------------------------------------------------------------
-    def release_external(self, fact):
-        '''Release an external atom represented by the given symbol, program literal, or
-        clorm fact.
+    def release_external(self, external):
+        '''Release an external fact (or collection of facts)
+
+        A fact can be a raw clingo.Symbol object, a clorm.Predicate instance, or
+        a program literal (an int). If the external is a collection then the
+        truth value is assigned to all elements in the collection.
 
         This function extends ``clingo.Control.release_external``.
 
         '''
-        if isinstance(fact, NonLogicalSymbol):
-            self._ctrl.release_external(fact.raw)
+        def _release_fact(fact):
+            if isinstance(fact, Predicate):
+                self._ctrl.release_external(fact.raw)
+            else:
+                self._ctrl.release_external(fact)
+
+        if isinstance(external, Iterable):
+            for f in external: _release_fact(f)
         else:
-            self._ctrl.release_external(fact)
+            _release_fact(external)
 
     #---------------------------------------------------------------------------
     # Overide solve and if necessary replace on_model with a wrapper that

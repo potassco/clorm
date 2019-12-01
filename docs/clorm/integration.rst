@@ -108,11 +108,16 @@ functions:
     function is a ``clorm.clingo.SolveHandle`` object. This object iterates over
     ``clorm.clingo.Model`` objects.
 
-* ``assign_external()`` is overloaded so that the ``fact`` parameter can take a
-  ``clorm.Predicate`` instance.
+* ``assign_external(external,truth)``. This function assigns a truth value to an
+  external atom. This function has been overloaded so that the ``external``
+  parameter can also take a ``clorm.Predicate`` instance or a collection of
+  external atoms (e.g., a ``FactBase``), where the same truth value is assigned
+  to all atoms in the collection.
 
-* ``release_external()`` is overloaded so that the ``fact`` parameter can take a
-  ``clorm.Predicate`` instance.
+* ``release_external(external)``. This function releases an external atom so
+  that it is permanently false. The function is overloaded so that the
+  ``external`` parameter can also take a ``clorm.Predicate`` instance or a
+  collection of extenal atoms.
 
 ``Model``
 ^^^^^^^^^
