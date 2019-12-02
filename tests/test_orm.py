@@ -745,21 +745,37 @@ class ORMTestCase(unittest.TestCase):
     # --------------------------------------------------------------------------
     def test_nls_default_predicate_names(self):
 
-        # Camel-case example
+        # Basic camel-case example
         class MyPred1(Predicate): a = StringField()
         self.assertEqual(MyPred1.meta.name, "myPred1")
 
-        # snake-case example
+        # Complex camel-case example
+        class MYpRed1A(Predicate): a = StringField()
+        self.assertEqual(MYpRed1A.meta.name, "mypRed1A")
+
+        # Basic snake-case example 1
         class My_Pred1(Predicate): a = StringField()
         self.assertEqual(My_Pred1.meta.name, "my_pred1")
 
-        # snake-case example
+        # Basic snake-case example 2
         class My_Pred_1(Predicate): a = StringField()
         self.assertEqual(My_Pred_1.meta.name, "my_pred_1")
 
-        # acronym example
+        # Complex snake-case example 1
+        class MY_PREd1(Predicate): a = StringField()
+        self.assertEqual(MY_PREd1.meta.name, "my_pred1")
+
+        # Complex snake-case example 2
+        class MY_PREd_1A(Predicate): a = StringField()
+        self.assertEqual(MY_PREd_1A.meta.name, "my_pred_1a")
+
+        # acronym example 1
         class MP1(Predicate): a = StringField()
         self.assertEqual(MP1.meta.name, "mp1")
+
+        # acronym example 1
+        class MP1A(Predicate): a = StringField()
+        self.assertEqual(MP1A.meta.name, "mp1a")
 
         # Do nothing
         class myPred1(Predicate): a = StringField()

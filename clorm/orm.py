@@ -1139,18 +1139,26 @@ def _nls_base_constructor(self, *args, **kwargs):
 # Generate a default predicate name from the NonLogicalSymbol class name.
 def _nlsdefn_default_predicate_name(class_name):
 
-    # If has no lower-case letters than assume it is something like an acronym
-    # (eg., TCP or IP) in which case we make all lower-case
-    if not any(c.islower() for c in class_name): return class_name.lower()
+    # If first letter is lower-case then do nothing
+    if class_name[0].islower(): return class_name
 
-    # If it has an underscore then assume the user wants to use "snake-case" (eg.,
-    # 'C' variable names) and make all lower-case
-    if '_' in class_name: return class_name.lower()
+    # Otherwise, replace any sequence of upper-case only characters that occur
+    # at the beginning of the string or immediately after an underscore with
+    # lower-case equivalents. The sequence of upper-case characters can include
+    # non-alphabetic characters (eg., numbers) and this will still be treated as
+    # a single sequence of upper-case characters.  This covers basic naming
+    # conventions: camel-case, snake-case, and acronyms.
 
-    # If we get here assume user wants "camel-case" and simply make sure the
-    # first character is lowercase
-    name = class_name[:1].lower() + class_name[1:]
-    return name
+    output=""
+    incap=True
+    for c in class_name:
+        if c == '_': output += c ; incap = True ; continue
+        if not c.isalpha(): output += c ; continue
+        if not incap: output += c ; continue
+        if c.isupper(): output += c.lower() ; continue
+        else: output += c ; incap = False ; continue
+
+    return output
 
 # build the metadata for the NonLogicalSymbol - NOTE: this funtion returns a
 # NLSDefn instance but it also modified the dct paramater to add the fields.

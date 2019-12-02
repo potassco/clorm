@@ -75,36 +75,45 @@ There are some things to note here:
   that the names of all predicate/complex-terms must begin with a lower-case
   letter and can contain only alphanumeric characters or underscore. Unless
   overriden, Clorm will automatically generate a predicate name for a
-  ``Predicate`` sub-class by transforming the class name based on a number of
-  common naming conventions:
+  ``Predicate`` sub-class by transforming the class name based on some simple rules:
 
-  * If the class name includes an underscore then it assumes that the user wants
-    to use "snake-case" and so converts everything to lower-case (e.g.,
-    ``My_Predicate`` => ``my_predicate``),
-  * If the first letter of the class name is already in lower case (and it is
-    not snake-case) then it already is a legitimate predicate name so no
-    additional transformation is performed (e.g., ``myPredicate`` =>
-    ``myPredicate``),
-  * If the class name has no lower case letters then it assumes that the class
-    name is an acronym so it convert all letters to lower case (e.g., ``TCP`` =>
-    ``tcp``),
-  * If the first letter is an upper-case and the class name has no underscores
-    then it assume that the user wants to use camel-case (e.g., ``MyPredicate``
-    => ``myPredicate``).
+  * If the first letter is a lower-case character then this is a valid predicate
+    name so the name is left unchanged (e.g., ``myPredicate`` =>
+    ``myPredicate``).
+
+  * Otherwise, replace any sequence of upper-case only characters that occur at
+    the beginning of the string or immediately after an underscore with
+    lower-case equivalents. The sequence of upper-case characters can include
+    non-alphabetic characters (eg., numbers) and this will still be treated as a
+    single sequence of upper-case characters.
+
+  * The above criteria covers a number of common naming conventions:
+
+    * Snake-case: ``My_Predicate`` => ``my_predicate``, ``MY_Predicate`` =>
+      ``my_predicate``, ``My_Predicate_1A`` => ``my_predicate_1a``,
+
+    * Camel-case: ``MyPredicate`` => ``myPredicate``, ``MyPredicate1A`` =>
+      ``myPredicate1A``.
+
+    * Acronym: ``TCP1`` => ``tcp1``.
 
 * *Field order*: the order of declared term defintions in the predicate
   class is important.
+
 * *Field names*: besides the Python keywords, Clorm also disallows the following
   reserved words: ``raw``, ``meta``, ``clone``, ``Field`` as these are used as
   properties or functions of a ``Predicate`` object.
+
 * *Constant vs string*: In the above example ``"bob"`` and ``"Sydney uni"`` are
   both Python strings but because of the ``entity`` field is declared as a
   ``ConstantField`` this ensures that the Python string ``"bob"`` is treated as
   an ASP constant. Note, currently it is the users' responsibility to ensure
   that the Python string passed to a constant term satisfies the syntactic
   restriction.
+
 * The use of a *default value*: all term types support the specification of a
   default value.
+
 * If the specified default is a function then this function will be called (with
   no arguments) when the predicate/complex-term object is instantiated. This can
   be used to generated unique ids or a date/time stamp.
