@@ -44,8 +44,8 @@ copyright = '2018, David Rajaratnam'
 author = 'David Rajaratnam'
 
 # The short X.Y version
-#version = '1.0.0'
 version = find_major_minor_version("../clorm/__init__.py")
+#version = '0.0.0'
 # The full version, including alpha/beta/rc tags
 #release = 'alpha'
 
