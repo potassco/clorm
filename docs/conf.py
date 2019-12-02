@@ -13,8 +13,28 @@
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 #
 import os
+import re
 import sys
 sys.path.insert(0, os.path.abspath('..'))
+
+# Utility functions so that we can populate the version number
+# automatically. Following semantic naming conventions we want the major and
+# minor version but ignore the bug-fix version number.
+def read_file(fname):
+    return open(os.path.join(os.path.dirname(__file__), fname)).read()
+
+def find_major_minor_version(fname):
+    version_file = read_file(fname)
+    full_version_match = re.search(r"^__version__ = ['\"]([^'\"]*)['\"]",
+                                   version_file, re.M)
+    if not full_version_match:
+        raise RuntimeError("Unable to find version string.")
+
+    full_version=full_version_match.group(1)
+    version_match = re.search(r"(^[^\.]*\.[^\.]*)\.", full_version, re.M)
+    if not version_match:
+        raise RuntimeError("Cannot extract major-minor version from: '{}'".format(full_version))
+    return version_match.group(1)
 
 
 # -- Project information -----------------------------------------------------
@@ -24,7 +44,8 @@ copyright = '2018, David Rajaratnam'
 author = 'David Rajaratnam'
 
 # The short X.Y version
-version = '1.0.0'
+#version = '1.0.0'
+version = find_major_minor_version("../clorm/__init__.py")
 # The full version, including alpha/beta/rc tags
 #release = 'alpha'
 
