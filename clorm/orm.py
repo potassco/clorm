@@ -260,9 +260,6 @@ def _make_fpb_class(field_defn):
 def _fpb_base_constructor(self, *args, **kwargs):
     raise TypeError("FieldPathBuilder must be sub-classed")
 
-def _fpb_get_canon_key(field_defn, key):
-    canon=nls_defn=field_defn.complex.meta.canonical(key)
-
 def _fpb_subclass_constructor(self, fp=None):
     self._meta = FieldPathBuilder.Meta(self)
     if not fp:
