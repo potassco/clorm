@@ -1081,6 +1081,7 @@ def _nls_init_by_keyword_values(self, **kwargs):
     class_name = type(self).__name__
     pred_name = self.meta.name
     names = set(self.meta.keys())
+    names.add("sign")
 
     invalids = [ k for k in kwargs if k not in names ]
     if invalids:
@@ -1099,11 +1100,13 @@ def _nls_init_by_keyword_values(self, **kwargs):
             self._field_values[field.name] = _preprocess_field_value(
                 field.defn, kwargs[field.name])
 
+    sign = bool(kwargs["sign"]) if "sign" in kwargs else True
+
     # Create the raw clingo.Symbol object
-    self._raw = self._generate_raw()
+    self._raw = self._generate_raw(sign)
 
 # Construct a NonLogicalSymbol using keyword arguments
-def _nls_init_by_positional_values(self, *args):
+def _nls_init_by_positional_values(self, *args, **kwargs):
     class_name = type(self).__name__
     pred_name = self.meta.name
     argc = len(args)
@@ -1114,8 +1117,10 @@ def _nls_init_by_positional_values(self, *args):
     for idx, field in enumerate(self.meta):
         self._field_values[field.name] = _preprocess_field_value(field.defn, args[idx])
 
+    sign = bool(kwargs["sign"]) if "sign" in kwargs else True
+
     # Create the raw clingo.Symbol object
-    self._raw = self._generate_raw()
+    self._raw = self._generate_raw(sign)
 
 # Constructor for every NonLogicalSymbol sub-class
 def _nls_constructor(self, *args, **kwargs):
@@ -1124,7 +1129,11 @@ def _nls_constructor(self, *args, **kwargs):
     if "raw" in kwargs:
         _nls_init_by_raw(self, **kwargs)
     elif len(args) > 0:
-        _nls_init_by_positional_values(self, *args)
+        if len(kwargs) > 1 or (len(kwargs) == 1 and "sign" not in kwargs):
+            raise ValueError(("Invalid Predicate initialisation: only \"sign\" is a "
+                             "valid keyword argument when combined with positional "
+                              "arguments: {}").format(kwargs))
+        _nls_init_by_positional_values(self, *args,**kwargs)
     else:
         _nls_init_by_keyword_values(self, **kwargs)
 
@@ -1183,8 +1192,7 @@ def _make_nlsdefn(class_name, dct):
                                   "'name' and 'is_tuple' "))
         elif is_tuple: name = ""
 
-
-    reserved = set(["meta", "raw", "clone", "Field"])
+    reserved = set(["meta", "raw", "clone", "sign", "Field"])
 
     # Generate the fields - NOTE: this relies on dct being an OrderedDict()
     # which is true from Python 3.5+ (see PEP520
@@ -1367,7 +1375,12 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
     def raw(self):
         """Returns the underlying clingo.Symbol object"""
         return self._raw
-#        return self._generate_raw()
+
+    # Get the sign of the literal
+    @property
+    def sign(self):
+        """Returns the sign of the predicate instance"""
+        return self._raw.positive
 
     @_classproperty
     def Field(cls):
@@ -1375,12 +1388,12 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
         return cls._fieldcontainer.defn
 
     # Recompute the clingo.Symbol object from the stored fields
-    def _generate_raw(self):
+    def _generate_raw(self,sign):
         pred_args = []
         for field in self.meta:
             pred_args.append(field.defn.pytocl(self._field_values[field.name]))
         # Create the clingo.Symbol object
-        return clingo.Function(self.meta.name, pred_args)
+        return clingo.Function(self.meta.name, pred_args,sign)
 
     # Clone the object with some differences
     def clone(self, **kwargs):
@@ -1395,11 +1408,14 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
         clonekeys = set(kwargs.keys())
         objkeys = set(self.meta.keys())
         diffkeys = clonekeys - objkeys
+        diffkeys.discard("sign")
+
         if diffkeys:
             raise ValueError("Unknown field names: {}".format(diffkeys))
 
         # Get the arguments for the new object
         cloneargs = {}
+        if "sign" in clonekeys: cloneargs["sign"] = kwargs["sign"]
         for field in self.meta:
             if field.name in kwargs:
                 cloneargs[field.name] = kwargs[field.name]
@@ -1471,6 +1487,10 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
         """Overloaded boolean operator."""
         if not isinstance(other, self.__class__): return NotImplemented
 
+        # Negative literals are less than positive literals
+        if self.raw.positive != other.raw.positive:
+            return self.raw.positive < other.raw.positive
+
         # compare each field in order
         for idx in range(0,len(self._meta)):
             selfv = self[idx]
@@ -1489,12 +1509,17 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
         """Overloaded boolean operator."""
         if not isinstance(other, self.__class__): return NotImplemented
 
+        # Positive literals are greater than negative literals
+        if self.raw.positive != other.raw.positive:
+            return self.raw.positive > other.raw.positive
+
         # compare each field in order
         for idx in range(0,len(self._meta)):
             selfv = self[idx]
             otherv = other[idx]
             if selfv == otherv: continue
             return selfv > otherv
+
         return False
 
     def __le__(self, other):

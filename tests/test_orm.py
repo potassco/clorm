@@ -126,6 +126,36 @@ class ORMTestCase(unittest.TestCase):
         self.assertTrue(fconst.unifies(csim1))
 
     #--------------------------------------------------------------------------
+    # Test bad predicate definitions
+    # --------------------------------------------------------------------------
+    def test_bad_predicate_defn(self):
+
+        # "meta" is a reserved word
+        with self.assertRaises(ValueError) as ctx:
+            class P(Predicate):
+                meta = IntegerField
+
+        # "raw" is a reserved word
+        with self.assertRaises(ValueError) as ctx:
+            class P(Predicate):
+                raw = IntegerField
+
+        # "clone" is a reserved word
+        with self.assertRaises(ValueError) as ctx:
+            class P(Predicate):
+                clone = IntegerField
+
+        # "sign" is a reserved word
+        with self.assertRaises(ValueError) as ctx:
+            class P(Predicate):
+                sign = IntegerField
+
+        # "Field" is a reserved word
+        with self.assertRaises(ValueError) as ctx:
+            class P(Predicate):
+                Field = IntegerField
+
+    #--------------------------------------------------------------------------
     # Simple test to make sure the default getters and setters are correct
     #--------------------------------------------------------------------------
     def test_raw_term(self):
@@ -548,6 +578,72 @@ class ORMTestCase(unittest.TestCase):
         self.assertEqual(Fact.meta.parent, Fact)
         self.assertEqual(f1, f2)
         self.assertEqual(f1.raw, func)
+
+    def test_predicate_init_neg_literals(self):
+
+        class Fact(Predicate):
+            anum = IntegerField
+
+        # Test the different ways of initialising the literals
+        func=Function("fact",[Number(1)])
+        f=Fact(1)
+        f_alt1=Fact(1,sign=True)
+        f_alt2=Fact(anum=1,sign=True)
+        self.assertEqual(func, f.raw)
+        self.assertEqual(func, f_alt1.raw)
+        self.assertEqual(func, f_alt2.raw)
+
+        neg_func=Function("fact",[Number(1)],False)
+        neg_f=Fact(1,sign=False)
+        neg_f_alt=Fact(anum=1,sign=False)
+        self.assertEqual(neg_func, neg_f.raw)
+        self.assertEqual(neg_func, neg_f_alt.raw)
+
+        self.assertFalse(f == neg_f)
+
+        # Test that the sign property works correctly
+        self.assertTrue(func.positive)
+        self.assertTrue(f.sign)
+        self.assertFalse(neg_func.positive)
+        self.assertFalse(neg_f.sign)
+
+        # Clone with negating the sign
+        neg_f2 = f.clone(sign=False)
+        self.assertEqual(neg_f, neg_f2)
+
+        neg_f2 = f.clone(sign=not f.sign)
+        self.assertEqual(neg_f, neg_f2)
+
+
+    #--------------------------------------------------------------------------
+    # Test predicate equality
+    # --------------------------------------------------------------------------
+    def test_predicate_comparison_operator_overload_signed(self):
+        class P(Predicate):
+            a = IntegerField
+        class Q(Predicate):
+            a = IntegerField
+
+        p1 = P(1) ; neg_p1=P(1,sign=False) ; p2 = P(2) ; neg_p2=P(2,sign=False)
+        q1 = Q(1)
+
+        self.assertTrue(neg_p1 < neg_p2)
+        self.assertTrue(neg_p1 < p1)
+        self.assertTrue(neg_p1 < p2)
+        self.assertTrue(neg_p2 < p1)
+        self.assertTrue(neg_p2 < p2)
+        self.assertTrue(p1 < p2)
+
+        self.assertTrue(p2 > p1)
+        self.assertTrue(p2 > neg_p2)
+        self.assertTrue(p2 > neg_p1)
+        self.assertTrue(p1 > neg_p2)
+        self.assertTrue(p1 > neg_p1)
+        self.assertTrue(neg_p2 > neg_p1)
+
+        # Different predicate sub-classes are incomparable
+        with self.assertRaises(TypeError) as ctx:
+            self.assertTrue(p1 < q1)
 
     #--------------------------------------------------------------------------
     # Test a simple predicate with a field that has a function default
