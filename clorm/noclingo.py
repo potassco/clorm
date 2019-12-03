@@ -50,12 +50,13 @@ class Symbol(object):
     Symbol objects to be released.
     """
 
-    def __init__(self, stype, value=None, args=[]):
+    def __init__(self, stype, value=None, args=[],sign=True):
         if not isinstance(stype, SymbolType):
             raise TypeError("{} is not a SymbolType".format(stype))
         self._stype = stype
         self._args = None
         self._value = None
+        self._sign = bool(sign)
         if stype == SymbolType.Infimum:
             self._hash = hash(0)
         elif stype == SymbolType.Supremum:
@@ -70,9 +71,12 @@ class Symbol(object):
             self._value = str(value)
             self._args = list(args)
             self._hash = hash(self._value)
+            self._hash ^= hash(self._sign)
             if self._args:
                 t = functools.reduce(lambda x,y: x ^ y, [ hash(a) for a in self._args ])
                 self._hash ^= t
+            if not self._value and not self._sign:
+                raise ValueError("Tuple symbol cannot have a negative sign")
         else:
             raise ValueError("Unknown SymbolType {}".format(stype))
 
@@ -99,6 +103,16 @@ class Symbol(object):
     @property
     def type(self):
         return self._stype
+
+    @property
+    def positive(self):
+        if self._stype != SymbolType.Function: return None
+        return self._sign
+
+    @property
+    def negative(self):
+        if self._stype != SymbolType.Function: return None
+        return not self._sign
 
     def __hash__(self):
         return self._hash
@@ -164,7 +178,8 @@ class Symbol(object):
 
         # SymbolType.Function
         if not self._args: return str(self._value)
-        return "{}({})".format(self._value, ",".join([str(a) for a in self._args]))
+        return "{}{}({})".format("" if self._sign else "-", self._value,
+                                 ",".join([str(a) for a in self._args]))
 
     def __repr__(self):
         return self.__str__()
@@ -180,14 +195,14 @@ Supremum = Symbol(SymbolType.Supremum)
 # helper functions to create objects
 #--------------------------------------------------------------------------------
 
-def Function(name, args=[]):
-    return Symbol(SymbolType.Function, name, args)
+def Function(name, args=[],sign=True):
+    return Symbol(SymbolType.Function,name,args,sign)
 
 def String(string):
-    return Symbol(SymbolType.String, string)
+    return Symbol(SymbolType.String,string)
 
 def Number(number):
-    return Symbol(SymbolType.Number, number)
+    return Symbol(SymbolType.Number,number)
 
 
 

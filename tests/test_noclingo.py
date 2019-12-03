@@ -130,6 +130,12 @@ class NoClingoTestCase(unittest.TestCase):
         self.assertEqual(nc.arguments[0].name, "aaaa")
         self.assertEqual(nc.arguments[1].string, c.arguments[1].string)
 
+        nc4 = noclingo.Function("ccc",[noclingo.Number(10)],False)
+        c4 = clingo.Function("ccc",[clingo.Number(10)],False)
+        self.assertEqual(str(nc4), str(c4))
+        self.assertEqual(nc4.positive, c4.positive)
+        self.assertEqual(nc4.negative, c4.negative)
+
     def test_tuple(self):
         nc1 = noclingo.Function("aaaa")
         nc2 = noclingo.String("bbb")
@@ -155,6 +161,13 @@ class NoClingoTestCase(unittest.TestCase):
 
         nc1 = noclingo.Function("aaaa")
         nc2 = noclingo.Function("aaaa")
+        self.assertEqual(hash(nc1),hash(nc2))
+        self.assertTrue(nc1 == nc2)
+        self.assertTrue(nc1 <= nc2)
+        self.assertTrue(nc1 >= nc2)
+
+        nc1 = noclingo.Function("aaaa",[],False)
+        nc2 = noclingo.Function("aaaa",[],False)
         self.assertEqual(hash(nc1),hash(nc2))
         self.assertTrue(nc1 == nc2)
         self.assertTrue(nc1 <= nc2)
