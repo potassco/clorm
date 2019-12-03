@@ -579,25 +579,30 @@ class ORMTestCase(unittest.TestCase):
         self.assertEqual(f1, f2)
         self.assertEqual(f1.raw, func)
 
-    def test_predicate_init_neg_literals(self):
+    #--------------------------------------------------------------------------
+    # Test that we can define predicates and initialise negative literals.
+    # --------------------------------------------------------------------------
+    def test_predicate_init_neg_literals_simple(self):
 
-        class Fact(Predicate):
-            anum = IntegerField
+        class F(Predicate):
+            a = IntegerField
 
         # Test the different ways of initialising the literals
-        func=Function("fact",[Number(1)])
-        f=Fact(1)
-        f_alt1=Fact(1,sign=True)
-        f_alt2=Fact(anum=1,sign=True)
+        func=Function("f",[Number(1)])
+        f=F(1)
+        f_alt1=F(1,sign=True)
+        f_alt2=F(a=1,sign=True)
         self.assertEqual(func, f.raw)
         self.assertEqual(func, f_alt1.raw)
         self.assertEqual(func, f_alt2.raw)
 
-        neg_func=Function("fact",[Number(1)],False)
-        neg_f=Fact(1,sign=False)
-        neg_f_alt=Fact(anum=1,sign=False)
+        neg_func=Function("f",[Number(1)],False)
+        neg_f=F(1,sign=False)
+        neg_f_alt1=F(a=1,sign=False)
+        neg_f_alt2=F(raw=neg_func)
         self.assertEqual(neg_func, neg_f.raw)
-        self.assertEqual(neg_func, neg_f_alt.raw)
+        self.assertEqual(neg_func, neg_f_alt1.raw)
+        self.assertEqual(neg_func, neg_f_alt2.raw)
 
         self.assertFalse(f == neg_f)
 
@@ -614,6 +619,72 @@ class ORMTestCase(unittest.TestCase):
         neg_f2 = f.clone(sign=not f.sign)
         self.assertEqual(neg_f, neg_f2)
 
+
+    #--------------------------------------------------------------------------
+    # Test that we can define predicates which only allow for specifically
+    # signed instances.
+    # --------------------------------------------------------------------------
+    def test_predicate_init_neg_literals_signed_predicates(self):
+
+        # F1 can handle both positive and negative
+        class F1(Predicate):
+            a = IntegerField
+            class Meta:
+                name="f"
+                sign=None
+
+        # F2 can only handle positive
+        class F2(Predicate):
+            a = IntegerField
+            class Meta:
+                name="f"
+                sign=True
+
+        # F3 can only handle negative
+        class F3(Predicate):
+            a = IntegerField
+            class Meta:
+                name="f"
+                sign=False
+
+        self.assertEqual(F1.meta.sign, None)
+        self.assertEqual(F2.meta.sign, True)
+        self.assertEqual(F3.meta.sign, False)
+
+
+        # Test that how we initialise the different Predicate versions
+        pos_raw=Function("f",[Number(1)])
+        neg_raw=Function("f",[Number(1)],False)
+
+        # F1 handles all
+        pos_f1=F1(1,sign=True) ; neg_f1=F1(1,sign=False)
+        pos_f1_alt=F1(raw=pos_raw) ; neg_f1_alt=F1(raw=neg_raw)
+        self.assertEqual(pos_f1,pos_f1_alt)
+        self.assertEqual(neg_f1,neg_f1_alt)
+
+        # F2 handles positive only
+        pos_f1=F2(1,sign=True) ;
+        pos_f1_alt=F2(raw=pos_raw) ;
+        self.assertEqual(pos_f1,pos_f1_alt)
+
+        with self.assertRaises(ValueError) as ctx:
+            neg_f1=F2(a=1,sign=False)
+        with self.assertRaises(ValueError) as ctx:
+            neg_f1=F2(1,sign=False)
+        with self.assertRaises(ValueError) as ctx:
+            neg_f1=F2(raw=neg_raw)
+
+        # F3 handles negative only
+        neg_f1=F3(1,sign=False) ;
+        neg_f1_alt=F3(raw=neg_raw) ;
+        self.assertEqual(neg_f1,neg_f1_alt)
+
+        with self.assertRaises(ValueError) as ctx:
+            pos_f1=F3(a=1,sign=True)
+        with self.assertRaises(ValueError) as ctx:
+            pos_f1=F3(1,sign=True)
+        with self.assertRaises(ValueError) as ctx:
+            pos_f1=F3(raw=pos_raw)
 
     #--------------------------------------------------------------------------
     # Test predicate equality
@@ -1265,6 +1336,41 @@ class ORMTestCase(unittest.TestCase):
         self.assertEqual(len(res), 2)
         self.assertTrue(f1_alt in res)
         self.assertTrue(f2 in res)
+
+    #--------------------------------------------------------------------------
+    # Test unifying with negative facts
+    #--------------------------------------------------------------------------
+    def test_unify_signed_literals(self):
+        class F1(Predicate):
+            a = IntegerField
+            class Meta:
+                name = "f"
+                sign = True
+
+        class F2(Predicate):
+            a = IntegerField
+            class Meta:
+                name = "f"
+                sign = False
+
+        pos_raw1 = Function("f",[Number(1)])
+        pos_raw2 = Function("f",[Number(2)])
+        neg_raw1 = Function("f",[Number(1)],False)
+        neg_raw2 = Function("f",[Number(2)],False)
+
+        # unify with all raw
+        fb = unify([F1,F2], [ pos_raw1, pos_raw2, neg_raw1, neg_raw2])
+        self.assertEqual(len(fb), 4)
+        self.assertEqual(fb.select(F1).count(), 2)
+        self.assertEqual(fb.select(F2).count(), 2)
+
+        fb = unify([F1], [ pos_raw1, pos_raw2, neg_raw1, neg_raw2])
+        self.assertEqual(len(fb), 2)
+        self.assertEqual(fb.select(F1).count(), 2)
+
+        fb = unify([F2], [ pos_raw1, pos_raw2, neg_raw1, neg_raw2])
+        self.assertEqual(len(fb), 2)
+        self.assertEqual(fb.select(F2).count(), 2)
 
     #--------------------------------------------------------------------------
     #  Test that the fact comparators work

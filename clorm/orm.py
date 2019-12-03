@@ -959,7 +959,7 @@ class NLSDefn(object):
 
     """
 
-    def __init__(self, name, field_accessors, anon=False):
+    def __init__(self, name, field_accessors, anon=False,sign=None):
         self._name = name
         self._byidx = tuple(field_accessors)
         self._byname = { f.name : f for f in field_accessors }
@@ -968,6 +968,7 @@ class NLSDefn(object):
         self._key2canon.update({f.name : f.name for f in field_accessors })
         self._parent_cls = None
         self._indexed_fields = ()
+        self._sign = sign
 
     @property
     def name(self):
@@ -978,6 +979,18 @@ class NLSDefn(object):
     def arity(self):
         """Returns the arity of the predicate"""
         return len(self)
+
+    @property
+    def sign(self):
+        """Returns the sign that this Predicate signature can unify against
+
+           If the sign is ``True`` then this Predicate definition will only
+           unify against positive literals. If the sign is ``False`` then it
+           will only unify against negative literals, and if ``None`` then it
+           will unify against either positive or negative literals.
+
+        """
+        return self._sign
 
     @property
     def is_tuple(self):
@@ -1100,7 +1113,12 @@ def _nls_init_by_keyword_values(self, **kwargs):
             self._field_values[field.name] = _preprocess_field_value(
                 field.defn, kwargs[field.name])
 
+    # Calculate the sign of the literal and check that it matches the allowed values
     sign = bool(kwargs["sign"]) if "sign" in kwargs else True
+    if self.meta.sign is not None:
+        if sign != self.meta.sign:
+            raise ValueError(("Predicate {} is defined to only allow {} "
+                              "instances").format(class_name, self.meta.sign))
 
     # Create the raw clingo.Symbol object
     self._raw = self._generate_raw(sign)
@@ -1117,7 +1135,12 @@ def _nls_init_by_positional_values(self, *args, **kwargs):
     for idx, field in enumerate(self.meta):
         self._field_values[field.name] = _preprocess_field_value(field.defn, args[idx])
 
+    # Calculate the sign of the literal and check that it matches the allowed values
     sign = bool(kwargs["sign"]) if "sign" in kwargs else True
+    if self.meta.sign is not None:
+        if sign != self.meta.sign:
+            raise ValueError(("Predicate {} is defined to only allow {} "
+                              "instances").format(class_name, self.meta.sign))
 
     # Create the raw clingo.Symbol object
     self._raw = self._generate_raw(sign)
@@ -1176,6 +1199,8 @@ def _make_nlsdefn(class_name, dct):
     # Set the default predicate name
     name = _nlsdefn_default_predicate_name(class_name)
     anon = False
+    sign = None
+
     if "Meta" in dct:
         metadefn = dct["Meta"]
         if not inspect.isclass(metadefn):
@@ -1191,6 +1216,11 @@ def _make_nlsdefn(class_name, dct):
             raise AttributeError(("Mutually exclusive meta attibutes "
                                   "'name' and 'is_tuple' "))
         elif is_tuple: name = ""
+
+        # Sign can be True/False/None. Controls if we want to allow unification
+        # against a positive literal only, a negative literal only or either.
+        if "sign" in  metadefn.__dict__: sign = metadefn.__dict__["sign"]
+        sign = None if sign is None else bool(sign)
 
     reserved = set(["meta", "raw", "clone", "sign", "Field"])
 
@@ -1218,7 +1248,7 @@ def _make_nlsdefn(class_name, dct):
             pass
 
     # Now create the NLSDefn object
-    return NLSDefn(name=name,field_accessors=fas, anon=anon)
+    return NLSDefn(name=name,field_accessors=fas, anon=anon,sign=sign)
 
 #------------------------------------------------------------------------------
 # A container to dynamically generate a RawField subclass corresponding to a
@@ -1444,6 +1474,9 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
 
         if raw.name != cls.meta.name: return False
         if len(raw.arguments) != len(cls.meta): return False
+
+        if cls.meta.sign is not None:
+            if cls.meta.sign != raw.positive: return False
 
         for idx, field in enumerate(cls.meta):
             if not field.defn.unifies(raw.arguments[idx]): return False
