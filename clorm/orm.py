@@ -275,13 +275,11 @@ def _fpb_subclass_constructor(self, fp=None):
                             "FieldPathBuilder {}").format(fp, self._field_defn))
         self._fp = fp
 
-def _fpb_make_path_extender(key):
-    return lambda self : self[key]
-
 class _FieldPathBuilderMeta(type):
     def __new__(meta, name, bases, dct):
-        dct["_byidx"] = []
-        dct["_byname"] = {}
+
+        # Some internal functions
+        def _make_field_lookup(key): return lambda self: self[key]
 
         if name == "FieldPathBuilder":
             dct["__init__"] = _fpb_base_constructor
@@ -294,9 +292,7 @@ class _FieldPathBuilderMeta(type):
         nls = field_defn.complex
         if nls:
             for field in nls.meta:
-                dct[field.name] = property(_fpb_make_path_extender(field.name))
-                dct["_byidx"].append(field)
-                dct["_byname"][field.name] = field
+                dct[field.name] = property(_make_field_lookup(field.name))
 
         # The appropriate fields have been created
         return super(_FieldPathBuilderMeta, meta).__new__(meta, name, bases, dct)

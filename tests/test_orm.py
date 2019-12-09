@@ -1549,7 +1549,7 @@ class ORMTestCase(unittest.TestCase):
     #--------------------------------------------------------------------------
     # Test the factbasehelper with double decorators
     #--------------------------------------------------------------------------
-    def test_factbasebuilder(self):
+    def test_symbolpredicateunifier(self):
 
         # Using the SymbolPredicateUnifier as a decorator
         spu1 = SymbolPredicateUnifier()
@@ -1579,9 +1579,9 @@ class ORMTestCase(unittest.TestCase):
         self.assertEqual(spu3.indexes, ())
 
     #--------------------------------------------------------------------------
-    # Test the factbasebuilder when there are subfields defined
+    # Test the symbolpredicateunifier when there are subfields defined
     #--------------------------------------------------------------------------
-    def test_factbasebuilder_with_subfields(self):
+    def test_symbolpredicateunifier_with_subfields(self):
         spu = SymbolPredicateUnifier()
 
         class CT(ComplexTerm):
@@ -1611,7 +1611,7 @@ class ORMTestCase(unittest.TestCase):
     # Test that subclass factbase works and we can specify indexes
     #--------------------------------------------------------------------------
 
-    def test_factbasebuilder_symbols(self):
+    def test_symbolpredicateunifier_symbols(self):
 
         class Afact(Predicate):
             num1=IntegerField()
@@ -2055,6 +2055,32 @@ class FactIndexTestCase(unittest.TestCase):
         fi.add(Afact(num1=1, str1="a"))
         fi.clear()
         self.assertEqual(fi.keys,[])
+
+    #--------------------------------------------------------------------------
+    # Test accessing the value of attributes through a FieldPathBuilder properties
+    #--------------------------------------------------------------------------
+    def test_subfield_access(self):
+        class F(ComplexTerm):
+            anum=IntegerField()
+        class G(Predicate):
+            ct1=F.Field()
+            ct2=(IntegerField(),IntegerField())
+
+        f1 = F(1)
+        g1 = G(f1,(2,3))
+
+        self.assertEqual(f1.anum,1)
+        self.assertEqual(g1.ct1.anum,1)
+        self.assertEqual(g1.ct2[0],2)
+        self.assertEqual(g1.ct2[1],3)
+
+#        tmp1 = G.ct1.anum.meta.path
+#        print("TMP: {}, type: {}".format(tmp1,type(tmp1)))
+
+#        tmp2 = G.ct1.sign
+#        print("TMP: {}, type: {}".format(tmp1,type(tmp1)))
+
+#        self.assertEqual(F.anum(f1), 1)
 
     #--------------------------------------------------------------------------
     # Test the support for indexes of subfields
