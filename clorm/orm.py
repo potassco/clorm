@@ -66,14 +66,19 @@ class _classproperty(object):
         return self.getter(owner)
 
 #------------------------------------------------------------------------------
-# A property to help with delayed initialisation. Useful for metaclasses where
-# an object needs to be created in the __new__ call but can only be assigned in
-# the __init__ call.
+# A descriptor with write-once-read-many (WORM) behaviour. Help with delayed
+# initialisation, in particular, for metaclasses where an object needs to be
+# created in the __new__ call but can only be assigned in the __init__ call. The
+# assign() function can be called only once.
 # ------------------------------------------------------------------------------
-class _lateinit(object):
-    def __init__(self, value):
-        self._value=value
+class _wormproperty(object):
+    def __init__(self,name):
+        self._name = name
+        self._value=None
     def assign(self, value):
+        if self._value is not None:
+            raise RuntimeError(("Error trying to reset the value for write-once "
+                                "property {}").format(self._name))
         self._value=value
     def __get__(self, instance, owner):
         return self._value
@@ -491,7 +496,7 @@ class _RawFieldMeta(type):
         if "__init__" not in dct:
             dct["__init__"] = _sfm_constructor
 
-        dct["_fpb"] = _lateinit(None)
+        dct["_fpb"] = _wormproperty("{}._fpb".format(name))
 
         if name == "RawField":
             dct["_parentclass"] = None
@@ -1212,40 +1217,39 @@ def _make_nlsdefn(class_name, dct):
     # Now create the NLSDefn object
     return NLSDefn(name=name,field_accessors=fas, anon=anon)
 
-#------------------------------------------------------------------------------
-# A container to dynamically generate a RawField subclass corresponding to a
-# Predicate/Complex-term class.
 # ------------------------------------------------------------------------------
-class _FieldContainer(object):
-    def __init__(self):
-        self._defn = None
-    def set_defn(self, cls):
-        field_defn_name = "{}Field".format(cls.__name__)
-        def _pytocl(v):
-            if isinstance(v,cls): return v.raw
-            if isinstance(v,tuple):
-                if len(v) != len(cls.meta):
-                    raise ValueError(("incorrect values to unpack (expected "
-                                      "{})").format(len(cls.meta)))
-                try:
-                    v = cls(*v)
-                    return v.raw
-                except Exception:
-                    raise TypeError(("Failed to unify tuple {} with complex "
-                                      "term {}").format(v,cls))
-            raise TypeError("Value {} not an instance of {}".format(v, cls))
+# Define a RawField sub-class that corresponds to a Predicate/ComplexTerm
+# sub-class. This RawField sub-class will convert to/from a complex-term
+# instances and clingo symbol objects.
+# ------------------------------------------------------------------------------
 
-        def _cltopy(v):
-            return cls(raw=v)
+def _define_field_for_nls(cls):
+    if not issubclass(cls, NonLogicalSymbol):
+        raise TypeError(("Class {} is not a Predicate or ComplexTerm "
+                         "sub-class").format(cls))
 
-        self._defn = type(field_defn_name, (RawField,),
-                          { "pytocl": _pytocl,
-                            "cltopy": _cltopy,
-                            "complex": lambda self: cls})
-    @property
-    def defn(self):
-        return self._defn
+    field_name = "{}Field".format(cls.__name__)
+    def _pytocl(v):
+        if isinstance(v,cls): return v.raw
+        if isinstance(v,tuple):
+            if len(v) != len(cls.meta):
+                raise ValueError(("incorrect values to unpack (expected "
+                                  "{})").format(len(cls.meta)))
+            try:
+                v = cls(*v)
+                return v.raw
+            except Exception:
+                raise TypeError(("Failed to unify tuple {} with complex "
+                                  "term {}").format(v,cls))
+        raise TypeError("Value {} not an instance of {}".format(v, cls))
 
+    def _cltopy(v):
+        return cls(raw=v)
+
+    field = type(field_name, (RawField,),
+                 { "pytocl": _pytocl, "cltopy": _cltopy,
+                   "complex": lambda self: cls})
+    return field
 
 #------------------------------------------------------------------------------
 # A Metaclass for the NonLogicalSymbol base class
@@ -1265,7 +1269,7 @@ class _NonLogicalSymbolMeta(type):
 
         # Set the _meta attribute and constuctor
         dct["__init__"] = _nls_constructor
-        dct["_fieldcontainer"] = _FieldContainer()
+        dct["_field"] = _wormproperty("{}._field".format(name))
         dct["_meta"] = _make_nlsdefn(name, dct)
 
         parents = [ b for b in bases if issubclass(b, NonLogicalSymbol) ]
@@ -1280,8 +1284,8 @@ class _NonLogicalSymbolMeta(type):
         if name == "NonLogicalSymbol":
             return super(_NonLogicalSymbolMeta, cls).__init__(name, bases, dct)
 
-        # Set this class as the field
-        dct["_fieldcontainer"].set_defn(cls)
+        # Set a RawField sub-class that converts to/from cls instances
+        dct["_field"].assign(_define_field_for_nls(cls))
 
         md = dct["_meta"]
         # The property attribute for each field can only be created in __new__
@@ -1372,7 +1376,7 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
     @_classproperty
     def Field(cls):
         """A RawField sub-class corresponding to a Field for this class."""
-        return cls._fieldcontainer.defn
+        return cls._field
 
     # Recompute the clingo.Symbol object from the stored fields
     def _generate_raw(self):
