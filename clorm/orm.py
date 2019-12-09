@@ -258,7 +258,7 @@ class FieldPath(object):
 # syntax such as, Pred.a.b == 1
 # ------------------------------------------------------------------------------
 
-def _make_fpb_class(field_defn):
+def _define_fpb_for_field_defn(field_defn):
     class_name = field_defn.__name__ + "FPB"
     return type(class_name, (FieldPathBuilder,), { "_field_defn" : field_defn })
 
@@ -546,7 +546,7 @@ class _RawFieldMeta(type):
         return super(_RawFieldMeta, meta).__new__(meta, name, bases, dct)
 
     def __init__(cls, name, bases, dct):
-        dct["_fpb"].assign(_make_fpb_class(cls))
+        dct["_fpb"].assign(_define_fpb_for_field_defn(cls))
 
         return super(_RawFieldMeta, cls).__init__(name, bases, dct)
 
