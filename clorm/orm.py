@@ -1757,10 +1757,9 @@ class FieldQueryComparator(Comparator):
         if not isinstance(arg1, FieldPathEval):
             raise TypeError(("Internal error: argument 1 is not "
                              "a FieldPathEval {}").format(arg1))
-        # Comparison is trivial if:
-        # 1) the objects are identical then it is a trivial comparison and
-        # equivalent to checking if the operator satisfies a simple identity (eg., 1)
-        # 2) neither argument is a Field
+
+        # Comparison is trivial if the objects are identical or semantically
+        # equivalent. If so return a static identity comparison 1 op 1
         if arg1 is arg2:
             self._static = True
             self._value = compop(1,1)
