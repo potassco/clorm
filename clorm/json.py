@@ -173,9 +173,9 @@ class FactBaseCoder(object):
                 if fs[0] not in self._name2pred:
                     raise ValueError(("Unrecognised predicate name {} not one "
                                       "of {}").format(fs, self._name2pred.keys()))
-                fpb = path(self._name2pred[fs[0]])
-                for key in fs[1:]: fpb = fpb[key]
-                indexes.append(fpb.meta.path)
+                ppath = path(self._name2pred[fs[0]])
+                for key in fs[1:]: ppath = ppath[key]
+                indexes.append(ppath)
             facts = [ self.decoder(f) for f in obj["facts"] ]
             return FactBase(facts=facts, indexes=indexes)
         if not "clorm.Predicate" in obj: return obj

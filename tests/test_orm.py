@@ -15,8 +15,8 @@ from clorm.orm import \
     _get_field_defn, refine_field, simple_predicate, \
     not_, and_, or_, StaticComparator, \
     ph_, ph1_, ph2_, \
-    _FactIndex, _FactMap, FieldPath, FieldPathEval, path, \
-    unify, desc, FactBase, SymbolPredicateUnifier, FieldPathLink, \
+    _FactIndex, _FactMap, PredicatePath, path, \
+    unify, desc, FactBase, SymbolPredicateUnifier,  \
     TypeCastSignature, make_function_asp_callable, make_method_asp_callable, \
     ContextBuilder
 
@@ -26,7 +26,7 @@ from clorm.orm import \
 
 __all__ = [
     'ORMTestCase',
-    'FieldPathTestCase',
+    'PredicatePathBuilderTestCase',
     'FactIndexTestCase',
     'FactMapTestCase',
     'FactBaseTestCase',
@@ -216,16 +216,16 @@ class ORMTestCase(unittest.TestCase):
             e = CT.Field()
 
         # Indexes fields for P are: P.d, P.d.b, P.d.c.arg1, P.e.b, P.e.c.arg1
-        indexes = set(P.meta.indexes)
+        indexes = set([p.meta.hashable for p in P.meta.indexes])
         self.assertTrue(len(indexes), 5)
-        self.assertTrue(P.d.meta.path in indexes)
-        self.assertTrue(P.d.b.meta.path in indexes)
-        self.assertTrue(P.d.c.arg1.meta.path in indexes)
-        self.assertTrue(P.e.b.meta.path in indexes)
-        self.assertTrue(P.e.c.arg1.meta.path in indexes)
-        self.assertFalse(P.e.meta.path in indexes)
-        self.assertFalse(P.d.a.meta.path in indexes)
-        self.assertFalse(P.d.c.arg2.meta.path in indexes)
+        self.assertTrue(P.d.meta.hashable in indexes)
+        self.assertTrue(P.d.b.meta.hashable in indexes)
+        self.assertTrue(P.d.c.arg1.meta.hashable in indexes)
+        self.assertTrue(P.e.b.meta.hashable in indexes)
+        self.assertTrue(P.e.c.arg1.meta.hashable in indexes)
+        self.assertFalse(P.e.meta.hashable in indexes)
+        self.assertFalse(P.d.a.meta.hashable in indexes)
+        self.assertFalse(P.d.c.arg2.meta.hashable in indexes)
 
     #--------------------------------------------------------------------------
     # Test that we can distinguish between user defined and anonymous
@@ -237,7 +237,7 @@ class ORMTestCase(unittest.TestCase):
             b = StringField()
 
         self.assertFalse(Blah.meta.anonymous)
-        self.assertTrue(Blah.a.meta.path.defn.complex.meta.anonymous)
+        self.assertTrue(Blah.a.meta.field.complex.meta.anonymous)
 
     #--------------------------------------------------------------------------
     # Test that we can distinguish NonLogicalSymbol tuples
@@ -272,7 +272,7 @@ class ORMTestCase(unittest.TestCase):
         self.assertEqual(len(Tuple.meta), 3)
         self.assertEqual(Tuple.meta.arity, 3)
         self.assertEqual(len(t.c), 2)
-        self.assertEqual(len(Tuple.c.meta.path.defn.complex.meta),2)
+        self.assertEqual(len(Tuple.c.meta.field.complex.meta),2)
 
     #--------------------------------------------------------------------------
     # Test that we can return access the NLS class fields using positional
@@ -1432,11 +1432,11 @@ class ORMTestCase(unittest.TestCase):
         self.assertFalse(ep1(af1))
         self.assertTrue(ep1(af2))
 
-        # Testing the FieldQueryComparator on the wrong fact type
+        # Testing the PredicatePathComparator on the wrong fact type
         with self.assertRaises(TypeError) as ctx:
             self.assertFalse(e1(bf1))
 
-        # Testing the FieldQueryComparator on the wrong fact type
+        # Testing the PredicatePathComparator on the wrong fact type
         with self.assertRaises(TypeError) as ctx:
             self.assertFalse(ep1(bf1))
 
@@ -1594,18 +1594,18 @@ class ORMTestCase(unittest.TestCase):
             d = CT.Field(index=True)
             e = CT.Field()
 
-        expected=set([P.d.meta.path,
-                      P.d.b.meta.path, P.d.c.arg1.meta.path,
-                      P.e.b.meta.path, P.e.c.arg1.meta.path])
+        expected=set([P.d.meta.hashable,
+                      P.d.b.meta.hashable, P.d.c.arg1.meta.hashable,
+                      P.e.b.meta.hashable, P.e.c.arg1.meta.hashable])
         self.assertEqual(spu.predicates, (P,))
-        self.assertEqual(set(spu.indexes), set(expected))
+        self.assertEqual(set([p.meta.hashable for p in spu.indexes]), set(expected))
 
         ct_func=Function("ct",[Number(1),String("aaa"),
                                Function("",[Number(1),Function("const",[])])])
         p1=Function("p",[ct_func,ct_func])
         fb=spu.unify(symbols=[p1],raise_on_empty=True)
         self.assertEqual(len(fb),1)
-        self.assertEqual(set(fb.indexes), expected)
+        self.assertEqual(set([p.meta.hashable for p in fb.indexes]), expected)
 
     #--------------------------------------------------------------------------
     # Test that subclass factbase works and we can specify indexes
@@ -1717,230 +1717,217 @@ class ORMTestCase(unittest.TestCase):
         self.assertEqual(list(fb3.indexes), list(fb1.indexes))
 
 
+
 #------------------------------------------------------------------------------
-# Test the FieldPathBuilder class
+# Test the PredicatePathBuilder class
 #------------------------------------------------------------------------------
 
-class FieldPathTestCase(unittest.TestCase):
+class PredicatePathBuilderTestCase(unittest.TestCase):
     def setUp(self):
-        pass
+        class F(ComplexTerm):
+            a = IntegerField
 
-    def test_fp(self):
-        FPL=FieldPathLink
+        class G(ComplexTerm):
+            a = StringField
+            b = ConstantField
+            class Meta: is_tuple = True
 
-        class Cmplx1(ComplexTerm):
-            a = IntegerField()
-            b = StringField()
-            c = ConstantField()
+        class H(Predicate):
+            a = IntegerField
+            b = F.Field
+            c = G.Field
 
-        class Cmplx2(ComplexTerm):
-            x = Cmplx1.Field()
-            y = (StringField(), ConstantField())
+        self.F = F
+        self.G = G
+        self.H = H
 
-        fp1=FieldPath(Cmplx2.Field)
-        self.assertEqual(fp1[0], FieldPathLink(Cmplx2.Field,None))
-        fp2=fp1.extend_by_key('x')
-        self.assertEqual(fp2[0], FieldPathLink(Cmplx2.Field,'x'))
-        self.assertEqual(fp2[1], FieldPathLink(Cmplx1.Field,None))
-        fp3=fp2.extend_by_key('b')
-        self.assertEqual(fp3[1], FieldPathLink(Cmplx1.Field,'b'))
-        self.assertEqual(fp3[2], FieldPathLink(StringField,None))
+    #-----------------------------------------------------------------------------
+    # Test that there is an appropriate PredicatePath associated with each
+    # NonLogicalSymbol and that it has the appropriate attributes.
+    # -----------------------------------------------------------------------------
+    def test_path_class(self):
 
-        # some failed extensions
-        with self.assertRaises(KeyError) as ctx:
-            fpf=fp1.extend_by_key('z')
-        with self.assertRaises(KeyError) as ctx:
-            fpf=fp1.extend_by_key(2)
-        with self.assertRaises(KeyError) as ctx:
-            fpf=fp2.extend_by_key('d')
-        with self.assertRaises(KeyError) as ctx:
-            fpf=fp2.extend_by_key(3)
-        with self.assertRaises(TypeError) as ctx:
-            fpf=fp3.extend_by_key(0)
+        F = self.F
+        G = self.G
+        H = self.H
+        FPP = F.meta.PredicatePath
+        GPP = G.meta.PredicatePath
+        HPP = H.meta.PredicatePath
 
-        # Test equaility and equivalence
-        fp2b=fp1.extend_by_key(0)
-        self.assertTrue(fp2 != fp2b)
-        self.assertTrue(fp2.equivalent(fp2b))
-        self.assertTrue(fp2b.equivalent(fp2))
+        # Check that all the appropriate attributes are defined
+        self.assertTrue('a' in FPP.__dict__)
+        self.assertTrue('sign' in FPP.__dict__)
 
-        fp3b=fp2b.extend_by_key('b')
-        fp3c=fp2b.extend_by_key(1)
-        fp3d=fp3c.canonical()
-        self.assertTrue(fp3 != fp3b)
-        self.assertTrue(fp3 != fp3c)
-        self.assertTrue(fp3b != fp3c)
-        self.assertTrue(fp3c != fp3d)
-        self.assertTrue(fp3.equivalent(fp3b))
-        self.assertTrue(fp3.equivalent(fp3c))
-        self.assertTrue(fp3.equivalent(fp3d))
+        self.assertTrue('a' in GPP.__dict__)
+        self.assertTrue('b' in GPP.__dict__)
+        self.assertTrue('sign' not in GPP.__dict__)
 
-        self.assertEqual(str(fp3b), "Cmplx2[0].b")
-        self.assertEqual(str(fp3d), "Cmplx2.x.b")
+        self.assertTrue('a' in HPP.__dict__)
+        self.assertTrue('b' in HPP.__dict__)
+        self.assertTrue('c' in HPP.__dict__)
+        self.assertTrue('sign' in HPP.__dict__)
 
-        # Test that a FieldPath is hashable
-        self.assertTrue(hash(fp3b))
+    def test_path_instance(self):
 
-    def test_create_fpb(self):
+        F = self.F
+        G = self.G
+        H = self.H
+        fpath = F.meta.path
+        gpath = G.meta.path
+        hpath = H.meta.path
 
-        FPL=FieldPathLink
+        self.assertTrue(fpath.meta.is_root)
+        self.assertTrue(gpath.meta.is_root)
+        self.assertTrue(gpath.meta.is_root)
 
-        self.assertTrue(StringField.FieldPathBuilder)
-        with self.assertRaises(ValueError) as ctx:
-            stffp = StringField.FieldPathBuilder(None)
+        # The path is associated with a predicate
+        self.assertEqual(fpath.meta.Predicate,F)
+        self.assertEqual(gpath.meta.Predicate,G)
+        self.assertEqual(hpath.meta.Predicate,H)
 
-        class Cmplx1(ComplexTerm):
-            a = IntegerField()
-            b = StringField()
-            c = ConstantField()
+        # Make sure that sub-paths determined by attribute matches to the
+        # indexed sub-paths. Note: we can't directly compare two paths because
+        # of the overloaded comparison operators. However, since paths should
+        # always reference the same object we can use object identity.
+        self.assertTrue(fpath.a is fpath[0])
+        self.assertTrue(gpath.a is gpath[0])
+        self.assertTrue(gpath.b is gpath[1])
+        self.assertTrue(hpath.a is hpath[0])
+        self.assertTrue(hpath.b is hpath[1])
+        self.assertTrue(hpath.c is hpath[2])
+        self.assertTrue(hpath.b.a is hpath[1][0])
+        self.assertTrue(hpath.b.sign is hpath[1].sign)
+        self.assertTrue(hpath.c.a is hpath[2][0])
+        self.assertTrue(hpath.c.b is hpath[2][1])
 
-        class Cmplx2(ComplexTerm):
-            x = Cmplx1.Field()
-            y = (StringField(), ConstantField())
+        # Test the intuitive syntax (ie., acccess the path through the
+        # Predicate class).
+        self.assertTrue(fpath is path(F))
+        self.assertTrue(gpath is path(G))
+        self.assertTrue(hpath is path(H))
+        self.assertTrue(fpath.a is F.a)
+        self.assertTrue(fpath.sign is F.sign)
+        self.assertTrue(gpath.a is G.a)
+        self.assertTrue(gpath.b is G.b)
+        self.assertTrue(hpath.a is H.a)
+        self.assertTrue(hpath.b is H.b)
+        self.assertTrue(hpath.b.a is H.b.a)
+        self.assertTrue(hpath.b.sign is H.b.sign)
+        self.assertTrue(hpath.c.a is H.c.a)
+        self.assertTrue(hpath.c.b is H.c.b)
 
-        fp0 = Cmplx1.Field.FieldPathBuilder()
-        self.assertEqual(fp0.meta.path[0], FPL(Cmplx1.Field, None))
-
-        fp1 = Cmplx1.b
-        self.assertEqual(list(fp1.meta.path),
-                         [FPL(Cmplx1.Field,'b'), FPL(StringField,None)])
-
-        fp2 = Cmplx1[2]
-        self.assertEqual(list(fp2.meta.path),
-                         [FPL(Cmplx1.Field,2), FPL(ConstantField,None)])
-
-        fp3 = Cmplx2.x
-        self.assertEqual(list(fp3.meta.path),
-                         [FPL(Cmplx2.Field,'x'), FPL(Cmplx1.Field,None)])
-
-        fp4 = Cmplx2.x.a
-        self.assertEqual(list(fp4.meta.path),
-                         [FPL(Cmplx2.Field,'x'),
-                          FPL(Cmplx1.Field,'a'), FPL(IntegerField,None)])
-
-        fp5 = Cmplx2.x[1]
-        self.assertEqual(list(fp5.meta.path),
-                         [FPL(Cmplx2.Field,'x'),FPL(Cmplx1.Field,1),
-                          FPL(StringField,None)])
-
-        fp6 = Cmplx2.y[1]
-        self.assertEqual(fp6.meta.path[0], FPL(Cmplx2.Field,'y'))
-        self.assertEqual(fp6.meta.path[-1], FPL(ConstantField,None))
+        # Test that the string representation is correct
+        self.assertEqual(str(path(F)), "F")
+        self.assertEqual(str(path(G)), "G")
+        self.assertEqual(str(path(H)), "H")
+        self.assertEqual(str(F.a), "F.a")
+        self.assertEqual(str(F.sign), "F.sign")
+        self.assertEqual(str(G.a), "G.a")
+        self.assertEqual(str(G.b), "G.b")
+        self.assertEqual(str(H.a), "H.a")
+        self.assertEqual(str(H.b), "H.b")
+        self.assertEqual(str(H.b.a), "H.b.a")
+        self.assertEqual(str(H.b.sign), "H.b.sign")
+        self.assertEqual(str(H.c.a), "H.c.a")
+        self.assertEqual(str(H.c.b), "H.c.b")
 
         with self.assertRaises(AttributeError) as ctx:
-            fp7 = Cmplx2.b
+            sign = G.sign
 
-        with self.assertRaises(KeyError) as ctx:
-            fp7 = Cmplx2.x[4]
+    def test_resolve_fact_wrt_path(self):
 
-        with self.assertRaises(KeyError) as ctx:
-            fp7 = Cmplx2.x['f']
+        F = self.F
+        G = self.G
+        H = self.H
 
-        # Test the path function, used to generate FPBs. This is a special case
-        # since we can't easily automatically generate a FPB object when
-        # referencing the NLS object itself.
-        fpb1 = path(Cmplx2)
-        self.assertEqual(str(fpb1), "Cmplx2")
-        self.assertEqual(str(fpb1.x), "Cmplx2.x")
-        self.assertEqual(str(fpb1['x']), "Cmplx2.x")
-        self.assertEqual(str(fpb1[1]), "Cmplx2[1]")
+        f1_pos = F(a=1)
+        f1_neg = F(a=2,sign=False)
 
-        self.assertEqual(path(Cmplx2.x),Cmplx2.x)
-        self.assertEqual(path(Cmplx2.x.meta.path),Cmplx2.x)
+        self.assertEqual(path(F).meta.resolve(f1_pos), f1_pos)
+        self.assertEqual(path(F).meta.resolve(f1_neg), f1_neg)
+        self.assertEqual(F.a.meta.resolve(f1_pos), f1_pos.a)
+        self.assertEqual(F.a.meta.resolve(f1_neg), f1_neg.a)
+        self.assertEqual(F.sign.meta.resolve(f1_pos), f1_pos.sign)
+        self.assertEqual(F.sign.meta.resolve(f1_neg), f1_neg.sign)
 
-        with self.assertRaises(TypeError) as ctx:
-            tmp = path(FieldPathEval(Cmplx2.x))
+        g1 = G(a="a",b="b")
+        self.assertEqual(path(G).meta.resolve(g1), g1)
+        self.assertEqual(G.a.meta.resolve(g1), g1.a)
+        self.assertEqual(G.b.meta.resolve(g1), g1.b)
 
-    def test_fpspec_fpget(self):
-        class Cmplx1(ComplexTerm):
-            a = IntegerField()
-            b = StringField()
-            c = ConstantField()
+        h1_pos = H(a=10,b=f1_pos,c=g1)
+        h1_neg = H(a=10,b=f1_pos,c=g1,sign=False)
+        h2_pos = H(a=10,b=f1_neg,c=g1)
 
-        class Cmplx2(ComplexTerm):
-            x = Cmplx1.Field()
-            y = (StringField(), ConstantField())
+        self.assertEqual(path(H).meta.resolve(h1_pos), h1_pos)
+        self.assertEqual(path(H).meta.resolve(h1_neg), h1_neg)
+        self.assertEqual(path(H).meta.resolve(h2_pos), h2_pos)
+        self.assertEqual(H.a.meta.resolve(h1_pos), h1_pos.a)
+        self.assertEqual(H.b.meta.resolve(h1_pos), f1_pos)
+        self.assertEqual(H.b.a.meta.resolve(h1_pos), f1_pos.a)
+        self.assertEqual(H.b.sign.meta.resolve(h1_pos), f1_pos.sign)
+        self.assertEqual(H.sign.meta.resolve(h1_pos), h1_pos.sign)
+        self.assertEqual(H.sign.meta.resolve(h1_neg), h1_neg.sign)
+        self.assertEqual(H.sign.meta.resolve(h2_pos), h2_pos.sign)
 
-        # Test the FieldPath and the equality boolean operator
-        fps1_a = Cmplx1.b.meta.path
-        fps1_b = Cmplx1.a.meta.path
-        self.assertFalse(fps1_a == fps1_b)
-        self.assertTrue(fps1_a != fps1_b)
+    def test_path_comparator(self):
 
-        fps2_a = Cmplx1.a.meta.path
-        fps2_b = Cmplx1.a.meta.path
-        self.assertTrue(fps2_a == fps2_b)
-        self.assertFalse(fps2_a != fps2_b)
+        F = self.F
+        G = self.G
+        H = self.H
 
-        fps3 = Cmplx2.x.b.meta.path
-        fps3_alt = Cmplx2[0][1].meta.path
+        f1_pos = F(a=1)
+        f1_neg = F(a=2,sign=False)
+        g1 = G(a="a",b="b")
+        h1_pos = H(a=1,b=f1_pos,c=g1)
+        h1_pos2 = H(a=1,b=f1_pos,c=g1)
+        h1_neg = H(a=1,b=f1_pos,c=g1,sign=False)
+        h2_pos = H(a=2,b=f1_neg,c=g1)
 
-        # fp3 and fp3_alt are different paths but are semantically equivalent
-        self.assertFalse(fps3 == fps3_alt)
-        self.assertTrue(fps3.equivalent(fps3_alt))
-        self.assertEqual(str(fps3), "Cmplx2.x.b")
-        self.assertEqual(str(fps3_alt), "Cmplx2[0][1]")
-        self.assertFalse(str(fps3) == str(fps3_alt))
+        comp = path(H) == h1_pos
+        self.assertTrue(comp(h1_pos))
+        self.assertTrue(comp(h1_pos2))
+        self.assertFalse(comp(h1_neg))
+        self.assertFalse(comp(h2_pos))
 
-        # fp3_alt and fps3_alt_canon are different paths but semantically equivalent
-        fps3_alt_canon = fps3_alt.canonical()
-        self.assertFalse(fps3_alt == fps3_alt_canon)
-        self.assertTrue(fps3_alt.equivalent(fps3_alt_canon))
-        self.assertTrue(str(fps3) == str(fps3_alt_canon))
+        comp = H.sign == True
+        self.assertTrue(comp(h1_pos))
+        self.assertTrue(comp(h2_pos))
+        self.assertFalse(comp(h1_neg))
 
-        # Different paths but semantically equivalent
-        self.assertFalse(Cmplx1.a.meta.path == Cmplx1[0].meta.path)
-        self.assertFalse(Cmplx2.x.b.meta.path == Cmplx2[0][1].meta.path)
-        self.assertTrue(Cmplx1.a.meta.path.equivalent(Cmplx1[0].meta.path))
-        self.assertTrue(Cmplx2.x.b.meta.path.equivalent(Cmplx2[0][1].meta.path))
+        comp = H.c.a == "a"
+        self.assertTrue(comp(h1_pos))
+        self.assertTrue(comp(h2_pos))
+        self.assertTrue(comp(h1_neg))
 
-        # Just different
-        self.assertFalse(Cmplx2.x.b.meta.path == Cmplx2[0][0].meta.path)
-        self.assertFalse(Cmplx2.x.b.meta.path.equivalent(Cmplx2[0][0].meta.path))
+        comp = H.c.a != "a"
+        self.assertFalse(comp(h1_pos))
+        self.assertFalse(comp(h2_pos))
+        self.assertFalse(comp(h1_neg))
 
-        # Now test the FieldPathEval
-        tmp1 = Cmplx1(1,"blah1","blah2")
-        tmp2 = Cmplx2(tmp1, ("blah3", "blah4"))
+        comp = H.a < 2
+        self.assertTrue(comp(h1_pos))
+        self.assertTrue(comp(h1_neg))
+        self.assertFalse(comp(h2_pos))
 
-        fp0 = Cmplx1.Field.FieldPathBuilder()
-        fpg0 = FieldPathEval(fp0.meta.path)
-        self.assertEqual(fpg0(tmp1), tmp1)
+        comp = H.a <= 2
+        self.assertTrue(comp(h1_pos))
+        self.assertTrue(comp(h1_neg))
+        self.assertTrue(comp(h2_pos))
 
-        fp1 = Cmplx1.b
-        fpg1 = FieldPathEval(fp1.meta.path)
-        self.assertEqual(fpg1(tmp1), "blah1")
+        comp = H.a > 1
+        self.assertFalse(comp(h1_pos))
+        self.assertFalse(comp(h1_neg))
+        self.assertTrue(comp(h2_pos))
 
-        fp2 = Cmplx1[2]
-        fpg2 = FieldPathEval(fp2.meta.path)
-        self.assertEqual(fpg2(tmp1), "blah2")
+        comp = H.a > 2
+        self.assertFalse(comp(h1_pos))
+        self.assertFalse(comp(h1_neg))
+        self.assertFalse(comp(h2_pos))
 
-        fp3 = Cmplx2.x
-        fpg3 = FieldPathEval(fp3.meta.path)
-        self.assertEqual(fpg3(tmp2), tmp1)
+        comp = H.a == H.b.a
+        self.assertTrue(comp(h1_pos))
 
-        fp4 = Cmplx2.x.a
-        fpg4 = FieldPathEval(fp4.meta.path)
-        self.assertEqual(fpg4(tmp2), 1)
-
-    def test_fp_comparator(self):
-        class Cmplx1(ComplexTerm):
-            a = IntegerField()
-            b = StringField()
-            c = ConstantField()
-
-        class Cmplx2(ComplexTerm):
-            x = Cmplx1.Field()
-            y = (StringField(), ConstantField())
-
-        tmp1_1 = Cmplx1(1,"b1","b2")
-        tmp1_2 = Cmplx1(2,"b1","b3")
-        tmp1_3 = Cmplx1(2,"b1","b2")
-        tmp2 = Cmplx2(tmp1_1, ("blah3", "blah4"))
-        tmp2_1 = Cmplx2(tmp1_1, ("blah3", "blah5"))
-        tmp2_3 = Cmplx2(tmp1_2, ("blah6", "blah4"))
-
-        fpc1 = Cmplx1.b == 1
-#        self.assertTrue(qpdc1(tmp1_1))
 
 #------------------------------------------------------------------------------
 # Test the _FactIndex class
@@ -2762,9 +2749,8 @@ class SelectTestCase(unittest.TestCase):
         self.assertFalse(f3 <= f2b)
 
         fpb = path(Fact)
-        fpe = FieldPathEval(fpb.meta.path)
-        self.assertEqual(f1, fpe(f1))
-        self.assertFalse(f2 == fpe(f1))
+        self.assertEqual(f1, fpb.meta.resolve(f1))
+        self.assertFalse(f2 == fpb.meta.resolve(f1))
 
         fb1 = FactBase(facts=facts, indexes=[path(Fact)])
         fb2 = FactBase(facts=facts)
@@ -2871,9 +2857,9 @@ class SelectTestCase(unittest.TestCase):
 
         # Test that the fact base index
         fb = FactBase(indexes=[Afact.num2, Bfact.str1])
-        self.assertEqual(set(fb.indexes),
-                         set([Afact.num2.meta.path,
-                              Bfact.str1.meta.path]))
+        self.assertEqual(set([p.meta.hashable for p in fb.indexes]),
+                         set([Afact.num2.meta.hashable,
+                              Bfact.str1.meta.hashable]))
 
     #--------------------------------------------------------------------------
     #   Test that we can use the same placeholder multiple times
@@ -2936,19 +2922,19 @@ class SelectTestCase(unittest.TestCase):
         q = fb.select(Afact).order_by(Afact.num1)
         self.assertEqual([f1,f2,f3,f4,f5], q.get())
 
-        q = fb.select(Afact).order_by(Afact.num1.meta.path.asc())
+        q = fb.select(Afact).order_by(Afact.num1.meta.asc())
         self.assertEqual([f1,f2,f3,f4,f5], q.get())
 
-        q = fb.select(Afact).order_by(Afact.num1.meta.path.desc())
+        q = fb.select(Afact).order_by(Afact.num1.meta.desc())
         self.assertEqual([f5,f4,f3,f2,f1], q.get())
 
         q = fb.select(Afact).order_by(Afact.str2)
         self.assertEqual([f5,f4,f3,f2,f1], q.get())
 
-        q = fb.select(Afact).order_by(Afact.str2.meta.path.desc())
+        q = fb.select(Afact).order_by(Afact.str2.meta.desc())
         self.assertEqual([f1,f2,f3,f4,f5], q.get())
 
-        q = fb.select(Afact).order_by(Afact.str1.meta.path.desc(), Afact.num1)
+        q = fb.select(Afact).order_by(Afact.str1.meta.desc(), Afact.num1)
         self.assertEqual([f3,f2,f4,f1,f5], q.get())
 
         q = fb.select(Afact).order_by(desc(Afact.str1), Afact.num1)
