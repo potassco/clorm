@@ -66,20 +66,23 @@ class _classproperty(object):
         return self.getter(owner)
 
 #------------------------------------------------------------------------------
-# A descriptor with write-once-read-many (WORM) behaviour. Help with delayed
+# A descriptor for late initialisation of a read-only value. Help with delayed
 # initialisation, in particular, for metaclasses where an object needs to be
-# created in the __new__ call but can only be assigned in the __init__ call. The
-# assign() function can be called only once.
+# created in the __new__ call but can only be assigned in the __init__ call
+# because the object needs to refer to the class being created in the
+# metaclass. The assign() function can be called only once.
 # ------------------------------------------------------------------------------
-class _wormproperty(object):
+class _lateinit(object):
     def __init__(self,name):
         self._name = name
         self._value=None
+
     def assign(self, value):
         if self._value is not None:
             raise RuntimeError(("Error trying to reset the value for write-once "
                                 "property {}").format(self._name))
         self._value=value
+
     def __get__(self, instance, owner):
         return self._value
 
@@ -407,7 +410,7 @@ class _RawFieldMeta(type):
         if "__init__" not in dct:
             dct["__init__"] = _sfm_constructor
 
-        dct["_fpb"] = _wormproperty("{}._fpb".format(name))
+        dct["_fpb"] = _lateinit("{}._fpb".format(name))
 
         if name == "RawField":
             dct["_parentclass"] = None
@@ -780,7 +783,8 @@ class FieldAccessor(object):
         return instance._field_values[self._name]
 
     def __set__(self, instance, value):
-        raise AttributeError("field is a read-only data descriptor")
+        raise AttributeError(("Cannot modify {}.{}: field values are "
+                              "read-only").format(self.parent.__name__, self.name))
 
 #------------------------------------------------------------------------------
 # SignAccessor - a Python descriptor to access the sign value of a
@@ -815,7 +819,8 @@ class SignAccessor(object):
         return instance._raw.positive
 
     def __set__(self, instance, value):
-        raise AttributeError("\"sign\" is a read-only data descriptor")
+        raise AttributeError(("Cannot modify {}.sign: sign and field values "
+                              "are read-only").format(self.parent.__name__))
 
 
 #------------------------------------------------------------------------------
@@ -1251,7 +1256,7 @@ class _NonLogicalSymbolMeta(type):
 
         # Set the _meta attribute and constuctor
         dct["__init__"] = _nls_constructor
-        dct["_field"] = _wormproperty("{}._field".format(name))
+        dct["_field"] = _lateinit("{}._field".format(name))
         dct["_meta"] = _make_nlsdefn(name, dct)
 
         parents = [ b for b in bases if issubclass(b, NonLogicalSymbol) ]
