@@ -1358,11 +1358,16 @@ class ORMTestCase(unittest.TestCase):
         neg_raw1 = Function("f",[Number(1)],False)
         neg_raw2 = Function("f",[Number(2)],False)
 
+        pos1 = F1(a=1)
+        pos2 = F1(a=2)
+        neg1 = F2(a=1,sign=False)
+        neg2 = F2(a=2,sign=False)
+
         # unify with all raw
         fb = unify([F1,F2], [ pos_raw1, pos_raw2, neg_raw1, neg_raw2])
         self.assertEqual(len(fb), 4)
-        self.assertEqual(fb.select(F1).count(), 2)
-        self.assertEqual(fb.select(F2).count(), 2)
+        self.assertEqual(set(fb.select(F1).get()), set([pos1,pos2]))
+        self.assertEqual(set(fb.select(F2).get()), set([neg1,neg2]))
 
         fb = unify([F1], [ pos_raw1, pos_raw2, neg_raw1, neg_raw2])
         self.assertEqual(len(fb), 2)
@@ -1371,6 +1376,9 @@ class ORMTestCase(unittest.TestCase):
         fb = unify([F2], [ pos_raw1, pos_raw2, neg_raw1, neg_raw2])
         self.assertEqual(len(fb), 2)
         self.assertEqual(fb.select(F2).count(), 2)
+
+        with self.assertRaises(ValueError) as ctx:
+            bad1 = F1(a=1,sign=False)
 
     #--------------------------------------------------------------------------
     #  Test that the fact comparators work
