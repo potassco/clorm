@@ -36,8 +36,10 @@ __all__ = [
     'refine_field',
     'simple_predicate',
     'desc',
+    'asc',
     'unify',
     'path',
+    'hashable_path',
     'ph_',
     'ph1_',
     'ph2_',
@@ -66,9 +68,9 @@ class _classproperty(object):
         return self.getter(owner)
 
 #------------------------------------------------------------------------------
-# A descriptor for late initialisation of a read-only value. Help with delayed
-# initialisation, in particular, for metaclasses where an object needs to be
-# created in the __new__ call but can only be assigned in the __init__ call
+# A descriptor for late initialisation of a read-only value. Helpful for delayed
+# initialisation in metaclasses where an object needs to be created in the
+# metaclass' __new__() call but can only be assigned in the __init__() call
 # because the object needs to refer to the class being created in the
 # metaclass. The assign() function can be called only once.
 # ------------------------------------------------------------------------------
@@ -90,21 +92,37 @@ class _lateinit(object):
 #------------------------------------------------------------------------------
 # PredicatePath class and supporting metaclass and functions. The PredicatePath
 # is crucial to the Clorm API because it implements the intuitive syntax for
-# refering to elements of a fact; the sign as well as the fields and sub-fields
+# referring to elements of a fact; the sign as well as the fields and sub-fields
 # (eg., Pred.sign, Pred.a.b or Pred.a[0]).
 #
-# Every NonLogicalSymbol (NLS) sub-class has an attribute for every field of a
-# predicate as well as providing an indexable lookup by position. Every
-# non-tuple NLS also has a sign-attribute. So, for each NonLogicalSymbol (NLS)
-# sub-class a corresponding PredicatePath sub-class is defined that contains
-# these queryable elements that are also defined as attributes or indexable
-# items. Each element points to another Path instance and forms a tree. The
-# leaves of the tree are base PredicatePath class objects while the non-leaf
-# elements will be sub-classes of PredicatePath.
-#
-# When the API user refers to a field (or sign) of a predicate sub-class they
+# When the API user refers to a field (or sign) of a Predicate sub-class they
 # are redirected to the corresponding PredicatePath object of that predicate
 # sub-class.
+#
+# Overview of how it works:
+#
+# Every NonLogicalSymbol (NLS) sub-class has an attribute for every field of a
+# predicate as well as providing a index lookup by position. Every non-tuple NLS
+# also has a sign attribute to say whether the fact/term is positive or
+# negative.
+#
+# So, for each NonLogicalSymbol (NLS) sub-class a corresponding PredicatePath
+# sub-class is created that contains all these elements; defined as attributes
+# and indexed items. An instance of this PredicatePath is created for each NLS;
+# which forms the root of a tree linking to to other PredicatePath (base or
+# sub-classes) that represent the sub-paths. The leaves of the tree are base
+# PredicatePath class objects while the non-leaf elements are sub-classes of
+# PredicatePath.
+#
+# The result of building the PredicatePath tree is that each element of the tree
+# encodes the path from the root node to that element. This is then used as a
+# mechanism for forming queries and extracting components from facts.
+#
+# PredicatePath overloads the boolean comparison operators to return a
+# functor. This provides the mechanism to construct "where" clauses that form
+# part of a query. For example, the statement "P.a.b == 2" is overloaded to
+# return a functor that takes any P instance p and checks whether p.a.b == 2.
+#
 # ------------------------------------------------------------------------------
 
 def _define_predicate_path_subclass(nls_class):
@@ -135,8 +153,8 @@ class _PredicatePathMeta(type):
         # of a pathbuilder for each attribute
         for fa in nls_class.meta:
             dct[fa.name] = property(_make_lookup_functor(fa.name))
-            ct_cls = fa.defn.complex
-            if ct_cls: ct_classes[fa.name] = ct_cls
+            ct_class = fa.defn.complex
+            if ct_class: ct_classes[fa.name] = ct_class
 
         # If the corresponding NLS is not a tuple then we need to create a
         # "sign" attribute
@@ -148,24 +166,32 @@ class _PredicatePathMeta(type):
 
 
 class PredicatePath(object, metaclass=_PredicatePathMeta):
-    '''FieldPredicatePath implements the ability to specify field query parameters and
-    indexes in an intuitive manner.  A builder is created to match each
-    NonLogicalSymbol (NLS) and is generated to have attributes that match the
-    field name of the NLS. While the class is externally exposed through the
-    API, users should not realise that they are interacting with the builder
-    objects.
+    '''PredicatePath implements the intuitive query syntax.
 
-    For example, when a user specifies 'Pred.a.b.c' the NLS class 'Pred'
-    seemslessly passes off to its associated builder, so that the chain of
-    specifications is actually being generated by the builder.
+    PredicatePath provides a specification for refer to elements of a fact; both
+    the sign as well as the fields and sub-fields of that fact (eg., Pred.sign,
+    Pred.a.b or Pred.a[0]).
+
+    When the API user refers to a field (or sign) of a Predicate sub-class they
+    are redirected to the corresponding PredicatePath object of that predicate
+    sub-class.
+
+    While instances of this class (and sub-classes) are externally exposed
+    through the API, users should not explicitly instantiate instances
+    themselves.
+
+    PredicatePath subclasses provide attributes and indexed items for refering
+    to sub-paths. When a user specifies 'Pred.a.b.c' the NLS class 'Pred'
+    seemslessly passes off to an associated PredicatePath object, which then
+    returns a path corresponding to the specifications.
 
     Fields can be specified either by name through a chain of attributes or
     using the overloaded __getitem__ array function which allows for name or
     positional argument specifications.
 
-    The other important aspect of the builder is that it overloads the boolean
-    operators to return a Comparator functor. This is what allows for query
-    specifications such as 'Pred.a.b == 2' or 'Pred.a.b == ph1_'
+    The other important aspect of the PredicatePath is that it overloads the
+    boolean operators to return a Comparator functor. This is what allows for
+    query specifications such as 'Pred.a.b == 2' or 'Pred.a.b == ph1_'
 
     Because the name 'meta' is a Clorm keyword and can't be used as a field name
     it is used as a property referring to an internal class with functions for
@@ -174,10 +200,44 @@ class PredicatePath(object, metaclass=_PredicatePathMeta):
     '''
 
     #--------------------------------------------------------------------------
-    # A sub-class to provide some useful functions in a sub-namespace. Need this
-    # to avoid creating name conflicts, since each builder will have attributes
-    # that mirror the field names of the associated Predicate/Complex-term.
-    # Internal API use only
+    # An inner class that provides a hashable variant of a path. Because
+    # PredicatePath co-ops the boolean comparision operators to return a
+    # functor, rather than doing the normal behaviour of comparing two object,
+    # therefore it cannot be hashable (which required __eq__() __ne__() to work
+    # properly). But we want to be able to use paths in a set or as a dictionary
+    # key. So we provide a separate class to do this.
+    # --------------------------------------------------------------------------
+    class Hashable(object):
+        def __init__(self, path):
+            self._path = path
+
+        @property
+        def path(self):
+            return self._path
+
+        def __hash__(self):
+            return hash(self._path._pathseq)
+
+        def __eq__(self, other):
+            if not isinstance(other, self.__class__): return NotImplemented
+            return self._path._pathseq == other._path._pathseq
+
+        def __ne__(self, other):
+            result = self.__eq__(other)
+            if result is NotImplemented: return NotImplemented
+            return not result
+
+        def __str__(self):
+            return str(self._path)
+
+        def __repr__(self):
+            return self.__str__()
+
+    #--------------------------------------------------------------------------
+    # An inner class to provide some useful functions in a sub-namespace. Need
+    # this to avoid creating name conflicts, since each sub-class will have
+    # attributes that mirror the field names of the associated
+    # Predicate/Complex-term.  Internal API use only.
     # --------------------------------------------------------------------------
 
     class Meta(object):
@@ -185,33 +245,21 @@ class PredicatePath(object, metaclass=_PredicatePathMeta):
             self._parent = parent
 
         #--------------------------------------------------------------------------
-        # Return the FieldPredicatePath generated by the builder - it is a property of
-        # the Meta class which is accessed through the meta property. Since
-        # "meta" is a clorm reserved keyword it is guaranteed not to be an
-        # field name.
+        # Properties of the parent PredicatePath instance
         # --------------------------------------------------------------------------
         @property
         def hashable(self):
-            return self._parent._pathseq
-
-        #--------------------------------------------------------------------------
-        # Return the a OrderBy structure for ascending and descending
-        # order. Used by the Select query.
-        # --------------------------------------------------------------------------
-        def asc(self):
-            return OrderBy(self._parent, asc=True)
-        def desc(self):
-            return OrderBy(self._parent, asc=False)
+            return self._parent._hashable
 
         # --------------------------------------------------------------------------
-        # Is it a leaf path
+        # Is this a leaf path
         # --------------------------------------------------------------------------
         @property
         def is_leaf(self):
             return not hasattr(self, '_nls_class')
 
         # --------------------------------------------------------------------------
-        # Is it a root path (ie. the path corresponds to a predicate definition)
+        # Is this a root path (ie. the path corresponds to a predicate definition)
         # --------------------------------------------------------------------------
         @property
         def is_root(self):
@@ -224,24 +272,41 @@ class PredicatePath(object, metaclass=_PredicatePathMeta):
         def is_sign(self):
             return self._parent._pathseq[-1] == "sign"
 
+        # --------------------------------------------------------------------------
+        # Return the Predicate sub-class that is the root of this path
+        # --------------------------------------------------------------------------
         @property
-        def Predicate(self):
+        def predicate(self):
             return self._parent._pathseq[0]
 
         #--------------------------------------------------------------------------
         # get the RawField instance associated with this path. If the path is a
-        # root path or a sign path then it won't have an associated field so we
-        # return None
+        # root path or a sign path then it won't have an associated field so
+        # will return None
         # --------------------------------------------------------------------------
         @property
         def field(self):
             return self._parent._field
 
         # --------------------------------------------------------------------------
-        # subpaths
+        # All the subpaths of this path
         #--------------------------------------------------------------------------
+        @property
         def subpaths(self):
             return self._parent._allsubpaths
+
+        #--------------------------------------------------------------------------
+        # Functions that do something with the parent PredicatePath instance
+        #--------------------------------------------------------------------------
+
+        #--------------------------------------------------------------------------
+        # Return an OrderBy object for specifying sorting in ascending or
+        # descending order. Used by the Select query.
+        # --------------------------------------------------------------------------
+        def asc(self):
+            return OrderBy(self._parent, asc=True)
+        def desc(self):
+            return OrderBy(self._parent, asc=False)
 
         #--------------------------------------------------------------------------
         # Resolve (extract the component) the path wrt a fact
@@ -254,10 +319,6 @@ class PredicatePath(object, metaclass=_PredicatePathMeta):
             for name in pseq[1:]: value = value.__getattribute__(name)
             return value
 
-        #--------------------------------------------------------------------------
-        # Resolve (extract the component) the path wrt a fact
-        # --------------------------------------------------------------------------
-
     #--------------------------------------------------------------------------
     # Return the underlying meta object with useful functions
     # Internal API use only
@@ -267,7 +328,9 @@ class PredicatePath(object, metaclass=_PredicatePathMeta):
         return self._meta
 
     #--------------------------------------------------------------------------
-    #
+    # Takes a pathseq - which is a sequence where the first element must be a
+    # Predicate class and subsequent elements are strings refering to
+    # attributes.
     #--------------------------------------------------------------------------
     def __init__(self, pathseq):
         self._meta = PredicatePath.Meta(self)
@@ -275,12 +338,14 @@ class PredicatePath(object, metaclass=_PredicatePathMeta):
         self._subpath = {}
         self._allsubpaths = tuple([])
         self._field = self._get_field()
+        self._hashable = PredicatePath.Hashable(self)
 
         if not pathseq or not inspect.isclass(pathseq[0]) or \
            not issubclass(pathseq[0], Predicate):
             raise TypeError("Invalid path sequence for PredicatePath: {}".format(pathseq))
 
-        # Base class initialisation
+        # If this is a leaf path (instance of the base PredicatePath class) then
+        # there will be no sub-paths so nothing else to do.
         if not hasattr(self, '_nls_class'): return
 
         # Iteratively build the tree of PredicatePaths corresponding to the
@@ -291,7 +356,7 @@ class PredicatePath(object, metaclass=_PredicatePathMeta):
             name = fa.name
             idx = fa.index
             if name in self._complexterm_classes:
-                path_cls = self._complexterm_classes[name].meta.PredicatePath
+                path_cls = self._complexterm_classes[name].meta.path_class
             else:
                 path_cls = PredicatePath
             path = path_cls(list(self._pathseq) + [name])
@@ -317,6 +382,12 @@ class PredicatePath(object, metaclass=_PredicatePathMeta):
             field = nls.meta[name].defn
             if field.complex: nls = field.complex
         return field
+
+    #--------------------------------------------------------------------------
+    # A PredicatePath instance is a functor that resolves a fact wrt the path
+    # --------------------------------------------------------------------------
+    def __call__(self, fact):
+        return self._meta.resolve(fact)
 
     #--------------------------------------------------------------------------
     # Get all field path builder corresponding to an index
@@ -370,6 +441,27 @@ def path(arg):
     if inspect.isclass(arg) and issubclass(arg, Predicate):
         return arg.meta.path
     raise TypeError("{} is not a Predicate class".format(arg))
+
+#------------------------------------------------------------------------------
+# API function to return the PredicatePath.Hashable instance for a path
+# ------------------------------------------------------------------------------
+
+def hashable_path(arg):
+    '''Return a PredicatePath.Hashable instance for a path or Predicate sub-class.
+
+    A hashable path can be used in a set or dictionary key. If the argument is a
+    path then returns the hashable version (the original path can be accessed
+    from the hashable's "path" property). If the argument is a Predicate
+    sub-class then returns the hashable path corresponding to the root path for
+    that predicate class.
+
+    '''
+    if inspect.isclass(arg) and issubclass(arg, Predicate):
+        return arg.meta.path.meta.hashable
+    elif isinstance(arg, PredicatePath):
+        return arg.meta.hashable
+    raise TypeError(("Invalid argument {} (type: {}). Expecting a Predicate sub-class "
+                     "or path").format(arg, type(arg)))
 
 #------------------------------------------------------------------------------
 # RawField class captures the definition of a logical term ("which we will call
@@ -719,8 +811,8 @@ class OrderBy(object):
         self._path = path
         self.asc = asc
     def compare(self, a,b):
-        va = self._path.meta.resolve(a)
-        vb = self._path.meta.resolve(b)
+        va = self._path(a)
+        vb = self._path(b)
         if  va == vb: return 0
         if self.asc and va < vb: return -1
         if not self.asc and va > vb: return -1
@@ -733,11 +825,14 @@ class OrderBy(object):
         return self.__str__()
 
 #------------------------------------------------------------------------------
-# A helper function to return a OrderBy descending object. Input is a
-# PredicatePath
+# Helper functions to return a OrderBy in descending and ascending order. Input
+# is a PredicatePath. The ascending order function is provided for completeness
+# since the order_by parameter will treat a path as ascending order by default.
 # ------------------------------------------------------------------------------
 def desc(path):
     return path.meta.desc()
+def asc(path):
+    return path.meta.asc()
 
 #------------------------------------------------------------------------------
 # FieldAccessor - a Python descriptor (similar to a property) to access the
@@ -866,7 +961,7 @@ def _get_field_defn(defn):
 def _get_paths(predicate):
     def get_subpaths(path):
         paths=[]
-        for subpath in path.meta.subpaths():
+        for subpath in path.meta.subpaths:
             paths.append(subpath)
             paths.extend(get_subpaths(subpath))
         return paths
@@ -974,8 +1069,8 @@ class NLSDefn(object):
             raise RuntimeError(("Trying to reset the parent for a "
                                 "NLSDefn doesn't make sense"))
         self._parent_cls = pc
-        self._PredicatePath = _define_predicate_path_subclass(pc)
-        self._path = self._PredicatePath([pc])
+        self._path_class = _define_predicate_path_subclass(pc)
+        self._path = self._path_class([pc])
 
     # Internal property
     @property
@@ -983,7 +1078,7 @@ class NLSDefn(object):
 
     # Internal property
     @property
-    def PredicatePath(self): return self._PredicatePath
+    def path_class(self): return self._path_class
 
     def __len__(self):
         '''Returns the number of fields'''
@@ -1730,13 +1825,13 @@ class PredicatePathComparator(Comparator):
 
         # Get the value of an argument (resolving placeholder)
         def getargval(arg):
-            if isinstance(arg, PredicatePath): return arg.meta.resolve(fact)
+            if isinstance(arg, PredicatePath): return arg(fact)
             elif isinstance(arg, _PositionalPlaceholder): return args[arg.posn]
             elif isinstance(arg, _NamedPlaceholder): return kwargs[arg.name]
             else: return arg
 
         # Get the values of the two arguments and then calculate the operator
-        v1 = self._arg1.meta.resolve(fact)
+        v1 = self._arg1(fact)
         v2 = getargval(self._arg2)
 
         # As much as possible check that the types should match - ie if the
@@ -1877,7 +1972,7 @@ class _FactIndex(object):
     def __init__(self, path):
         try:
             self._path = path
-            self._predicate = self._path.meta.Predicate
+            self._predicate = self._path.meta.predicate
             self._keylist = []
             self._key2values = {}
         except:
@@ -1890,7 +1985,7 @@ class _FactIndex(object):
     def add(self, fact):
         if not isinstance(fact, self._predicate):
             raise TypeError("{} is not a {}".format(fact, self._predicate))
-        key = self._path.meta.resolve(fact)
+        key = self._path(fact)
 
         # Index the fact by the key
         if key not in self._key2values: self._key2values[key] = set()
@@ -1907,7 +2002,7 @@ class _FactIndex(object):
     def remove(self, fact, raise_on_missing=True):
         if not isinstance(fact, self._predicate):
             raise TypeError("{} is not a {}".format(fact, self._predicate))
-        key = self._path.meta.resolve(fact)
+        key = self._path(fact)
 
         # Remove the value
         if key not in self._key2values:
@@ -2249,7 +2344,7 @@ class _FactMap(object):
             self._indexes = tuple(indexes)
             self._findexes = collections.OrderedDict(
                 (p.meta.hashable, _FactIndex(p)) for p in self._indexes )
-            preds = set([p.meta.Predicate for p in self._indexes])
+            preds = set([p.meta.predicate for p in self._indexes])
             if len(preds) != 1 or preds != set([ptype]):
                 raise TypeError("Fields in {} do not belong to {}".format(indexes,preds))
 
@@ -2467,8 +2562,8 @@ class FactBase(object):
 
         self._indexes = tuple(indexes)
         for path in self._indexes:
-            if path.meta.Predicate not in grouped: grouped[path.meta.Predicate] = []
-            grouped[path.meta.Predicate].append(path)
+            if path.meta.predicate not in grouped: grouped[path.meta.predicate] = []
+            grouped[path.meta.predicate].append(path)
         self._factmaps = { pt : _FactMap(pt, idxs) for pt, idxs in grouped.items() }
 
         if facts is None: return
@@ -2949,7 +3044,7 @@ class SymbolPredicateUnifier(object):
 
     def _register_index(self, path, predicates, indexes, predicateset, indexset):
         if path.meta.hashable in indexset: return
-        if isinstance(path, PredicatePath) and path.meta.Predicate in predicateset:
+        if isinstance(path, PredicatePath) and path.meta.predicate in predicateset:
             indexset.add(path.meta.hashable)
             indexes.append(path)
         else:

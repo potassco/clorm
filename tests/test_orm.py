@@ -15,8 +15,8 @@ from clorm.orm import \
     _get_field_defn, refine_field, simple_predicate, \
     not_, and_, or_, StaticComparator, \
     ph_, ph1_, ph2_, \
-    _FactIndex, _FactMap, PredicatePath, path, \
-    unify, desc, FactBase, SymbolPredicateUnifier,  \
+    _FactIndex, _FactMap, PredicatePath, path, hashable_path, \
+    unify, desc, asc, FactBase, SymbolPredicateUnifier,  \
     TypeCastSignature, make_function_asp_callable, make_method_asp_callable, \
     ContextBuilder
 
@@ -26,7 +26,7 @@ from clorm.orm import \
 
 __all__ = [
     'ORMTestCase',
-    'PredicatePathBuilderTestCase',
+    'PredicatePathTestCase',
     'FactIndexTestCase',
     'FactMapTestCase',
     'FactBaseTestCase',
@@ -216,16 +216,16 @@ class ORMTestCase(unittest.TestCase):
             e = CT.Field()
 
         # Indexes fields for P are: P.d, P.d.b, P.d.c.arg1, P.e.b, P.e.c.arg1
-        indexes = set([p.meta.hashable for p in P.meta.indexes])
+        indexes = set([hashable_path(p) for p in P.meta.indexes])
         self.assertTrue(len(indexes), 5)
-        self.assertTrue(P.d.meta.hashable in indexes)
-        self.assertTrue(P.d.b.meta.hashable in indexes)
-        self.assertTrue(P.d.c.arg1.meta.hashable in indexes)
-        self.assertTrue(P.e.b.meta.hashable in indexes)
-        self.assertTrue(P.e.c.arg1.meta.hashable in indexes)
-        self.assertFalse(P.e.meta.hashable in indexes)
-        self.assertFalse(P.d.a.meta.hashable in indexes)
-        self.assertFalse(P.d.c.arg2.meta.hashable in indexes)
+        self.assertTrue(hashable_path(P.d) in indexes)
+        self.assertTrue(hashable_path(P.d.b) in indexes)
+        self.assertTrue(hashable_path(P.d.c.arg1) in indexes)
+        self.assertTrue(hashable_path(P.e.b) in indexes)
+        self.assertTrue(hashable_path(P.e.c.arg1) in indexes)
+        self.assertFalse(hashable_path(P.e) in indexes)
+        self.assertFalse(hashable_path(P.d.a) in indexes)
+        self.assertFalse(hashable_path(P.d.c.arg2) in indexes)
 
     #--------------------------------------------------------------------------
     # Test that we can distinguish between user defined and anonymous
@@ -1594,18 +1594,18 @@ class ORMTestCase(unittest.TestCase):
             d = CT.Field(index=True)
             e = CT.Field()
 
-        expected=set([P.d.meta.hashable,
-                      P.d.b.meta.hashable, P.d.c.arg1.meta.hashable,
-                      P.e.b.meta.hashable, P.e.c.arg1.meta.hashable])
+        expected=set([hashable_path(P.d),
+                      hashable_path(P.d.b), hashable_path(P.d.c.arg1),
+                      hashable_path(P.e.b), hashable_path(P.e.c.arg1)])
         self.assertEqual(spu.predicates, (P,))
-        self.assertEqual(set([p.meta.hashable for p in spu.indexes]), set(expected))
+        self.assertEqual(set([hashable_path(p) for p in spu.indexes]), set(expected))
 
         ct_func=Function("ct",[Number(1),String("aaa"),
                                Function("",[Number(1),Function("const",[])])])
         p1=Function("p",[ct_func,ct_func])
         fb=spu.unify(symbols=[p1],raise_on_empty=True)
         self.assertEqual(len(fb),1)
-        self.assertEqual(set([p.meta.hashable for p in fb.indexes]), expected)
+        self.assertEqual(set([hashable_path(p) for p in fb.indexes]), expected)
 
     #--------------------------------------------------------------------------
     # Test that subclass factbase works and we can specify indexes
@@ -1719,10 +1719,10 @@ class ORMTestCase(unittest.TestCase):
 
 
 #------------------------------------------------------------------------------
-# Test the PredicatePathBuilder class
+# Test the PredicatePath class and supporting classes/functions
 #------------------------------------------------------------------------------
 
-class PredicatePathBuilderTestCase(unittest.TestCase):
+class PredicatePathTestCase(unittest.TestCase):
     def setUp(self):
         class F(ComplexTerm):
             a = IntegerField
@@ -1750,9 +1750,9 @@ class PredicatePathBuilderTestCase(unittest.TestCase):
         F = self.F
         G = self.G
         H = self.H
-        FPP = F.meta.PredicatePath
-        GPP = G.meta.PredicatePath
-        HPP = H.meta.PredicatePath
+        FPP = F.meta.path_class
+        GPP = G.meta.path_class
+        HPP = H.meta.path_class
 
         # Check that all the appropriate attributes are defined
         self.assertTrue('a' in FPP.__dict__)
@@ -1781,9 +1781,9 @@ class PredicatePathBuilderTestCase(unittest.TestCase):
         self.assertTrue(gpath.meta.is_root)
 
         # The path is associated with a predicate
-        self.assertEqual(fpath.meta.Predicate,F)
-        self.assertEqual(gpath.meta.Predicate,G)
-        self.assertEqual(hpath.meta.Predicate,H)
+        self.assertEqual(fpath.meta.predicate,F)
+        self.assertEqual(gpath.meta.predicate,G)
+        self.assertEqual(hpath.meta.predicate,H)
 
         # Make sure that sub-paths determined by attribute matches to the
         # indexed sub-paths. Note: we can't directly compare two paths because
@@ -1834,6 +1834,26 @@ class PredicatePathBuilderTestCase(unittest.TestCase):
         with self.assertRaises(AttributeError) as ctx:
             sign = G.sign
 
+    def test_hashable_path(self):
+
+        F = self.F
+        H = self.H
+        fpath = path(F)
+        hpath = path(H)
+
+        self.assertEqual(hashable_path(fpath), hashable_path(F))
+        self.assertEqual(str(hashable_path(F.a)), str(F.a))
+        self.assertTrue(hashable_path(F.a) == hashable_path(fpath.a))
+        self.assertTrue(hashable_path(F.a) != hashable_path(H.a))
+        self.assertEqual(id(hashable_path(F.a).path), id(F.a))
+
+        hp2p = { hashable_path(p) : p for p in [H.a,H.b.a,H.c.a] }
+
+        self.assertEqual(id(hp2p[hashable_path(H.a)]), id(H.a))
+        self.assertEqual(id(hp2p[hashable_path(H.b.a)]), id(H.b.a))
+        self.assertEqual(id(hp2p[hashable_path(H.c.a)]), id(H.c.a))
+
+
     def test_resolve_fact_wrt_path(self):
 
         F = self.F
@@ -1843,32 +1863,32 @@ class PredicatePathBuilderTestCase(unittest.TestCase):
         f1_pos = F(a=1)
         f1_neg = F(a=2,sign=False)
 
-        self.assertEqual(path(F).meta.resolve(f1_pos), f1_pos)
-        self.assertEqual(path(F).meta.resolve(f1_neg), f1_neg)
-        self.assertEqual(F.a.meta.resolve(f1_pos), f1_pos.a)
-        self.assertEqual(F.a.meta.resolve(f1_neg), f1_neg.a)
-        self.assertEqual(F.sign.meta.resolve(f1_pos), f1_pos.sign)
-        self.assertEqual(F.sign.meta.resolve(f1_neg), f1_neg.sign)
+        self.assertEqual(path(F)(f1_pos), f1_pos)
+        self.assertEqual(path(F)(f1_neg), f1_neg)
+        self.assertEqual(F.a(f1_pos), f1_pos.a)
+        self.assertEqual(F.a(f1_neg), f1_neg.a)
+        self.assertEqual(F.sign(f1_pos), f1_pos.sign)
+        self.assertEqual(F.sign(f1_neg), f1_neg.sign)
 
         g1 = G(a="a",b="b")
-        self.assertEqual(path(G).meta.resolve(g1), g1)
-        self.assertEqual(G.a.meta.resolve(g1), g1.a)
-        self.assertEqual(G.b.meta.resolve(g1), g1.b)
+        self.assertEqual(path(G)(g1), g1)
+        self.assertEqual(G.a(g1), g1.a)
+        self.assertEqual(G.b(g1), g1.b)
 
         h1_pos = H(a=10,b=f1_pos,c=g1)
         h1_neg = H(a=10,b=f1_pos,c=g1,sign=False)
         h2_pos = H(a=10,b=f1_neg,c=g1)
 
-        self.assertEqual(path(H).meta.resolve(h1_pos), h1_pos)
-        self.assertEqual(path(H).meta.resolve(h1_neg), h1_neg)
-        self.assertEqual(path(H).meta.resolve(h2_pos), h2_pos)
-        self.assertEqual(H.a.meta.resolve(h1_pos), h1_pos.a)
-        self.assertEqual(H.b.meta.resolve(h1_pos), f1_pos)
-        self.assertEqual(H.b.a.meta.resolve(h1_pos), f1_pos.a)
-        self.assertEqual(H.b.sign.meta.resolve(h1_pos), f1_pos.sign)
-        self.assertEqual(H.sign.meta.resolve(h1_pos), h1_pos.sign)
-        self.assertEqual(H.sign.meta.resolve(h1_neg), h1_neg.sign)
-        self.assertEqual(H.sign.meta.resolve(h2_pos), h2_pos.sign)
+        self.assertEqual(path(H)(h1_pos), h1_pos)
+        self.assertEqual(path(H)(h1_neg), h1_neg)
+        self.assertEqual(path(H)(h2_pos), h2_pos)
+        self.assertEqual(H.a(h1_pos), h1_pos.a)
+        self.assertEqual(H.b(h1_pos), f1_pos)
+        self.assertEqual(H.b.a(h1_pos), f1_pos.a)
+        self.assertEqual(H.b.sign(h1_pos), f1_pos.sign)
+        self.assertEqual(H.sign(h1_pos), h1_pos.sign)
+        self.assertEqual(H.sign(h1_neg), h1_neg.sign)
+        self.assertEqual(H.sign(h2_pos), h2_pos.sign)
 
     def test_path_comparator(self):
 
@@ -2749,8 +2769,8 @@ class SelectTestCase(unittest.TestCase):
         self.assertFalse(f3 <= f2b)
 
         fpb = path(Fact)
-        self.assertEqual(f1, fpb.meta.resolve(f1))
-        self.assertFalse(f2 == fpb.meta.resolve(f1))
+        self.assertEqual(f1, fpb(f1))
+        self.assertFalse(f2 == fpb(f1))
 
         fb1 = FactBase(facts=facts, indexes=[path(Fact)])
         fb2 = FactBase(facts=facts)
@@ -2857,9 +2877,9 @@ class SelectTestCase(unittest.TestCase):
 
         # Test that the fact base index
         fb = FactBase(indexes=[Afact.num2, Bfact.str1])
-        self.assertEqual(set([p.meta.hashable for p in fb.indexes]),
-                         set([Afact.num2.meta.hashable,
-                              Bfact.str1.meta.hashable]))
+        self.assertEqual(set([hashable_path(p) for p in fb.indexes]),
+                         set([hashable_path(Afact.num2),
+                              hashable_path(Bfact.str1)]))
 
     #--------------------------------------------------------------------------
     #   Test that we can use the same placeholder multiple times
@@ -2923,6 +2943,9 @@ class SelectTestCase(unittest.TestCase):
         self.assertEqual([f1,f2,f3,f4,f5], q.get())
 
         q = fb.select(Afact).order_by(Afact.num1.meta.asc())
+        self.assertEqual([f1,f2,f3,f4,f5], q.get())
+
+        q = fb.select(Afact).order_by(asc(Afact.num1))
         self.assertEqual([f1,f2,f3,f4,f5], q.get())
 
         q = fb.select(Afact).order_by(Afact.num1.meta.desc())
