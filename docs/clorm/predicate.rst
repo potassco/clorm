@@ -248,6 +248,90 @@ the above ``Booking`` class could be replaced with:
 		default=LocationTuple(city="Sydney", country="Australia"))
 
 
+Negative Facts
+--------------
+
+ASP follows standard logic programming syntax and treats the ``not`` keyword as
+**default negation** (also **negation as failure**). Using default negation is
+important to ASP programming as it can lead to more readable and compact
+modelling of a problem.
+
+However, there may be times when having an explicit notion of negation is also
+useful, and ASP/Clingo does have support for **classical negation**; indicated
+syntactically using the ``-`` symbol:
+
+.. code-block:: prolog
+
+    { a(1..2); b(1..2) }.
+    -b(N) :- a(N).
+    -a(N) :- b(N).
+
+The above program chooses amongst the ``a/1`` and ``b/1`` predicates, then for
+every positive ``a/1`` fact, the corresponding ``b/1`` fact is negated and
+vice-versa. This will generate nine stable models. For example, if ``a(2)`` and
+``b(1)`` are chosen, then the corresponding negative literals will be ``-b(2)``
+and ``-a(1)`` respectively.
+
+Note: Clingo supports negated literals as well as terms. However, tuples cannot be negated.
+
+.. code-block:: prolog
+
+   f(-g(a)).   % This is valid
+   f(-(a,b)).  % Error!!!
+
+Clorm supports negation for any fact or term that can be negated by
+Clingo. Specifying a negative literal simply involves setting ``sign=False``
+when instantiating the Predicate (or ComplexTerm). Note: unlike the field
+parameters, the ``sign`` parameter must be specified as a named parameter and
+cannot be specified using positional arguments.
+
+.. code-block:: python
+
+   class P(Predicate):
+       a = IntegerField
+
+   neg_p1 = P(a=1,sign=False)
+   neg_p1_alt = P(1,sign=False)
+   assert neg_p1 == neg_p1_alt
+
+Once instantiated, checking whether a fact (or a complex term) is negated can be
+determined using the ``sign`` attribute of Predicate instance.
+
+.. code-block:: python
+
+   assert neg_p1.sign == False
+
+Finally, for finer control of the unification process, a Predicate/ComplexTerm
+can be specified to only unify with either positive or negative facts/terms by
+setting a ``sign`` meta attribute declaration.
+
+.. code-block:: python
+
+   class P_pos(Predicate):
+       a = IntegerField
+       class Meta:
+          sign = True
+	  name = "p"
+
+   class P_neg(Predicate):
+       a = IntegerField
+       class Meta:
+          sign = False
+	  name = "p"
+
+   % Instatiating facts
+   pos_p = P_pos(1)                     % Ok
+   neg_p_fail = P_pos(1,sign=False)     % throws a ValueError
+
+   neg_p = P_neg(1)                     % Ok
+   pos_p_fail = P_neg(1,sign=False)     % throws a ValueError
+
+   % Unifying against raw Clingo positive and negative facts
+   raws = [Function("p",Number(1)), Function("p",Number(1),positive=False)]
+   fb = unify([P_pos,P_neg], raw)
+   assert fb.select(F_pos).get() == [pos_p]
+   assert fb.select(F_neg).get() == [neg_p]
+
 Field Definitions
 -----------------
 

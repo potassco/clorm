@@ -132,6 +132,24 @@ case. Finally, ``count()`` returns the number of matched entries.
        for pet in query2.get():
            assert pet.owner == "dave"
 
+Querying Negative Facts/Complex-Terms
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The Clorm query mechanism support querying based on the sign of a fact or
+complex term.
+
+.. code-block:: python
+
+   class P(Predicate):
+       a = IntegerField
+
+   p1 = P(1)
+   neg_p2 = P(2,sign=False)
+
+   fb = FactBase([p1,neg_p2])
+   assert fb.select(P).where(P.sign == True).get(), [p1]
+   assert fb.select(P).where(P.sign == False).get(), [neg_p2]
+
 Queries that use Indexes
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
