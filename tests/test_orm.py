@@ -155,6 +155,33 @@ class ORMTestCase(unittest.TestCase):
             class P(Predicate):
                 Field = IntegerField
 
+        #------------------------------------------
+        # Test incorrect Meta attributes
+
+        # Empty 'name' is invalid
+        with self.assertRaises(ValueError) as ctx:
+            class P(Predicate):
+                a = IntegerField
+                class Meta: name = ""
+
+        # Name and is_tuple=True is invalid
+        with self.assertRaises(ValueError) as ctx:
+            class P(Predicate):
+                a = IntegerField
+                class Meta: name = "blah" ;  is_tuple = True
+
+        # is_tuple=True and sign=None
+        with self.assertRaises(ValueError) as ctx:
+            class P(Predicate):
+                a = IntegerField
+                class Meta: sign = None ;  is_tuple = True
+
+        # is_tuple=True and sign=False
+        with self.assertRaises(ValueError) as ctx:
+            class P(Predicate):
+                a = IntegerField
+                class Meta: sign = False ;  is_tuple = True
+
     #--------------------------------------------------------------------------
     # Simple test to make sure the default getters and setters are correct
     #--------------------------------------------------------------------------
@@ -647,10 +674,17 @@ class ORMTestCase(unittest.TestCase):
                 name="f"
                 sign=False
 
+        class G(Predicate):
+            a = IntegerField
+            b = IntegerField
+            class Meta: is_tuple = True
+
         self.assertEqual(F1.meta.sign, None)
         self.assertEqual(F2.meta.sign, True)
         self.assertEqual(F3.meta.sign, False)
 
+        # Tuple can only unify with positive literals
+        self.assertEqual(G.meta.sign, True)
 
         # Test that how we initialise the different Predicate versions
         pos_raw=Function("f",[Number(1)])
@@ -661,6 +695,7 @@ class ORMTestCase(unittest.TestCase):
         pos_f1_alt=F1(raw=pos_raw) ; neg_f1_alt=F1(raw=neg_raw)
         self.assertEqual(pos_f1,pos_f1_alt)
         self.assertEqual(neg_f1,neg_f1_alt)
+        self.assertEqual(pos_f1.clone(sign=False).raw, neg_f1.raw)
 
         # F2 handles positive only
         pos_f1=F2(1,sign=True) ;
@@ -674,6 +709,14 @@ class ORMTestCase(unittest.TestCase):
         with self.assertRaises(ValueError) as ctx:
             neg_f1=F2(raw=neg_raw)
 
+        with self.assertRaises(ValueError) as ctx:
+            neg_tuple_g = G(1,2,sign=False)
+
+        g1 = G(1,2)
+        self.assertEqual(g1.raw, Function("",[Number(1),Number(2)]))
+        with self.assertRaises(ValueError) as ctx:
+            neg_g1 = g1.clone(sign=False)
+        
         # F3 handles negative only
         neg_f1=F3(1,sign=False) ;
         neg_f1_alt=F3(raw=neg_raw) ;

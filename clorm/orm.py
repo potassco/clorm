@@ -157,7 +157,7 @@ class _PredicatePathMeta(type):
             if ct_class: ct_classes[fa.name] = ct_class
 
         # If the corresponding NLS is not a tuple then we need to create a
-        # "sign" attribute
+        # "sign" attribute.
         if not nls_class.meta.is_tuple:
             dct["sign"] = property(_make_lookup_functor("sign"))
 
@@ -986,8 +986,9 @@ def _get_paths_for_default_indexed_fields(predicate):
 # One NLSDefn object for each NonLogicalSymbol sub-class
 #--------------------------------------------------------------------------
 class NLSDefn(object):
-    """Encapsulates some meta-data for a NonLogicalSymbol (NLS) definition. Each NLS
-    class will have a corresponding NLSDefn object that specifies some
+    """Encapsulates some meta-data for a NonLogicalSymbol (NLS) definition.
+
+    Each NLS class will have a corresponding NLSDefn object that specifies some
     introspective properties of the predicate/complex-term.
 
     """
@@ -1238,34 +1239,52 @@ def _nlsdefn_default_predicate_name(class_name):
     return output
 
 # build the metadata for the NonLogicalSymbol - NOTE: this funtion returns a
-# NLSDefn instance but it also modified the dct paramater to add the fields.
+# NLSDefn instance but it also modified the dct paramater to add the fields. It
+# also checks to make sure the class Meta declaration is error free: 1) Setting
+# a name is not allowed for a tuple, 2) Sign controls if we want to allow
+# unification against a positive literal only, a negative literal only or
+# both. Sign can be True/False/None. By default sign is None (meaning both
+# positive/negative) unless it is a tuple then it is positive only.
+
 def _make_nlsdefn(class_name, dct):
 
     # Set the default predicate name
     name = _nlsdefn_default_predicate_name(class_name)
     anon = False
     sign = None
+    is_tuple = False
 
     if "Meta" in dct:
         metadefn = dct["Meta"]
         if not inspect.isclass(metadefn):
             raise TypeError("'Meta' attribute is not an inner class")
-        name_def="name" in metadefn.__dict__
-        is_tuple_def="is_tuple" in metadefn.__dict__
+
+        # What has been defined
+        name_def = "name" in metadefn.__dict__
+        is_tuple_def = "is_tuple" in metadefn.__dict__
+        sign_def = "sign" in metadefn.__dict__
+
         if name_def : name = metadefn.__dict__["name"]
-        is_tuple = metadefn.__dict__["is_tuple"] if is_tuple_def else False
+        if is_tuple_def : is_tuple = bool(metadefn.__dict__["is_tuple"])
         if "_anon" in metadefn.__dict__:
             anon = metadefn.__dict__["_anon"]
 
+        if name_def and not name:
+            raise ValueError(("Empty 'name' attribute is invalid. Use "
+                              "'is_tuple=True' if you want to define a tuple."))
         if name_def and is_tuple:
-            raise AttributeError(("Mutually exclusive meta attibutes "
-                                  "'name' and 'is_tuple' "))
+            raise ValueError(("Cannot specify a 'name' attribute if "
+                              "'is_tuple=True' has been set"))
         elif is_tuple: name = ""
 
-        # Sign can be True/False/None. Controls if we want to allow unification
-        # against a positive literal only, a negative literal only or either.
+        if is_tuple: sign = True       # Change sign default if is tuple
+
         if "sign" in  metadefn.__dict__: sign = metadefn.__dict__["sign"]
-        sign = None if sign is None else bool(sign)
+        if sign is not None: sign = bool(sign)
+
+        if is_tuple and not sign:
+            raise ValueError(("Tuples cannot be negated so specifying "
+                              "'sign' is None or False is invalid"))
 
     reserved = set(["meta", "raw", "clone", "sign", "Field"])
 
