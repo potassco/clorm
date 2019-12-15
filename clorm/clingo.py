@@ -32,6 +32,22 @@ __all__ = list([ k for k in oclingo.__dict__.keys() if k[0] != '_'])
 __version__ = oclingo.__version__
 
 # ------------------------------------------------------------------------------
+# Determine if an attribute name has the pattern of a magic method (ie. is
+# callable and has name of the form __XXX__. Ideally, would like to have a
+# system function that tells me the list of magic methods. But this should be
+# good enough.
+# ------------------------------------------------------------------------------
+
+def _poss_magic_method(name,value):
+    if not callable(value): return False
+    if not name.startswith("__"): return False
+    if not name.endswith("__"): return False
+    if len(name) <= 4: return False
+    if name[2] == '_': return False
+    if name[-3] == '_': return False
+    return True
+
+# ------------------------------------------------------------------------------
 # Helper function to smartly build a unifier if only a list of predicates have
 # been provided.
 # ------------------------------------------------------------------------------
@@ -57,10 +73,10 @@ def _model_property(name):
 
 class _ModelMetaClass(type):
     def __new__(meta, name, bases, dct):
-        ignore=["contains"]
+        ignore=["__init__", "__new__", "contains"]
         for key,value in OModel.__dict__.items():
             if key in ignore: continue
-            if key.startswith("_"): continue
+            if key.startswith("_") and not _poss_magic_method(key,value): continue
             if callable(value):
                 dct[key]=_model_wrapper(value)
             else:
@@ -159,10 +175,11 @@ def _solvehandle_property(name):
 
 class _SolveHandleMetaClass(type):
     def __new__(meta, name, bases, dct):
-        ignore=[]
+        ignore=["__init__", "__new__", "__iter__",
+                "__next__", "__enter__", "__exit__"]
         for key,value in OSolveHandle.__dict__.items():
             if key in ignore: continue
-            if key.startswith("_"): continue
+            if key.startswith("_") and not _poss_magic_method(key,value): continue
             if callable(value):
                 dct[key]=_solvehandle_wrapper(value)
             else:
@@ -228,10 +245,10 @@ def _control_property(name):
 
 class _ControlMetaClass(type):
     def __new__(meta, name, bases, dct):
-        ignore=["assign_external", "release_external", "solve"]
+        ignore=["__init__", "__new__", "assign_external", "release_external", "solve"]
         for key,value in OControl.__dict__.items():
             if key in ignore: continue
-            if key.startswith("_"): continue
+            if key.startswith("_") and not _poss_magic_method(key,value): continue
             if callable(value):
                 dct[key]=_control_wrapper(value)
             else:

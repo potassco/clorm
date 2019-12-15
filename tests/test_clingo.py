@@ -59,19 +59,22 @@ class ClingoTestCase(unittest.TestCase):
             fb2 = model.facts(spu, atoms=True)
 
             # Check that the known attributes behave the same as the real model
-            self.assertEqual(model.cost, model._model.cost)
-            self.assertEqual(model.number, model._model.number)
-            self.assertEqual(model.optimality_proven, model._model.optimality_proven)
-            self.assertEqual(model.thread_id, model._model.thread_id)
-            self.assertEqual(model.type, model._model.type)
+            self.assertEqual(model.cost, model.model_.cost)
+            self.assertEqual(model.number, model.model_.number)
+            self.assertEqual(model.optimality_proven, model.model_.optimality_proven)
+            self.assertEqual(model.thread_id, model.model_.thread_id)
+            self.assertEqual(model.type, model.model_.type)
 
             # Note: the SolveControl object returned is created dynamically on
             # each call so will be different for both calls. So test that the
             # symbolic_atoms property is the same.
             sas1=set(model.context.symbolic_atoms)
-            sas2=set(model._model.context.symbolic_atoms)
+            sas2=set(model.model_.context.symbolic_atoms)
             self.assertEqual(len(sas1),len(sas2))
 
+            # Test that clorm.clingo.Model produces the correct string
+            self.assertEqual(str(model), str(model.model_))
+            self.assertEqual(repr(model), repr(model.model_))
 
         # Use the orignal clingo.Control object so that we can test the wrapper call
         ctrlX_ = oclingo.Control()
