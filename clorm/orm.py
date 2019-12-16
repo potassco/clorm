@@ -1143,13 +1143,20 @@ def _nls_init_by_raw(self, **kwargs):
     if len(kwargs) != 1:
         raise ValueError("Invalid combination of keyword arguments")
     raw = kwargs["raw"]
-    class_name = type(self).__name__
-    if not self._unifies(raw):
+    self._raw = raw
+    cls=type(self)
+    try:
+        if raw.type != clingo.SymbolType.Function: raise ValueError()
+        if raw.name != cls.meta.name: raise ValueError()
+        if len(raw.arguments) != len(cls.meta): raise ValueError()
+        if cls.meta.sign is not None and cls.meta.sign != raw.positive: raise ValueError()
+
+        for f in self.meta:
+            self._field_values[f.name] = f.defn.cltopy(raw.arguments[f.index])
+    except:
+        class_name = type(self).__name__
         raise ValueError(("Failed to unify clingo.Symbol object {} with "
                           "NonLogicalSymbol class {}").format(raw, class_name))
-    self._raw = raw
-    for idx, f in enumerate(self.meta):
-        self._field_values[f.name] = f.defn.cltopy(raw.arguments[idx])
 
 # Construct a NonLogicalSymbol via the field keywords
 def _nls_init_by_keyword_values(self, **kwargs):
