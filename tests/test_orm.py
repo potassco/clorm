@@ -848,7 +848,7 @@ class ORMTestCase(unittest.TestCase):
         self.assertEqual(g1.raw, Function("",[Number(1),Number(2)]))
         with self.assertRaises(ValueError) as ctx:
             neg_g1 = g1.clone(sign=False)
-        
+
         # F3 handles negative only
         neg_f1=F3(1,sign=False) ;
         neg_f1_alt=F3(raw=neg_raw) ;

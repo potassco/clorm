@@ -71,12 +71,12 @@ transforming ``Clingo.Symbol`` objects into Clorm facts. This unification
 process is integral to using Clorm since it is the main process by which the
 symbols within a Clingo model are transformed into Clorm facts.
 
-A ``unify`` function is provided that takes two parameters; a *unifier* and a
-list of raw clingo symbols. It then tries to unify the list of raw symbols with
-the predicates in the unifier. The function then returns a ``FactBase``
-containing the facts that resulted from the unification of the symbols with the
-first matching predicate. If a symbol was not able to unify with any predicate
-it is ignored.
+A ``unify`` function is provided that takes at least two parameters; a *unifier*
+and a list of raw clingo symbols. It then tries to unify the list of raw symbols
+with the predicates in the unifier. It returns a ``FactBase`` containing the
+facts, or a list of facts if the parameter ``ordered=True``, that resulted from
+the unification of the symbols with the first matching predicate. If a symbol
+was not able to unify with any predicate it is ignored.
 
 .. code-block:: python
 
