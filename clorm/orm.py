@@ -928,17 +928,20 @@ class SignAccessor(object):
 # ------------------------------------------------------------------------------
 
 def _get_field_defn(defn):
+    errmsg = ("Unrecognised field definition object '{}'. Expecting: "
+              "1) RawField (sub-)class, 2) RawField (sub-)class instance, "
+              "3) a tuple containing a field definition")
+
+    # If we get a RawField (sub-)class then return an instance with default init
     if inspect.isclass(defn):
-        if not issubclass(defn,RawField):
-            raise TypeError("Unrecognised field definition object {}".format(defn))
+        if not issubclass(defn,RawField): raise TypeError(errmsg.format(defn))
         return defn()
 
     # Simplest case of a RawField instance
     if isinstance(defn,RawField): return defn
 
     # Expecting a tuple and treat it as a recursive definition
-    if not isinstance(defn, tuple):
-        raise TypeError("Unrecognised field definition object {}".format(defn))
+    if not isinstance(defn, tuple): raise TypeError(errmsg.format(defn))
 
     # NOTE: I was using a dict rather than OrderedDict which just happened to
     # work. Apparently, in Python 3.6 this was an implmentation detail and
@@ -977,6 +980,19 @@ def _get_paths_for_default_indexed_fields(predicate):
         if field and field.index: return True
         return False
     return filter(is_indexed, _get_paths(predicate))
+
+# ------------------------------------------------------------------------------
+# Determine if an attribute name has the pattern of an official attribute
+# (ie.  has name of the form __XXX__).
+# ------------------------------------------------------------------------------
+
+def _magic_name(name):
+    if not name.startswith("__"): return False
+    if not name.endswith("__"): return False
+    if len(name) <= 4: return False
+    if name[2] == '_': return False
+    if name[-3] == '_': return False
+    return True
 
 #------------------------------------------------------------------------------
 # The NonLogicalSymbol base class and supporting functions and classes
@@ -1150,7 +1166,8 @@ def _nls_init_by_keyword_values(self, **kwargs):
     # Construct the clingo function arguments
     for field in self.meta:
         if field.name not in kwargs:
-            default = field.defn.default   # Only get the default once in case it is a function
+            default = field.defn.default   # Only get the default value once in
+                                           # case it is a function.
             if not default:
                 raise ValueError(("Unspecified field {} has no "
                                   "default value".format(field.name)))
@@ -1238,6 +1255,12 @@ def _nlsdefn_default_predicate_name(class_name):
 
     return output
 
+# Detect a class definition for a ComplexTerm
+def _is_complexterm_declaration(name,obj):
+    if not inspect.isclass(obj): return False
+    if not issubclass(obj,ComplexTerm): return False
+    return obj.__name__ == name
+
 # build the metadata for the NonLogicalSymbol - NOTE: this funtion returns a
 # NLSDefn instance but it also modified the dct paramater to add the fields. It
 # also checks to make sure the class Meta declaration is error free: 1) Setting
@@ -1249,7 +1272,7 @@ def _nlsdefn_default_predicate_name(class_name):
 def _make_nlsdefn(class_name, dct):
 
     # Set the default predicate name
-    name = _nlsdefn_default_predicate_name(class_name)
+    pname = _nlsdefn_default_predicate_name(class_name)
     anon = False
     sign = None
     is_tuple = False
@@ -1264,18 +1287,18 @@ def _make_nlsdefn(class_name, dct):
         is_tuple_def = "is_tuple" in metadefn.__dict__
         sign_def = "sign" in metadefn.__dict__
 
-        if name_def : name = metadefn.__dict__["name"]
+        if name_def : pname = metadefn.__dict__["name"]
         if is_tuple_def : is_tuple = bool(metadefn.__dict__["is_tuple"])
         if "_anon" in metadefn.__dict__:
             anon = metadefn.__dict__["_anon"]
 
-        if name_def and not name:
+        if name_def and not pname:
             raise ValueError(("Empty 'name' attribute is invalid. Use "
                               "'is_tuple=True' if you want to define a tuple."))
         if name_def and is_tuple:
             raise ValueError(("Cannot specify a 'name' attribute if "
                               "'is_tuple=True' has been set"))
-        elif is_tuple: name = ""
+        elif is_tuple: pname = ""
 
         if is_tuple: sign = True       # Change sign default if is tuple
 
@@ -1293,30 +1316,35 @@ def _make_nlsdefn(class_name, dct):
     # https://www.python.org/dev/peps/pep-0520/)
     fas= []
     idx = 0
-    for field_name, field_defn in dct.items():
-        if field_name in reserved:
+
+    for fname, fdefn in dct.items():
+
+        # Ignore entries that are not field declarations
+        if fname == "Meta": continue
+        if _magic_name(fname): continue
+        if _is_complexterm_declaration(fname, fdefn): continue
+
+        if fname in reserved:
             raise ValueError(("Error: invalid field name: '{}' "
-                              "is a reserved keyword").format(field_name))
+                              "is a reserved keyword").format(fname))
+        if fname.startswith('_'):
+            raise ValueError(("Error: field names cannot start with an "
+                              "underscore: {}").format(fname))
         try:
-            fd = _get_field_defn(field_defn)
-            if field_name.startswith('_'):
-                raise ValueError(("Error: field names cannot start with an "
-                                  "underscore: {}").format(field_name))
-            fa = FieldAccessor(field_name, idx, fd)
-            dct[field_name] = fa
+            fd = _get_field_defn(fdefn)
+            fa = FieldAccessor(fname, idx, fd)
+            dct[fname] = fa
             fas.append(fa)
             idx += 1
         except TypeError as e:
-            # If we get here assume that the dictionary item is for something
-            # other than a field definition.
-            pass
+            raise TypeError("Error defining field '{}': {}".format(fname,str(e)))
 
     # Create the "sign" attribute - must be assigned a parent in the metaclass
     # __init__() call.
     dct["sign"] = SignAccessor()
 
     # Now create the NLSDefn object
-    return NLSDefn(name=name,field_accessors=fas, anon=anon,sign=sign)
+    return NLSDefn(name=pname,field_accessors=fas, anon=anon,sign=sign)
 
 # ------------------------------------------------------------------------------
 # Define a RawField sub-class that corresponds to a Predicate/ComplexTerm
@@ -1369,9 +1397,9 @@ class _NonLogicalSymbolMeta(type):
         # Create the metadata AND populate dct - the class dict (including the fields)
 
         # Set the _meta attribute and constuctor
+        dct["_meta"] = _make_nlsdefn(name, dct)
         dct["__init__"] = _nls_constructor
         dct["_field"] = _lateinit("{}._field".format(name))
-        dct["_meta"] = _make_nlsdefn(name, dct)
 
         parents = [ b for b in bases if issubclass(b, NonLogicalSymbol) ]
         if len(parents) == 0:

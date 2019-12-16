@@ -25,6 +25,7 @@ from clorm.orm import \
 #------------------------------------------------------------------------------
 
 __all__ = [
+    'RawFieldTestCase',
     'ORMTestCase',
     'PredicatePathTestCase',
     'FactIndexTestCase',
@@ -36,16 +37,15 @@ __all__ = [
     ]
 
 #------------------------------------------------------------------------------
-#
+# Test for RawField and definining simple sub-classes
 #------------------------------------------------------------------------------
 
-class ORMTestCase(unittest.TestCase):
+class RawFieldTestCase(unittest.TestCase):
     def setUp(self):
         pass
 
     def tearDown(self):
         pass
-
 
     #--------------------------------------------------------------------------
     # Test the Simple Fields conversion functions
@@ -126,9 +126,301 @@ class ORMTestCase(unittest.TestCase):
         self.assertTrue(fconst.unifies(csim1))
 
     #--------------------------------------------------------------------------
+    # A default can now take a function that will be called when the Field's
+    # default property is called.
+    # --------------------------------------------------------------------------
+    def test_field_default_function(self):
+        val=0
+        def inc():
+            nonlocal val
+            val +=1
+            return val
+
+        fld1 = IntegerField()
+        fld2 = IntegerField(default=5)
+        fld3 = IntegerField(default=inc)
+        self.assertEqual(fld1.default, None)
+        self.assertEqual(fld2.default, 5)
+        self.assertEqual(fld3.default, 1)
+        self.assertEqual(fld3.default, 2)
+
+    #--------------------------------------------------------------------------
+    # Test setting index for a term
+    #--------------------------------------------------------------------------
+    def test_term_index(self):
+        fint1 = IntegerField()
+        fstr1 = StringField()
+        fconst1 = ConstantField()
+        fint2 = IntegerField(index=True)
+        fstr2 = StringField(index=True)
+        fconst2 = ConstantField(index=True)
+
+        self.assertFalse(fint1.index)
+        self.assertFalse(fstr1.index)
+        self.assertFalse(fconst1.index)
+        self.assertTrue(fint2.index)
+        self.assertTrue(fstr2.index)
+        self.assertTrue(fconst2.index)
+
+
+    #--------------------------------------------------------------------------
+    # Test catching invalid default values for a field
+    #--------------------------------------------------------------------------
+    def test_catch_bad_field_defaults(self):
+        with self.assertRaises(TypeError) as ctx:
+            fld = IntegerField(default="bad")
+
+    #--------------------------------------------------------------------------
+    # Test making a restriction of a field using a list of values
+    #--------------------------------------------------------------------------
+    def test_refine_field_values(self):
+        rf = refine_field
+
+        # Some bad calls
+        with self.assertRaises(TypeError) as ctx:
+            class Something(object):
+                def __init__(self): self._a = 1
+
+            fld = rf("fld", Something, ["a","b"])
+
+        with self.assertRaises(TypeError) as ctx:
+            fld = rf("fld", "notaclass", ["a","b"])
+
+        with self.assertRaises(TypeError) as ctx:
+            fld = rf("fld", IntegerField, ["a"])
+
+        # A good restriction
+        ABCField = rf("ABCField", ConstantField, ["a","b","c"])
+
+        # Make sure it works
+        r_a = Function("a",[])
+        r_b = Function("b",[])
+        r_c = Function("c",[])
+        r_d = Function("d",[])
+        r_1 = Number(1)
+
+        # Test the pytocl direction
+        self.assertEqual(ABCField.pytocl("a"), r_a)
+        self.assertEqual(ABCField.pytocl("b"), r_b)
+        self.assertEqual(ABCField.pytocl("c"), r_c)
+
+        with self.assertRaises(TypeError) as ctx:
+            v = ABCField.pytocl("d")
+
+        with self.assertRaises(TypeError) as ctx:
+            v = ABCField.pytocl(1)
+
+        # Test the cltopy direction
+        self.assertEqual(ABCField.cltopy(r_a), "a")
+        self.assertEqual(ABCField.cltopy(r_b), "b")
+        self.assertEqual(ABCField.cltopy(r_c), "c")
+        with self.assertRaises(TypeError) as ctx:
+            v = ABCField.cltopy(r_d)
+        with self.assertRaises(TypeError) as ctx:
+            v = ABCField.cltopy(r_1)
+
+        self.assertTrue(ABCField.unifies(r_a))
+        self.assertTrue(ABCField.unifies(r_b))
+        self.assertTrue(ABCField.unifies(r_c))
+        self.assertFalse(ABCField.unifies(r_d))
+        self.assertFalse(ABCField.unifies(r_1))
+
+        # Test a version with no class name
+        ABCField2 = rf(ConstantField, ["a","b","c"])
+        self.assertEqual(ABCField2.pytocl("a"), r_a)
+
+        # But only 2 and 3 arguments are valid
+        with self.assertRaises(TypeError) as ctx:
+            ABCField3 = rf(["a","b","c"])
+        with self.assertRaises(TypeError) as ctx:
+            ABCField4 = rf("ABCField", ConstantField, ["a","b","c"], 1)
+
+
+    #--------------------------------------------------------------------------
+    # Test making a restriction of a field using a value functor
+    #--------------------------------------------------------------------------
+    def test_refine_field_functor(self):
+        rf = refine_field
+
+        # A good restriction
+        PosIntField = rf("PosIntField", IntegerField, lambda x: x >= 0)
+
+        # Make sure it works
+        r_neg1 = Number(-1)
+        r_0 = Number(0)
+        r_1 = Number(1)
+        r_a = Function("a",[])
+
+        # Test the pytocl direction
+        self.assertEqual(PosIntField.pytocl(0), r_0)
+        self.assertEqual(PosIntField.pytocl(1), r_1)
+
+        with self.assertRaises(TypeError) as ctx:
+            v = PosIntField.pytocl("a")
+
+        with self.assertRaises(TypeError) as ctx:
+            v = PosIntField.pytocl(-1)
+
+        # Test the cltopy direction
+        self.assertEqual(PosIntField.cltopy(r_0), 0)
+        self.assertEqual(PosIntField.cltopy(r_1), 1)
+        with self.assertRaises(TypeError) as ctx:
+            v = PosIntField.cltopy(r_neg1)
+        with self.assertRaises(TypeError) as ctx:
+            v = PosIntField.cltopy(r_a)
+
+        self.assertTrue(PosIntField.unifies(r_0))
+        self.assertTrue(PosIntField.unifies(r_1))
+        self.assertFalse(PosIntField.unifies(r_neg1))
+        self.assertFalse(PosIntField.unifies(r_a))
+
+#------------------------------------------------------------------------------
+#
+#------------------------------------------------------------------------------
+
+class ORMTestCase(unittest.TestCase):
+    def setUp(self):
+        pass
+
+    def tearDown(self):
+        pass
+
+    #--------------------------------------------------------------------------
+    # Test the _get_field_defn function that smartly returns field definitions
+    #--------------------------------------------------------------------------
+    def test_get_field_defn(self):
+        # Simple case of a RawField instance - return the input
+        tmp = RawField()
+        self.assertEqual(_get_field_defn(tmp), tmp)
+        tmp = IntegerField()
+        self.assertEqual(_get_field_defn(tmp), tmp)
+        tmp = ConstantField()
+        self.assertEqual(_get_field_defn(tmp), tmp)
+
+        # A raw field subclass returns an instance of the subclass
+        self.assertTrue(isinstance(_get_field_defn(RawField), RawField))
+        self.assertTrue(isinstance(_get_field_defn(StringField), StringField))
+
+        # Throws an erorr on an unrecognised object
+        with self.assertRaises(TypeError) as ctx:
+            t = _get_field_defn("error")
+
+        # Throws an erorr on an unrecognised class object
+        with self.assertRaises(TypeError) as ctx:
+            t = _get_field_defn(int)
+        with self.assertRaises(TypeError) as ctx:
+            class Blah(object): pass
+            t = _get_field_defn(Blah)
+
+        # A simple tuple definition
+        td = _get_field_defn((IntegerField(), ConstantField()))
+        self.assertTrue(isinstance(td,RawField))
+
+        # Test the positional and named argument access of result
+        clob = Function("",[Number(1),Function("blah")])
+        pyresult = td.cltopy(clob)
+        self.assertEqual(pyresult[0], 1)
+        self.assertEqual(pyresult.arg1, 1)
+        self.assertEqual(pyresult[1], "blah")
+        self.assertEqual(pyresult.arg2, "blah")
+
+        clresult = td.pytocl((1,"blah"))
+        self.assertEqual(clresult, clob)
+
+    #--------------------------------------------------------------------------
+    # Test that we can define predicates using the class syntax and test that
+    # the getters and setters are connected properly to the predicate classes.
+    # --------------------------------------------------------------------------
+    def test_simple_predicate_defn(self):
+
+        # A simple unary predicate definition
+        class P(Predicate):
+            pass
+        self.assertEqual(P.meta.arity,0)
+        self.assertEqual(P.meta.name, "p")
+
+        # A simple predicate definition
+        class P(Predicate):
+            a = IntegerField
+            b = ConstantField
+        self.assertEqual(P.meta.arity,2)
+        self.assertEqual(P.meta.name, "p")
+
+        # A predicate definition is allowed to have an internal class (other
+        # than Meta) only if it is a ComplexTerm
+        class P(Predicate):
+            class Q(ComplexTerm): d = IntegerField
+            a = IntegerField
+            b = IntegerField
+            c = Q.Field
+
+        self.assertEqual(P.meta.arity,3)
+        self.assertEqual(P.meta.name, "p")
+        self.assertEqual(P.Q.meta.arity,1)
+        self.assertEqual(P.Q.meta.name, "q")
+
+        # Test declaration of predicate with an implicit name
+        class ImplicitlyNamedPredicate(Predicate):
+            aterm = IntegerField()
+
+        inp1 = ImplicitlyNamedPredicate(aterm=2)
+        inp2 = Function("implicitlyNamedPredicate",[Number(2)])
+        self.assertEqual(inp1.raw, inp2)
+
+        # Test declaration of a unary predicate
+        class UnaryPredicate(Predicate):
+            class Meta: name = "unary"
+
+        self.assertEqual(UnaryPredicate.meta.parent, UnaryPredicate)
+
+        up1 = UnaryPredicate()
+        up2 = Function("unary",[])
+        self.assertEqual(up1.raw, up2)
+
+        # Test the class properties; when access from the class and the object.
+        self.assertEqual(up1.meta.name, "unary")
+        self.assertEqual(UnaryPredicate.meta.name, "unary")
+        self.assertEqual(len(up1.meta), 0)
+        self.assertEqual(len(UnaryPredicate.meta), 0)
+
+        # Test that default terms work and that not specifying a value raises
+        # an exception
+        class DefaultFieldPredicate(Predicate):
+            first = IntegerField()
+            second = IntegerField(default=10)
+            class Meta: name = "dfp"
+
+        self.assertEqual(DefaultFieldPredicate.meta.parent, DefaultFieldPredicate)
+
+        dfp1 = DefaultFieldPredicate(first=15)
+        dfp2 = Function("dfp",[Number(15),Number(10)])
+        self.assertEqual(dfp1.raw, dfp2)
+
+        with self.assertRaises(ValueError) as ctx:
+            dfp3 = DefaultFieldPredicate()
+
+        # Test declaration of predicates with Simple and String terms
+        class MultiFieldPredicate(Predicate):
+            aterm1 = StringField()
+            aterm2 = ConstantField()
+            class Meta: name = "mfp"
+
+        mfp1 = MultiFieldPredicate(aterm1="astring", aterm2="asimple")
+        mfp2 = Function("mfp", [String("astring"), Function("asimple",[])])
+        self.assertEqual(mfp1.raw, mfp2)
+
+        # Test that the appropriate term properties are set up properly
+        self.assertEqual(mfp1.aterm1, "astring")
+        self.assertEqual(mfp1.aterm2, "asimple")
+
+    #--------------------------------------------------------------------------
     # Test bad predicate definitions
     # --------------------------------------------------------------------------
     def test_bad_predicate_defn(self):
+
+        #---------------------------------------------------------------------
+        # Some bad definitions
+        #---------------------------------------------------------------------
 
         # "meta" is a reserved word
         with self.assertRaises(ValueError) as ctx:
@@ -154,6 +446,11 @@ class ORMTestCase(unittest.TestCase):
         with self.assertRaises(ValueError) as ctx:
             class P(Predicate):
                 Field = IntegerField
+
+        # The term name starts with an "_"
+        with self.assertRaises(ValueError) as ctx:
+            class P(Predicate):
+                _a = IntegerField
 
         #------------------------------------------
         # Test incorrect Meta attributes
@@ -182,10 +479,35 @@ class ORMTestCase(unittest.TestCase):
                 a = IntegerField
                 class Meta: sign = False ;  is_tuple = True
 
+        # Can't declare an inner class other than Meta that is not a ComplexTerm
+        with self.assertRaises(TypeError) as ctx:
+            class P(Predicate):
+                a = IntegerField
+                class Something: pass
+
+        with self.assertRaises(TypeError) as ctx:
+            class Q(ComplexTerm):
+                b = IntegerField
+            class P(Predicate):
+                a = IntegerField
+                Z = Q
+
+        # Can't declare a non-field
+        with self.assertRaises(TypeError) as ctx:
+            class P(Predicate):
+                a = IntegerField
+                def dfd(self): pass
+
+
+        with self.assertRaises(TypeError) as ctx:
+            class P(Predicate):
+                a = IntegerField
+                b = "string"
+
     #--------------------------------------------------------------------------
     # Simple test to make sure the default getters and setters are correct
     #--------------------------------------------------------------------------
-    def test_raw_term(self):
+    def test_predicate_instance_raw_term(self):
 
         raw1 = Function("func",[Number(1)])
         raw2 = Function("bob",[String("no")])
@@ -211,24 +533,6 @@ class ORMTestCase(unittest.TestCase):
     #--------------------------------------------------------------------------
     # Simple test to make sure the default getters and setters are correct
     #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------
-    # Test setting index for a term
-    #--------------------------------------------------------------------------
-    def test_term_index(self):
-        fint1 = IntegerField()
-        fstr1 = StringField()
-        fconst1 = ConstantField()
-        fint2 = IntegerField(index=True)
-        fstr2 = StringField(index=True)
-        fconst2 = ConstantField(index=True)
-
-        self.assertFalse(fint1.index)
-        self.assertFalse(fstr1.index)
-        self.assertFalse(fconst1.index)
-        self.assertTrue(fint2.index)
-        self.assertTrue(fstr2.index)
-        self.assertTrue(fconst2.index)
 
     #--------------------------------------------------------------------------
     # Test fields with a predicate that are specified as indexed
@@ -415,178 +719,6 @@ class ORMTestCase(unittest.TestCase):
 
         self.assertEqual(BlahBlah.Field().complex, BlahBlah)
 
-    #--------------------------------------------------------------------------
-    # Test the _get_field_defn function that smartly returns field definitions
-    #--------------------------------------------------------------------------
-    def test_get_field_defn(self):
-        # Simple case of a RawField instance - return the input
-        tmp = RawField()
-        self.assertEqual(_get_field_defn(tmp), tmp)
-        tmp = IntegerField()
-        self.assertEqual(_get_field_defn(tmp), tmp)
-        tmp = ConstantField()
-        self.assertEqual(_get_field_defn(tmp), tmp)
-
-        # A raw field subclass returns an instance of the subclass
-        self.assertTrue(isinstance(_get_field_defn(RawField), RawField))
-        self.assertTrue(isinstance(_get_field_defn(StringField), StringField))
-
-        # Throws an erorr on an unrecognised object
-        with self.assertRaises(TypeError) as ctx:
-            t = _get_field_defn("error")
-
-        # Throws an erorr on an unrecognised class object
-        with self.assertRaises(TypeError) as ctx:
-            t = _get_field_defn(int)
-        with self.assertRaises(TypeError) as ctx:
-            class Blah(object): pass
-            t = _get_field_defn(Blah)
-
-        # A simple tuple definition
-        td = _get_field_defn((IntegerField(), ConstantField()))
-        self.assertTrue(isinstance(td,RawField))
-
-        # Test the positional and named argument access of result
-        clob = Function("",[Number(1),Function("blah")])
-        pyresult = td.cltopy(clob)
-        self.assertEqual(pyresult[0], 1)
-        self.assertEqual(pyresult.arg1, 1)
-        self.assertEqual(pyresult[1], "blah")
-        self.assertEqual(pyresult.arg2, "blah")
-
-        clresult = td.pytocl((1,"blah"))
-        self.assertEqual(clresult, clob)
-
-
-    #--------------------------------------------------------------------------
-    # Test catching invalid default values for a field
-    #--------------------------------------------------------------------------
-    def test_catch_bad_field_defaults(self):
-        with self.assertRaises(TypeError) as ctx:
-            fld = IntegerField(default="bad")
-
-    #--------------------------------------------------------------------------
-    # A default can now take a function that will be called when the Field's
-    # default property is called.
-    # --------------------------------------------------------------------------
-    def test_field_default_function(self):
-        val=0
-        def inc():
-            nonlocal val
-            val +=1
-            return val
-
-        fld1 = IntegerField()
-        fld2 = IntegerField(default=5)
-        fld3 = IntegerField(default=inc)
-        self.assertEqual(fld1.default, None)
-        self.assertEqual(fld2.default, 5)
-        self.assertEqual(fld3.default, 1)
-        self.assertEqual(fld3.default, 2)
-
-    #--------------------------------------------------------------------------
-    # Test making a restriction of a field using a list of values
-    #--------------------------------------------------------------------------
-    def test_refine_field_values(self):
-        rf = refine_field
-
-        # Some bad calls
-        with self.assertRaises(TypeError) as ctx:
-            class Something(object):
-                def __init__(self): self._a = 1
-
-            fld = rf("fld", Something, ["a","b"])
-
-        with self.assertRaises(TypeError) as ctx:
-            fld = rf("fld", "notaclass", ["a","b"])
-
-        with self.assertRaises(TypeError) as ctx:
-            fld = rf("fld", IntegerField, ["a"])
-
-        # A good restriction
-        ABCField = rf("ABCField", ConstantField, ["a","b","c"])
-
-        # Make sure it works
-        r_a = Function("a",[])
-        r_b = Function("b",[])
-        r_c = Function("c",[])
-        r_d = Function("d",[])
-        r_1 = Number(1)
-
-        # Test the pytocl direction
-        self.assertEqual(ABCField.pytocl("a"), r_a)
-        self.assertEqual(ABCField.pytocl("b"), r_b)
-        self.assertEqual(ABCField.pytocl("c"), r_c)
-
-        with self.assertRaises(TypeError) as ctx:
-            v = ABCField.pytocl("d")
-
-        with self.assertRaises(TypeError) as ctx:
-            v = ABCField.pytocl(1)
-
-        # Test the cltopy direction
-        self.assertEqual(ABCField.cltopy(r_a), "a")
-        self.assertEqual(ABCField.cltopy(r_b), "b")
-        self.assertEqual(ABCField.cltopy(r_c), "c")
-        with self.assertRaises(TypeError) as ctx:
-            v = ABCField.cltopy(r_d)
-        with self.assertRaises(TypeError) as ctx:
-            v = ABCField.cltopy(r_1)
-
-        self.assertTrue(ABCField.unifies(r_a))
-        self.assertTrue(ABCField.unifies(r_b))
-        self.assertTrue(ABCField.unifies(r_c))
-        self.assertFalse(ABCField.unifies(r_d))
-        self.assertFalse(ABCField.unifies(r_1))
-
-        # Test a version with no class name
-        ABCField2 = rf(ConstantField, ["a","b","c"])
-        self.assertEqual(ABCField2.pytocl("a"), r_a)
-
-        # But only 2 and 3 arguments are valid
-        with self.assertRaises(TypeError) as ctx:
-            ABCField3 = rf(["a","b","c"])
-        with self.assertRaises(TypeError) as ctx:
-            ABCField4 = rf("ABCField", ConstantField, ["a","b","c"], 1)
-
-
-    #--------------------------------------------------------------------------
-    # Test making a restriction of a field using a value functor
-    #--------------------------------------------------------------------------
-    def test_refine_field_functor(self):
-        rf = refine_field
-
-        # A good restriction
-        PosIntField = rf("PosIntField", IntegerField, lambda x: x >= 0)
-
-        # Make sure it works
-        r_neg1 = Number(-1)
-        r_0 = Number(0)
-        r_1 = Number(1)
-        r_a = Function("a",[])
-
-        # Test the pytocl direction
-        self.assertEqual(PosIntField.pytocl(0), r_0)
-        self.assertEqual(PosIntField.pytocl(1), r_1)
-
-        with self.assertRaises(TypeError) as ctx:
-            v = PosIntField.pytocl("a")
-
-        with self.assertRaises(TypeError) as ctx:
-            v = PosIntField.pytocl(-1)
-
-        # Test the cltopy direction
-        self.assertEqual(PosIntField.cltopy(r_0), 0)
-        self.assertEqual(PosIntField.cltopy(r_1), 1)
-        with self.assertRaises(TypeError) as ctx:
-            v = PosIntField.cltopy(r_neg1)
-        with self.assertRaises(TypeError) as ctx:
-            v = PosIntField.cltopy(r_a)
-
-        self.assertTrue(PosIntField.unifies(r_0))
-        self.assertTrue(PosIntField.unifies(r_1))
-        self.assertFalse(PosIntField.unifies(r_neg1))
-        self.assertFalse(PosIntField.unifies(r_a))
 
     #--------------------------------------------------------------------------
     # Test that we can define predicates using the class syntax and test that
@@ -827,81 +959,6 @@ class ORMTestCase(unittest.TestCase):
 
         with self.assertRaises(IndexError) as ctx:
             a = f1[2]
-
-    #--------------------------------------------------------------------------
-    # Test that we can define predicates using the class syntax and test that
-    # the getters and setters are connected properly to the predicate classes.
-    # --------------------------------------------------------------------------
-    def test_simple_predicate_defn(self):
-
-        # Test bad declaration - the term name starts with an "_"
-        with self.assertRaises(ValueError) as ctx:
-            class BadPredicate(Predicate):
-                _aterm = IntegerField()
-
-        # Test bad declaration - the term name is "meta"
-        with self.assertRaises(ValueError) as ctx:
-            class BadPredicate(Predicate):
-                meta = IntegerField()
-
-        # Test bad declaration - the term name is "raw"
-        with self.assertRaises(ValueError) as ctx:
-            class BadPredicate(Predicate):
-                raw = IntegerField()
-
-        # Test declaration of predicate with an implicit name
-        class ImplicitlyNamedPredicate(Predicate):
-            aterm = IntegerField()
-
-        inp1 = ImplicitlyNamedPredicate(aterm=2)
-        inp2 = Function("implicitlyNamedPredicate",[Number(2)])
-        self.assertEqual(inp1.raw, inp2)
-
-        # Test declaration of a unary predicate
-        class UnaryPredicate(Predicate):
-            class Meta: name = "unary"
-
-        self.assertEqual(UnaryPredicate.meta.parent, UnaryPredicate)
-
-        up1 = UnaryPredicate()
-        up2 = Function("unary",[])
-        self.assertEqual(up1.raw, up2)
-
-        # Test the class properties; when access from the class and the object.
-        self.assertEqual(up1.meta.name, "unary")
-        self.assertEqual(UnaryPredicate.meta.name, "unary")
-        self.assertEqual(len(up1.meta), 0)
-        self.assertEqual(len(UnaryPredicate.meta), 0)
-
-        # Test that default terms work and that not specifying a value raises
-        # an exception
-        class DefaultFieldPredicate(Predicate):
-            first = IntegerField()
-            second = IntegerField(default=10)
-            class Meta: name = "dfp"
-
-        self.assertEqual(DefaultFieldPredicate.meta.parent, DefaultFieldPredicate)
-
-        dfp1 = DefaultFieldPredicate(first=15)
-        dfp2 = Function("dfp",[Number(15),Number(10)])
-        self.assertEqual(dfp1.raw, dfp2)
-
-        with self.assertRaises(ValueError) as ctx:
-            dfp3 = DefaultFieldPredicate()
-
-        # Test declaration of predicates with Simple and String terms
-        class MultiFieldPredicate(Predicate):
-            aterm1 = StringField()
-            aterm2 = ConstantField()
-            class Meta: name = "mfp"
-
-        mfp1 = MultiFieldPredicate(aterm1="astring", aterm2="asimple")
-        mfp2 = Function("mfp", [String("astring"), Function("asimple",[])])
-        self.assertEqual(mfp1.raw, mfp2)
-
-        # Test that the appropriate term properties are set up properly
-        self.assertEqual(mfp1.aterm1, "astring")
-        self.assertEqual(mfp1.aterm2, "asimple")
 
     #--------------------------------------------------------------------------
     # Test that we can define predicates with Function and Tuple terms
