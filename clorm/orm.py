@@ -875,7 +875,7 @@ class FieldAccessor(object):
         if not isinstance(instance, self._parent_cls):
             raise TypeError(("field {} doesn't match type "
                              "{}").format(self, type(instance).__name__))
-        return instance._field_values[self._name]
+        return instance._field_values[self._index]
 
     def __set__(self, instance, value):
         raise AttributeError(("Cannot modify {}.{}: field values are "
@@ -1013,6 +1013,7 @@ class NLSDefn(object):
         self._name = name
         self._byidx = tuple(field_accessors)
         self._byname = { f.name : f for f in field_accessors }
+        self._arity = len(self._byidx)
         self._anon = anon
         self._key2canon = { f.index : f.name for f in field_accessors }
         self._key2canon.update({f.name : f.name for f in field_accessors })
@@ -1028,7 +1029,7 @@ class NLSDefn(object):
     @property
     def arity(self):
         """Returns the arity of the predicate"""
-        return len(self)
+        return self._arity
 
     @property
     def sign(self):
@@ -1144,24 +1145,21 @@ def _nls_init_by_raw(self, **kwargs):
         raise ValueError("Invalid combination of keyword arguments")
     raw = kwargs["raw"]
     self._raw = raw
-    cls=type(self)
     try:
+        cls=type(self)
         if raw.type != clingo.SymbolType.Function: raise ValueError()
+        arity=len(raw.arguments)
         if raw.name != cls.meta.name: raise ValueError()
-        if len(raw.arguments) != len(cls.meta): raise ValueError()
+        if arity != cls.meta.arity: raise ValueError()
         if cls.meta.sign is not None and cls.meta.sign != raw.positive: raise ValueError()
-
-        for f in self.meta:
-            self._field_values[f.name] = f.defn.cltopy(raw.arguments[f.index])
+        self._field_values = [ f.defn.cltopy(raw.arguments[f.index]) for f in self.meta ]
     except:
-        class_name = type(self).__name__
         raise ValueError(("Failed to unify clingo.Symbol object {} with "
-                          "NonLogicalSymbol class {}").format(raw, class_name))
+                          "NonLogicalSymbol class {}").format(raw, cls.__name__))
 
 # Construct a NonLogicalSymbol via the field keywords
 def _nls_init_by_keyword_values(self, **kwargs):
     class_name = type(self).__name__
-    pred_name = self.meta.name
     names = set(self.meta.keys())
     names.add("sign")
 
@@ -1171,6 +1169,7 @@ def _nls_init_by_keyword_values(self, **kwargs):
                           "of {}".format(invalids,class_name)))
 
     # Construct the clingo function arguments
+    self._field_values = [None]*self.meta.arity
     for field in self.meta:
         if field.name not in kwargs:
             default = field.defn.default   # Only get the default value once in
@@ -1178,9 +1177,9 @@ def _nls_init_by_keyword_values(self, **kwargs):
             if not default:
                 raise ValueError(("Unspecified field {} has no "
                                   "default value".format(field.name)))
-            self._field_values[field.name] = _preprocess_field_value(field.defn, default)
+            self._field_values[field.index] = _preprocess_field_value(field.defn, default)
         else:
-            self._field_values[field.name] = _preprocess_field_value(
+            self._field_values[field.index] = _preprocess_field_value(
                 field.defn, kwargs[field.name])
 
     # Calculate the sign of the literal and check that it matches the allowed values
@@ -1195,22 +1194,18 @@ def _nls_init_by_keyword_values(self, **kwargs):
 
 # Construct a NonLogicalSymbol using keyword arguments
 def _nls_init_by_positional_values(self, *args, **kwargs):
-    class_name = type(self).__name__
-    pred_name = self.meta.name
     argc = len(args)
     arity = len(self.meta)
     if argc != arity:
-        raise ValueError("Expected {} arguments but {} given".format(arity,argc))
+        raise ValueError("Expected {} arguments but {} given".format(argc,arity))
 
-    for idx, field in enumerate(self.meta):
-        self._field_values[field.name] = _preprocess_field_value(field.defn, args[idx])
+    self._field_values = [ _preprocess_field_value(f.defn, args[f.index]) for f in self.meta ]
 
     # Calculate the sign of the literal and check that it matches the allowed values
     sign = bool(kwargs["sign"]) if "sign" in kwargs else True
-    if self.meta.sign is not None:
-        if sign != self.meta.sign:
-            raise ValueError(("Predicate {} is defined to only allow {} "
-                              "instances").format(class_name, self.meta.sign))
+    if self.meta.sign is not None and sign != self.meta.sign:
+        raise ValueError(("Predicate {} is defined to only allow {} "
+                          "instances").format(type(self).__name__, self.meta.sign))
 
     # Create the raw clingo.Symbol object
     self._raw = self._generate_raw(sign)
@@ -1218,7 +1213,7 @@ def _nls_init_by_positional_values(self, *args, **kwargs):
 # Constructor for every NonLogicalSymbol sub-class
 def _nls_constructor(self, *args, **kwargs):
     self._raw = None
-    self._field_values = {}
+    cls=type(self)
     if "raw" in kwargs:
         _nls_init_by_raw(self, **kwargs)
     elif len(args) > 0:
@@ -1523,10 +1518,7 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
 
     # Recompute the clingo.Symbol object from the stored fields
     def _generate_raw(self,sign):
-        pred_args = []
-        for field in self.meta:
-            pred_args.append(field.defn.pytocl(self._field_values[field.name]))
-        # Create the clingo.Symbol object
+        pred_args = [ f.defn.pytocl(self._field_values[f.index]) for f in self.meta ]
         return clingo.Function(self.meta.name, pred_args,sign)
 
     # Clone the object with some differences
@@ -1554,8 +1546,8 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
             if field.name in kwargs:
                 cloneargs[field.name] = kwargs[field.name]
             else:
-                cloneargs[field.name] = self._field_values[field.name]
-                kwargs[field.name] = self._field_values[field.name]
+                cloneargs[field.name] = self._field_values[field.index]
+                kwargs[field.name] = self._field_values[field.index]
 
         # Create the new object
         return type(self)(**cloneargs)
