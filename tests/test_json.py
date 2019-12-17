@@ -31,8 +31,9 @@ class JSONSymbolTestCase(unittest.TestCase):
         self.f1 = clingo.Function("",[self.s1, self.s2])
         self.f2 = clingo.Function("func1", [self.n1])
         self.f3 = clingo.Function("func2", [self.n2, self.f1])
+        self.f4 = clingo.Function("func1", [], False)
         self.alls = [self.inf, self.sup, self.s1, self.s2, self.n1, \
-                    self.n2, self.f1, self.f2, self.f3 ]
+                     self.n2, self.f1, self.f2, self.f3, self.f4 ]
 
         self.str_inf = '{"clingo.SymbolType": "Infimum"}'
         self.str_sup = '{"clingo.SymbolType": "Supremum"}'
@@ -41,15 +42,17 @@ class JSONSymbolTestCase(unittest.TestCase):
         self.str_n1 = '{"clingo.SymbolType": "Number", "number": 24}'
         self.str_n2 = '{"clingo.SymbolType": "Number", "number": 60}'
         self.str_f1 = '{"clingo.SymbolType": "Function", "name": "", "arguments": [' \
-            + self.str_s1 + ', ' + self.str_s2 + ']}'
+            + self.str_s1 + ', ' + self.str_s2 + '], "positive": true}'
         self.str_f2 = '{"clingo.SymbolType": "Function", "name": "func1", "arguments": [' \
-            + self.str_n1 + ']}'
+            + self.str_n1 + '], "positive": true}'
         self.str_f3 = '{"clingo.SymbolType": "Function", "name": "func2", "arguments": [' \
-            + self.str_n2 + ', ' + self.str_f1 + ']}'
+            + self.str_n2 + ', ' + self.str_f1 + '], "positive": true}'
+        self.str_f4 = '{"clingo.SymbolType": "Function", "name": "func1", "arguments": []' \
+            + ', "positive": false}'
         self.str_alls = '[' + self.str_inf + ', ' + self.str_sup + ', ' + \
              self.str_s1 + ', ' + self.str_s2 + ', ' + self.str_n1 + ', ' +\
              self.str_n2 + ', ' + self.str_f1 + ', ' + self.str_f2 + ', ' +\
-             self.str_f3 + ']'
+             self.str_f3 + ', ' + self.str_f4 + ']'
 
     #--------------------------------------------------------------------------
     #
@@ -185,7 +188,7 @@ class JSONPredicateTestCase(unittest.TestCase):
         self.str_n1 = '{"clingo.SymbolType": "Number", "number": 60}'
         self.str_s1 = '{"clingo.SymbolType": "String", "string": "aaaa"}'
         self.str_f1 = '{"clingo.SymbolType": "Function", "name": "cfact", ' \
-            + '"arguments": [' + self.str_n1 + ', ' + self.str_s1 + ']}'
+            + '"arguments": [' + self.str_n1 + ', ' + self.str_s1 + ']' + ', "positive": true}'
         self.str_p1 = '{"clorm.Predicate": "Cfact", "raw": ' + self.str_f1 + '}'
         self.str_fb1 = '{"clorm.FactBase": [], "facts": ['+ self.str_p1 + ']}'
 

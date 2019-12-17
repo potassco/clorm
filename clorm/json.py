@@ -52,6 +52,7 @@ def symbol_encoder(s):
     if s.type == clingo.SymbolType.Function:
         js["name"] = s.name
         js["arguments"] = [symbol_encoder(a) for a in s.arguments]
+        js["positive"] = s.positive
         return js
 
 #------------------------------------------------------------------------------
@@ -76,7 +77,8 @@ def symbol_decoder(obj):
     if stype_str == "Number": return clingo.Number(obj["number"])
     if stype_str == "Function":
         args = [ symbol_decoder(a) for a in obj["arguments"] ]
-        return clingo.Function(obj["name"], args)
+        positive = obj["positive"]
+        return clingo.Function(obj["name"], args, positive)
 
     # A bad encoding?
     return obj
