@@ -24,7 +24,6 @@ __all__ = [
     'StringField',
     'ConstantField',
     'Placeholder',
-    'NonLogicalSymbol',
     'Predicate',
     'ComplexTerm',
     'FactBase',
@@ -101,15 +100,14 @@ class _lateinit(object):
 #
 # Overview of how it works:
 #
-# Every NonLogicalSymbol (NLS) sub-class has an attribute for every field of a
-# predicate as well as providing a index lookup by position. Every non-tuple NLS
-# also has a sign attribute to say whether the fact/term is positive or
-# negative.
+# Every Predicate sub-class has an attribute for every field of a predicate as
+# well as providing a index lookup by position. Every non-tuple Predicate also
+# has a sign attribute to say whether the fact/term is positive or negative.
 #
-# So, for each NonLogicalSymbol (NLS) sub-class a corresponding PredicatePath
-# sub-class is created that contains all these elements; defined as attributes
-# and indexed items. An instance of this PredicatePath is created for each NLS;
-# which forms the root of a tree linking to to other PredicatePath (base or
+# So, for each Predicate sub-class a corresponding PredicatePath sub-class is
+# created that contains all these elements; defined as attributes and indexed
+# items. An instance of this PredicatePath is created for each Predicate; which
+# forms the root of a tree linking to to other PredicatePath (base or
 # sub-classes) that represent the sub-paths. The leaves of the tree are base
 # PredicatePath class objects while the non-leaf elements are sub-classes of
 # PredicatePath.
@@ -125,9 +123,9 @@ class _lateinit(object):
 #
 # ------------------------------------------------------------------------------
 
-def _define_predicate_path_subclass(nls_class):
-    class_name = nls_class.__name__ + "_PredicatePath"
-    return type(class_name, (PredicatePath,), { "_nls_class" : nls_class })
+def _define_predicate_path_subclass(predicate_class):
+    class_name = predicate_class.__name__ + "_PredicatePath"
+    return type(class_name, (PredicatePath,), { "_predicate_class" : predicate_class })
 
 class _PredicatePathMeta(type):
     def __new__(meta, name, bases, dct):
@@ -136,10 +134,10 @@ class _PredicatePathMeta(type):
         if name == "PredicatePath":
             return super(_PredicatePathMeta, meta).__new__(meta, name, bases, dct)
 
-        # Note: _nls_class must be defined when creating a subclass.
-        nls_class = dct["_nls_class"]
-        if not nls_class:
-            raise AttributeError(("The \"_nls_class\" member variable was not "
+        # Note: _predicate_class must be defined when creating a subclass.
+        predicate_class = dct["_predicate_class"]
+        if not predicate_class:
+            raise AttributeError(("The \"_predicate_class\" member variable was not "
                                   "specified for {}").format(name))
 
         # Maintain a lookup of the fields that are complex.
@@ -149,16 +147,16 @@ class _PredicatePathMeta(type):
         def _make_lookup_functor(key):
             return lambda self: self._subpath[key]
 
-        # Create an attribute for each nls class field that returns an instance
+        # Create an attribute for each predicate class field that returns an instance
         # of a pathbuilder for each attribute
-        for fa in nls_class.meta:
+        for fa in predicate_class.meta:
             dct[fa.name] = property(_make_lookup_functor(fa.name))
             ct_class = fa.defn.complex
             if ct_class: ct_classes[fa.name] = ct_class
 
-        # If the corresponding NLS is not a tuple then we need to create a
+        # If the corresponding Predicate is not a tuple then we need to create a
         # "sign" attribute.
-        if not nls_class.meta.is_tuple:
+        if not predicate_class.meta.is_tuple:
             dct["sign"] = property(_make_lookup_functor("sign"))
 
         # The appropriate fields have been created
@@ -181,7 +179,7 @@ class PredicatePath(object, metaclass=_PredicatePathMeta):
     themselves.
 
     PredicatePath subclasses provide attributes and indexed items for refering
-    to sub-paths. When a user specifies 'Pred.a.b.c' the NLS class 'Pred'
+    to sub-paths. When a user specifies 'Pred.a.b.c' the Predicate class 'Pred'
     seemslessly passes off to an associated PredicatePath object, which then
     returns a path corresponding to the specifications.
 
@@ -256,7 +254,7 @@ class PredicatePath(object, metaclass=_PredicatePathMeta):
         # --------------------------------------------------------------------------
         @property
         def is_leaf(self):
-            return not hasattr(self, '_nls_class')
+            return not hasattr(self, '_predicate_class')
 
         # --------------------------------------------------------------------------
         # Is this a root path (ie. the path corresponds to a predicate definition)
@@ -346,13 +344,13 @@ class PredicatePath(object, metaclass=_PredicatePathMeta):
 
         # If this is a leaf path (instance of the base PredicatePath class) then
         # there will be no sub-paths so nothing else to do.
-        if not hasattr(self, '_nls_class'): return
+        if not hasattr(self, '_predicate_class'): return
 
         # Iteratively build the tree of PredicatePaths corresponding to the
         # searchable elements. Elements corresponding to non-complex terms will
         # have leaf PredicatePaths while the complex ones will have appropriate
         # sub-classed PredicatePaths.
-        for fa in self._nls_class.meta:
+        for fa in self._predicate_class.meta:
             name = fa.name
             idx = fa.index
             if name in self._complexterm_classes:
@@ -364,7 +362,7 @@ class PredicatePath(object, metaclass=_PredicatePathMeta):
             self._subpath[idx] = path
 
         # Add the sign if it's not a tuple
-        if not self._nls_class.meta.is_tuple:
+        if not self._predicate_class.meta.is_tuple:
             self._subpath["sign"] = PredicatePath(list(self._pathseq) + ["sign"])
 
         # A list of the unique subpaths
@@ -377,10 +375,10 @@ class PredicatePath(object, metaclass=_PredicatePathMeta):
     def _get_field(self):
         if len(self._pathseq) <= 1: return None
         if self._pathseq[-1] == "sign": return None
-        nls = self._pathseq[0]
+        predicate = self._pathseq[0]
         for name in self._pathseq[1:]:
-            field = nls.meta[name].defn
-            if field.complex: nls = field.complex
+            field = predicate.meta[name].defn
+            if field.complex: predicate = field.complex
         return field
 
     #--------------------------------------------------------------------------
@@ -399,7 +397,7 @@ class PredicatePath(object, metaclass=_PredicatePathMeta):
             if self.meta.is_leaf:
                 raise KeyError("Leaf path {} has no sub-paths".format(self))
             msg = "{} is not a valid positional argument for {}"
-            raise KeyError(msg.format(key, self._nls_class))
+            raise KeyError(msg.format(key, self._predicate_class))
 
     #--------------------------------------------------------------------------
     # Overload the boolean operators to return a functor
@@ -900,7 +898,7 @@ class FieldAccessor(object):
 
 #------------------------------------------------------------------------------
 # SignAccessor - a Python descriptor to access the sign value of a
-# NonLogicalSymbol instance. It has a __get__ overload to return the value of
+# Predicate instance. It has a __get__ overload to return the value of
 # the sign if the function is called from an instance, but if called by the
 # class then returns the appropriate PredicatePath (that can be used to
 # specify a query).
@@ -970,7 +968,7 @@ def _get_field_defn(defn):
     proto = collections.OrderedDict([("arg{}".format(i+1), _get_field_defn(d))
                                      for i,d in enumerate(defn)])
     proto['Meta'] = type("Meta", (object,), {"is_tuple" : True, "_anon" : True})
-    ct = type("ClormAnonTuple", (NonLogicalSymbol,), proto)
+    ct = type("ClormAnonTuple", (Predicate,), proto)
     return ct.Field()
 
 
@@ -1012,16 +1010,16 @@ def _magic_name(name):
     return True
 
 #------------------------------------------------------------------------------
-# The NonLogicalSymbol base class and supporting functions and classes
+# The Predicate base class and supporting functions and classes
 # ------------------------------------------------------------------------------
 
 #--------------------------------------------------------------------------
-# One NLSDefn object for each NonLogicalSymbol sub-class
+# One PredicateDefn object for each Predicate sub-class
 #--------------------------------------------------------------------------
-class NLSDefn(object):
-    """Encapsulates some meta-data for a NonLogicalSymbol (NLS) definition.
+class PredicateDefn(object):
+    """Encapsulates some meta-data for a Predicate definition.
 
-    Each NLS class will have a corresponding NLSDefn object that specifies some
+    Each Predicate class will have a corresponding PredicateDefn object that specifies some
     introspective properties of the predicate/complex-term.
 
     """
@@ -1088,7 +1086,7 @@ class NLSDefn(object):
     def indexes(self,indexed_fields):
         if self._indexed_fields:
             raise RuntimeError(("Trying to reset the indexed fields for a "
-                                "NLSDefn doesn't make sense"))
+                                "PredicateDefn doesn't make sense"))
         self._indexed_fields = tuple(indexed_fields)
 
     # Internal property
@@ -1102,7 +1100,7 @@ class NLSDefn(object):
     def parent(self, pc):
         if self._parent_cls:
             raise RuntimeError(("Trying to reset the parent for a "
-                                "NLSDefn doesn't make sense"))
+                                "PredicateDefn doesn't make sense"))
         self._parent_cls = pc
         self._path_class = _define_predicate_path_subclass(pc)
         self._path = self._path_class([pc])
@@ -1138,26 +1136,26 @@ class NLSDefn(object):
 # ------------------------------------------------------------------------------
 
 def _preprocess_field_value(field_defn, v):
-    nls_cls = field_defn.complex
-    if not nls_cls: return v
-    mt = nls_cls.meta
-    if isinstance(v, nls_cls): return v
-    if (mt.is_tuple and isinstance(v,NonLogicalSymbol) and v.meta.is_tuple) or \
+    predicate_cls = field_defn.complex
+    if not predicate_cls: return v
+    mt = predicate_cls.meta
+    if isinstance(v, predicate_cls): return v
+    if (mt.is_tuple and isinstance(v,Predicate) and v.meta.is_tuple) or \
        isinstance(v, tuple):
         if len(v) != len(mt):
             raise ValueError(("mis-matched arity between field {} (arity {}) and "
                              " value (arity {})").format(field_defn, len(mt), len(v)))
-        return nls_cls(*v)
+        return predicate_cls(*v)
     else:
         return v
 
 # ------------------------------------------------------------------------------
-# Helper functions for NonLogicalSymbolMeta class to create a NonLogicalSymbol
+# Helper functions for PredicateMeta class to create a Predicate
 # class constructor.
 # ------------------------------------------------------------------------------
 
-# Construct a NonLogicalSymbol via an explicit (raw) clingo.Symbol object
-def _nls_init_by_raw(self, **kwargs):
+# Construct a Predicate via an explicit (raw) clingo.Symbol object
+def _predicate_init_by_raw(self, **kwargs):
     if len(kwargs) != 1:
         raise ValueError("Invalid combination of keyword arguments")
     raw = kwargs["raw"]
@@ -1172,10 +1170,10 @@ def _nls_init_by_raw(self, **kwargs):
         self._field_values = [ f.defn.cltopy(raw.arguments[f.index]) for f in self.meta ]
     except:
         raise ValueError(("Failed to unify clingo.Symbol object {} with "
-                          "NonLogicalSymbol class {}").format(raw, cls.__name__))
+                          "Predicate class {}").format(raw, cls.__name__))
 
-# Construct a NonLogicalSymbol via the field keywords
-def _nls_init_by_keyword_values(self, **kwargs):
+# Construct a Predicate via the field keywords
+def _predicate_init_by_keyword_values(self, **kwargs):
     class_name = type(self).__name__
     names = set(self.meta.keys())
     names.add("sign")
@@ -1209,8 +1207,8 @@ def _nls_init_by_keyword_values(self, **kwargs):
     # Create the raw clingo.Symbol object
     self._raw = self._generate_raw(sign)
 
-# Construct a NonLogicalSymbol using keyword arguments
-def _nls_init_by_positional_values(self, *args, **kwargs):
+# Construct a Predicate using keyword arguments
+def _predicate_init_by_positional_values(self, *args, **kwargs):
     argc = len(args)
     arity = len(self.meta)
     if argc != arity:
@@ -1227,31 +1225,30 @@ def _nls_init_by_positional_values(self, *args, **kwargs):
     # Create the raw clingo.Symbol object
     self._raw = self._generate_raw(sign)
 
-# Constructor for every NonLogicalSymbol sub-class
-def _nls_constructor(self, *args, **kwargs):
+# Constructor for every Predicate sub-class
+def _predicate_constructor(self, *args, **kwargs):
     self._raw = None
     cls=type(self)
     if "raw" in kwargs:
-        _nls_init_by_raw(self, **kwargs)
+        _predicate_init_by_raw(self, **kwargs)
     elif len(args) > 0:
         if len(kwargs) > 1 or (len(kwargs) == 1 and "sign" not in kwargs):
             raise ValueError(("Invalid Predicate initialisation: only \"sign\" is a "
                              "valid keyword argument when combined with positional "
                               "arguments: {}").format(kwargs))
-        _nls_init_by_positional_values(self, *args,**kwargs)
+        _predicate_init_by_positional_values(self, *args,**kwargs)
     else:
-        _nls_init_by_keyword_values(self, **kwargs)
+        _predicate_init_by_keyword_values(self, **kwargs)
 
-def _nls_base_constructor(self, *args, **kwargs):
-    raise TypeError(("Predicate/ComplexTerm (aliases for NonLogicalSymbol "
-                    "must be sub-classed"))
+def _predicate_base_constructor(self, *args, **kwargs):
+    raise TypeError(("Predicate/ComplexTerm must be sub-classed"))
 
 #------------------------------------------------------------------------------
 # Metaclass constructor support functions to create the fields
 #------------------------------------------------------------------------------
 
-# Generate a default predicate name from the NonLogicalSymbol class name.
-def _nlsdefn_default_predicate_name(class_name):
+# Generate a default predicate name from the Predicate class name.
+def _predicatedefn_default_predicate_name(class_name):
 
     # If first letter is lower-case then do nothing
     if class_name[0].islower(): return class_name
@@ -1280,18 +1277,18 @@ def _is_complexterm_declaration(name,obj):
     if not issubclass(obj,ComplexTerm): return False
     return obj.__name__ == name
 
-# build the metadata for the NonLogicalSymbol - NOTE: this funtion returns a
-# NLSDefn instance but it also modified the dct paramater to add the fields. It
+# build the metadata for the Predicate - NOTE: this funtion returns a
+# PredicateDefn instance but it also modified the dct paramater to add the fields. It
 # also checks to make sure the class Meta declaration is error free: 1) Setting
 # a name is not allowed for a tuple, 2) Sign controls if we want to allow
 # unification against a positive literal only, a negative literal only or
 # both. Sign can be True/False/None. By default sign is None (meaning both
 # positive/negative) unless it is a tuple then it is positive only.
 
-def _make_nlsdefn(class_name, dct):
+def _make_predicatedefn(class_name, dct):
 
     # Set the default predicate name
-    pname = _nlsdefn_default_predicate_name(class_name)
+    pname = _predicatedefn_default_predicate_name(class_name)
     anon = False
     sign = None
     is_tuple = False
@@ -1362,8 +1359,8 @@ def _make_nlsdefn(class_name, dct):
     # __init__() call.
     dct["sign"] = SignAccessor()
 
-    # Now create the NLSDefn object
-    return NLSDefn(name=pname,field_accessors=fas, anon=anon,sign=sign)
+    # Now create the PredicateDefn object
+    return PredicateDefn(name=pname,field_accessors=fas, anon=anon,sign=sign)
 
 # ------------------------------------------------------------------------------
 # Define a RawField sub-class that corresponds to a Predicate/ComplexTerm
@@ -1371,9 +1368,9 @@ def _make_nlsdefn(class_name, dct):
 # instances and clingo symbol objects.
 # ------------------------------------------------------------------------------
 
-def _define_field_for_nls(cls):
-    if not issubclass(cls, NonLogicalSymbol):
-        raise TypeError(("Class {} is not a Predicate or ComplexTerm "
+def _define_field_for_predicate(cls):
+    if not issubclass(cls, Predicate):
+        raise TypeError(("Class {} is not a Predicate/ComplexTerm "
                          "sub-class").format(cls))
 
     field_name = "{}Field".format(cls.__name__)
@@ -1400,40 +1397,40 @@ def _define_field_for_nls(cls):
     return field
 
 #------------------------------------------------------------------------------
-# A Metaclass for the NonLogicalSymbol base class
+# A Metaclass for the Predicate base class
 #------------------------------------------------------------------------------
-class _NonLogicalSymbolMeta(type):
+class _PredicateMeta(type):
 
     #--------------------------------------------------------------------------
     # Allocate the new metaclass
     #--------------------------------------------------------------------------
     def __new__(meta, name, bases, dct):
-        if name == "NonLogicalSymbol":
-            dct["_nls"] = None
-            dct["__init__"] = _nls_base_constructor
-            return super(_NonLogicalSymbolMeta, meta).__new__(meta, name, bases, dct)
+        if name == "Predicate":
+            dct["_predicate"] = None
+            dct["__init__"] = _predicate_base_constructor
+            return super(_PredicateMeta, meta).__new__(meta, name, bases, dct)
 
         # Create the metadata AND populate dct - the class dict (including the fields)
 
         # Set the _meta attribute and constuctor
-        dct["_meta"] = _make_nlsdefn(name, dct)
-        dct["__init__"] = _nls_constructor
+        dct["_meta"] = _make_predicatedefn(name, dct)
+        dct["__init__"] = _predicate_constructor
         dct["_field"] = _lateinit("{}._field".format(name))
 
-        parents = [ b for b in bases if issubclass(b, NonLogicalSymbol) ]
+        parents = [ b for b in bases if issubclass(b, Predicate) ]
         if len(parents) == 0:
-            raise TypeError("Internal bug: number of NonLogicalSymbol bases is 0!")
+            raise TypeError("Internal bug: number of Predicate bases is 0!")
         if len(parents) > 1:
-            raise TypeError("Multiple NonLogicalSymbol sub-class inheritance forbidden")
+            raise TypeError("Multiple Predicate sub-class inheritance forbidden")
 
-        return super(_NonLogicalSymbolMeta, meta).__new__(meta, name, bases, dct)
+        return super(_PredicateMeta, meta).__new__(meta, name, bases, dct)
 
     def __init__(cls, name, bases, dct):
-        if name == "NonLogicalSymbol":
-            return super(_NonLogicalSymbolMeta, cls).__init__(name, bases, dct)
+        if name == "Predicate":
+            return super(_PredicateMeta, cls).__init__(name, bases, dct)
 
         # Set a RawField sub-class that converts to/from cls instances
-        dct["_field"].assign(_define_field_for_nls(cls))
+        dct["_field"].assign(_define_field_for_predicate(cls))
 
         md = dct["_meta"]
         # The property attribute for each field can only be created in __new__
@@ -1448,10 +1445,10 @@ class _NonLogicalSymbolMeta(type):
         # Assign the parent for the SignAccessor
         dct["sign"].parent = cls
 
-        return super(_NonLogicalSymbolMeta, cls).__init__(name, bases, dct)
+        return super(_PredicateMeta, cls).__init__(name, bases, dct)
 
-    # A NonLogicalSymbol subclass is an instance of this meta class. So to
-    # provide querying of a NonLogicalSymbol subclass Blah by a positional
+    # A Predicate subclass is an instance of this meta class. So to
+    # provide querying of a Predicate subclass Blah by a positional
     # argument we need to implement __getitem__ for the metaclass.
     def __getitem__(self, idx):
         return self.meta.path[idx]
@@ -1465,12 +1462,12 @@ class _NonLogicalSymbolMeta(type):
 # underlying clingo.Symbol object.
 # ------------------------------------------------------------------------------
 
-class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
+class Predicate(object, metaclass=_PredicateMeta):
     """Encapsulates an ASP predicate or complex term in an easy to access object.
 
     This is the heart of the ORM model for defining the mapping of a complex
-    term or predicate to a Python object. ``Predicate`` and ``ComplexTerm`` are
-    actually aliases for NonLogicalSymbol.
+    term or predicate to a Python object. ``ComplexTerm`` is simply an alias for
+    ``Predicate``.
 
     Example:
        .. code-block:: python
@@ -1513,7 +1510,7 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
 
 
     #--------------------------------------------------------------------------
-    # Properties and functions for NonLogicalSymbol
+    # Properties and functions for Predicate
     #--------------------------------------------------------------------------
 
     # Get the underlying clingo.Symbol object
@@ -1573,14 +1570,14 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
     # Class methods and properties
     #--------------------------------------------------------------------------
 
-    # Get the metadata for the NonLogicalSymbol definition
+    # Get the metadata for the Predicate definition
     @_classproperty
     def meta(cls):
         """The meta data (definitional information) for the Predicate/Complex-term"""
         return cls._meta
 
     # Returns whether or not a clingo.Symbol object can unify with this
-    # NonLogicalSymbol
+    # Predicate
     @classmethod
     def _unifies(cls, raw):
         if raw.type != clingo.SymbolType.Function: return False
@@ -1595,7 +1592,7 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
             if not field.defn.unifies(raw.arguments[idx]): return False
         return True
 
-    # Factory that returns a unified NonLogicalSymbol object
+    # Factory that returns a unified Predicate object
     @classmethod
     def _unify(cls, raw):
         return cls(raw=raw)
@@ -1614,6 +1611,13 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
     def __len__(self):
         '''Returns the number of fields in the object'''
         return len(self.meta)
+
+    #--------------------------------------------------------------------------
+    # Overload the unary minus operator to return the complement of this literal
+    # (if its positive return a negative equivaent and vice-versa)
+    # --------------------------------------------------------------------------
+    def __neg__(self):
+        return self.clone(sign=not self.sign)
 
     #--------------------------------------------------------------------------
     # Overloaded operators
@@ -1678,7 +1682,7 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
         return self.raw.__hash__()
 
     def __str__(self):
-        """Returns the NonLogicalSymbol as the string representation of the raw
+        """Returns the Predicate as the string representation of the raw
         clingo.Symbol.
         """
         return str(self.raw)
@@ -1687,14 +1691,13 @@ class NonLogicalSymbol(object, metaclass=_NonLogicalSymbolMeta):
         return self.__str__()
 
 #------------------------------------------------------------------------------
-# Predicate and ComplexTerm are simply aliases for NonLogicalSymbol.
+# Predicate and ComplexTerm are simply aliases for Predicate.
 #------------------------------------------------------------------------------
 
-Predicate=NonLogicalSymbol
-ComplexTerm=NonLogicalSymbol
+ComplexTerm=Predicate
 
 #------------------------------------------------------------------------------
-# A function for defining NonLogicalSymbol sub-classes containing only RawField
+# A function for defining Predicate sub-classes containing only RawField
 # parameters. Useful when debugging ASP code and you just want to use the class
 # for easy display/printing.
 # ------------------------------------------------------------------------------
@@ -1723,7 +1726,7 @@ def simple_predicate(*args):
     """
     largs = len(args)
     if largs == 2:
-        subclass_name = "ClormAnonNLS"
+        subclass_name = "ClormAnonPredicate"
         name = args[0]
         arity = args[1]
     elif largs == 3:
@@ -1738,7 +1741,7 @@ def simple_predicate(*args):
                                      for i in range(0,arity)])
     proto['Meta'] = type("Meta", (object,),
                          {"name" : name, "is_tuple" : False, "_anon" : True})
-    return type("ClormAnonNLS", (NonLogicalSymbol,), proto)
+    return type("ClormAnonPredicate", (Predicate,), proto)
 
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
@@ -1904,9 +1907,9 @@ class PredicatePathComparator(Comparator):
         # complex term object of the first type.
         tryconv = False
         if type(v1) != type(v2):
-            if isinstance(v1, NonLogicalSymbol):
+            if isinstance(v1, Predicate):
                 tryconv = True
-                if isinstance(v2, NonLogicalSymbol) and v1.meta.name != v2.meta.name:
+                if isinstance(v2, Predicate) and v1.meta.name != v2.meta.name:
                     raise TypeError(("Incompatabile type comparison of "
                                      "{} and {}").format(v1,v2))
         if tryconv:

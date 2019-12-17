@@ -31,13 +31,14 @@ more intuitive Python objects.
 Predicates and Complex Terms
 ----------------------------
 
-In logical terminology predicates and complex terms are both considered *non
-logical symbols*; where logical symbols are the symbols for *conjunction*,
-*negation*, *implication*, etc. Clorm sticks to this terminology with the
-``NonLogicalSymbol`` class, where ``Predicate`` and ``ComplexTerm`` simply
-aliases to this class.
+In logical terminology predicates and terms are both considered *non logical
+symbols*; where the logical symbols are the operator symbols for *conjunction*,
+*negation*, *implication*, etc. While simple terms (constants, strings, and
+integers) are handled by Clorm as special cases, complex terms and predicates
+are both encapsulated in the ``Predicate`` class, with ``ComplexTerm`` simply
+being an alias to this class.
 
-.. autoclass:: clorm.NonLogicalSymbol
+.. autoclass:: clorm.Predicate
    :members:
 
    .. attribute:: Field
@@ -61,9 +62,6 @@ aliases to this class.
       .. attribute:: arity
 
          Arity of the predicate/complex-term.
-
-.. autoclass:: clorm.Predicate
-   :members:
 
 .. autoclass:: clorm.ComplexTerm
    :members:

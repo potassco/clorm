@@ -10,7 +10,7 @@ import operator
 from clingo import Number, String, Function,  __version__ as clingo_version
 from clingo import Control
 from clorm.orm import \
-    NonLogicalSymbol, Predicate, ComplexTerm, \
+    Predicate, ComplexTerm, \
     IntegerField, StringField, ConstantField, RawField, \
     _get_field_defn, refine_field, simple_predicate, \
     not_, and_, or_, StaticComparator, \
@@ -583,7 +583,7 @@ class ORMTestCase(unittest.TestCase):
         self.assertTrue(Blah.a.meta.field.complex.meta.anonymous)
 
     #--------------------------------------------------------------------------
-    # Test that we can distinguish NonLogicalSymbol tuples
+    # Test that we can distinguish Predicate tuples
     # --------------------------------------------------------------------------
     def test_tuple_nonlogicalsymbol(self):
         class NotTuple(ComplexTerm):
@@ -599,7 +599,7 @@ class ORMTestCase(unittest.TestCase):
         self.assertTrue(Tuple.meta.is_tuple)
 
     #--------------------------------------------------------------------------
-    # Test that we can get the arity of a NLS class; using the arity property
+    # Test that we can get the arity of a Predicate class; using the arity property
     # and the len function.
     # --------------------------------------------------------------------------
     def test_arity_len_nonlogicalsymbol(self):
@@ -618,7 +618,7 @@ class ORMTestCase(unittest.TestCase):
         self.assertEqual(len(Tuple.c.meta.field.complex.meta),2)
 
     #--------------------------------------------------------------------------
-    # Test that we can return access the NLS class fields using positional
+    # Test that we can return access the Predicate class fields using positional
     # arguments as well as iterating over them (for both the class itself as
     # well as an instance).
     # --------------------------------------------------------------------------
@@ -631,7 +631,7 @@ class ORMTestCase(unittest.TestCase):
             b = StringField()
             c = (IntegerField(), ConstantField())
 
-        # Test the NonLogicalSymbol class
+        # Test the Predicate class
         self.assertEqual(Blah.a, Blah[0])
         self.assertEqual(Blah.b, Blah[1])
         self.assertEqual(Blah.c, Blah[2])
@@ -1021,7 +1021,7 @@ class ORMTestCase(unittest.TestCase):
     #--------------------------------------------------------------------------
     # Test the mapping of class names to predicate/complex-term names
     # --------------------------------------------------------------------------
-    def test_nls_default_predicate_names(self):
+    def test_predicate_default_predicate_names(self):
 
         # Basic camel-case example
         class MyPred1(Predicate): a = StringField()
@@ -1072,9 +1072,9 @@ class ORMTestCase(unittest.TestCase):
         class Ok2(Predicate):
             aint = IntegerField()
 
-        # Test that you cannot instantiate NonLogicalSymbol
+        # Test that you cannot instantiate Predicate
         with self.assertRaises(TypeError) as ctx:
-            a = NonLogicalSymbol()
+            a = Predicate()
 
         with self.assertRaises(TypeError):
             class Bad1(Ok1,Ok2):
@@ -1862,7 +1862,7 @@ class PredicatePathTestCase(unittest.TestCase):
 
     #-----------------------------------------------------------------------------
     # Test that there is an appropriate PredicatePath associated with each
-    # NonLogicalSymbol and that it has the appropriate attributes.
+    # Predicate and that it has the appropriate attributes.
     # -----------------------------------------------------------------------------
     def test_path_class(self):
 

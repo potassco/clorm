@@ -203,9 +203,9 @@ predicate, such as:
 
     booking("2018-12-31", location("Sydney", "Australia")).
 
-To support this flexibility Clorm introduces a ``ComplexTerm`` class.  It is
-defined identically to a Predicate (in fact they are both simply aliases for
-the ``NonLogicalSymbol`` class).
+The Clorm ``Predicate`` class definition is able to support the flexiblity
+required to deal with complex terms. A ``ComplexTerm`` class is introduced
+simply as an alias for the ``Predicate`` class.
 
 .. code-block:: python
 
@@ -246,6 +246,30 @@ the above ``Booking`` class could be replaced with:
        date=StringField
        location=Location.Field(index=True,
 		default=LocationTuple(city="Sydney", country="Australia"))
+
+
+Note: From a code readability and conceptual stand point it may be convenient to
+treat predicates and complex terms as separate classes, however there are cases
+where this separation breaks down. For example when dealing with the
+*reification* of facts there is nothing to be gained by providing two
+definitions for the predicate and complex term versions of the same non logical
+term:
+
+.. code-block:: prolog
+
+    p(q(1)).
+    q(1) :- p(q(1)).
+
+In this example ``q/1`` is both a complex term and predicate and when providing
+the Python Clorm mapping it is simpler not to separate the two versions:
+
+.. code-block:: python
+
+   class Q(Predicate):
+      a = IntegerField
+
+   class P(Predicate):
+      a = Q.Field
 
 
 Negative Facts
