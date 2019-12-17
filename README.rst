@@ -4,7 +4,8 @@ Clingo ORM (Clorm)
 Clorm is a Python library that provides an Object Relational Mapping (ORM)
 interface to the Clingo Answer Set Programming (ASP) solver. The goal of this
 library is to make it easier to integrate Clingo within a Python application. It
-is designed to supplement and not replace the existing Clingo API.
+is implemented on top of the official Clingo API so is designed to supplement
+and not replace the Clingo API.
 
 When integrating an ASP program into an application you typically want to model
 the domain as a statically written ASP program, but then to generate problem
@@ -12,9 +13,9 @@ instances and process the results dynamically. Clorm makes this integration
 cleaner, both in terms of code readability but also by providing a framework
 that makes it easier to refactor the python code as the ASP program evolves.
 
-The documentation is available online `here <https://clorm.readthedocs.io>`_.
+The documentation is available online `here <https://clorm.readthedocs.io/en/stable>`_.
 
-Note: Clorm only works with Python 3.5+
+Note: Clorm works with Python 3.5+ and Clingo 5.3+
 
 Installation
 ------------
@@ -31,6 +32,20 @@ Then install Clorm:
 .. code-block:: bash
 
     $ conda install -c daveraja clorm
+
+Development Version
+^^^^^^^^^^^^^^^^^^^
+
+To experiment with the latest features you can install the development version
+from:
+
+.. code-block:: bash
+
+    $ conda install -c daveraja/label/dev clorm
+
+With the `latest documentation <https://clorm.readthedocs.io/en/latest/>`_.
+
+
 
 Quick Start
 -----------
@@ -72,7 +87,7 @@ The above crieria can be encoded with the following simple ASP program:
    #minimize { T@1,D : assignment(_,D,T) }.
 
 This above ASP program encodes the *problem domain* and can be used to solve the
-problem for arbitrary instances by combining it with an *problem instance*
+problem for arbitrary instances by combining it with a *problem instance*
 (i.e., some combination of drivers and items).
 
 We now use a Python program to dynamically generate the problem instance and to
@@ -94,7 +109,7 @@ Note: Importing from ``clorm.clingo`` instead of ``clingo``.
    functionality to offer integration with Clorm objects. It is also possible to
    `monkey patch <https://en.wikipedia.org/wiki/Monkey_patch>`_ Clingo if this
    is your preferred approach (see the `documentation
-   <https://clorm.readthedocs.io/en/latest/>`_).
+   <https://clorm.readthedocs.io/en/stable/>`_).
 
 The next step is to define a data model that maps the Clingo predicates to
 Python classes. Clorm introduces a number basic concepts for defining the data
@@ -269,7 +284,7 @@ Running this example produces the following results:
 
 The above example shows some of the main features of Clorm and how to match the
 Python data model to the defined ASP predicates. For more details about how to
-use Clorm see the `documentation <https://clorm.readthedocs.io/en/latest/>`_.
+use Clorm see the `documentation <https://clorm.readthedocs.io/en/stable/>`_.
 
 Other Clorm Features
 --------------------
@@ -366,7 +381,7 @@ Clorm library. These include:
 Development
 -----------
 * Python version: Clorm was developed using Python 3.7 and has been tested with Python 3.6.
-* Clingo version: Clorm has been tested with Clingo version 5.3 and 5.4 (development release)
+* Clingo version: Clorm has been tested with Clingo version 5.3 and 5.4.
 
 Ideas for the Future
 --------------------
