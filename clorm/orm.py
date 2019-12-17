@@ -653,7 +653,7 @@ class RawField(object, metaclass=_RawFieldMeta):
         return self._index
 
 #------------------------------------------------------------------------------
-# The three RawField
+# StringField and IntegerField are simple sub-classes of RawField
 #------------------------------------------------------------------------------
 
 class StringField(RawField):
@@ -676,6 +676,19 @@ class IntegerField(RawField):
     cltopy = _integer_cltopy
     pytocl = lambda v: clingo.Number(v)
 
+#------------------------------------------------------------------------------
+# ConstantField is more complex than basic string or integer because the value
+# can be negated. A heavy handed way to deal with this would be to create a
+# unary ComplexTerm subclass for every constant string value. But this is an
+# expensive way of dealing with the boundary case of negated constants that will
+# be used rarely (I've never seen it used in the wild).
+#
+# Instead we encode this as a string with a minus first symbol. The disadvantage
+# of this approach is that detecting complementary terms will need to be done
+# manually. But I think this is a good trade-off since it is very unusual to use
+# negated terms in general and negated constants in particular.
+# ------------------------------------------------------------------------------
+
 class ConstantField(RawField):
     """A field to convert between a simple Clingo.Function object and a Python
     string.
@@ -685,10 +698,14 @@ class ConstantField(RawField):
         if   (raw.type != clingo.SymbolType.Function or
               not raw.name or len(raw.arguments) != 0):
             raise TypeError("Object {0} is not a Simple symbol")
-        return raw.name
+        return raw.name if raw.positive else "-{}".format(raw.name)
+
+    def _constant_pytocl(v):
+        if v.startswith('-'): return clingo.Function(v[1:],[],False)
+        return clingo.Function(v,[])
 
     cltopy = _constant_cltopy
-    pytocl = lambda v: clingo.Function(v,[])
+    pytocl = _constant_pytocl
 
 #------------------------------------------------------------------------------
 # refine_field is a function that creates a sub-class of a RawField (or RawField

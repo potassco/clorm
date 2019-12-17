@@ -64,6 +64,11 @@ class RawFieldTestCase(unittest.TestCase):
         self.assertEqual(ConstantField.cltopy(symstr), "const")
         self.assertEqual(ConstantField.pytocl("const"), symstr)
 
+        symstr = Function("const",[],False)
+        self.assertEqual(type(ConstantField.cltopy(symstr)), str)
+        self.assertEqual(ConstantField.cltopy(symstr), "-const")
+        self.assertEqual(ConstantField.pytocl("-const"), symstr)
+
         symstr = Number(1)
         self.assertEqual(type(IntegerField.cltopy(symstr)), int)
         self.assertEqual(IntegerField.cltopy(symstr), 1)
@@ -98,20 +103,26 @@ class RawFieldTestCase(unittest.TestCase):
         num1 = 1
         str1 = "string"
         sim1 = "name"
+        sim2 = "-name"
         cnum1 = Number(num1)
         cstr1 = String(str1)
-        csim1 = Function(sim1,[])
+        csim1 = Function(sim1)
+        csim2 = Function(sim1,[],False)
+
         self.assertEqual(num1, IntegerField.cltopy(cnum1))
         self.assertEqual(str1, StringField.cltopy(cstr1))
         self.assertEqual(sim1, ConstantField.cltopy(csim1))
+        self.assertEqual(sim2, ConstantField.cltopy(csim2))
 
         self.assertEqual(cnum1, IntegerField.pytocl(num1))
         self.assertEqual(cstr1, StringField.pytocl(str1))
         self.assertEqual(csim1, ConstantField.pytocl(sim1))
+        self.assertEqual(csim2, ConstantField.pytocl(sim2))
 
         self.assertTrue(IntegerField.unifies(cnum1))
         self.assertTrue(StringField.unifies(cstr1))
         self.assertTrue(ConstantField.unifies(csim1))
+        self.assertTrue(ConstantField.unifies(csim2))
 
         self.assertFalse(IntegerField.unifies(csim1))
         self.assertFalse(StringField.unifies(cnum1))
@@ -124,6 +135,7 @@ class RawFieldTestCase(unittest.TestCase):
         self.assertTrue(fint.unifies(cnum1))
         self.assertTrue(fstr.unifies(cstr1))
         self.assertTrue(fconst.unifies(csim1))
+        self.assertTrue(fconst.unifies(csim2))
 
     #--------------------------------------------------------------------------
     # A default can now take a function that will be called when the Field's
@@ -777,7 +789,6 @@ class ORMTestCase(unittest.TestCase):
 
         neg_f2 = f.clone(sign=not f.sign)
         self.assertEqual(neg_f, neg_f2)
-
 
     #--------------------------------------------------------------------------
     # Test that we can define predicates which only allow for specifically
