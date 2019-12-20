@@ -24,7 +24,7 @@ setup(
     author_email="daver@gemarex.com.au",
     description="Clingo ORM (CLORM) provides a ORM interface for interacting with the Clingo Answer Set Programming (ASP) solver",
     license="MIT",
-    url="https://github.com/daveraja/clorm",
+    url="https://github.com/potassco/clorm",
     packages=["clorm","clorm.lib"],
     long_description=read("README.rst"),
 )

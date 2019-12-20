@@ -24,14 +24,19 @@ Then install Clorm:
 Installing from source
 ----------------------
 
-The project is hosted on github at https://github.com/daveraja/clorm and can
+The project is hosted on github at https://github.com/potassco/clorm and can
 also be installed using git:
 
 .. code-block:: bash
 
-    $ git clone https://github.com/daveraja/clorm
+    $ git clone https://github.com/potassco/clorm
     $ cd clorm
     $ python setup.py install
 
+.. note:: The home of Clorm
+
+   Going forward Clorm will be part of Potassco (home of Clingo and other ASP
+   tools). The GitHub namespace has been changed and Anaconda will follow
+   shortly.
 
 
