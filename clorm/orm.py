@@ -1174,38 +1174,42 @@ def _predicate_init_by_raw(self, **kwargs):
 
 # Construct a Predicate via the field keywords
 def _predicate_init_by_keyword_values(self, **kwargs):
-    class_name = type(self).__name__
-    names = set(self.meta.keys())
-    names.add("sign")
-
-    invalids = [ k for k in kwargs if k not in names ]
-    if invalids:
-        raise ValueError(("Arguments {} are not valid field names "
-                          "of {}".format(invalids,class_name)))
-
-    # Construct the clingo function arguments
-    self._field_values = [None]*self.meta.arity
-    for field in self.meta:
-        if field.name not in kwargs:
-            default = field.defn.default   # Only get the default value once in
-                                           # case it is a function.
+    argnum=0
+    self._field_values = []
+    clingoargs = []
+    for f in self.meta:
+        # Only get the default value once in case it is a function.
+        try:
+            v= _preprocess_field_value(f.defn, kwargs[f.name])
+            argnum += 1
+        except:
+            default = f.defn.default
             if not default:
                 raise ValueError(("Unspecified field {} has no "
-                                  "default value".format(field.name)))
-            self._field_values[field.index] = _preprocess_field_value(field.defn, default)
-        else:
-            self._field_values[field.index] = _preprocess_field_value(
-                field.defn, kwargs[field.name])
+                                  "default value".format(f.name)))
+            v = _preprocess_field_value(f.defn, default)
+        self._field_values.append(v)
+        clingoargs.append(f.defn.pytocl(v))
 
     # Calculate the sign of the literal and check that it matches the allowed values
-    sign = bool(kwargs["sign"]) if "sign" in kwargs else True
+    if "sign" in kwargs:
+        sign = bool(kwargs["sign"])
+        argnum += 1
+    else:
+        sign = True
+
+    if len(kwargs) > argnum:
+        args=set(kwargs.keys())
+        expected=set([f.name for f in self.meta])
+        raise ValueError(("Unrecognised named arguments {} for creating instances "
+                          "{}").format(args-expected, self.__class__))
     if self.meta.sign is not None:
         if sign != self.meta.sign:
-            raise ValueError(("Predicate {} is defined to only allow {} "
-                              "instances").format(class_name, self.meta.sign))
+            raise ValueError(("Predicate {} is defined to only allow {} signed "
+                              "instances").format(self.__class__, self.meta.sign))
 
     # Create the raw clingo.Symbol object
-    self._raw = self._generate_raw(sign)
+    self._raw = clingo.Function(self.meta.name, clingoargs, sign)
 
 # Construct a Predicate using keyword arguments
 def _predicate_init_by_positional_values(self, *args, **kwargs):
@@ -1214,7 +1218,12 @@ def _predicate_init_by_positional_values(self, *args, **kwargs):
     if argc != arity:
         raise ValueError("Expected {} arguments but {} given".format(argc,arity))
 
-    self._field_values = [ _preprocess_field_value(f.defn, args[f.index]) for f in self.meta ]
+    clingoargs = []
+    self._field_values = []
+    for f in self.meta:
+        v = _preprocess_field_value(f.defn, args[f.index])
+        self._field_values.append(v)
+        clingoargs.append(f.defn.pytocl(v))
 
     # Calculate the sign of the literal and check that it matches the allowed values
     sign = bool(kwargs["sign"]) if "sign" in kwargs else True
@@ -1223,20 +1232,18 @@ def _predicate_init_by_positional_values(self, *args, **kwargs):
                           "instances").format(type(self).__name__, self.meta.sign))
 
     # Create the raw clingo.Symbol object
-    self._raw = self._generate_raw(sign)
+    self._raw = clingo.Function(self.meta.name, clingoargs, sign)
 
 # Constructor for every Predicate sub-class
 def _predicate_constructor(self, *args, **kwargs):
-    self._raw = None
-    cls=type(self)
-    if "raw" in kwargs:
-        _predicate_init_by_raw(self, **kwargs)
-    elif len(args) > 0:
+    if len(args) > 0:
         if len(kwargs) > 1 or (len(kwargs) == 1 and "sign" not in kwargs):
             raise ValueError(("Invalid Predicate initialisation: only \"sign\" is a "
                              "valid keyword argument when combined with positional "
                               "arguments: {}").format(kwargs))
         _predicate_init_by_positional_values(self, *args,**kwargs)
+    elif "raw" in kwargs:
+        _predicate_init_by_raw(self, **kwargs)
     else:
         _predicate_init_by_keyword_values(self, **kwargs)
 

@@ -1028,6 +1028,43 @@ class ORMTestCase(unittest.TestCase):
             f3=Fact("test")
 
     #--------------------------------------------------------------------------
+    # Test that we can initialise using positional arguments
+    # --------------------------------------------------------------------------
+    def test_predicate_init_named(self):
+
+        class F(Predicate):
+            a = IntegerField
+            b = ConstantField(default="foo")
+
+        # Initialise with named arguments
+        f=F(a=1,b="bar")
+        self.assertEqual(f.a,1)
+        self.assertEqual(f.b,"bar")
+        self.assertTrue(f.sign)
+
+        f=F(a=1,b="bar",sign=False)
+        self.assertEqual(f.a,1)
+        self.assertEqual(f.b,"bar")
+        self.assertFalse(f.sign)
+
+        # Initialise with named arguments and default
+        f=F(a=1)
+        self.assertEqual(f.a,1)
+        self.assertEqual(f.b,"foo")
+        self.assertTrue(f.sign)
+
+        f=F(a=1,sign=False)
+        self.assertEqual(f.a,1)
+        self.assertEqual(f.b,"foo")
+        self.assertFalse(f.sign)
+
+        # Initialise with wrong arguments
+        with self.assertRaises(ValueError) as ctx:
+            f=F(a=1,b="bar",c=3)
+        with self.assertRaises(ValueError) as ctx:
+            f=F(a=1,c=3)
+
+    #--------------------------------------------------------------------------
     # Test that we can predicate fields using positional arguments
     # --------------------------------------------------------------------------
     def test_predicate_positional_access(self):
