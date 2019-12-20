@@ -26,6 +26,7 @@ from clorm.orm import \
 
 __all__ = [
     'RawFieldTestCase',
+    'PredicateDefnTestCase',
     'ORMTestCase',
     'PredicatePathTestCase',
     'FactIndexTestCase',
@@ -37,7 +38,7 @@ __all__ = [
     ]
 
 #------------------------------------------------------------------------------
-# Test for RawField and definining simple sub-classes
+# Test the RawField class and sub-classes and definining simple sub-classes
 #------------------------------------------------------------------------------
 
 class RawFieldTestCase(unittest.TestCase):
@@ -287,10 +288,10 @@ class RawFieldTestCase(unittest.TestCase):
         self.assertFalse(PosIntField.unifies(r_a))
 
 #------------------------------------------------------------------------------
-#
+# Test definition predicates/complex terms
 #------------------------------------------------------------------------------
 
-class ORMTestCase(unittest.TestCase):
+class PredicateDefnTestCase(unittest.TestCase):
     def setUp(self):
         pass
 
@@ -517,36 +518,6 @@ class ORMTestCase(unittest.TestCase):
                 b = "string"
 
     #--------------------------------------------------------------------------
-    # Simple test to make sure the default getters and setters are correct
-    #--------------------------------------------------------------------------
-    def test_predicate_instance_raw_term(self):
-
-        raw1 = Function("func",[Number(1)])
-        raw2 = Function("bob",[String("no")])
-        rf1 = RawField()
-        rf2 = RawField(default=raw1)
-        rt1 = Function("tmp", [Number(1), raw1])
-        rt2 = Function("tmp", [Number(1), raw2])
-        self.assertTrue(rf1.unifies(raw1))
-
-        class Tmp(Predicate):
-            n1 = IntegerField()
-            r1 = RawField()
-
-        self.assertTrue(Tmp._unifies(rt1))
-        self.assertTrue(Tmp._unifies(rt2))
-        t1 = Tmp(1,raw1)
-        t2 = Tmp(1,raw2)
-
-        self.assertEqual(set([f for f in unify([Tmp], [rt1,rt2])]),set([t1,t2]))
-        self.assertEqual(t1.r1, raw1)
-        self.assertEqual(t2.r1, raw2)
-
-    #--------------------------------------------------------------------------
-    # Simple test to make sure the default getters and setters are correct
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------
     # Test fields with a predicate that are specified as indexed
     #--------------------------------------------------------------------------
     def test_predicate_defn_containing_indexed_fields(self):
@@ -597,6 +568,7 @@ class ORMTestCase(unittest.TestCase):
 
         self.assertFalse(NotTuple.meta.is_tuple)
         self.assertTrue(Tuple.meta.is_tuple)
+
 
     #--------------------------------------------------------------------------
     # Test that we can get the arity of a Predicate class; using the arity property
@@ -731,6 +703,108 @@ class ORMTestCase(unittest.TestCase):
 
         self.assertEqual(BlahBlah.Field().complex, BlahBlah)
 
+    #--------------------------------------------------------------------------
+    # Test the mapping of class names to predicate/complex-term names
+    # --------------------------------------------------------------------------
+    def test_predicate_default_predicate_names(self):
+
+        # Basic camel-case example
+        class MyPred1(Predicate): a = StringField()
+        self.assertEqual(MyPred1.meta.name, "myPred1")
+
+        # Complex camel-case example
+        class MYpRed1A(Predicate): a = StringField()
+        self.assertEqual(MYpRed1A.meta.name, "mypRed1A")
+
+        # Basic snake-case example 1
+        class My_Pred1(Predicate): a = StringField()
+        self.assertEqual(My_Pred1.meta.name, "my_pred1")
+
+        # Basic snake-case example 2
+        class My_Pred_1(Predicate): a = StringField()
+        self.assertEqual(My_Pred_1.meta.name, "my_pred_1")
+
+        # Complex snake-case example 1
+        class MY_PREd1(Predicate): a = StringField()
+        self.assertEqual(MY_PREd1.meta.name, "my_pred1")
+
+        # Complex snake-case example 2
+        class MY_PREd_1A(Predicate): a = StringField()
+        self.assertEqual(MY_PREd_1A.meta.name, "my_pred_1a")
+
+        # acronym example 1
+        class MP1(Predicate): a = StringField()
+        self.assertEqual(MP1.meta.name, "mp1")
+
+        # acronym example 1
+        class MP1A(Predicate): a = StringField()
+        self.assertEqual(MP1A.meta.name, "mp1a")
+
+        # Do nothing
+        class myPred1(Predicate): a = StringField()
+        self.assertEqual(myPred1.meta.name, "myPred1")
+
+    #--------------------------------------------------------------------------
+    # Test that the Predicate meta class only allows a single sub-class derived
+    # from Predicate.
+    # --------------------------------------------------------------------------
+    def test_subclassing_nonlogicalsymbol(self):
+
+        class Ok1(Predicate):
+            astr = StringField()
+
+        class Ok2(Predicate):
+            aint = IntegerField()
+
+        # Test that you cannot instantiate Predicate
+        with self.assertRaises(TypeError) as ctx:
+            a = Predicate()
+
+        with self.assertRaises(TypeError):
+            class Bad1(Ok1,Ok2):
+                pass
+
+        with self.assertRaises(TypeError):
+            class Bad2(Ok1,Predicate):
+                pass
+
+
+#------------------------------------------------------------------------------
+#
+#------------------------------------------------------------------------------
+
+class ORMTestCase(unittest.TestCase):
+    def setUp(self):
+        pass
+
+    def tearDown(self):
+        pass
+
+    #--------------------------------------------------------------------------
+    # Simple test to make sure the default getters and setters are correct
+    #--------------------------------------------------------------------------
+    def test_predicate_instance_raw_term(self):
+
+        raw1 = Function("func",[Number(1)])
+        raw2 = Function("bob",[String("no")])
+        rf1 = RawField()
+        rf2 = RawField(default=raw1)
+        rt1 = Function("tmp", [Number(1), raw1])
+        rt2 = Function("tmp", [Number(1), raw2])
+        self.assertTrue(rf1.unifies(raw1))
+
+        class Tmp(Predicate):
+            n1 = IntegerField()
+            r1 = RawField()
+
+        self.assertTrue(Tmp._unifies(rt1))
+        self.assertTrue(Tmp._unifies(rt2))
+        t1 = Tmp(1,raw1)
+        t2 = Tmp(1,raw2)
+
+        self.assertEqual(set([f for f in unify([Tmp], [rt1,rt2])]),set([t1,t2]))
+        self.assertEqual(t1.r1, raw1)
+        self.assertEqual(t2.r1, raw2)
 
     #--------------------------------------------------------------------------
     # Test that we can define predicates using the class syntax and test that
@@ -1017,72 +1091,6 @@ class ORMTestCase(unittest.TestCase):
         self.assertEqual(f1, af1.raw)
         self.assertEqual(f2, af2.raw)
         self.assertEqual(af2.atup.aint,4)
-
-    #--------------------------------------------------------------------------
-    # Test the mapping of class names to predicate/complex-term names
-    # --------------------------------------------------------------------------
-    def test_predicate_default_predicate_names(self):
-
-        # Basic camel-case example
-        class MyPred1(Predicate): a = StringField()
-        self.assertEqual(MyPred1.meta.name, "myPred1")
-
-        # Complex camel-case example
-        class MYpRed1A(Predicate): a = StringField()
-        self.assertEqual(MYpRed1A.meta.name, "mypRed1A")
-
-        # Basic snake-case example 1
-        class My_Pred1(Predicate): a = StringField()
-        self.assertEqual(My_Pred1.meta.name, "my_pred1")
-
-        # Basic snake-case example 2
-        class My_Pred_1(Predicate): a = StringField()
-        self.assertEqual(My_Pred_1.meta.name, "my_pred_1")
-
-        # Complex snake-case example 1
-        class MY_PREd1(Predicate): a = StringField()
-        self.assertEqual(MY_PREd1.meta.name, "my_pred1")
-
-        # Complex snake-case example 2
-        class MY_PREd_1A(Predicate): a = StringField()
-        self.assertEqual(MY_PREd_1A.meta.name, "my_pred_1a")
-
-        # acronym example 1
-        class MP1(Predicate): a = StringField()
-        self.assertEqual(MP1.meta.name, "mp1")
-
-        # acronym example 1
-        class MP1A(Predicate): a = StringField()
-        self.assertEqual(MP1A.meta.name, "mp1a")
-
-        # Do nothing
-        class myPred1(Predicate): a = StringField()
-        self.assertEqual(myPred1.meta.name, "myPred1")
-
-
-    #--------------------------------------------------------------------------
-    # Test that the Predicate meta class only allows a single sub-class derived
-    # from Predicate.
-    # --------------------------------------------------------------------------
-    def test_subclassing_nonlogicalsymbol(self):
-
-        class Ok1(Predicate):
-            astr = StringField()
-
-        class Ok2(Predicate):
-            aint = IntegerField()
-
-        # Test that you cannot instantiate Predicate
-        with self.assertRaises(TypeError) as ctx:
-            a = Predicate()
-
-        with self.assertRaises(TypeError):
-            class Bad1(Ok1,Ok2):
-                pass
-
-        with self.assertRaises(TypeError):
-            class Bad2(Ok1,Predicate):
-                pass
 
 
     #--------------------------------------------------------------------------
@@ -1663,178 +1671,6 @@ class ORMTestCase(unittest.TestCase):
         or4 = or_(and3,e1)
         sor4 = or4.simplified()
         self.assertEqual(str(sor4), "Afact.anum1 == 2")
-
-
-    #--------------------------------------------------------------------------
-    # Test the factbasehelper with double decorators
-    #--------------------------------------------------------------------------
-    def test_symbolpredicateunifier(self):
-
-        # Using the SymbolPredicateUnifier as a decorator
-        spu1 = SymbolPredicateUnifier()
-        spu2 = SymbolPredicateUnifier()
-        spu3 = SymbolPredicateUnifier(suppress_auto_index=True)
-
-        # decorator both
-        @spu3.register
-        @spu2.register
-        @spu1.register
-        class Afact(Predicate):
-            num1=IntegerField(index=True)
-            num2=IntegerField()
-            str1=StringField()
-
-        # decorator without argument
-        @spu1.register
-        class Bfact(Predicate):
-            num1=IntegerField(index=True)
-            str1=StringField()
-
-        self.assertEqual(spu1.predicates, (Afact,Bfact))
-        self.assertEqual(spu2.predicates, (Afact,))
-        self.assertEqual(spu3.predicates, (Afact,))
-        self.assertEqual(spu1.indexes, (Afact.num1,Afact.num1))
-        self.assertEqual(spu2.indexes, (Afact.num1,))
-        self.assertEqual(spu3.indexes, ())
-
-    #--------------------------------------------------------------------------
-    # Test the symbolpredicateunifier when there are subfields defined
-    #--------------------------------------------------------------------------
-    def test_symbolpredicateunifier_with_subfields(self):
-        spu = SymbolPredicateUnifier()
-
-        class CT(ComplexTerm):
-            a = IntegerField
-            b = StringField(index=True)
-            c = (IntegerField(index=True),ConstantField)
-
-        @spu.register
-        class P(Predicate):
-            d = CT.Field(index=True)
-            e = CT.Field()
-
-        expected=set([hashable_path(P.d),
-                      hashable_path(P.d.b), hashable_path(P.d.c.arg1),
-                      hashable_path(P.e.b), hashable_path(P.e.c.arg1)])
-        self.assertEqual(spu.predicates, (P,))
-        self.assertEqual(set([hashable_path(p) for p in spu.indexes]), set(expected))
-
-        ct_func=Function("ct",[Number(1),String("aaa"),
-                               Function("",[Number(1),Function("const",[])])])
-        p1=Function("p",[ct_func,ct_func])
-        fb=spu.unify(symbols=[p1],raise_on_empty=True)
-        self.assertEqual(len(fb),1)
-        self.assertEqual(set([hashable_path(p) for p in fb.indexes]), expected)
-
-    #--------------------------------------------------------------------------
-    # Test that subclass factbase works and we can specify indexes
-    #--------------------------------------------------------------------------
-
-    def test_symbolpredicateunifier_symbols(self):
-
-        class Afact(Predicate):
-            num1=IntegerField()
-            num2=IntegerField()
-            str1=StringField()
-        class Bfact(Predicate):
-            num1=IntegerField()
-            str1=StringField()
-        class Cfact(Predicate):
-            num1=IntegerField()
-
-        af1 = Afact(1,10,"bbb")
-        af2 = Afact(2,20,"aaa")
-        af3 = Afact(3,20,"aaa")
-        bf1 = Bfact(1,"aaa")
-        bf2 = Bfact(2,"bbb")
-        cf1 = Cfact(1)
-
-        raws = [
-            Function("afact",[Number(1), Number(10), String("bbb")]),
-            Function("afact",[Number(2), Number(20), String("aaa")]),
-            Function("afact",[Number(3), Number(20), String("aaa")]),
-            Function("bfact",[Number(1),String("aaa")]),
-            Function("bfact",[Number(2),String("bbb")]),
-            Function("cfact",[Number(1)])
-            ]
-        spu = SymbolPredicateUnifier(predicates=[Afact,Bfact,Cfact])
-
-        # Test the different ways that facts can be added
-        fb = spu.unify(symbols=raws)
-        self.assertFalse(fb._delayed_init)
-        self.assertEqual(set(fb.predicates), set([Afact,Bfact,Cfact]))
-        s_af_all = fb.select(Afact)
-        self.assertEqual(set(s_af_all.get()), set([af1,af2,af3]))
-
-        fb = spu.unify(symbols=raws, delayed_init=True)
-        self.assertTrue(fb._delayed_init)
-        self.assertEqual(set(fb.predicates), set([Afact,Bfact,Cfact]))
-        s_af_all = fb.select(Afact)
-        self.assertEqual(set(s_af_all.get()), set([af1,af2,af3]))
-
-        fb = FactBase()
-        fb.add([af1,af2,af3])
-####        self.assertEqual(fb.add([af1,af2,af3]),3)
-        s_af_all = fb.select(Afact)
-        self.assertEqual(set(s_af_all.get()), set([af1,af2,af3]))
-
-        fb = FactBase()
-        fb.add(af1)
-        fb.add(af2)
-        fb.add(af3)
-####        self.assertEqual(fb.add(af1),1)
-####        self.assertEqual(fb.add(af2),1)
-####        self.assertEqual(fb.add(af3),1)
-        s_af_all = fb.select(Afact)
-        self.assertEqual(set(s_af_all.get()), set([af1,af2,af3]))
-
-        # Test that adding symbols can handle symbols that don't unify
-        fb = spu.unify(symbols=raws)
-        s_af_all = fb.select(Afact)
-        self.assertEqual(set(s_af_all.get()), set([af1,af2,af3]))
-
-        return
-
-        # Test the specification of indexes
-        class MyFactBase3(FactBase):
-            predicates = [Afact, Bfact]
-
-        spu = SymbolPredicateUnifier(predicates=[Afact,Bfact,Cfact],
-                                     indexes=[Afact.num1, Bfact.num1])
-
-        fb = spu.unify(symbols=raws)
-        s = fb.select(Afact).where(Afact.num1 == 1)
-        self.assertEqual(s.get_unique(), af1)
-        s = fb.select(Bfact).where(Bfact.num1 == 1)
-        self.assertEqual(s.get_unique(), bf1)
-
-
-    #--------------------------------------------------------------------------
-    # Test that subclass factbase works and we can specify indexes
-    #--------------------------------------------------------------------------
-
-    def test_factbase_copy(self):
-        class Afact(Predicate):
-            num=IntegerField(index=True)
-            pair=(IntegerField, IntegerField(index=True))
-
-        af1=Afact(num=5,pair=(1,2))
-        af2=Afact(num=6,pair=(1,2))
-        af3=Afact(num=5,pair=(2,3))
-
-        fb1=FactBase([af1,af2,af3],indexes=Afact.meta.indexes)
-        fb2=FactBase(list(fb1))
-        fb3=FactBase(fb1)
-
-        # The data is the same so they are all equal
-        self.assertEqual(fb1, fb2)
-        self.assertEqual(fb2, fb3)
-
-        # But the indexes can be different
-        self.assertEqual(list(fb1.indexes), list(Afact.meta.indexes))
-        self.assertEqual(list(fb2.indexes), [])
-        self.assertEqual(list(fb3.indexes), list(fb1.indexes))
-
 
 
 #------------------------------------------------------------------------------
@@ -2735,6 +2571,175 @@ class FactBaseTestCase(unittest.TestCase):
         fb ^= FactBase([cf2])
         self.assertEqual(fb, FactBase([af1,af2,bf1,cf2]))
 
+    #--------------------------------------------------------------------------
+    # Test the factbasehelper with double decorators
+    #--------------------------------------------------------------------------
+    def test_symbolpredicateunifier(self):
+
+        # Using the SymbolPredicateUnifier as a decorator
+        spu1 = SymbolPredicateUnifier()
+        spu2 = SymbolPredicateUnifier()
+        spu3 = SymbolPredicateUnifier(suppress_auto_index=True)
+
+        # decorator both
+        @spu3.register
+        @spu2.register
+        @spu1.register
+        class Afact(Predicate):
+            num1=IntegerField(index=True)
+            num2=IntegerField()
+            str1=StringField()
+
+        # decorator without argument
+        @spu1.register
+        class Bfact(Predicate):
+            num1=IntegerField(index=True)
+            str1=StringField()
+
+        self.assertEqual(spu1.predicates, (Afact,Bfact))
+        self.assertEqual(spu2.predicates, (Afact,))
+        self.assertEqual(spu3.predicates, (Afact,))
+        self.assertEqual(spu1.indexes, (Afact.num1,Afact.num1))
+        self.assertEqual(spu2.indexes, (Afact.num1,))
+        self.assertEqual(spu3.indexes, ())
+
+    #--------------------------------------------------------------------------
+    # Test the symbolpredicateunifier when there are subfields defined
+    #--------------------------------------------------------------------------
+    def test_symbolpredicateunifier_with_subfields(self):
+        spu = SymbolPredicateUnifier()
+
+        class CT(ComplexTerm):
+            a = IntegerField
+            b = StringField(index=True)
+            c = (IntegerField(index=True),ConstantField)
+
+        @spu.register
+        class P(Predicate):
+            d = CT.Field(index=True)
+            e = CT.Field()
+
+        expected=set([hashable_path(P.d),
+                      hashable_path(P.d.b), hashable_path(P.d.c.arg1),
+                      hashable_path(P.e.b), hashable_path(P.e.c.arg1)])
+        self.assertEqual(spu.predicates, (P,))
+        self.assertEqual(set([hashable_path(p) for p in spu.indexes]), set(expected))
+
+        ct_func=Function("ct",[Number(1),String("aaa"),
+                               Function("",[Number(1),Function("const",[])])])
+        p1=Function("p",[ct_func,ct_func])
+        fb=spu.unify(symbols=[p1],raise_on_empty=True)
+        self.assertEqual(len(fb),1)
+        self.assertEqual(set([hashable_path(p) for p in fb.indexes]), expected)
+
+    #--------------------------------------------------------------------------
+    # Test that subclass factbase works and we can specify indexes
+    #--------------------------------------------------------------------------
+
+    def test_symbolpredicateunifier_symbols(self):
+
+        class Afact(Predicate):
+            num1=IntegerField()
+            num2=IntegerField()
+            str1=StringField()
+        class Bfact(Predicate):
+            num1=IntegerField()
+            str1=StringField()
+        class Cfact(Predicate):
+            num1=IntegerField()
+
+        af1 = Afact(1,10,"bbb")
+        af2 = Afact(2,20,"aaa")
+        af3 = Afact(3,20,"aaa")
+        bf1 = Bfact(1,"aaa")
+        bf2 = Bfact(2,"bbb")
+        cf1 = Cfact(1)
+
+        raws = [
+            Function("afact",[Number(1), Number(10), String("bbb")]),
+            Function("afact",[Number(2), Number(20), String("aaa")]),
+            Function("afact",[Number(3), Number(20), String("aaa")]),
+            Function("bfact",[Number(1),String("aaa")]),
+            Function("bfact",[Number(2),String("bbb")]),
+            Function("cfact",[Number(1)])
+            ]
+        spu = SymbolPredicateUnifier(predicates=[Afact,Bfact,Cfact])
+
+        # Test the different ways that facts can be added
+        fb = spu.unify(symbols=raws)
+        self.assertFalse(fb._delayed_init)
+        self.assertEqual(set(fb.predicates), set([Afact,Bfact,Cfact]))
+        s_af_all = fb.select(Afact)
+        self.assertEqual(set(s_af_all.get()), set([af1,af2,af3]))
+
+        fb = spu.unify(symbols=raws, delayed_init=True)
+        self.assertTrue(fb._delayed_init)
+        self.assertEqual(set(fb.predicates), set([Afact,Bfact,Cfact]))
+        s_af_all = fb.select(Afact)
+        self.assertEqual(set(s_af_all.get()), set([af1,af2,af3]))
+
+        fb = FactBase()
+        fb.add([af1,af2,af3])
+####        self.assertEqual(fb.add([af1,af2,af3]),3)
+        s_af_all = fb.select(Afact)
+        self.assertEqual(set(s_af_all.get()), set([af1,af2,af3]))
+
+        fb = FactBase()
+        fb.add(af1)
+        fb.add(af2)
+        fb.add(af3)
+####        self.assertEqual(fb.add(af1),1)
+####        self.assertEqual(fb.add(af2),1)
+####        self.assertEqual(fb.add(af3),1)
+        s_af_all = fb.select(Afact)
+        self.assertEqual(set(s_af_all.get()), set([af1,af2,af3]))
+
+        # Test that adding symbols can handle symbols that don't unify
+        fb = spu.unify(symbols=raws)
+        s_af_all = fb.select(Afact)
+        self.assertEqual(set(s_af_all.get()), set([af1,af2,af3]))
+
+        return
+
+        # Test the specification of indexes
+        class MyFactBase3(FactBase):
+            predicates = [Afact, Bfact]
+
+        spu = SymbolPredicateUnifier(predicates=[Afact,Bfact,Cfact],
+                                     indexes=[Afact.num1, Bfact.num1])
+
+        fb = spu.unify(symbols=raws)
+        s = fb.select(Afact).where(Afact.num1 == 1)
+        self.assertEqual(s.get_unique(), af1)
+        s = fb.select(Bfact).where(Bfact.num1 == 1)
+        self.assertEqual(s.get_unique(), bf1)
+
+
+    #--------------------------------------------------------------------------
+    # Test that subclass factbase works and we can specify indexes
+    #--------------------------------------------------------------------------
+
+    def test_factbase_copy(self):
+        class Afact(Predicate):
+            num=IntegerField(index=True)
+            pair=(IntegerField, IntegerField(index=True))
+
+        af1=Afact(num=5,pair=(1,2))
+        af2=Afact(num=6,pair=(1,2))
+        af3=Afact(num=5,pair=(2,3))
+
+        fb1=FactBase([af1,af2,af3],indexes=Afact.meta.indexes)
+        fb2=FactBase(list(fb1))
+        fb3=FactBase(fb1)
+
+        # The data is the same so they are all equal
+        self.assertEqual(fb1, fb2)
+        self.assertEqual(fb2, fb3)
+
+        # But the indexes can be different
+        self.assertEqual(list(fb1.indexes), list(Afact.meta.indexes))
+        self.assertEqual(list(fb2.indexes), [])
+        self.assertEqual(list(fb3.indexes), list(fb1.indexes))
 
 #------------------------------------------------------------------------------
 # Test the _Select class
