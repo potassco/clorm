@@ -1537,11 +1537,6 @@ class Predicate(object, metaclass=_PredicateMeta):
         """A RawField sub-class corresponding to a Field for this class."""
         return cls._field
 
-    # Recompute the clingo.Symbol object from the stored fields
-    def _generate_raw(self,sign):
-        pred_args = [ f.defn.pytocl(self._field_values[f.index]) for f in self.meta ]
-        return clingo.Function(self.meta.name, pred_args,sign)
-
     # Clone the object with some differences
     def clone(self, **kwargs):
         """Clone the object with some differences.
