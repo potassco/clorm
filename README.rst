@@ -31,20 +31,7 @@ Then install Clorm:
 
 .. code-block:: bash
 
-    $ conda install -c daveraja clorm
-
-Development Version
-^^^^^^^^^^^^^^^^^^^
-
-To experiment with the latest features you can install the development version
-from:
-
-.. code-block:: bash
-
-    $ conda install -c daveraja/label/dev clorm
-
-With the `latest documentation <https://clorm.readthedocs.io/en/latest/>`_.
-
+    $ conda install -c potassco clorm
 
 
 Quick Start

@@ -19,7 +19,7 @@ Then install Clorm:
 
 .. code-block:: bash
 
-    $ conda install -c daveraja clorm
+    $ conda install -c potassco clorm
 
 Installing from source
 ----------------------
@@ -35,8 +35,8 @@ also be installed using git:
 
 .. note:: The home of Clorm
 
-   Going forward Clorm will be part of Potassco (home of Clingo and other ASP
-   tools). The GitHub namespace has been changed and Anaconda will follow
-   shortly.
+   Going forward Clorm will be maintained within the Potassco suite of tools
+   (home of Clingo and other ASP tools). The GitHub and Anaconda namespaces have
+   been changed accordingly.
 
 
