@@ -35,12 +35,12 @@ also be installed using git:
 
 .. note::
 
-   The above installation from source instructions assumes that you have already
-   installed a version of Clingo that has been compiled with Python support, as
-   well as the Python Clingo module.
+   The above instructions for installing from source assumes that you have
+   already installed a version of Clingo that has been compiled with Python
+   support, as well as the Python Clingo module.
 
    Unfortunately, the pre-compiled Clingo Ubuntu packages from the *apt*
-   repository may not work. From what I can tell, even thought the ``clingo``
+   repository may not work. From what I can tell, even though the ``clingo``
    executable has been compiled with Python support, the Clingo Python module
    itself is missing from these packages. So you may need to compile and install
    Clingo manually.
