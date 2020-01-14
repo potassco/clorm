@@ -23,7 +23,14 @@ integration cleaner, both in terms of code readability but also by making it
 easier to refactor the python code as the ASP program evolves.
 
 - Works with Python 3.5+ (developed on 3.6 and 3.7)
-- Tested with Clingo 5.3 and 5.4 (dev release)
+- Tested with Clingo 5.3 and 5.4
+
+.. note::
+
+   Clorm is now being hosted under the Potassco umbrella (which is the home of
+   Clingo and the other ASP tools). The GitHub and Anaconda namespaces have been
+   changed accordingly.
+
 
 
 .. toctree::
@@ -47,3 +54,4 @@ Indices and tables
 * :ref:`genindex`
 * :ref:`modindex`
 * :ref:`search`
+

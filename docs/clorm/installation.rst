@@ -33,10 +33,18 @@ also be installed using git:
     $ cd clorm
     $ python setup.py install
 
-.. note:: The home of Clorm
+.. note::
 
-   Going forward Clorm will be maintained within the Potassco suite of tools
-   (home of Clingo and other ASP tools). The GitHub and Anaconda namespaces have
-   been changed accordingly.
+   The above installation from source instructions assumes that you have already
+   installed a version of Clingo that has been compiled with Python support, as
+   well as the Python Clingo module.
 
+   Unfortunately, the pre-compiled Clingo Ubuntu packages from the *apt*
+   repository may not work. From what I can tell, even thought the ``clingo``
+   executable has been compiled with Python support, the Clingo Python module
+   itself is missing from these packages. So you may need to compile and install
+   Clingo manually.
+
+   For instructions on compiling and installing Clingo see:
+   https://github.com/potassco/clingo/blob/master/INSTALL.md
 
