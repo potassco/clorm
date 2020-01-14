@@ -13,7 +13,7 @@ instances and process the results dynamically. Clorm makes this integration
 cleaner, both in terms of code readability but also by providing a framework
 that makes it easier to refactor the python code as the ASP program evolves.
 
-The documentation is available online `here <https://clorm.readthedocs.io/en/stable>`_.
+The documentation is available online `here <https://clorm.readthedocs.io/>`_.
 
 Note: Clorm works with Python 3.5+ and Clingo 5.3+
 
