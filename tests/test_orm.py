@@ -17,9 +17,9 @@ from clorm.orm import \
     ph_, ph1_, ph2_, \
     _FactIndex, _FactMap, PredicatePath, path, hashable_path, \
     unify, desc, asc, FactBase, SymbolPredicateUnifier,  \
-    TypeCastSignature, make_function_asp_callable, make_method_asp_callable, \
+    TypeCastSignature, _get_annotations, make_function_asp_callable, \
+    make_method_asp_callable, \
     ContextBuilder
-
 
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
@@ -3431,6 +3431,39 @@ class TypeCastSignatureTestCase(unittest.TestCase):
 #        result = test_sig1(t1_raw)
         self.assertEqual(test_sig1(t1_raw),t1_raw)
         self.assertEqual(test_sig2(s_raw),[t1_raw,t2_raw])
+
+    #--------------------------------------------------------------------------
+    # Test using function annotations and reporting better errors
+    #--------------------------------------------------------------------------
+    def test_get_annotations_errors(self):
+
+        def assert_msg(bw, ctx):
+            msg=str(ctx.exception)
+            if not msg.startswith(bw):
+                msg = ("Error message \"{}\" does not start "
+                       "with \"{}\"").format(msg,bw)
+                raise AssertionError(msg)
+        IF=IntegerField
+
+        with self.assertRaises(TypeError) as ctx:
+            def bad() -> IF : return 1
+            s = _get_annotations(bad,True)
+        assert_msg("Cannot ignore", ctx)
+
+        with self.assertRaises(TypeError) as ctx:
+            def bad(a : IF, b : IF) : return 1
+            s = _get_annotations(bad)
+        assert_msg("Missing function", ctx)
+
+        with self.assertRaises(TypeError) as ctx:
+            def bad(a, b) -> IF : return 1
+            s = _get_annotations(bad)
+        assert_msg("Missing type cast", ctx)
+
+        with self.assertRaises(TypeError) as ctx:
+            def bad(a : IF, b) -> IF : return 1
+            s = _get_annotations(bad)
+        assert_msg("Missing type cast", ctx)
 
     #--------------------------------------------------------------------------
     # Test the signature generation for writing python functions that can be

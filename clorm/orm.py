@@ -3336,14 +3336,25 @@ class TypeCastSignature(object):
 
 def _get_annotations(fn, ignore_first=False):
     fsig = inspect.signature(fn)
+    qname = fn.__qualname__
     fsigparam = fsig.parameters
     annotations = [fsigparam[s].annotation for s in fsigparam]
     if not annotations and ignore_first:
-        raise TypeError("Empty function signature - cannot ignore first element")
-    annotations.append(fsig.return_annotation)
+        raise TypeError(("Cannot ignore the first parameter for a function "
+                         "with no arguments: {}").format(qname))
+
+    # Make sure the return value is annotated
+    if inspect.Signature.empty == fsig.return_annotation:
+        raise TypeError(("Missing function return annotation: "
+                         "{}").format(qname))
+
+    # Remove any ignore first and add the return value annotation
     if ignore_first: annotations.pop(0)
+    annotations.append(fsig.return_annotation)
+
     if inspect.Signature.empty in annotations:
-        raise TypeError("Failed to extract all annotations from {} ".format(fn))
+        raise TypeError(("Missing type cast annotations in function "
+                         "arguments: {} ").format(qname))
     return annotations
 
 
