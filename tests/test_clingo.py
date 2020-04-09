@@ -179,12 +179,23 @@ class ClingoTestCase(unittest.TestCase):
         ctrl.ground([("base",[])])
         ctrl.control_.solve(on_model=on_model1)
 
-        # Test that it fails correctly when no spu is passed
+        # Test that an empty unifier list is valid (even if not useful)
         def on_model2(model):
+            cmodel=cclingo.Model(model=model,unifier=[])
+            fb = cmodel.facts(atoms=True)
+            self.assertEqual(len(fb.facts()), 0)
+
+        ctrl = cclingo.Control()
+        ctrl.add_facts([af1,af2])
+        ctrl.ground([("base",[])])
+        ctrl.control_.solve(on_model=on_model2)
+
+        # Test that it fails correctly when no unifier is passed
+        def on_model3(model):
             cmodel=cclingo.Model(model=model)
             with self.assertRaises(ValueError) as ctx:
                 fb = cmodel.facts(atoms=True)
-        ctrl.control_.solve(on_model=on_model2)
+        ctrl.control_.solve(on_model=on_model3)
 
     #--------------------------------------------------------------------------
     # Test passing a SymbolPredicateUnifier to the control constructors and using the
@@ -221,14 +232,24 @@ class ClingoTestCase(unittest.TestCase):
         ctrl.ground([("base",[])])
         ctrl.solve(on_model=on_model1)
 
-        # Test that it fails correctly when no spu is passed
+        # Test that an empty unifier list is still valid (even if not useful)
         def on_model2(model):
+            fb = model.facts(atoms=True)
+            self.assertEqual(len(fb.facts()), 0)
+
+        ctrl = cclingo.Control(unifier=[])
+        ctrl.add_facts([af1,af2])
+        ctrl.ground([("base",[])])
+        ctrl.solve(on_model=on_model2)
+
+        # Test that it fails correctly when no spu is passed
+        def on_model3(model):
             with self.assertRaises(ValueError) as ctx:
                 fb = model.facts(atoms=True)
         ctrl = cclingo.Control()
         ctrl.add_facts([af1,af2])
         ctrl.ground([("base",[])])
-        ctrl.solve(on_model=on_model2)
+        ctrl.solve(on_model=on_model3)
 
         # Now set the unifier and (checking the getter and setter) then re-run
         # the solver to show that it works

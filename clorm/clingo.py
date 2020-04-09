@@ -53,7 +53,7 @@ def _poss_magic_method(name,value):
 # ------------------------------------------------------------------------------
 
 def _build_unifier(unifier):
-    if not unifier: return None
+    if unifier is None: return None
     if isinstance(unifier, SymbolPredicateUnifier): return unifier
     return SymbolPredicateUnifier(predicates=unifier)
 
@@ -132,7 +132,7 @@ class Model(object, metaclass=_ModelMetaClass):
                            (Default: False)
 
         '''
-        if unifier: unifier=_build_unifier(unifier)
+        if unifier is not None: unifier=_build_unifier(unifier)
         else: unifier=self._unifier
         if not unifier:
             msg = "Missing a predicate unifier specification in function call " + \
