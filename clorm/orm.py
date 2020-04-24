@@ -479,26 +479,43 @@ def _make_cltopy(fn):
         return fn(v)
     return _cltopy
 
-def _sfm_constructor(self, default=None, index=False):
-    """Default values"""
-    self._default = default
-    self._index = index
+
+def _check_keys(validkeys, inputkeys):
+    if not inputkeys.issubset(validkeys): return inputkeys-validkeys
+    return set([])
+
+def _rfm_constructor(self, **kwargs):
+    badkeys = _check_keys(set(["default","index"]), set(kwargs.keys()))
+    if badkeys:
+        mstr = "Field constructor got unexpected keyword arguments: "
+        if len(badkeys) == 1:
+            mstr = "Field constructor got an unexpected keyword argument: "
+        raise TypeError("{}{}".format(mstr,",".join(sorted(badkeys))))
+
+    if "default" in kwargs: self._default = (True, kwargs["default"])
+    else: self._default = (False,None)
+
+    if "index" in kwargs: self._index = kwargs["index"]
+    else: self._index=False
+
+    if not self._default[0]: return
+    dval = self._default[1]
 
     # Check that the default is a valid value. If the default is a callable then
-    # we can't do this check.
-    if default and not callable(default):
+    # we can't do this check because it could break a counter type procedure.
+    if not callable(dval):
         try:
-            self.pytocl(default)
+            self.pytocl(dval)
         except TypeError:
             raise TypeError("Invalid default value \"{}\" for {}".format(
-                default, type(self).__name__))
+                dval, type(self).__name__))
 
 class _RawFieldMeta(type):
     def __new__(meta, name, bases, dct):
 
         # Add a default initialiser if one is not already defined
         if "__init__" not in dct:
-            dct["__init__"] = _sfm_constructor
+            dct["__init__"] = _rfm_constructor
 
         dct["_fpb"] = _lateinit("{}._fpb".format(name))
 
@@ -554,7 +571,7 @@ class _RawFieldMeta(type):
 
 #------------------------------------------------------------------------------
 # Field definitions. All fields have the functions: pytocl, cltopy,
-# and unifies, and the property: default
+# and unifies, and the properties: default and has_default
 # ------------------------------------------------------------------------------
 
 class RawField(object, metaclass=_RawFieldMeta):
@@ -611,12 +628,12 @@ class RawField(object, metaclass=_RawFieldMeta):
 
     @classmethod
     def cltopy(cls, v):
-        """Called when translating data from a Clingo to Python"""
+        """Called when translating data from Clingo to Python"""
         return v
 
     @classmethod
     def pytocl(cls, v):
-        """Called when translating data from a Python to Clingo"""
+        """Called when translating data from Python to Clingo"""
         return v
 
     @classmethod
@@ -634,16 +651,24 @@ class RawField(object, metaclass=_RawFieldMeta):
         return None
 
     @property
+    def has_default(self):
+        """Returns whether a default value has been set"""
+        return self._default[0]
+
+    @property
     def default(self):
         """Returns the default value for the field (or ``None`` if no default was set).
 
-        Note: if a function was specified as the default then call this function and
-        return the value.
+        Note: 1) if a function was specified as the default then testing
+        ``default`` will call this function and return the value, 2) if your
+        RawField sub-class allows a default value of ``None`` then you need to
+        check the ``has_default`` property to distinguish between no default
+        value and a ``None`` default value.
 
         """
-        if not self._default: return None
-        if callable(self._default): return self._default()
-        return self._default
+        if not self._default[0]: return None
+        if callable(self._default[1]): return self._default[1]()
+        return self._default[1]
 
     @property
     def index(self):

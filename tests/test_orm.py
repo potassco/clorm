@@ -37,6 +37,18 @@ __all__ = [
     'ContextBuilderTestCase',
     ]
 
+
+#------------------------------------------------------------------------------
+# Helper function for helping to test for good error messages.
+#------------------------------------------------------------------------------
+def check_errmsg(startmsg, ctx):
+    msg=str(ctx.exception)
+    if not msg.startswith(startmsg):
+        msg = ("Error message \"{}\" does not start "
+               "with \"{}\"").format(msg,startmsg)
+        raise AssertionError(msg)
+
+
 #------------------------------------------------------------------------------
 # Test the RawField class and sub-classes and definining simple sub-classes
 #------------------------------------------------------------------------------
@@ -139,23 +151,58 @@ class RawFieldTestCase(unittest.TestCase):
         self.assertTrue(fconst.unifies(csim2))
 
     #--------------------------------------------------------------------------
-    # A default can now take a function that will be called when the Field's
-    # default property is called.
+    # A default can take arbitrary non-None values. It can also take a
+    # function/functor will be called when the Field's default property is
+    # queried.
     # --------------------------------------------------------------------------
-    def test_field_default_function(self):
+    def test_field_defaults(self):
         val=0
         def inc():
             nonlocal val
             val +=1
             return val
 
-        fld1 = IntegerField()
-        fld2 = IntegerField(default=5)
-        fld3 = IntegerField(default=inc)
-        self.assertEqual(fld1.default, None)
-        self.assertEqual(fld2.default, 5)
-        self.assertEqual(fld3.default, 1)
-        self.assertEqual(fld3.default, 2)
+        # Note: distinguish no default value and a default value of None
+        fld = RawField()
+        self.assertEqual(fld.default, None)
+        self.assertFalse(fld.has_default)
+
+        fld = RawField(default=None)
+        self.assertEqual(fld.default, None)
+        self.assertTrue(fld.has_default)
+
+        fld = IntegerField(default=5)
+        self.assertEqual(fld.default, 5)
+        self.assertTrue(fld.has_default)
+
+        fld = IntegerField(default=inc)
+        self.assertTrue(fld.has_default)
+        self.assertEqual(fld.default, 1)
+        self.assertEqual(fld.default, 2)
+
+        # Added test for bug fix to distinguish a value that evaluates to False
+        # from a None value
+        fld = IntegerField(default=0)
+        self.assertEqual(fld.default, 0)
+        self.assertTrue(fld.has_default)
+
+
+    #--------------------------------------------------------------------------
+    # Test catching invalid default values for a field
+    #--------------------------------------------------------------------------
+    def test_catch_bad_field_defaults(self):
+        with self.assertRaises(TypeError) as ctx:
+            fld = IntegerField(default="bad")
+        check_errmsg("Invalid default value \"bad\" for IntegerField", ctx)
+
+        with self.assertRaises(TypeError) as ctx:
+            fld5=IntegerField(unknown=5)
+        check_errmsg("Field constructor got an", ctx)
+
+        with self.assertRaises(TypeError) as ctx:
+            fld5=IntegerField(unknown1=5,unknown2="f")
+        check_errmsg(("Field constructor got unexpected keyword arguments: "
+                      "unknown1,unknown2"), ctx)
 
     #--------------------------------------------------------------------------
     # Test setting index for a term
@@ -176,12 +223,6 @@ class RawFieldTestCase(unittest.TestCase):
         self.assertTrue(fconst2.index)
 
 
-    #--------------------------------------------------------------------------
-    # Test catching invalid default values for a field
-    #--------------------------------------------------------------------------
-    def test_catch_bad_field_defaults(self):
-        with self.assertRaises(TypeError) as ctx:
-            fld = IntegerField(default="bad")
 
     #--------------------------------------------------------------------------
     # Test making a restriction of a field using a list of values
@@ -3437,33 +3478,27 @@ class TypeCastSignatureTestCase(unittest.TestCase):
     #--------------------------------------------------------------------------
     def test_get_annotations_errors(self):
 
-        def assert_msg(bw, ctx):
-            msg=str(ctx.exception)
-            if not msg.startswith(bw):
-                msg = ("Error message \"{}\" does not start "
-                       "with \"{}\"").format(msg,bw)
-                raise AssertionError(msg)
         IF=IntegerField
 
         with self.assertRaises(TypeError) as ctx:
             def bad() -> IF : return 1
             s = _get_annotations(bad,True)
-        assert_msg("Cannot ignore", ctx)
+        check_errmsg("Cannot ignore", ctx)
 
         with self.assertRaises(TypeError) as ctx:
             def bad(a : IF, b : IF) : return 1
             s = _get_annotations(bad)
-        assert_msg("Missing function", ctx)
+        check_errmsg("Missing function", ctx)
 
         with self.assertRaises(TypeError) as ctx:
             def bad(a, b) -> IF : return 1
             s = _get_annotations(bad)
-        assert_msg("Missing type cast", ctx)
+        check_errmsg("Missing type cast", ctx)
 
         with self.assertRaises(TypeError) as ctx:
             def bad(a : IF, b) -> IF : return 1
             s = _get_annotations(bad)
-        assert_msg("Missing type cast", ctx)
+        check_errmsg("Missing type cast", ctx)
 
     #--------------------------------------------------------------------------
     # Test the signature generation for writing python functions that can be
