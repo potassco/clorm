@@ -822,14 +822,13 @@ class ORMTestCase(unittest.TestCase):
         pass
 
     #--------------------------------------------------------------------------
-    # Simple test to make sure the default getters and setters are correct
+    # Simple test to make sure that raw terms unify correctly
     #--------------------------------------------------------------------------
     def test_predicate_instance_raw_term(self):
 
         raw1 = Function("func",[Number(1)])
         raw2 = Function("bob",[String("no")])
         rf1 = RawField()
-        rf2 = RawField(default=raw1)
         rt1 = Function("tmp", [Number(1), raw1])
         rt2 = Function("tmp", [Number(1), raw2])
         self.assertTrue(rf1.unifies(raw1))
