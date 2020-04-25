@@ -491,7 +491,19 @@ def _make_cltopy(fn):
         return fn(v)
     return _cltopy
 
-def _rfm_constructor(self, **kwargs):
+def _rfm_constructor(self, *args, **kwargs):
+    # Check the match between positional and keyword arguments
+    if "default" in kwargs and len(args) > 0:
+        raise TypeError(("Field constructor got multiple values for "
+                         "argument 'default'"))
+    if "index" in kwargs and len(args) > 1:
+        raise TypeError(("Field constructor got multiple values for "
+                         "argument 'index'"))
+    if len(args) > 2:
+        raise TypeError(("Field constructor takes from 0 to 2 positional"
+                         "arguments but {} given").format(len(args)))
+
+    # Check for bad positional arguments
     badkeys = _check_keys(set(["default","index"]), set(kwargs.keys()))
     if badkeys:
         mstr = "Field constructor got unexpected keyword arguments: "
@@ -500,9 +512,11 @@ def _rfm_constructor(self, **kwargs):
         raise TypeError("{}{}".format(mstr,",".join(sorted(badkeys))))
 
     if "default" in kwargs: self._default = (True, kwargs["default"])
+    elif len(args) > 0: self._default = (True, args[0])
     else: self._default = (False,None)
 
     if "index" in kwargs: self._index = kwargs["index"]
+    elif len(args) > 1: self._index = args[1]
     else: self._index=False
 
     if not self._default[0]: return
@@ -1814,44 +1828,86 @@ class Placeholder(abc.ABC):
     pass
 
 class _NamedPlaceholder(Placeholder):
-    def __init__(self, name, default=None):
-        self._name = str(name)
-        self._default = default
-        self._value = None
+    # None could be a legitimate value so cannot use it to test for default
+    def __init__(self, name, *args, **kwargs):
+        self._name = name
+        # Check for unexpected arguments
+        badkeys = _check_keys(set(["default"]), set(kwargs.keys()))
+        if badkeys:
+            mstr = "Named placeholder unexpected keyword arguments: "
+            raise TypeError("{}{}".format(mstr,",".join(sorted(badkeys))))
+
+        # Check the match between positional and keyword arguments
+        if "default" in kwargs and len(args) > 0:
+            raise TypeError(("Named placeholder got multiple values for "
+                             "argument 'default'"))
+        if len(args) > 1:
+            raise TypeError(("Named placeholder takes from 0 to 2 positional"
+                             "arguments but {} given").format(len(args)+1))
+
+        # Set the keyword argument
+        if "default" in kwargs: self._default = (True, kwargs["default"])
+        else: self._default = (False,None)
+
     @property
     def name(self):
         return self._name
     @property
+    def has_default(self):
+        return self._default[0]
+    @property
     def default(self):
-        return self._default
+        return self._default[1]
     def __str__(self):
-        tmpstr = "" if not self._default else ",{}"
-        return "ph_({}{})".format(self._name, tmpstr)
+        tmpstr = "" if not self._default[0] else ",{}".format(self._default[1])
+        return "ph_(\"{}\"{})".format(self._name, tmpstr)
     def __repr__(self):
         return self.__str__()
 
 class _PositionalPlaceholder(Placeholder):
     def __init__(self, posn):
         self._posn = posn
-        self._value = None
     @property
     def posn(self):
         return self._posn
-    def reset(self):
-        self._value = None
     def __str__(self):
         return "ph{}_".format(self._posn+1)
     def __repr__(self):
         return self.__str__()
 
-def ph_(value,default=None):
+#def ph_(value,default=None):
+
+def ph_(value, *args, **kwargs):
     ''' A function for building new placeholders, either named or positional.'''
+
+    badkeys = _check_keys(set(["default"]), set(kwargs.keys()))
+    if badkeys:
+        mstr = "ph_() unexpected keyword arguments: "
+        raise TypeError("{}{}".format(mstr,",".join(sorted(badkeys))))
+
+    # Check the match between positional and keyword arguments
+    if "default" in kwargs and len(args) > 0:
+        raise TypeError("ph_() got multiple values for argument 'default'")
+    if len(args) > 1:
+        raise TypeError(("ph_() takes from 0 to 2 positional"
+                         "arguments but {} given").format(len(args)+1))
+
+    # Set the default argument
+    if "default" in kwargs: default = default = (True, kwargs["default"])
+    elif len(args) > 0: default = (True, args[0])
+    else: default = (False,None)
+
     try:
         idx = int(value)
     except ValueError:
-        return _NamedPlaceholder(value,default)
-    if default is not None:
-        raise ValueError("Positional placeholders don't support default values")
+        # It's a named placeholder
+        nkargs = { "name" : value }
+        if default[0]: nkargs["default"] = default[1]
+        return _NamedPlaceholder(**nkargs)
+
+    # Its a positional placeholder
+    if default[0]:
+        raise TypeError("Positional placeholders don't support default values")
     idx -= 1
     if idx < 0:
         raise ValueError("Index {} is not a positional argument".format(idx+1))
@@ -2342,7 +2398,7 @@ class _Select(Select):
                                  "{}").format(args, ph))
             elif isinstance(ph, _NamedPlaceholder):
                 if ph.name in kwargs: continue
-                elif ph.default is not None:
+                elif ph.has_default:
                     new_kwargs[ph.name] = ph.default
                     continue
                 raise TypeError(("missing argument in {} for named "

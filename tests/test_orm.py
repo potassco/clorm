@@ -14,7 +14,7 @@ from clorm.orm import \
     IntegerField, StringField, ConstantField, RawField, \
     _get_field_defn, refine_field, simple_predicate, \
     not_, and_, or_, StaticComparator, \
-    ph_, ph1_, ph2_, \
+    ph_, ph1_, ph2_, _PositionalPlaceholder, _NamedPlaceholder, \
     _FactIndex, _FactMap, PredicatePath, path, hashable_path, \
     unify, desc, asc, FactBase, SymbolPredicateUnifier,  \
     TypeCastSignature, _get_annotations, make_function_asp_callable, \
@@ -186,6 +186,11 @@ class RawFieldTestCase(unittest.TestCase):
         self.assertEqual(fld.default, 0)
         self.assertTrue(fld.has_default)
 
+        # A default can also be specified as a position argument
+        fld = IntegerField(0)
+        self.assertEqual(fld.default, 0)
+        self.assertTrue(fld.has_default)
+
 
     #--------------------------------------------------------------------------
     # Test catching invalid default values for a field
@@ -222,6 +227,9 @@ class RawFieldTestCase(unittest.TestCase):
         self.assertTrue(fstr2.index)
         self.assertTrue(fconst2.index)
 
+        # Specify with positional arguments
+        f = IntegerField(1,True)
+        self.assertTrue(f.index)
 
 
     #--------------------------------------------------------------------------
@@ -2866,6 +2874,40 @@ class FactBaseTestCase(unittest.TestCase):
 class SelectTestCase(unittest.TestCase):
     def setUp(self):
         pass
+
+    #--------------------------------------------------------------------------
+    # Test initialising a placeholder (named and positional)
+    #--------------------------------------------------------------------------
+    def test_placeholder_instantiation(self):
+
+        # Named placeholder with and without default
+        p = ph_("test")
+        self.assertEqual(type(p), _NamedPlaceholder)
+        self.assertFalse(p.has_default)
+        self.assertEqual(p.default,None)
+        self.assertEqual(str(p), "ph_(\"test\")")
+
+        p = ph_("test",default=0)
+        self.assertEqual(type(p), _NamedPlaceholder)
+        self.assertTrue(p.has_default)
+        self.assertEqual(p.default,0)
+        self.assertEqual(str(p), "ph_(\"test\",0)")
+
+        p = ph_("test",default=None)
+        self.assertEqual(type(p), _NamedPlaceholder)
+        self.assertTrue(p.has_default)
+        self.assertEqual(p.default,None)
+
+        # Positional placeholder
+        p = ph_(1)
+        self.assertEqual(type(p), _PositionalPlaceholder)
+        self.assertEqual(p.posn, 0)
+        self.assertEqual(str(p), "ph1_")
+
+        # Some bad initialisation
+        with self.assertRaises(TypeError) as ctx: ph_(1,2)
+        with self.assertRaises(TypeError) as ctx: ph_("a",2,3)
+        with self.assertRaises(TypeError) as ctx: ph_("a",default=2,arg=3)
 
     #--------------------------------------------------------------------------
     #   Test that the select works
