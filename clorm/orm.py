@@ -200,10 +200,11 @@ class PredicatePath(object, metaclass=_PredicatePathMeta):
     #--------------------------------------------------------------------------
     # An inner class that provides a hashable variant of a path. Because
     # PredicatePath co-ops the boolean comparision operators to return a
-    # functor, rather than doing the normal behaviour of comparing two object,
+    # functor, rather than doing the normal behaviour of comparing two objects,
     # therefore it cannot be hashable (which required __eq__() __ne__() to work
     # properly). But we want to be able to use paths in a set or as a dictionary
-    # key. So we provide a separate class to do this.
+    # key. So we provide a separate class to do this. The `path` property will
+    # return the original (non-hashable) path.
     # --------------------------------------------------------------------------
     class Hashable(object):
         def __init__(self, path):
@@ -878,6 +879,10 @@ class OrderBy(object):
         if self.asc and va < vb: return -1
         if not self.asc and va > vb: return -1
         return 1
+
+    @property
+    def path(self):
+        return self._path
 
     def __str__(self):
         return "OrderBy(path={},asc={})".format(self._path, self.asc)
@@ -1934,9 +1939,9 @@ class Comparator(abc.ABC):
     def placeholders(self):
         pass
 
-#    @abc.abstractmethod
-#    def paths(self):
-#        pass
+    @abc.abstractmethod
+    def hashable_paths(self):
+        pass
 
 #------------------------------------------------------------------------------
 # A Fact comparator functor that returns a static value
@@ -1950,7 +1955,7 @@ class StaticComparator(Comparator):
     def simpified(self):
         return self
     def placeholders(self): return set([])
-#    def paths(self): return set([]
+    def hashable_paths(self): return set([])
     @property
     def value(self):
         return self._value
@@ -2030,6 +2035,12 @@ class PredicatePathComparator(Comparator):
         if isinstance(self._arg2, Placeholder): return set([self._arg2])
         return set([])
 
+    def hashable_paths(self):
+        tmp=set([])
+        if isinstance(self._arg1, PredicatePath): tmp.add(self._arg1.meta.hashable)
+        if isinstance(self._arg2, PredicatePath): tmp.add(self._arg2.meta.hashable)
+        return tmp
+
     def indexable(self):
         if self._static: return None
         if isinstance(self._arg2, PredicatePath): return None
@@ -2101,6 +2112,12 @@ class BoolComparator(Comparator):
         tmp = set([])
         for a in self._args:
             if isinstance(a, Comparator): tmp.update(a.placeholders())
+        return tmp
+
+    def hashable_paths(self):
+        tmp = set([])
+        for a in self._args:
+            if isinstance(a, Comparator): tmp.update(a.hashable_paths())
         return tmp
 
     @property
@@ -2317,6 +2334,26 @@ class Delete(abc.ABC):
         pass
 
 #------------------------------------------------------------------------------
+# Helper function to check a where clause for errors
+#------------------------------------------------------------------------------
+def _check_where_clause(where, ptype):
+    # Note: the expression may not be a Comparator, in which case at least check
+    # that it is a function/functor
+    try:
+        hashable_paths = where.hashable_paths()
+
+        for p in hashable_paths:
+            if p.path.meta.predicate != ptype:
+                msg = ("'where' expression contains path '{}' that doesn't match "
+                       "predicate type '{}'").format(p.path, ptype.__name__)
+                raise TypeError(msg)
+
+    except AttributeError:
+        if not callable(where):
+            raise TypeError("'{}' object is not callable".format(type(where).__name__))
+
+
+#------------------------------------------------------------------------------
 # A selection over a _FactMap
 #------------------------------------------------------------------------------
 
@@ -2332,15 +2369,18 @@ class _Select(Select):
 
     def where(self, *expressions):
         if self._where:
-            raise ValueError("cannot specify 'where' multiple times")
+            raise TypeError("cannot specify 'where' multiple times")
         if not expressions:
-            raise ValueError("empty 'where' expression")
+            raise TypeError("empty 'where' expression")
         elif len(expressions) == 1:
             self._where = _simplify_fact_comparator(expressions[0])
         else:
             self._where = _simplify_fact_comparator(and_(*expressions))
 
         self._indexable = self._primary_search(self._where)
+
+        # Check that the where clause only refers to the correct predicate
+        _check_where_clause(self._where, self._factmap.predicate)
         return self
 
     @property
@@ -2349,15 +2389,24 @@ class _Select(Select):
 
     def order_by(self, *expressions):
         if self._key:
-            raise ValueError("cannot specify 'order_by' multiple times")
+            raise TypeError("cannot specify 'order_by' multiple times")
         if not expressions:
-            raise ValueError("empty 'order_by' expression")
+            raise TypeError("empty 'order_by' expression")
         field_orders = []
         for exp in expressions:
             if isinstance(exp, OrderBy): field_orders.append(exp)
             elif isinstance(exp, PredicatePath):
                 field_orders.append(exp.meta.asc())
-            else: raise ValueError("Invalid field order expression: {}".format(exp))
+            else: raise TypeError("Invalid 'order_by' expression: {}".format(exp))
+
+        # Check that all the paths refer to the correct predicate type
+        ptype = self._factmap.predicate
+        for f in field_orders:
+            if f.path.meta.predicate != ptype:
+                msg = ("'order_by' expression contains path '{}' that doesn't match "
+                       "predicate type '{}'").format(f.path, ptype.__name__)
+                raise TypeError(msg)
+
 
         # Create a comparator function
         def mycmp(a, b):

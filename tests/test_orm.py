@@ -3253,22 +3253,6 @@ class SelectTestCase(unittest.TestCase):
         q = fb.select(Afact).order_by(desc(Afact.str1), Afact.num1)
         self.assertEqual([f3,f2,f4,f1,f5], q.get())
 
-    #--------------------------------------------------------------------------
-    #   Test badly formed select statement where the where clause or order by
-    #   clause refers to fields that are not part of the predicate being
-    #   queried. Instead of creating an error at query time this should create
-    #   an error when the select statement is declared.
-    #   --------------------------------------------------------------------------
-    def test_bad_select_statements(self):
-        class F(Predicate):
-            num1=IntegerField()
-        class G(Predicate):
-            num1=IntegerField()
-
-        f = F(1)
-        fb = FactBase([f])
-        q = fb.select(F).where(G.num1 == 1)
-#        q.get()
 
     #--------------------------------------------------------------------------
     #   Test that select works with order_by for complex term
@@ -3454,6 +3438,83 @@ class SelectTestCase(unittest.TestCase):
         # One query doesn't use the index
         s4 = fb.select(Fact).where(Fact.ct1.str1 == ph1_)
         self.assertEqual(s4.get("c"), [f3])
+
+    #--------------------------------------------------------------------------
+    #   Test badly formed select/delete statements where the where clause (or
+    #   order by clause for select statements) refers to fields that are not
+    #   part of the predicate being queried. Instead of creating an error at
+    #   query time creating the error when the statement is declared can help
+    #   with debugging.
+    #   --------------------------------------------------------------------------
+    def test_bad_select_delete_statements(self):
+        class F(Predicate):
+            num1=IntegerField()
+            num2=IntegerField()
+        class G(Predicate):
+            num1=IntegerField()
+            num2=IntegerField()
+
+        f = F(1,2)
+        fb = FactBase([f])
+
+        # Making multiple calls to select where()
+        with self.assertRaises(TypeError) as ctx:
+            q = fb.select(F).where(F.num1 == 1).where(F.num2 == 2)
+        check_errmsg("cannot specify 'where' multiple times",ctx)
+
+        # Bad select where clauses
+        with self.assertRaises(TypeError) as ctx:
+            q = fb.select(F).where()
+        check_errmsg("empty 'where' expression",ctx)
+
+        with self.assertRaises(TypeError) as ctx:
+            q = fb.select(F).where(G.num1 == 1)
+        check_errmsg("'where' expression contains path 'G.num1'",ctx)
+
+        with self.assertRaises(TypeError) as ctx:
+            q = fb.select(F).where(F.num1 == G.num1)
+        check_errmsg("'where' expression contains path 'G.num1'",ctx)
+
+        with self.assertRaises(TypeError) as ctx:
+            q = fb.select(F).where(F.num1 == 1, G.num1 == 1)
+        check_errmsg("'where' expression contains path 'G.num1'",ctx)
+
+        with self.assertRaises(TypeError) as ctx:
+            q = fb.select(F).where(0)
+        check_errmsg("'int' object is not callable",ctx)
+
+        # Bad delete where clause
+        with self.assertRaises(TypeError) as ctx:
+            q = fb.delete(F).where(G.num1 == 1)
+        check_errmsg("'where' expression contains path 'G.num1'",ctx)
+
+
+        # Making multiple calls to select order_by()
+        with self.assertRaises(TypeError) as ctx:
+            q = fb.select(F).order_by(F.num1).order_by(F.num2)
+        check_errmsg("cannot specify 'order_by' multiple times",ctx)
+
+        # Bad select where clauses
+        with self.assertRaises(TypeError) as ctx:
+            q = fb.select(F).order_by()
+        check_errmsg("empty 'order_by' expression",ctx)
+
+        with self.assertRaises(TypeError) as ctx:
+            q = fb.select(F).order_by(1)
+        check_errmsg("Invalid 'order_by' expression",ctx)
+
+        with self.assertRaises(TypeError) as ctx:
+            q = fb.select(F).order_by(G.num1)
+        check_errmsg("'order_by' expression contains path 'G.num1'",ctx)
+
+        with self.assertRaises(TypeError) as ctx:
+            q = fb.select(F).order_by(F.num1,G.num1)
+        check_errmsg("'order_by' expression contains path 'G.num1'",ctx)
+
+        with self.assertRaises(TypeError) as ctx:
+            q = fb.select(F).order_by(F.num1,desc(G.num1))
+        check_errmsg("'order_by' expression contains path 'G.num1'",ctx)
+
 
 #------------------------------------------------------------------------------
 #
