@@ -462,6 +462,18 @@ def hashable_path(arg):
                      "or path").format(arg, type(arg)))
 
 #------------------------------------------------------------------------------
+# Helper function to check if a second set of keys is a subset of a first
+# set. If it is not it returns the unrecognised keys. Useful for checking a
+# function that uses **kwargs.
+# ------------------------------------------------------------------------------
+
+def _check_keys(validkeys, inputkeys):
+    if not inputkeys.issubset(validkeys): return inputkeys-validkeys
+    return set([])
+
+
+
+#------------------------------------------------------------------------------
 # RawField class captures the definition of a logical term ("which we will call
 # a field") between python and clingo.
 # ------------------------------------------------------------------------------
@@ -478,11 +490,6 @@ def _make_cltopy(fn):
             return fn(cls._parentclass.cltopy(v))
         return fn(v)
     return _cltopy
-
-
-def _check_keys(validkeys, inputkeys):
-    if not inputkeys.issubset(validkeys): return inputkeys-validkeys
-    return set([])
 
 def _rfm_constructor(self, **kwargs):
     badkeys = _check_keys(set(["default","index"]), set(kwargs.keys()))
@@ -1203,16 +1210,18 @@ def _predicate_init_by_keyword_values(self, **kwargs):
     self._field_values = []
     clingoargs = []
     for f in self.meta:
-        # Only get the default value once in case it is a function.
-        try:
+        if f.name in kwargs:
             v= _preprocess_field_value(f.defn, kwargs[f.name])
             argnum += 1
-        except:
-            default = f.defn.default
-            if not default:
-                raise ValueError(("Unspecified field {} has no "
-                                  "default value".format(f.name)))
-            v = _preprocess_field_value(f.defn, default)
+        elif f.defn.has_default:
+            # Note: must be careful to get the default value only once in case
+            # it is a function with side-effects.
+            v = _preprocess_field_value(f.defn, f.defn.default)
+        else:
+            raise TypeError(("Missing argument for field \"{}\" (which has no "
+                             "default value)").format(f.name))
+
+        # Set the value for the field
         self._field_values.append(v)
         clingoargs.append(f.defn.pytocl(v))
 
@@ -1226,8 +1235,8 @@ def _predicate_init_by_keyword_values(self, **kwargs):
     if len(kwargs) > argnum:
         args=set(kwargs.keys())
         expected=set([f.name for f in self.meta])
-        raise ValueError(("Unrecognised named arguments {} for creating instances "
-                          "{}").format(args-expected, self.__class__))
+        raise TypeError(("Unexpected keyword arguments for \"{}\" constructor: "
+                          "{}").format(type(self).__name__, ",".join(args-expected)))
     if self.meta.sign is not None:
         if sign != self.meta.sign:
             raise ValueError(("Predicate {} is defined to only allow {} signed "

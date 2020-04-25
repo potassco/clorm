@@ -393,6 +393,10 @@ class PredicateDefnTestCase(unittest.TestCase):
         self.assertEqual(P.meta.arity,0)
         self.assertEqual(P.meta.name, "p")
 
+        # The redicate's meta properly is initialised with the predicate itself
+        # as the meta's parent property.
+        self.assertEqual(P.meta.parent,P)
+
         # A simple predicate definition
         class P(Predicate):
             a = IntegerField
@@ -437,21 +441,58 @@ class PredicateDefnTestCase(unittest.TestCase):
         self.assertEqual(len(up1.meta), 0)
         self.assertEqual(len(UnaryPredicate.meta), 0)
 
-        # Test that default terms work and that not specifying a value raises
-        # an exception
-        class DefaultFieldPredicate(Predicate):
-            first = IntegerField()
-            second = IntegerField(default=10)
-            class Meta: name = "dfp"
+    #--------------------------------------------------------------------------
+    # Test where there is a value missing or the parameter name is incorrect
+    #--------------------------------------------------------------------------
+    def test_bad_predicate_instantiation(self):
 
-        self.assertEqual(DefaultFieldPredicate.meta.parent, DefaultFieldPredicate)
+        class P(Predicate):
+            val = IntegerField()
 
-        dfp1 = DefaultFieldPredicate(first=15)
-        dfp2 = Function("dfp",[Number(15),Number(10)])
-        self.assertEqual(dfp1.raw, dfp2)
+        # a missing parameter
+        with self.assertRaises(TypeError) as ctx:
+            p = P()
+        check_errmsg("Missing argument for field \"val\"",ctx)
 
-        with self.assertRaises(ValueError) as ctx:
-            dfp3 = DefaultFieldPredicate()
+        # an unexpected parameter
+        with self.assertRaises(TypeError) as ctx:
+            p = P(val=4, val2=1)
+#        with self.assertRaises(ValueError) as ctx:
+
+    #--------------------------------------------------------------------------
+    # Test that default terms work and that not specifying a value raises
+    # an exception
+    # --------------------------------------------------------------------------
+    def test_predicate_with_default_field(self):
+
+        class P(Predicate):
+            first = IntegerField(default=0)
+
+        p = P(first=15)
+        raw_p = Function("p",[Number(15)])
+        self.assertEqual(p.raw, raw_p)
+
+        p = P()
+        raw_p = Function("p",[Number(0)])
+        self.assertEqual(p.raw, raw_p)
+
+        # Test a boundary case that someone could create a Field sub-class where
+        # None is a legit value and can therefore be set as a default value.
+        class DumbField(StringField):
+            pytocl = lambda d: "silly" if d  is None else "ok"
+            cltopy = lambda s: None if d is "silly" else "ok"
+        class Q(Predicate):
+            first = DumbField(default=None)
+
+        q = Q()
+        raw_q = Function("q",[String("silly")])
+        self.assertEqual(q.raw, raw_q)
+
+
+    #--------------------------------------------------------------------------
+    # Test predicates with default fields
+    # --------------------------------------------------------------------------
+    def test_predicate_with_multi_field(self):
 
         # Test declaration of predicates with Simple and String terms
         class MultiFieldPredicate(Predicate):
@@ -1068,7 +1109,7 @@ class ORMTestCase(unittest.TestCase):
             f3=Fact("test")
 
     #--------------------------------------------------------------------------
-    # Test that we can initialise using positional arguments
+    # Test that we can initialise using keyword arguments
     # --------------------------------------------------------------------------
     def test_predicate_init_named(self):
 
@@ -1099,9 +1140,9 @@ class ORMTestCase(unittest.TestCase):
         self.assertFalse(f.sign)
 
         # Initialise with wrong arguments
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(TypeError) as ctx:
             f=F(a=1,b="bar",c=3)
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(TypeError) as ctx:
             f=F(a=1,c=3)
 
     #--------------------------------------------------------------------------
