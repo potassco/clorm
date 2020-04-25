@@ -1930,6 +1930,14 @@ class Comparator(abc.ABC):
     def __call__(self,fact, *args, **kwargs):
         pass
 
+    @abc.abstractmethod
+    def placeholders(self):
+        pass
+
+#    @abc.abstractmethod
+#    def paths(self):
+#        pass
+
 #------------------------------------------------------------------------------
 # A Fact comparator functor that returns a static value
 #------------------------------------------------------------------------------
@@ -1941,7 +1949,8 @@ class StaticComparator(Comparator):
         return self._value
     def simpified(self):
         return self
-    def placeholders(self): return []
+    def placeholders(self): return set([])
+#    def paths(self): return set([]
     @property
     def value(self):
         return self._value
@@ -2018,8 +2027,8 @@ class PredicatePathComparator(Comparator):
         return self
 
     def placeholders(self):
-        if isinstance(self._arg2, Placeholder): return [self._arg2]
-        return []
+        if isinstance(self._arg2, Placeholder): return set([self._arg2])
+        return set([])
 
     def indexable(self):
         if self._static: return None
@@ -2089,9 +2098,9 @@ class BoolComparator(Comparator):
         return BoolComparator(self._boolop, *newargs)
 
     def placeholders(self):
-        tmp = []
+        tmp = set([])
         for a in self._args:
-            if isinstance(a, Comparator): tmp.extend(a.placeholders())
+            if isinstance(a, Comparator): tmp.update(a.placeholders())
         return tmp
 
     @property

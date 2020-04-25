@@ -3254,6 +3254,23 @@ class SelectTestCase(unittest.TestCase):
         self.assertEqual([f3,f2,f4,f1,f5], q.get())
 
     #--------------------------------------------------------------------------
+    #   Test badly formed select statement where the where clause or order by
+    #   clause refers to fields that are not part of the predicate being
+    #   queried. Instead of creating an error at query time this should create
+    #   an error when the select statement is declared.
+    #   --------------------------------------------------------------------------
+    def test_bad_select_statements(self):
+        class F(Predicate):
+            num1=IntegerField()
+        class G(Predicate):
+            num1=IntegerField()
+
+        f = F(1)
+        fb = FactBase([f])
+        q = fb.select(F).where(G.num1 == 1)
+#        q.get()
+
+    #--------------------------------------------------------------------------
     #   Test that select works with order_by for complex term
     #--------------------------------------------------------------------------
     def test_select_order_by_complex_term(self):
