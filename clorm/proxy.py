@@ -1,6 +1,8 @@
 '''A proxy metaclass for building proxy objects. It is instantiated by
-sub-classing the class to be proxied with ProxyMetaClass as the metaclass. This
-creates a proxy base class for that type of object.
+specifying a class to be to be proxied as a parent class with ProxyMetaClass as
+the metaclass. This creates a proxy base class for that type of object. Note:
+this subverts the subclass mechanism as it does not actually create a subclass
+of the proxy class. The proxy class is replaced with object as the parent.
 
 This is to be used for proxying clingo.Control, clingo.SolveHandle, and
 clingo.Model objects.
@@ -8,10 +10,27 @@ clingo.Model objects.
 Note: some ideas and code have been copied from:
 https://code.activestate.com/recipes/496741-object-proxying/
 
-
 '''
 
 import functools
+
+
+# ------------------------------------------------------------------------------
+# Determine if an attribute name has the pattern of a magic method (ie. is
+# callable and has name of the form __XXX__. Ideally, would like to have a
+# system function that tells me the list of magic methods. But this should be
+# good enough.
+# ------------------------------------------------------------------------------
+
+def _poss_magic_method(name,value):
+    if not callable(value): return False
+    if not name.startswith("__"): return False
+    if not name.endswith("__"): return False
+    if len(name) <= 4: return False
+    if name[2] == '_': return False
+    if name[-3] == '_': return False
+    return True
+
 
 # ------------------------------------------------------------------------------
 # List of python special methods and some special cases that need to be handled
@@ -62,18 +81,18 @@ def _proxy_property_wrapper(name):
     return property(wrapper)
 
 # Constructor for every Predicate sub-class
-def proxy_init(self, *args, **kwargs):
-    PrClass = type(self).__bases__[0]
+def init_proxy(proxy, *args, **kwargs):
+    PrClass = proxy._proxied_cls
     if "proxied_" in kwargs:
         if len(args) != 0 and len(kwargs) != 1:
             raise ValueError(("Invalid initialisation: the 'proxied_' argument "
                               "cannot be combined with other arguments"))
-        self._proxied = kwargs["proxied_"]
-        if not isinstance(self._proxied, PrClass):
+        proxy._proxied = kwargs["proxied_"]
+        if not isinstance(proxy._proxied, PrClass):
             raise TypeError(("Invalid proxied object {} not of expected type "
-                             "{}").format(self._proxied, proxied_class))
+                             "{}").format(proxy._proxied, proxied_class))
     else:
-        self._proxied = PrClass(*args,**kwargs)
+        proxy._proxied = PrClass(*args,**kwargs)
 
 def _proxy_return_proxied(self):
     return self._proxied
@@ -87,12 +106,17 @@ class ProxyMetaClass(type):
         if len(bases) != 1:
             raise TypeError("ProxyMetaClass requires exactly one parent class")
         PrClass = bases[0]
+        bases = (object,)
 
         ignore=["_init__", "__new__"]
 
-        # Note: if a constructor is provided then it should call proxy_init
-        # manually
-        if "__init__" not in dct: dct["__init__"] = proxy_init
+        # Note: if a constructor is provided then it should call init_proxy
+        # manually. Also setup a _proxied_cls attribute.
+        if "__init__" not in dct: dct["__init__"] = init_proxy
+        if "_proxied_cls" in dct:
+            raise TypeError(("ProxyMetaClass cannot proxy a class with a "
+                             "\"_proxied_cls\" attribute: {}").format(PrClass))
+        dct["_proxied_cls"] = PrClass
 
         # Mirror the attributes of the class handling the special methods
         for key,value in PrClass.__dict__.items():

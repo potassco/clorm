@@ -11,6 +11,7 @@ import functools
 import itertools
 from collections.abc import Iterable
 from .orm import *
+from .proxy import ProxyMetaClass, init_proxy
 #import clorm as orm
 
 # I want to replace the original clingo - re-exporting everything in clingo
@@ -32,22 +33,6 @@ __all__ = list([ k for k in oclingo.__dict__.keys() if k[0] != '_'])
 __version__ = oclingo.__version__
 
 # ------------------------------------------------------------------------------
-# Determine if an attribute name has the pattern of a magic method (ie. is
-# callable and has name of the form __XXX__. Ideally, would like to have a
-# system function that tells me the list of magic methods. But this should be
-# good enough.
-# ------------------------------------------------------------------------------
-
-def _poss_magic_method(name,value):
-    if not callable(value): return False
-    if not name.startswith("__"): return False
-    if not name.endswith("__"): return False
-    if len(name) <= 4: return False
-    if name[2] == '_': return False
-    if name[-3] == '_': return False
-    return True
-
-# ------------------------------------------------------------------------------
 # Helper function to smartly build a unifier if only a list of predicates have
 # been provided.
 # ------------------------------------------------------------------------------
@@ -60,31 +45,8 @@ def _build_unifier(unifier):
 # ------------------------------------------------------------------------------
 # Wrap clingo.Model and override some functions
 # ------------------------------------------------------------------------------
-def _model_wrapper(fn):
-    @functools.wraps(fn)
-    def wrapper(self, *args, **kwargs):
-        return fn(self._model, *args, **kwargs)
-    return wrapper
 
-def _model_property(name):
-    def wrapper(self):
-        return self._model.__getattribute__(name)
-    return property(wrapper)
-
-class _ModelMetaClass(type):
-    def __new__(meta, name, bases, dct):
-        ignore=["__init__", "__new__", "contains"]
-        for key,value in OModel.__dict__.items():
-            if key in ignore: continue
-            if key.startswith("_") and not _poss_magic_method(key,value): continue
-            if callable(value):
-                dct[key]=_model_wrapper(value)
-            else:
-                dct[key]=_model_property(key)
-
-        return super(_ModelMetaClass, meta).__new__(meta, name, bases, dct)
-
-class Model(object, metaclass=_ModelMetaClass):
+class Model(OModel, metaclass=ProxyMetaClass):
     '''Provides access to a model during a solve call.
 
     Objects mustn't be created manually. Instead they are returned by
@@ -96,8 +58,8 @@ class Model(object, metaclass=_ModelMetaClass):
     '''
 
     def __init__(self, model,unifier=None):
-        self._model = model
         self._unifier = _build_unifier(unifier)
+        init_proxy(self,proxied_=model)
 
     #------------------------------------------------------------------------------
     # Return the underlying model object
@@ -105,7 +67,7 @@ class Model(object, metaclass=_ModelMetaClass):
     @property
     def model_(self):
         '''Returns the underlying clingo.Model object.'''
-        return self._model
+        return self._proxied
 
     #------------------------------------------------------------------------------
     # A new function to return a list of facts - similar to symbols
@@ -140,7 +102,7 @@ class Model(object, metaclass=_ModelMetaClass):
             raise ValueError(msg)
 
         return unifier.unify(
-            symbols=self._model.symbols(atoms=atoms,terms=terms,shown=shown),
+            symbols=self._proxied.symbols(atoms=atoms,terms=terms,shown=shown),
             raise_on_empty=raise_on_empty,
             delayed_init=True)
 
@@ -155,39 +117,15 @@ class Model(object, metaclass=_ModelMetaClass):
 
         '''
         if isinstance(fact, Predicate):
-            return self._model.contains(fact.raw)
-        return self._model.contains(fact)
+            return self._proxied.contains(fact.raw)
+        return self._proxied.contains(fact)
 
 
 # ------------------------------------------------------------------------------
 # Wrap clingo.SolveHandle and override some functions
 # ------------------------------------------------------------------------------
-def _solvehandle_wrapper(fn):
-    @functools.wraps(fn)
-    def wrapper(self, *args, **kwargs):
-        return fn(self._handle, *args, **kwargs)
-    return wrapper
 
-def _solvehandle_property(name):
-    def wrapper(self):
-        return self._handle.__getattribute__(name)
-    return property(wrapper)
-
-class _SolveHandleMetaClass(type):
-    def __new__(meta, name, bases, dct):
-        ignore=["__init__", "__new__", "__iter__",
-                "__next__", "__enter__", "__exit__"]
-        for key,value in OSolveHandle.__dict__.items():
-            if key in ignore: continue
-            if key.startswith("_") and not _poss_magic_method(key,value): continue
-            if callable(value):
-                dct[key]=_solvehandle_wrapper(value)
-            else:
-                dct[key]=_solvehandle_property(key)
-
-        return super(_SolveHandleMetaClass, meta).__new__(meta, name, bases, dct)
-
-class SolveHandle(object, metaclass=_SolveHandleMetaClass):
+class SolveHandle(OSolveHandle, metaclass=ProxyMetaClass):
     '''Handle for solve calls.
 
     Objects mustn't be created manually. Instead they are returned by
@@ -200,7 +138,7 @@ class SolveHandle(object, metaclass=_SolveHandleMetaClass):
 
 
     def __init__(self, handle,unifier=None):
-        self._handle = handle
+        init_proxy(self,proxied_=handle)
         self._unifier = _build_unifier(unifier)
 
     #------------------------------------------------------------------------------
@@ -209,7 +147,7 @@ class SolveHandle(object, metaclass=_SolveHandleMetaClass):
     @property
     def solvehandle_(self):
         '''Access the underlying clingo.SolveHandle object.'''
-        return self._handle
+        return self._proxied
 
     #------------------------------------------------------------------------------
     # Overrides
@@ -219,42 +157,19 @@ class SolveHandle(object, metaclass=_SolveHandleMetaClass):
         return self
 
     def __next__(self):
-        if self._unifier: return Model(self._handle.__next__(),unifier=self._unifier)
-        else: return Model(self._handle.__next__())
+        if self._unifier: return Model(self._proxied.__next__(),unifier=self._unifier)
+        else: return Model(self._proxied.__next__())
 
     def __enter__(self):
-        self._handle.__enter__()
+        self._proxied.__enter__()
         return self
 
     def __exit__(self, exception_type, exception_value, traceback):
-        self._handle.__exit__(exception_type,exception_value,traceback)
+        self._proxied.__exit__(exception_type,exception_value,traceback)
 
 # ------------------------------------------------------------------------------
 # Wrap clingo.Control and override some functions
 # ------------------------------------------------------------------------------
-def _control_wrapper(fn):
-    @functools.wraps(fn)
-    def wrapper(self, *args, **kwargs):
-        return fn(self._ctrl, *args, **kwargs)
-    return wrapper
-
-def _control_property(name):
-    def wrapper(self):
-        return self._ctrl.__getattribute__(name)
-    return property(wrapper)
-
-class _ControlMetaClass(type):
-    def __new__(meta, name, bases, dct):
-        ignore=["__init__", "__new__", "assign_external", "release_external", "solve"]
-        for key,value in OControl.__dict__.items():
-            if key in ignore: continue
-            if key.startswith("_") and not _poss_magic_method(key,value): continue
-            if callable(value):
-                dct[key]=_control_wrapper(value)
-            else:
-                dct[key]=_control_property(key)
-
-        return super(_ControlMetaClass, meta).__new__(meta, name, bases, dct)
 
 # ------------------------------------------------------------------------------
 # Helper functions to expand the assumptions list as part of a solve() call
@@ -290,7 +205,7 @@ def _expand_assumptions(assumptions):
 # Control class
 # ------------------------------------------------------------------------------
 
-class Control(object, metaclass=_ControlMetaClass):
+class Control(OControl, metaclass=ProxyMetaClass):
     '''Control object for the grounding/solving process.
 
     Behaves like ``clingo.Control`` but with modifications to deal with Clorm
@@ -311,11 +226,11 @@ class Control(object, metaclass=_ControlMetaClass):
 
         # Do we need to build a clingo.Control object or use an existing one
         if len(args) == 0 and "control_" in kwargs:
-            self._ctrl = kwargs["control_"]
+            init_proxy(self,proxied_=kwargs["control_"])
         else:
             kwargs2 = dict(kwargs)
             if "unifier" in kwargs2: del kwargs2["unifier"]
-            self._ctrl = OControl(*args, **kwargs2)
+            init_proxy(self,*args,**kwargs2)
 
     #------------------------------------------------------------------------------
     # Return the underlying control object
@@ -323,7 +238,7 @@ class Control(object, metaclass=_ControlMetaClass):
     @property
     def control_(self):
         '''Returns the underlying clingo.Control object.'''
-        return self._ctrl
+        return self._proxied
 
     #------------------------------------------------------------------------------
     # Make the unifier a property with a getter and setter
@@ -355,7 +270,7 @@ class Control(object, metaclass=_ControlMetaClass):
         # Facts are added by manually generating Abstract Syntax Tree (AST)
         # elements for each fact and calling Control.add().
         line = 1
-        with self._ctrl.builder() as bldr:
+        with self._proxied.builder() as bldr:
             for f in facts:
                 floc = { "filename" : "<input>", "line" : line , "column" : 1 }
                 location = { "begin" : floc, "end" : floc }
@@ -368,7 +283,7 @@ class Control(object, metaclass=_ControlMetaClass):
         return
 
 #        # DON'T USE BACKEND - COULD CAUSE UNEXPECTED INTERACTION BETWEEN GROUNDER AND SOLVER
-#        with self._ctrl.backend() as bknd:
+#        with self._proxied.backend() as bknd:
 #            for f in facts:
 #                atm = bknd.add_atom(f.raw)
 #                bknd.add_rule([atm])
@@ -389,9 +304,9 @@ class Control(object, metaclass=_ControlMetaClass):
         '''
         def _assign_fact(fact):
             if isinstance(fact, Predicate):
-                self._ctrl.assign_external(fact.raw, truth)
+                self._proxied.assign_external(fact.raw, truth)
             else:
-                self._ctrl.assign_external(fact, truth)
+                self._proxied.assign_external(fact, truth)
 
         if isinstance(external, Iterable):
             for f in external: _assign_fact(f)
@@ -413,9 +328,9 @@ class Control(object, metaclass=_ControlMetaClass):
         '''
         def _release_fact(fact):
             if isinstance(fact, Predicate):
-                self._ctrl.release_external(fact.raw)
+                self._proxied.release_external(fact.raw)
             else:
-                self._ctrl.release_external(fact)
+                self._proxied.release_external(fact)
 
         if isinstance(external, Iterable):
             for f in external: _release_fact(f)
@@ -476,7 +391,7 @@ class Control(object, metaclass=_ControlMetaClass):
             else: return on_model(Model(model))
         if on_model: kwargs["on_model"] =  on_model_wrapper
 
-        result = self._ctrl.solve(**kwargs)
+        result = self._proxied.solve(**kwargs)
         if kwargs["yield_"] or kwargs[async_keyword]:
             if self._unifier: return SolveHandle(result,unifier=self._unifier)
             else: return SolveHandle(result)

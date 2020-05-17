@@ -3,7 +3,7 @@
 #------------------------------------------------------------------------------
 import unittest
 
-from clorm.proxy import ProxyMetaClass, proxy_init
+from clorm.proxy import ProxyMetaClass, init_proxy
 
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
@@ -32,6 +32,10 @@ class ProxyTestCase(unittest.TestCase):
 
         class McProxy(MyClass,metaclass=ProxyMetaClass):
             pass
+
+        # Despite the specification McProxy is a subclass of object
+        self.assertEqual(len(McProxy.__bases__),1)
+        self.assertEqual(McProxy.__bases__[0],object)
 
         # Use the proxy on an existing object
         mcpr=McProxy(proxied_=MyClass(5))
@@ -62,9 +66,9 @@ class ProxyTestCase(unittest.TestCase):
                     if len(args) != 0 and len(kwargs) != 1:
                         raise ValueError(("Invalid initialisation: the 'myclass_' argument "
                                           "cannot be combined with other arguments"))
-                    proxy_init(self,proxied_=kwargs["myclass_"])
+                    init_proxy(self,proxied_=kwargs["myclass_"])
                 else:
-                    proxy_init(self,*args,**kwargs)
+                    init_proxy(self,*args,**kwargs)
             @property
             def myclass_(self): return self._proxied
 
