@@ -11,7 +11,7 @@ import functools
 import itertools
 from collections.abc import Iterable
 from .orm import *
-from .proxy import ProxyMetaClass, init_proxy
+from .wrapper import WrapperMetaClass, init_wrapper
 #import clorm as orm
 
 # I want to replace the original clingo - re-exporting everything in clingo
@@ -46,7 +46,7 @@ def _build_unifier(unifier):
 # Wrap clingo.Model and override some functions
 # ------------------------------------------------------------------------------
 
-class Model(OModel, metaclass=ProxyMetaClass):
+class Model(OModel, metaclass=WrapperMetaClass):
     '''Provides access to a model during a solve call.
 
     Objects mustn't be created manually. Instead they are returned by
@@ -59,7 +59,7 @@ class Model(OModel, metaclass=ProxyMetaClass):
 
     def __init__(self, model,unifier=None):
         self._unifier = _build_unifier(unifier)
-        init_proxy(self,proxied_=model)
+        init_wrapper(self,wrapped_=model)
 
     #------------------------------------------------------------------------------
     # Return the underlying model object
@@ -67,7 +67,7 @@ class Model(OModel, metaclass=ProxyMetaClass):
     @property
     def model_(self):
         '''Returns the underlying clingo.Model object.'''
-        return self._proxied
+        return self._wrapped
 
     #------------------------------------------------------------------------------
     # A new function to return a list of facts - similar to symbols
@@ -102,7 +102,7 @@ class Model(OModel, metaclass=ProxyMetaClass):
             raise ValueError(msg)
 
         return unifier.unify(
-            symbols=self._proxied.symbols(atoms=atoms,terms=terms,shown=shown),
+            symbols=self._wrapped.symbols(atoms=atoms,terms=terms,shown=shown),
             raise_on_empty=raise_on_empty,
             delayed_init=True)
 
@@ -117,15 +117,15 @@ class Model(OModel, metaclass=ProxyMetaClass):
 
         '''
         if isinstance(fact, Predicate):
-            return self._proxied.contains(fact.raw)
-        return self._proxied.contains(fact)
+            return self._wrapped.contains(fact.raw)
+        return self._wrapped.contains(fact)
 
 
 # ------------------------------------------------------------------------------
 # Wrap clingo.SolveHandle and override some functions
 # ------------------------------------------------------------------------------
 
-class SolveHandle(OSolveHandle, metaclass=ProxyMetaClass):
+class SolveHandle(OSolveHandle, metaclass=WrapperMetaClass):
     '''Handle for solve calls.
 
     Objects mustn't be created manually. Instead they are returned by
@@ -138,7 +138,7 @@ class SolveHandle(OSolveHandle, metaclass=ProxyMetaClass):
 
 
     def __init__(self, handle,unifier=None):
-        init_proxy(self,proxied_=handle)
+        init_wrapper(self,wrapped_=handle)
         self._unifier = _build_unifier(unifier)
 
     #------------------------------------------------------------------------------
@@ -147,7 +147,7 @@ class SolveHandle(OSolveHandle, metaclass=ProxyMetaClass):
     @property
     def solvehandle_(self):
         '''Access the underlying clingo.SolveHandle object.'''
-        return self._proxied
+        return self._wrapped
 
     #------------------------------------------------------------------------------
     # Overrides
@@ -157,15 +157,15 @@ class SolveHandle(OSolveHandle, metaclass=ProxyMetaClass):
         return self
 
     def __next__(self):
-        if self._unifier: return Model(self._proxied.__next__(),unifier=self._unifier)
-        else: return Model(self._proxied.__next__())
+        if self._unifier: return Model(self._wrapped.__next__(),unifier=self._unifier)
+        else: return Model(self._wrapped.__next__())
 
     def __enter__(self):
-        self._proxied.__enter__()
+        self._wrapped.__enter__()
         return self
 
     def __exit__(self, exception_type, exception_value, traceback):
-        self._proxied.__exit__(exception_type,exception_value,traceback)
+        self._wrapped.__exit__(exception_type,exception_value,traceback)
 
 # ------------------------------------------------------------------------------
 # Wrap clingo.Control and override some functions
@@ -205,7 +205,7 @@ def _expand_assumptions(assumptions):
 # Control class
 # ------------------------------------------------------------------------------
 
-class Control(OControl, metaclass=ProxyMetaClass):
+class Control(OControl, metaclass=WrapperMetaClass):
     '''Control object for the grounding/solving process.
 
     Behaves like ``clingo.Control`` but with modifications to deal with Clorm
@@ -226,11 +226,11 @@ class Control(OControl, metaclass=ProxyMetaClass):
 
         # Do we need to build a clingo.Control object or use an existing one
         if len(args) == 0 and "control_" in kwargs:
-            init_proxy(self,proxied_=kwargs["control_"])
+            init_wrapper(self,wrapped_=kwargs["control_"])
         else:
             kwargs2 = dict(kwargs)
             if "unifier" in kwargs2: del kwargs2["unifier"]
-            init_proxy(self,*args,**kwargs2)
+            init_wrapper(self,*args,**kwargs2)
 
     #------------------------------------------------------------------------------
     # Return the underlying control object
@@ -238,7 +238,7 @@ class Control(OControl, metaclass=ProxyMetaClass):
     @property
     def control_(self):
         '''Returns the underlying clingo.Control object.'''
-        return self._proxied
+        return self._wrapped
 
     #------------------------------------------------------------------------------
     # Make the unifier a property with a getter and setter
@@ -270,7 +270,7 @@ class Control(OControl, metaclass=ProxyMetaClass):
         # Facts are added by manually generating Abstract Syntax Tree (AST)
         # elements for each fact and calling Control.add().
         line = 1
-        with self._proxied.builder() as bldr:
+        with self._wrapped.builder() as bldr:
             for f in facts:
                 floc = { "filename" : "<input>", "line" : line , "column" : 1 }
                 location = { "begin" : floc, "end" : floc }
@@ -283,7 +283,7 @@ class Control(OControl, metaclass=ProxyMetaClass):
         return
 
 #        # DON'T USE BACKEND - COULD CAUSE UNEXPECTED INTERACTION BETWEEN GROUNDER AND SOLVER
-#        with self._proxied.backend() as bknd:
+#        with self._wrapped.backend() as bknd:
 #            for f in facts:
 #                atm = bknd.add_atom(f.raw)
 #                bknd.add_rule([atm])
@@ -304,9 +304,9 @@ class Control(OControl, metaclass=ProxyMetaClass):
         '''
         def _assign_fact(fact):
             if isinstance(fact, Predicate):
-                self._proxied.assign_external(fact.raw, truth)
+                self._wrapped.assign_external(fact.raw, truth)
             else:
-                self._proxied.assign_external(fact, truth)
+                self._wrapped.assign_external(fact, truth)
 
         if isinstance(external, Iterable):
             for f in external: _assign_fact(f)
@@ -328,9 +328,9 @@ class Control(OControl, metaclass=ProxyMetaClass):
         '''
         def _release_fact(fact):
             if isinstance(fact, Predicate):
-                self._proxied.release_external(fact.raw)
+                self._wrapped.release_external(fact.raw)
             else:
-                self._proxied.release_external(fact)
+                self._wrapped.release_external(fact)
 
         if isinstance(external, Iterable):
             for f in external: _release_fact(f)
@@ -391,7 +391,7 @@ class Control(OControl, metaclass=ProxyMetaClass):
             else: return on_model(Model(model))
         if on_model: kwargs["on_model"] =  on_model_wrapper
 
-        result = self._proxied.solve(**kwargs)
+        result = self._wrapped.solve(**kwargs)
         if kwargs["yield_"] or kwargs[async_keyword]:
             if self._unifier: return SolveHandle(result,unifier=self._unifier)
             else: return SolveHandle(result)
