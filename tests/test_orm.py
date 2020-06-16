@@ -913,6 +913,29 @@ class ORMTestCase(unittest.TestCase):
         self.assertEqual(f1, f2)
         self.assertEqual(f1.raw, func)
 
+        with self.assertRaises(ValueError) as ctx:
+            func2=Function("fact",[String("1"),String("test")])
+            f=Fact(raw=func2)
+
+    # --------------------------------------------------------------------------
+    # Test the RawField.unifies() function
+    # --------------------------------------------------------------------------
+
+    def test_rawfield_unifies(self):
+
+        class Fact(Predicate):
+            astr = StringField()
+
+        good=Function("fact",[String("astring")])
+        bad=Function("fact",[Number(1)])
+
+        self.assertTrue(RawField.unifies(good))
+        self.assertTrue(ConstantField.unifies(Function("fact",[])))
+        self.assertFalse(ConstantField.unifies(String("fact")))
+        self.assertTrue(Fact.Field.unifies(good))
+        self.assertFalse(Fact.Field.unifies(bad))
+
+
     #--------------------------------------------------------------------------
     # Test that we can define predicates and initialise negative literals.
     # --------------------------------------------------------------------------

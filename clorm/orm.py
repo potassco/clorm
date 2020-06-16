@@ -663,7 +663,7 @@ class RawField(object, metaclass=_RawFieldMeta):
         """Returns whether a `Clingo.Symbol` can be unified with this type of term"""
         try:
             cls.cltopy(v)
-        except TypeError:
+        except (TypeError,ValueError):
             return False
         return True
 
