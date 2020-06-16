@@ -340,11 +340,12 @@ class Control(OControl, metaclass=WrapperMetaClass):
     #---------------------------------------------------------------------------
     # Overide solve and if necessary replace on_model with a wrapper that
     # returns a clorm.Model object. Also because of the issue with using the
-    # keyword "async" as a parameter in Python 3.7 (which means that newer
-    # clingo version use "async_") we use a more complicated way to determine
-    # the function parameters.
-    #---------------------------------------------------------------------------
-    def solve(self, **kwargs):
+    # keyword "async" as a parameter in Python 3.7 (which forced clingo 5.3.1+
+    # to switch to using "async_") we have to use a complicated way to work out
+    # function parameters. At some point will drop support for older clingo and
+    # can simplify this function.
+    # ---------------------------------------------------------------------------
+    def solve(self, *args, **kwargs):
         '''Run the clingo solver.
 
         This function extends ``clingo.Control.solve()`` in two ways:
@@ -354,45 +355,56 @@ class Control(OControl, metaclass=WrapperMetaClass):
         predicate instance, or a collection of clingo symbols or clorm
         predicates.
 
-        2) It returns either a ``clorm.clingo.SolveHandle`` wrapper object or a
+        2) It produces either a ``clorm.clingo.SolveHandle`` wrapper object or a
         ``clorm.clingo.Model`` wrapper objects as appropriate (depending on the
-        ``yield_`` and ``on_model`` parameters).
+        ``yield_``, ``async_``, and ``on_model`` parameters).
 
         '''
 
-        # Build the list of valid arguments and their default values. We use
-        # "async" or "async_" depending on clingo version. Note: "async" is a
+        # Build the list of valid arguments; using the correct "async" or
+        # "async_" parameter based on the clingo version.  Note: "async" is a
         # keyword for Python 3.7+.
-        validargs = { "assumptions": [], "on_model" : None,
-                        "on_finish": None, "yield_" : False }
         async_keyword="async"
         if oclingo.__version__ > '5.3.1': async_keyword="async_"
-        validargs[async_keyword] = False
 
-        # validate the arguments and assign any missing default values
-        keys = set(kwargs.keys())
-        validkeys = set(validargs.keys())
-        if not keys.issubset(validkeys):
-            diff = keys - validkeys
-            msg = "solve() got an unexpected keyword argument '{}'".format(next(iter(diff)))
-            raise ValueError(msg)
-        for k,v in validargs.items():
-            if k not in kwargs: kwargs[k]=v
+        posnargs = ["assumptions","on_model","on_statistics",
+                    "on_finish","yield_",async_keyword]
+        validargs = set(posnargs)
+
+        # translate all positional arguments into keyword arguments.
+        if len(args) > len(posnargs):
+            raise TypeError(("solve() takes {} positional arguments but {}"
+                             "were given").format(len(posnargs),len(args)))
+        nkwargs = {}
+        for idx,arg in enumerate(args): nkwargs[posnargs[idx]] = arg
+
+        for k,v in kwargs.items():
+            if k not in validargs:
+                raise TypeError(("solve() got an unexpected keyword "
+                                 "argument '{}'").format(k))
+            if k in nkwargs:
+                raise TypeError(("solve() got multiple values for "
+                                 "argument '{}'").format(k))
+            nkwargs[k] = v
 
         # generate a new assumptions list if necesary
-        if "assumptions" in kwargs and not kwargs["assumptions"] is None:
-            kwargs["assumptions"] = _expand_assumptions(kwargs["assumptions"])
+        if "assumptions" in nkwargs and nkwargs["assumptions"] is not None:
+            nkwargs["assumptions"] = _expand_assumptions(nkwargs["assumptions"])
 
         # generate a new on_model function if necessary
-        on_model=kwargs["on_model"]
-        @functools.wraps(on_model)
-        def on_model_wrapper(model):
-            if self._unifier: return on_model(Model(model, self._unifier))
-            else: return on_model(Model(model))
-        if on_model: kwargs["on_model"] =  on_model_wrapper
+        if "on_model" in nkwargs and nkwargs["on_model"] is not None:
+            on_model=nkwargs["on_model"]
+            @functools.wraps(on_model)
+            def on_model_wrapper(model):
+                if self._unifier: return on_model(Model(model, self._unifier))
+                else: return on_model(Model(model))
+            nkwargs["on_model"] =  on_model_wrapper
 
-        result = self._wrapped.solve(**kwargs)
-        if kwargs["yield_"] or kwargs[async_keyword]:
+        # Call the wrapped solve function and handle the return value
+        # appropriately
+        result = self._wrapped.solve(**nkwargs)
+        if ("yield_" in nkwargs and nkwargs["yield_"])  or \
+           (async_keyword in nkwargs and nkwargs[async_keyword]):
             if self._unifier: return SolveHandle(result,unifier=self._unifier)
             else: return SolveHandle(result)
         else:

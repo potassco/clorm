@@ -495,7 +495,7 @@ class ClingoTestCase(unittest.TestCase):
 
 
     #--------------------------------------------------------------------------
-    # Test the solvehandle
+    # Test the solve
     #--------------------------------------------------------------------------
     def test_solve_with_on_finish(self):
         spu=SymbolPredicateUnifier()
@@ -524,6 +524,59 @@ class ClingoTestCase(unittest.TestCase):
         sr=ctrl.solve(on_model=on_model,on_finish=on_finish)
         self.assertTrue(sr.satisfiable)
         self.assertFalse(sr.unsatisfiable)
+
+
+    #--------------------------------------------------------------------------
+    # Test the solve
+    #--------------------------------------------------------------------------
+    def test_solve_with_on_statistics(self):
+
+        class F(Predicate):
+            num1=IntegerField()
+
+        f1 = F(1) ; f2 = F(2) ; f3 = F(3)
+        infb=FactBase([f1,f2,f2])
+        ctrl = cclingo.Control(['-n 0'])
+        ctrl.add_facts(infb)
+        ctrl.ground([("base",[])])
+
+        def on_model(model):
+            nonlocal om_called
+            om_called=True
+
+        def on_statistics(stp,acc):
+            nonlocal os_called
+            self.assertEqual(type(stp),oclingo.StatisticsMap)
+            os_called=True
+
+        # Calling using positional arguments
+        om_called=False ; os_called=False
+        sr=ctrl.solve([],on_model,on_statistics)
+        self.assertTrue(om_called)
+        self.assertTrue(os_called)
+
+        # Calling using keyword arguments
+        om_called=False ; os_called=False
+        sr=ctrl.solve(on_statistics=on_statistics)
+        self.assertFalse(om_called)
+        self.assertTrue(os_called)
+
+
+    #--------------------------------------------------------------------------
+    # Test accessing some other control variables that are not explcitly wrapped
+    # --------------------------------------------------------------------------
+    def test_control_access_others(self):
+
+        class F(Predicate):
+            num1=IntegerField()
+
+        f1 = F(1) ; f2 = F(2); f3 = F(3)
+        infb=FactBase([f1,f2])
+        ctrl = cclingo.Control(['-n 0'])
+        ctrl.add_facts(infb)
+        ctrl.ground([("base",[])])
+        self.assertTrue(ctrl.symbolic_atoms[f1.raw])
+
 
     #--------------------------------------------------------------------------
     # Test the solvehandle
@@ -602,8 +655,14 @@ class ClingoTestCase(unittest.TestCase):
         ctrl.add_facts([f1,f2,f3])
         ctrl.ground([("base",[])])
 
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(TypeError) as ctx:
             ctrl.solve(assump=[f1])
+
+        with self.assertRaises(TypeError) as ctx:
+            ctrl.solve([f1],assumptions=[f1])
+
+        with self.assertRaises(TypeError) as ctx:
+            ctrl.solve([f1])
 
     #--------------------------------------------------------------------------
     # Test assign external
