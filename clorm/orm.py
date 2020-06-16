@@ -1655,6 +1655,12 @@ class Predicate(object, metaclass=_PredicateMeta):
     #--------------------------------------------------------------------------
     # Overloaded index operator to access the values and len operator
     #--------------------------------------------------------------------------
+
+    def __iter__(self):
+        # The number of parameters in a predicate are always small so convenient
+        # to generate a list of values rather than have a specialised iterator.
+        return iter([self[idx] for idx in range(0,len(self))])
+
     def __getitem__(self, idx):
         """Allows for index based access to field elements."""
         return self.meta[idx].__get__(self)

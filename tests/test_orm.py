@@ -7,6 +7,7 @@ import unittest
 import datetime
 import calendar
 import operator
+import collections
 from clingo import Number, String, Function,  __version__ as clingo_version
 from clingo import Control
 from clorm.orm import \
@@ -1193,6 +1194,21 @@ class ORMTestCase(unittest.TestCase):
 
         with self.assertRaises(IndexError) as ctx:
             a = f1[2]
+
+    #--------------------------------------------------------------------------
+    # Test that we can iterate over the predicate field values
+    # --------------------------------------------------------------------------
+    def test_predicate_iterable(self):
+
+        class Fact(Predicate):
+            a1 = IntegerField
+            a2 = IntegerField
+            a3 = IntegerField
+
+        f=Fact(1,2,3)
+        self.assertTrue(isinstance(f,collections.Iterable))
+        self.assertEqual(list(f), [1,2,3])
+
 
     #--------------------------------------------------------------------------
     # Test that we can define predicates with Function and Tuple terms

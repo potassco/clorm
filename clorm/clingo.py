@@ -172,7 +172,11 @@ class SolveHandle(OSolveHandle, metaclass=WrapperMetaClass):
 # ------------------------------------------------------------------------------
 
 # ------------------------------------------------------------------------------
-# Helper functions to expand the assumptions list as part of a solve() call
+# Helper functions to expand the assumptions list as part of a solve() call. The
+# assumptions list is a list of argument-boolean pairs where the argument can be
+# be a clingo symbol, or clorm predicate instance, or a collection of clingo
+# symbols or clorm predicates. This needs to be expanded into a list of
+# symbol-bool pairs.
 # ------------------------------------------------------------------------------
 def _expand_assumptions(assumptions):
     pos_assump = set()
@@ -187,7 +191,9 @@ def _expand_assumptions(assumptions):
 
     try:
         for (arg,bval) in assumptions:
-            if isinstance(arg, Iterable):
+            if isinstance(arg, Predicate):
+                _add_fact(arg,bval)
+            elif isinstance(arg, Iterable):
                 for f in arg: _add_fact(f,bval)
             else:
                 _add_fact(arg,bval)
