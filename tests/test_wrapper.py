@@ -2,6 +2,7 @@
 # Unit tests for the clorm monkey patching
 #------------------------------------------------------------------------------
 import unittest
+from .support import check_errmsg
 
 from clorm.wrapper import WrapperMetaClass, init_wrapper
 
@@ -43,7 +44,7 @@ class WrapperTestCase(unittest.TestCase):
         class MyWrapper(My,metaclass=WrapperMetaClass):
             pass
 
-        # Despite the specification McWrapper is a subclass of object
+        # Despite the specification MyWrapper is a subclass of object and not My
         self.assertEqual(len(MyWrapper.__bases__),1)
         self.assertEqual(MyWrapper.__bases__[0],object)
 
@@ -87,8 +88,7 @@ class WrapperTestCase(unittest.TestCase):
             def __init__(self,*args,**kwargs):
                 if "my_" in kwargs:
                     if len(args) != 0 and len(kwargs) != 1:
-                        raise ValueError(("Invalid initialisation: the 'my_' argument "
-                                          "cannot be combined with other arguments"))
+                        raise ValueError("Missing 'my_' argument ")
                     init_wrapper(self,wrapped_=kwargs["my_"])
                 else:
                     init_wrapper(self,*args,**kwargs)
@@ -116,6 +116,84 @@ class WrapperTestCase(unittest.TestCase):
         self.assertEqual(mypr.num,5)
 
     #--------------------------------------------------------------------------
+    # Test that we can actually use an object of a different type instead of the
+    # officially wrapped type. Allows a form of duck-typing.
+    # --------------------------------------------------------------------------
+    def test_wrapper_diff_type(self):
+
+        class My1(object):
+            def __init__(self,num): self._num = num
+            def inc(self): self._num += 1
+            @property
+            def num(self): return self._num
+
+        class My2(object):
+            def __init__(self,num): self._num = num
+            def inc(self): self._num += 2
+            @property
+            def num(self): return self._num+1
+
+        class MyWrapper(My1,metaclass=WrapperMetaClass):
+            pass
+        ok1=My1(5)
+        ok2=My2(5)
+        wrapper1=MyWrapper(wrapped_=ok1)
+        wrapper2=MyWrapper(wrapped_=ok2)
+
+        self.assertEqual(wrapper1.num,5)
+        self.assertEqual(wrapper2.num,6)
+        wrapper1.inc()
+        wrapper2.inc()
+        self.assertEqual(wrapper1.num,6)
+        self.assertEqual(wrapper2.num,8)
+
+
+    #--------------------------------------------------------------------------
+    # Test that we can wrap a wrapper.
+    #--------------------------------------------------------------------------
+    def test_wrapper_of_wrapper(self):
+
+        class My(object):
+            def __init__(self,num): self._num = num
+            def inc(self): self._num += 1
+            @property
+            def num(self): return self._num
+
+        class MyWrapper(My,metaclass=WrapperMetaClass):
+            def inc(self):
+                self._wrapped.inc()
+                self._wrapped.inc()
+            @property
+            def num(self): return self._wrapped.num+1
+
+        my1=My(5)
+        my2=MyWrapper(wrapped_=my1)
+        my3=MyWrapper(wrapped_=my2)
+
+        self.assertEqual(my1.num,5)
+        self.assertEqual(my2.num,6)
+        self.assertEqual(my3.num,7)
+
+        # Incrementing the underlying object
+        my1.inc()
+        self.assertEqual(my1.num,6)
+        self.assertEqual(my2.num,7)
+        self.assertEqual(my3.num,8)
+
+        # Incrementing the first level wrapper
+        my2.inc()
+        self.assertEqual(my1.num,8)
+        self.assertEqual(my2.num,9)
+        self.assertEqual(my3.num,10)
+
+        # Incrementing the second level wrapper
+        my3.inc()
+        self.assertEqual(my1.num,12)
+        self.assertEqual(my2.num,13)
+        self.assertEqual(my3.num,14)
+
+
+    #--------------------------------------------------------------------------
     #
     #--------------------------------------------------------------------------
     def test_bad_wrapper(self):
@@ -127,13 +205,23 @@ class WrapperTestCase(unittest.TestCase):
             def num(self): return self._num
 
         class Other(object):
-            def __init__(self):
-                self._num2 = 5
+            def __init__(self,num):
+                self._num2 = num
 
+        # Multiple inheritence is not allowed
         with self.assertRaises(TypeError) as ctx:
-            class McWrapper(MyClass,Other, metaclass=WrapperMetaClass):
+            class MyWrapper(MyClass,Other, metaclass=WrapperMetaClass):
                 pass
+        check_errmsg("ProxyMetaClass requires exactly one", ctx)
 
+        # Using an object of the wrong class with missing attribute
+        with self.assertRaises(AttributeError) as ctx:
+            class MyWrapper(MyClass,metaclass=WrapperMetaClass):
+                pass
+            other=Other(4)
+            my = MyWrapper(wrapped_=other)
+            my.num
+        check_errmsg("'Other' object has no attribute 'num'", ctx)
 
 #------------------------------------------------------------------------------
 # main
