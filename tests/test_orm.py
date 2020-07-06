@@ -8,6 +8,8 @@ import datetime
 import calendar
 import operator
 import collections
+from .support import check_errmsg
+
 from clingo import Number, String, Function,  __version__ as clingo_version
 from clingo import Control
 from clorm.orm import \
@@ -40,17 +42,6 @@ __all__ = [
 
 
 #------------------------------------------------------------------------------
-# Helper function for helping to test for good error messages.
-#------------------------------------------------------------------------------
-def check_errmsg(startmsg, ctx):
-    msg=str(ctx.exception)
-    if not msg.startswith(startmsg):
-        msg = ("Error message \"{}\" does not start "
-               "with \"{}\"").format(msg,startmsg)
-        raise AssertionError(msg)
-
-
-#------------------------------------------------------------------------------
 # Test the RawField class and sub-classes and definining simple sub-classes
 #------------------------------------------------------------------------------
 
@@ -66,7 +57,6 @@ class RawFieldTestCase(unittest.TestCase):
     # (StringField/ConstantField/IntegerField) as well as sub-classing
     # --------------------------------------------------------------------------
     def test_simpleterms(self):
-
 
         symstr = String("SYM")
         self.assertEqual(type(StringField.cltopy(symstr)), str)
