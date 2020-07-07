@@ -339,20 +339,29 @@ of clauses. These are treated as a conjunction:
    # Count facts for pets named "Fido" with owner "morri"
    assert query1.count("Fido","morri")) == 1
 
-It is also possible to specify arbitrarily complex queries using the Clorm
-supplied ``and_``, ``or_``, and ``not_`` constructs.
+It is also possible to specify more complex queries using overloaded logical
+operators ``&``, ``|``, and ``~``:
 
 .. code-block:: python
 
-   # Find the Person with id "dave" or with address "UNSW"
-   query1=fb.select(Person).where(or_(Person.id == "dave", Person.address == "UNSW"))
+   # Find the Person with id "torsten" or whose university address is not "UP"
+   query1=fb.select(Person).where((Person.id == "torsten") | ~(Person.address[1] == "UP"))
 
-   # Count facts for people with id "dave" or address "UNSW"
-   assert query1.count() == 2
+   # With the previously defined factbase this matches all people
+   assert query1.count() == 3
 
-Here when ``query1`` is execute it counts the number of people who are either
-``"dave"`` or based at ``"UNSW"``. Based on the earlier created fact base
-``fb1`` both the "dave" and "morri" person facts match this criteria.
+   # Find the Person with id "dave" and with address "UNSW"
+   query2=fb.select(Person).where((Person.id == "dave") & (Person.address[1] == "UNSW"))
+   assert query2.count() == 1
+
+Clorm also provides explicit functions (``and_``, ``or_``, and ``not_``) for
+these logical operators, but the overloaded syntax is arguably more
+intuitive. With these operators the above could be written as:
+
+.. code-block:: python
+
+   query1=fb.select(Person).where(or_(Person.id == "torsten", not_(Person.address[1] == "UP")))
+   query2=fb.select(Person).where(and_(Person.id == "dave", Person.address[1] == "UNSW"))
 
 .. note::
 
@@ -386,10 +395,10 @@ two queries will generate the same results.
        results1 = list(query1.get("dave"))
        results2 = list(query2.get("dave"))
 
-However, while both these queries do generate the same result they are not
-necessarily equivalent in behaviour. In particular, the Clorm generated functor
-has a structure that the system is able to analyse and can therefore take
-advantage of any indexed fields to improve query efficiency.
+While both these queries do generate the same result they are not necessarily
+equivalent in behaviour. In particular, the Clorm generated functor has a
+structure that the system is able to analyse and can therefore take advantage of
+any indexed fields to improve query efficiency.
 
 In contrast, there is no simple mechanism to analyse the internal make up of a
 lambda statement or function. Consequently in these latter cases the query would
