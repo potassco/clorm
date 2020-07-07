@@ -16,7 +16,7 @@ from clorm.orm import \
     Predicate, ComplexTerm, \
     IntegerField, StringField, ConstantField, RawField, \
     _get_field_defn, refine_field, simple_predicate, \
-    not_, and_, or_, StaticComparator, \
+    not_, and_, or_, StaticComparator, BoolComparator, \
     ph_, ph1_, ph2_, _PositionalPlaceholder, _NamedPlaceholder, \
     _FactIndex, _FactMap, PredicatePath, path, hashable_path, \
     unify, desc, asc, FactBase, SymbolPredicateUnifier,  \
@@ -1777,6 +1777,36 @@ class ORMTestCase(unittest.TestCase):
         ac4 = and_(*es4)
         self.assertFalse(is_static(ac4.simplified()))
 
+
+    #--------------------------------------------------------------------------
+    #  Test the overloaded bitwise comparators (&,|,~)
+    #--------------------------------------------------------------------------
+    def test_query_bitwise_comparator_overloads(self):
+        class Afact(Predicate):
+            anum1=IntegerField
+            anum2=IntegerField
+            astr=StringField
+
+        fc1 = Afact.anum1 == 1 ; fc2 = Afact.anum1 == 2
+        ac = fc1 & fc2
+        self.assertTrue(type(ac), BoolComparator)
+        self.assertTrue(ac.boolop, operator.or_)
+        self.assertTrue(ac.args, [fc1,fc2])
+
+        oc = (Afact.anum1 == 1) | (Afact.anum2 == 2)
+        self.assertTrue(type(oc), BoolComparator)
+        self.assertTrue(oc.boolop, operator.or_)
+
+        nc1 = ~fc1
+        self.assertTrue(type(nc1), BoolComparator)
+        self.assertTrue(nc1.boolop, operator.not_)
+        self.assertTrue(nc1.args, [fc1])
+
+        nc2 = ~(Afact.anum1 == 1)
+        self.assertTrue(type(nc2), BoolComparator)
+        self.assertTrue(nc2.boolop, operator.not_)
+
+
     #--------------------------------------------------------------------------
     # Test that simplification is working for the boolean comparator
     #--------------------------------------------------------------------------
@@ -3104,7 +3134,7 @@ class SelectTestCase(unittest.TestCase):
     # Test basic insert and selection of facts in a factbase
     #--------------------------------------------------------------------------
 
-    def test_select_over_factbase(self):
+    def test_factbase_select(self):
 
         class Afact(Predicate):
             num1=IntegerField()
@@ -3195,9 +3225,37 @@ class SelectTestCase(unittest.TestCase):
                               hashable_path(Bfact.str1)]))
 
     #--------------------------------------------------------------------------
+    # Test factbase select with complex where clause
+    #--------------------------------------------------------------------------
+
+    def test_factbase_select_complex_where(self):
+
+        class Afact(Predicate):
+            num1=IntegerField
+            num2=IntegerField
+            str1=StringField
+
+        af1 = Afact(1,10,"bbb")
+        af2 = Afact(2,20,"aaa")
+        af3 = Afact(3,20,"aaa")
+        fb = FactBase([af1,af2,af3])
+
+        q=fb.select(Afact).where((Afact.num1 == 2) | (Afact.num2 == 10))
+        self.assertEqual(set([af1,af2]), set(q.get()))
+
+        q=fb.select(Afact).where((Afact.num1 == 2) & (Afact.num2 == 20))
+        self.assertEqual(set([af2]), set(q.get()))
+
+        q=fb.select(Afact).where(~(Afact.num1 == 2) & (Afact.num2 == 20))
+        self.assertEqual(set([af3]), set(q.get()))
+
+        q=fb.select(Afact).where(~((Afact.num1 == 2) & (Afact.num2 == 20)))
+        self.assertEqual(set([af1,af3]), set(q.get()))
+
+    #--------------------------------------------------------------------------
     #   Test that we can use the same placeholder multiple times
     #--------------------------------------------------------------------------
-    def test_select_multi_placeholder(self):
+    def test_factbase_select_multi_placeholder(self):
         class Afact(Predicate):
             num1=IntegerField()
             num2=IntegerField()
@@ -3239,7 +3297,7 @@ class SelectTestCase(unittest.TestCase):
     #--------------------------------------------------------------------------
     #   Test that select works with order_by
     #--------------------------------------------------------------------------
-    def test_select_order_by(self):
+    def test_factbase_select_order_by(self):
         class Afact(Predicate):
             num1=IntegerField()
             str1=StringField()
@@ -3286,7 +3344,7 @@ class SelectTestCase(unittest.TestCase):
     #--------------------------------------------------------------------------
     #   Test that select works with order_by for complex term
     #--------------------------------------------------------------------------
-    def test_select_order_by_complex_term(self):
+    def test_factbase_select_order_by_complex_term(self):
 
         class SwapField(IntegerField):
             pytocl = lambda x: 100 - x
@@ -3323,7 +3381,7 @@ class SelectTestCase(unittest.TestCase):
     #--------------------------------------------------------------------------
     #   Test that select works with order_by for complex term
     #--------------------------------------------------------------------------
-    def test_select_complex_term_placeholders(self):
+    def test_factbase_select_complex_term_placeholders(self):
 
         class AFact(Predicate):
             astr = StringField()
@@ -3360,7 +3418,7 @@ class SelectTestCase(unittest.TestCase):
     #--------------------------------------------------------------------------
     #   Test that the indexing works
     #--------------------------------------------------------------------------
-    def test_select_indexing(self):
+    def test_factbase_select_indexing(self):
         class Afact(Predicate):
             num1=IntegerField()
             num2=IntegerField()
@@ -3435,7 +3493,7 @@ class SelectTestCase(unittest.TestCase):
     #--------------------------------------------------------------------------
     # Test the support for indexes of subfields
     #--------------------------------------------------------------------------
-    def test_select_with_subfields(self):
+    def test_factbase_select_with_subfields(self):
         class CT(ComplexTerm):
             num1=IntegerField()
             str1=StringField()
@@ -3475,7 +3533,7 @@ class SelectTestCase(unittest.TestCase):
     #   query time creating the error when the statement is declared can help
     #   with debugging.
     #   --------------------------------------------------------------------------
-    def test_bad_select_delete_statements(self):
+    def test_bad_factbase_select_delete_statements(self):
         class F(Predicate):
             num1=IntegerField()
             num2=IntegerField()
