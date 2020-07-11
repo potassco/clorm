@@ -1953,6 +1953,10 @@ class Comparator(abc.ABC):
         return BoolComparator(operator.and_,self,other)
     def __or__(self,other):
         return BoolComparator(operator.or_,self,other)
+    def __rand__(self,other):
+        return BoolComparator(operator.and_,self,other)
+    def __ror__(self,other):
+        return BoolComparator(operator.or_,self,other)
     def __invert__(self):
         return BoolComparator(operator.not_,self)
 

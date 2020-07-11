@@ -1789,23 +1789,54 @@ class ORMTestCase(unittest.TestCase):
 
         fc1 = Afact.anum1 == 1 ; fc2 = Afact.anum1 == 2
         ac = fc1 & fc2
-        self.assertTrue(type(ac), BoolComparator)
-        self.assertTrue(ac.boolop, operator.or_)
-        self.assertTrue(ac.args, [fc1,fc2])
+        self.assertEqual(type(ac), BoolComparator)
+        self.assertEqual(ac.boolop, operator.and_)
+        self.assertEqual(ac.args, (fc1,fc2))
 
         oc = (Afact.anum1 == 1) | (Afact.anum2 == 2)
-        self.assertTrue(type(oc), BoolComparator)
-        self.assertTrue(oc.boolop, operator.or_)
+        self.assertEqual(type(oc), BoolComparator)
+        self.assertEqual(oc.boolop, operator.or_)
 
         nc1 = ~fc1
-        self.assertTrue(type(nc1), BoolComparator)
-        self.assertTrue(nc1.boolop, operator.not_)
-        self.assertTrue(nc1.args, [fc1])
+        self.assertEqual(type(nc1), BoolComparator)
+        self.assertEqual(nc1.boolop, operator.not_)
+        self.assertEqual(nc1.args, (fc1,))
 
         nc2 = ~(Afact.anum1 == 1)
-        self.assertTrue(type(nc2), BoolComparator)
-        self.assertTrue(nc2.boolop, operator.not_)
+        self.assertEqual(type(nc2), BoolComparator)
+        self.assertEqual(nc2.boolop, operator.not_)
 
+        # Test the __rand__ and __ror__ operators
+        nc3 = (lambda x: x.astr == "str") | (Afact.anum2 == 2)
+        self.assertEqual(type(nc3), BoolComparator)
+
+        nc4 = (lambda x: x.astr == "str") & (Afact.anum2 == 2)
+        self.assertEqual(type(nc4), BoolComparator)
+
+        # Test that the comparators actually work
+        f1=Afact(1,1,"str")
+        f2=Afact(1,2,"nostr")
+        f3=Afact(1,2,"str")
+
+        self.assertFalse(ac(f1))
+        self.assertFalse(ac(f2))
+        self.assertFalse(ac(f3))
+
+        self.assertTrue(oc(f1))
+        self.assertTrue(oc(f2))
+        self.assertTrue(oc(f3))
+
+        self.assertFalse(nc1(f1)) ; self.assertFalse(nc2(f1))
+        self.assertFalse(nc1(f2)) ; self.assertFalse(nc2(f2))
+        self.assertFalse(nc1(f3)) ; self.assertFalse(nc2(f3))
+
+        self.assertTrue(nc3(f1))
+        self.assertTrue(nc3(f2))
+        self.assertTrue(nc3(f3))
+
+        self.assertFalse(nc4(f1))
+        self.assertFalse(nc4(f2))
+        self.assertTrue(nc4(f3))
 
     #--------------------------------------------------------------------------
     # Test that simplification is working for the boolean comparator
