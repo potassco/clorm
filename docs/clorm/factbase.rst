@@ -354,9 +354,9 @@ operators ``&``, ``|``, and ``~``:
    query2=fb.select(Person).where((Person.id == "dave") & (Person.address[1] == "UNSW"))
    assert query2.count() == 1
 
-Clorm also provides explicit functions (``and_``, ``or_``, and ``not_``) for
-these logical operators, but the overloaded syntax is arguably more
-intuitive. With these operators the above could be written as:
+Note, Clorm also provides explicit functions (``and_``, ``or_``, and ``not_``)
+for these logical operators, but the overloaded syntax is arguably more
+intuitive. With the explicit functions the above could also be written as:
 
 .. code-block:: python
 

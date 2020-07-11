@@ -3,6 +3,8 @@
 #------------------------------------------------------------------------------
 import unittest
 
+from .support import check_errmsg
+
 import clingo as oclingo
 import clorm.clingo as cclingo
 #from clorm.clingo import *
@@ -25,6 +27,86 @@ class ClingoTestCase(unittest.TestCase):
 
     def tearDown(self):
         pass
+
+    #--------------------------------------------------------------------------
+    # Test the wrapping of control objects
+    #--------------------------------------------------------------------------
+    def test_control_and_model_wrapper(self):
+
+        # Test a control wrapper of a wrapper
+        ctrl0 = oclingo.Control()
+        ctrl1 = cclingo.Control(control_=ctrl0)
+        ctrl2 = cclingo.Control(control_=ctrl1)
+        ctrl2.ground([("base",[])])
+        with ctrl2.solve(yield_=True) as sh:
+            tmp = [m.facts(unifier=[],atoms=True) for m in sh]
+            self.assertEqual(len(tmp),1)
+            self.assertEqual(len(tmp[0]),0)
+
+        # Test a model wrapper
+        ctrl = oclingo.Control()
+        ctrl.ground([("base",[])])
+        with ctrl.solve(yield_=True) as sh:
+            for n,m_ in enumerate(sh):
+                self.assertEqual(n,0)
+                m=cclingo.Model(model=m_,unifier=[])
+                self.assertEqual(len(m.facts()),0)
+
+        # Test wrapping a bad object - missing attributes and functions
+
+        # Missing ground function
+        with self.assertRaises(AttributeError) as ctx:
+            class Bad(object):
+                def solve(self): pass
+            bad = Bad()
+            ctrl = cclingo.Control(control_=bad)
+        check_errmsg("'Bad' object has no attribute 'ground'", ctx)
+
+        # Missing solve function
+        with self.assertRaises(AttributeError) as ctx:
+            class Bad(object):
+                def ground(self): pass
+            bad = Bad()
+            ctrl = cclingo.Control(control_=bad)
+        check_errmsg("'Bad' object has no attribute 'solve'", ctx)
+
+        # Ground is an attribute but not a function
+        with self.assertRaises(AttributeError) as ctx:
+            class Bad(object):
+                def __init__(self): self.ground = 4
+                def solve(self): pass
+            bad = Bad()
+            ctrl = cclingo.Control(control_=bad)
+        check_errmsg(("Wrapped object of type '{}' does not have a "
+                      "function 'ground()'").format(type(bad)), ctx)
+
+        # Solve is an attribute but not a function
+        with self.assertRaises(AttributeError) as ctx:
+            class Bad(object):
+                def __init__(self): self.solve = 4
+                def ground(self): pass
+            bad = Bad()
+            ctrl = cclingo.Control(control_=bad)
+        check_errmsg(("Wrapped object of type '{}' does not have a "
+                      "function 'solve()'").format(type(bad)), ctx)
+
+
+        # Model wrapper with no "symbols" function or attribute
+        with self.assertRaises(AttributeError) as ctx:
+            class Bad(object):
+                def __init__(self): self.symbols=2
+            bad = Bad()
+            m=cclingo.Model(model=bad)
+        check_errmsg(("Wrapped object of type '{}' does not have a "
+                      "function 'symbols()'").format(type(bad)), ctx)
+
+        with self.assertRaises(AttributeError) as ctx:
+            class Bad(object):
+                def __init__(self): pass
+            bad = Bad()
+            m=cclingo.Model(model=bad)
+        check_errmsg("'Bad' object has no attribute 'symbols'", ctx)
+
 
     #--------------------------------------------------------------------------
     # Test processing clingo Model
@@ -295,6 +377,34 @@ class ClingoTestCase(unittest.TestCase):
                 with self.assertRaises(ValueError) as ctx:
                     fb = m.facts(atoms=True)
 
+
+
+    #--------------------------------------------------------------------------
+    # Test the different argument combinations for clingo Model.facts()
+    #--------------------------------------------------------------------------
+    def test_model_facts_arguments(self):
+        class Af(Predicate):
+            num1=IntegerField()
+        af1 = Af(1)
+        af2 = Af(2)
+
+        ctrl = cclingo.Control()
+        ctrl.add_facts([af1,af2])
+        ctrl.ground([("base",[])])
+        with ctrl.solve(yield_=True) as sh:
+            m=next(sh)
+            fb=m.facts(unifier=[Af],atoms=True,raise_on_empty=True)
+            self.assertEqual(len(fb.facts()),2)
+            fb=m.facts([Af],True,True,True,raise_on_empty=True)
+            self.assertEqual(len(fb.facts()),2)
+
+            with self.assertRaises(TypeError) as ctx:
+                fb=m.facts([Af],unifier=[Af])
+            check_errmsg("facts() got multiple values for argument 'unifier'", ctx)
+
+            with self.assertRaises(TypeError) as ctx:
+                fb=m.facts([Af],True,True,True,True,raise_on_empty=True)
+            check_errmsg("facts() got multiple values for argument 'raise_on_empty'", ctx)
 
 
     #--------------------------------------------------------------------------

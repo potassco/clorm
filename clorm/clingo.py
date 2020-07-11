@@ -5,6 +5,9 @@ for more details.
 
 '''
 
+# TODO: For clorm v2.0 the raise_on_empty parameter in Model.facts() should be
+#       moved to the second parameter position.
+
 import io
 import sys
 import functools
@@ -42,6 +45,17 @@ def _build_unifier(unifier):
     if isinstance(unifier, SymbolPredicateUnifier): return unifier
     return SymbolPredicateUnifier(predicates=unifier)
 
+
+# ------------------------------------------------------------------------------
+# Helper function to test that an attribute exists and corresponds to a function.
+# ------------------------------------------------------------------------------
+
+def _check_is_func(obj,name):
+    if not callable(obj.__getattribute__(name)):
+        raise AttributeError(("Wrapped object of type '{}' does not have "
+                                  "a function '{}()'").format(type(obj),name))
+
+
 # ------------------------------------------------------------------------------
 # Wrap clingo.Model and override some functions
 # ------------------------------------------------------------------------------
@@ -59,6 +73,7 @@ class Model(OModel, metaclass=WrapperMetaClass):
 
     def __init__(self, model,unifier=None):
         self._unifier = _build_unifier(unifier)
+        _check_is_func(model,"symbols")
         init_wrapper(self,wrapped_=model)
 
     #------------------------------------------------------------------------------
@@ -73,8 +88,7 @@ class Model(OModel, metaclass=WrapperMetaClass):
     # A new function to return a list of facts - similar to symbols
     #------------------------------------------------------------------------------
 
-    def facts(self, unifier=None, atoms=False, terms=False, shown=False,
-              raise_on_empty=False):
+    def facts(self, *args, **kwargs):
         '''Returns a FactBase containing the facts in the model that unify with the
         SymbolPredicateUnifier.
 
@@ -94,15 +108,27 @@ class Model(OModel, metaclass=WrapperMetaClass):
                            (Default: False)
 
         '''
+        nargs = list(args)
+        nkwargs = dict(kwargs)
+        if len(nargs) >= 1 and "unifier" in nkwargs:
+            raise TypeError("facts() got multiple values for argument 'unifier'")
+        if len(nargs) >= 5 and "raise_on_empty" in nkwargs:
+            raise TypeError("facts() got multiple values for argument 'raise_on_empty'")
+
+        raise_on_empty = nkwargs.pop("raise_on_empty",False)
+        if len(nargs) >= 5: raise_on_empty = nargs.pop(4)
+        unifier = nkwargs.pop("unifier",None)
+        if len(nargs) >= 1: unifier = nargs.pop(0)
+
         if unifier is not None: unifier=_build_unifier(unifier)
         else: unifier=self._unifier
-        if not unifier:
+        if unifier is None:
             msg = "Missing a predicate unifier specification in function call " + \
                 "(no default was given at model instantiation)"
             raise ValueError(msg)
 
         return unifier.unify(
-            symbols=self._wrapped.symbols(atoms=atoms,terms=terms,shown=shown),
+            symbols=self._wrapped.symbols(*nargs,**nkwargs),
             raise_on_empty=raise_on_empty,
             delayed_init=True)
 
@@ -230,9 +256,14 @@ class Control(OControl, metaclass=WrapperMetaClass):
         self._unifier = None
         if "unifier" in kwargs: self._unifier = _build_unifier(kwargs["unifier"])
 
-        # Do we need to build a clingo.Control object or use an existing one
+        # Do we need to build a clingo.Control object or use an existing one. If
+        # using existing one make sure the wrapped object has at least the
+        # ground and solve functions.
         if len(args) == 0 and "control_" in kwargs:
-            init_wrapper(self,wrapped_=kwargs["control_"])
+            wrapped_=kwargs["control_"]
+            _check_is_func(wrapped_,"solve")
+            _check_is_func(wrapped_,"ground")
+            init_wrapper(self,wrapped_=wrapped_)
         else:
             kwargs2 = dict(kwargs)
             if "unifier" in kwargs2: del kwargs2["unifier"]
