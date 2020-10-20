@@ -18,6 +18,8 @@ import clingo
 import typing
 import re
 
+from .util import OrderedSet
+
 __all__ = [
     'RawField',
     'IntegerField',
@@ -2568,7 +2570,8 @@ class _Delete(Delete):
 class _FactMap(object):
     def __init__(self, ptype, indexes=[]):
         self._ptype = ptype
-        self._allfacts = set()
+#        self._allfacts = set()
+        self._allfacts = OrderedSet()
         self._findexes = None
         self._indexes = ()
         if not issubclass(ptype, Predicate):
@@ -2662,10 +2665,12 @@ class _FactMap(object):
         return iter(self._allfacts)
 
     def __eq__(self,other):
-        return self._allfacts == other._allfacts
+        return self._allfacts.isequal(other._allfacts)
+#        return self._allfacts == other._allfacts
 
     def __ne__(self,other):
-        return self._allfacts != other._allfacts
+        return not self._allfacts.isequal(other._allfacts)
+#        return self._allfacts != other._allfacts
 
     def __lt__(self,other):
         return self._allfacts < other._allfacts
@@ -2978,7 +2983,7 @@ class FactBase(object):
 
         for p, fm1 in self_fms.items():
             fm2 = other_fms[p]
-            if fm1.facts() != fm2.facts(): return False
+            if not fm1.facts().isequal(fm2.facts()): return False
         return True
 
     def __ne__(self, other):

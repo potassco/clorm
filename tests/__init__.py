@@ -6,3 +6,4 @@ from .test_libdate import LibDateTestCase
 from .test_libtimeslot import *
 from .test_monkey import *
 from .test_wrapper import WrapperTestCase
+from .test_oset import OrderedSetTestCase

@@ -2957,6 +2957,38 @@ class FactBaseTestCase(unittest.TestCase):
         self.assertEqual(list(fb2.indexes), [])
         self.assertEqual(list(fb3.indexes), list(fb1.indexes))
 
+
+    #--------------------------------------------------------------------------
+    # Test deterministic iteration. Namely, that there is determinism when
+    # iterating over two factbases that have been constructed identically
+    # --------------------------------------------------------------------------
+    def test_factbase_iteration(self):
+        class Afact(Predicate):
+            num=IntegerField
+        class Bfact(Predicate):
+            num=IntegerField
+        class Cfact(Predicate):
+            num=IntegerField
+
+        fb=FactBase()
+        bfacts = [Bfact(i) for i in range(0,100)]
+        cfacts = [Cfact(i) for i in range(0,100)]
+        afacts = [Afact(i) for i in range(0,100)]
+        allfacts = bfacts+cfacts+afacts
+        fb.add(bfacts)
+        fb.add(cfacts)
+        fb.add(afacts)
+
+        # Make sure all the different ways to get the list of fact provide the
+        # same ordering as the original creation list
+        output=list(fb)
+        self.assertEqual(allfacts,fb.facts())
+        self.assertEqual(allfacts,output)
+        self.assertEqual(str(fb), "{" + ", ".join([str(f) for f in allfacts]) + "}")
+
+        tmpstr = "".join(["{}.\n".format(f) for f in allfacts])
+        self.assertEqual(tmpstr.strip(), fb.asp_str().strip())
+
 #------------------------------------------------------------------------------
 # Test the _Select class
 #------------------------------------------------------------------------------
