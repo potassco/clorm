@@ -18,9 +18,37 @@ import clingo
 import typing
 import re
 
-from .util import OrderedSet
+# ------------------------------------------------------------------------------
+# In order to implement FactBase I originally used the built in 'set'
+# class. However this uses the hash value, which for Predicate instances uses
+# the underlying clingo.Symbol.__hash__() function. This in-turn depends on the
+# c++ std::hash function. Like the Python standard hash function this uses
+# random seeds at program startup which means that between successive runs of
+# the same program the ordering of the set can change. This is bad for producing
+# deterministic ASP solving. So using an OrderedSet instead.
+
+from .util import OrderedSet as _FactSet
+
+#_FactSet=set                                # The Python standard set class. Note
+                                           # fails some unit tests because I'm
+                                           # testing for the ordering.
+
+# Note: Some other 3rd party libraries that were tried but performanced worse on
+# a basic FactBase creation process:
+#
+#from ordered_set import OrderedSet as _FactSet
+
+#from orderedset import OrderedSet as _FactSet   # Note: broken implementation so
+                                               # fails some unit tests - union
+                                               # operator only accepts a single
+                                               # argument
+
+#from blist import sortedset as _FactSet
+#from sortedcontainers import SortedSet as _FactSet
+# ------------------------------------------------------------------------------
 
 __all__ = [
+    '_FactSet',
     'RawField',
     'IntegerField',
     'StringField',
@@ -2562,6 +2590,19 @@ class _Delete(Delete):
         return len(to_delete)
 
 #------------------------------------------------------------------------------
+# A helper function to determine if two collections have the same elements
+# (irrespective of ordering). This is useful if the underlying objects are two
+# OrderedSet objects since the equality operator will also test for the same
+# ordering which is something we don't want.
+# ------------------------------------------------------------------------------
+
+def _is_set_equal(s1,s2):
+    if len(s1) != len(s2): return False
+    for elem in s1:
+        if elem not in s2: return False
+    return True
+
+#------------------------------------------------------------------------------
 # A map for facts of the same type - Indexes can be built to allow for fast
 # lookups based on a field value. The order that the fields are specified in the
 # index matters as it determines the priority of the index.
@@ -2570,8 +2611,8 @@ class _Delete(Delete):
 class _FactMap(object):
     def __init__(self, ptype, indexes=[]):
         self._ptype = ptype
-#        self._allfacts = set()
-        self._allfacts = OrderedSet()
+        self._allfacts = _FactSet()
+
         self._findexes = None
         self._indexes = ()
         if not issubclass(ptype, Predicate):
@@ -2665,12 +2706,10 @@ class _FactMap(object):
         return iter(self._allfacts)
 
     def __eq__(self,other):
-        return self._allfacts.isequal(other._allfacts)
-#        return self._allfacts == other._allfacts
+        return _is_set_equal(self._allfacts,other._allfacts)
 
     def __ne__(self,other):
-        return not self._allfacts.isequal(other._allfacts)
-#        return self._allfacts != other._allfacts
+        return not _is_set_equal(self._allfacts,other._allfacts)
 
     def __lt__(self,other):
         return self._allfacts < other._allfacts
@@ -2983,7 +3022,8 @@ class FactBase(object):
 
         for p, fm1 in self_fms.items():
             fm2 = other_fms[p]
-            if not fm1.facts().isequal(fm2.facts()): return False
+            if not _is_set_equal(fm1.facts(),fm2.facts()): return False
+
         return True
 
     def __ne__(self, other):

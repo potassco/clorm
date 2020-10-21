@@ -2694,6 +2694,29 @@ class FactBaseTestCase(unittest.TestCase):
         self.assertTrue(fb2 >= [af1,af2,bf1])
         self.assertTrue([af1,af2,bf1,bf2] >= fb1)
 
+
+    #--------------------------------------------------------------------------
+    # We want to ignore any insertion order when comparing fact bases. So
+    # equality should return true iff two fact bases have the same facts.
+    # --------------------------------------------------------------------------
+    def test_equality_fb_different_order(self):
+        Afact = self._Afact
+        Bfact = self._Bfact
+
+        af1 = Afact(num1=1, str1="1", str2="a")
+        af2 = Afact(num1=1, str1="1", str2="b")
+        af3 = Afact(num1=1, str1="1", str2="c")
+        bf1 = Bfact(num1=1, str1="1", str2="a")
+        bf2 = Bfact(num1=1, str1="1", str2="b")
+        bf3 = Bfact(num1=1, str1="1", str2="c")
+
+        inlist = [af1,af2,af3,bf1,bf2,bf3]
+        fb1 = FactBase(inlist)
+        inlist.reverse()
+        fb2 = FactBase(inlist)
+
+        self.assertTrue(fb1 == fb2)
+
     #--------------------------------------------------------------------------
     #
     #--------------------------------------------------------------------------
