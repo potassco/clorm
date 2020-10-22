@@ -45,16 +45,16 @@ class Profiler(object):
 
     def print_stats(self,justified=0):
         if justified < self._justified: justified = self._justified
-        print("\n=====================================================")
+        print("\n".ljust(justified+10,'='))
         print("{}".format(self._msg))
         if not self._calls:
             print(" -------- No functions profiled -----------\n")
             return
         total=0.0
         for msg,cputime in self._calls:
-            print("{} : {:.3f}".format(msg.ljust(justified),cputime))
+            print("{}: {:.3f}".format(msg.ljust(justified),cputime))
             total += cputime
-        print("{} : {:.3f}".format("Total time".ljust(justified),total))
+        print("{}: {:.3f}".format("Total time".ljust(justified),total))
 
 
 def profcall(msg,func,*args,**kwargs):
@@ -80,12 +80,13 @@ class P(Predicate):
 
 def create_p_list1():
     tmp=[]
-    for a in range(1,500000): tmp.append(P(a,"blah"))
+    for a in range(0,500000): tmp.append(P(a,"blah"))
     return tmp
 
 def create_p_list2():
     tmp=[]
     for a in range(100000,300000): tmp.append(P(a,"blah"))
+    for a in range(400000,700000): tmp.append(P(a,"blah"))
     return tmp
 
 def make_fbs(p_list1,p_list2):
@@ -107,14 +108,20 @@ g_plist1 = create_p_list1()
 g_plist2 = create_p_list2()
 
 def run(indexed):
+    msg1 = "Intstantiating new FactBase with {} facts".format(len(g_plist1))
+    msg2 = "Adding {} facts to new empty FactBase".format(len(g_plist2))
     if indexed:
         pr=Profiler("Profiling creating and querying an indexed FactBase")
-        fb1,fb2 = pr("Making two fact bases", make_indexed_fbs,g_plist1,g_plist2)
+        fb1 = pr(msg1, lambda n : FactBase(n,indexes=[P.a]), g_plist1)
+        fb2 = FactBase(indexes=[P.a])
+        pr(msg2, lambda n : fb2.add(n), g_plist2)
     else:
         pr=Profiler("Profiling creating and querying a non-indexed FactBase")
-        fb1,fb2 = pr("Making two fact bases", make_fbs,g_plist1,g_plist2)
+        fb1 = pr(msg1, lambda n : FactBase(n), g_plist1)
+        fb2 = FactBase()
+        pr(msg2, lambda n : fb2.add(n), g_plist2)
 
-    tmp1=pr("Querying a fact base", query_fb,fb1,10000)
+    tmp1=pr("Querying fact base to find one element", query_fb,fb1,10000)
     pr("Union operation",fb1.union,fb2)
     pr("Intersection operation",fb1.intersection,fb2)
     pr("Difference operation",fb1.difference,fb2)
