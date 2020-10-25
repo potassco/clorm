@@ -3012,6 +3012,37 @@ class FactBaseTestCase(unittest.TestCase):
         tmpstr = "".join(["{}.\n".format(f) for f in allfacts])
         self.assertEqual(tmpstr.strip(), fb.asp_str().strip())
 
+    #--------------------------------------------------------------------------
+    # Test the asp output string
+    # --------------------------------------------------------------------------
+    def test_factbase_aspstr_width(self):
+        class A(Predicate):
+            n=IntegerField
+        class C(Predicate):
+            s=StringField
+            class Meta: name="a_very_long_predicate_name_that_cause_wrapping_well"
+
+        fb=FactBase()
+        afacts = [A(i) for i in range(0,10)]
+        bfacts = [C("A long parameter for wrapping {}".format(i)) for i in range(0,10)]
+        allfacts = afacts+bfacts
+        fb.add(afacts)
+
+        aspstr=fb.asp_str(width=30)
+        afactsstr="a(0). a(1). a(2). a(3). a(4).\na(5). a(6). a(7). a(8). a(9).\n"
+        self.assertEqual(aspstr,afactsstr)
+
+        bfactsstr = "\n".join(["{}.".format(f) for f in bfacts]) + "\n"
+        fb.add(bfacts)
+        aspstr=fb.asp_str(width=30)
+        self.assertEqual(aspstr,afactsstr+bfactsstr)
+
+        aspstr=fb.asp_str(width=30,commented=True)
+        afactspre="% FactBase predicate: a/1\n"
+        bfactspre="% FactBase predicate: {}/1\n".format(C.meta.name)
+        matchstr = afactspre+afactsstr + "\n" + bfactspre+bfactsstr
+        self.assertEqual(aspstr,matchstr)
+
 #------------------------------------------------------------------------------
 # Test the _Select class
 #------------------------------------------------------------------------------

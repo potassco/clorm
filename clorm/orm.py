@@ -2782,6 +2782,22 @@ class _FactMap(object):
         nfm.add(self.facts())
         return nfm
 
+
+#------------------------------------------------------------------------------
+# Support function for printing ASP facts
+#------------------------------------------------------------------------------
+
+def _format_asp_facts(iterator,output,width):
+    tmp1=""
+    for f in iterator:
+        fstr="{}.".format(f)
+        if tmp1 and len(tmp1) + len(fstr) > width:
+            print(tmp1,file=output)
+            tmp1 = fstr
+        else:
+            tmp1 = tmp1 + " " + fstr if tmp1 else fstr
+    if tmp1: print(tmp1,file=output)
+
 #------------------------------------------------------------------------------
 # A FactBase consisting of facts of different types
 #------------------------------------------------------------------------------
@@ -2953,20 +2969,30 @@ class FactBase(object):
         tmp = [ fm.facts() for fm in self._factmaps.values() if fm]
         return list(itertools.chain(*tmp))
 
-    def asp_str(self):
+    def asp_str(self,width=0,commented=False):
         """Return a string representation of the fact base that is suitable for adding
         to an ASP program
 
         """
-
         self._check_init()  # Check for delayed init
         out = io.StringIO()
-        for fm in self._factmaps.values():
-            for f in fm:
-                print("{}.".format(f), file=out)
+
+        if not commented:
+            _format_asp_facts(self,out,width)
+        else:
+            first=True
+            for fm in self._factmaps.values():
+                if first: first=False
+                else: print("",file=out)
+                pm=fm.predicate.meta
+                print("% FactBase predicate: {}/{}".format(pm.name,pm.arity),file=out)
+                _format_asp_facts(fm,out,width)
+
         data = out.getvalue()
         out.close()
         return data
+
+
 
     def __str__(self):
         self._check_init()  # Check for delayed init
