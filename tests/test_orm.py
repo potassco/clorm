@@ -10,12 +10,12 @@ import operator
 import collections
 from .support import check_errmsg
 
-from clingo import Number, String, Function, __version__ as clingo_version
-from clingo import Control
+from clingo import Control, Number, String, Function, \
+    __version__ as clingo_version
 from clorm.orm import \
     Predicate, ComplexTerm, \
     IntegerField, StringField, ConstantField, SimpleField, RawField, \
-    _get_field_defn, refine_field, simple_predicate, \
+    _get_field_defn, refine_field, combine_fields, simple_predicate, \
     not_, and_, or_, StaticComparator, BoolComparator, \
     ph_, ph1_, ph2_, _PositionalPlaceholder, _NamedPlaceholder, \
     _FactIndex, _FactMap, PredicatePath, path, hashable_path, \
@@ -362,6 +362,55 @@ class RawFieldTestCase(unittest.TestCase):
         self.assertTrue(PosIntField.unifies(r_1))
         self.assertFalse(PosIntField.unifies(r_neg1))
         self.assertFalse(PosIntField.unifies(r_a))
+
+    #--------------------------------------------------------------------------
+    # Test combining fields
+    #--------------------------------------------------------------------------
+    def test_combine_fields(self):
+
+        # Make sure the basic class is setup
+        defn=combine_fields([IntegerField,ConstantField])
+        self.assertTrue(issubclass(defn,RawField))
+        self.assertEqual(defn.__name__,"AnonymousCombinedRawField")
+        defn=combine_fields("MixedField", [IntegerField,ConstantField])
+        self.assertTrue(issubclass(defn,RawField))
+        self.assertEqual(defn.__name__,"MixedField")
+
+        # Test some bad class setup
+        with self.assertRaises(TypeError) as ctx:
+            defn=combine_fields("a","b",[IntegerField,ConstantField])
+        with self.assertRaises(TypeError) as ctx:
+            defn=combine_fields("a",[IntegerField])
+        with self.assertRaises(TypeError) as ctx:
+            defn=combine_fields("a","b")
+
+        # Test the pytocl and cltopy functions for combined Integer-Constant
+        MF=combine_fields("MixedField", [IntegerField,ConstantField])
+
+        # Test pytocl
+        self.assertEqual(MF.pytocl(10), Number(10))
+        self.assertEqual(MF.pytocl("aconst"), Function("aconst"))
+
+        # A bad value
+        with self.assertRaises(TypeError) as ctx:
+            t=MF.pytocl([])
+        check_errmsg("No combined pytocl()",ctx)
+
+        # Test cltopy
+        self.assertEqual(MF.cltopy(Number(10)),10)
+        self.assertEqual(MF.cltopy(Function("aconst")),"aconst")
+
+        # A bad value
+        with self.assertRaises(TypeError) as ctx:
+            t=MF.cltopy([])
+        check_errmsg("No combined cltopy()",ctx)
+        with self.assertRaises(TypeError) as ctx:
+            t=MF.cltopy(String("blah"))
+        check_errmsg("No combined cltopy()",ctx)
+        with self.assertRaises(TypeError) as ctx:
+            t=MF.cltopy(Function("blah",[Number(1)]))
+        check_errmsg("No combined cltopy()",ctx)
+
 
 #------------------------------------------------------------------------------
 # Test definition predicates/complex terms

@@ -28,6 +28,8 @@ more intuitive Python objects.
 
 .. autofunction:: clorm.refine_field
 
+.. autofunction:: clorm.combine_fields
+
 .. _api_predicates:
 
 Predicates and Complex Terms

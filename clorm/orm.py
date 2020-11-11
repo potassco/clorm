@@ -64,6 +64,7 @@ __all__ = [
     'Delete',
     'TypeCastSignature',
     'refine_field',
+    'combine_fields',
     'simple_predicate',
     'desc',
     'asc',
@@ -948,6 +949,74 @@ def refine_field(*args):
         return _refine_field_collection(subclass_name, field_class, values)
 
 
+
+#------------------------------------------------------------------------------
+# combine_fields is a function that creates a sub-class of RawField that
+# combines existing RawField subclasses. It is the mirror of the refine_field
+# helper function.
+# ------------------------------------------------------------------------------
+
+def combine_fields(*args):
+    """Factory function that returns a field sub-class that combines other fields
+
+    A helper factory function to define a sub-class of RawField that combines
+    other RawField subclasses. The subclass is defined such that it's
+    ``pytocl()`` (respectively ``cltopy()``) function tries to return the value
+    returned by the underlying sub-field's ``pytocl()`` ( (respectively
+    ``cltopy()``) function. If the first sub-field fails then the second is
+    called, and so on until there are no matching sub-fields. If there is no
+    match then a TypeError is raised.
+
+    Example:
+       .. code-block:: python
+
+       MixedField = combine_fields("MixedField",[ConstantField,IntegerField])
+
+    Args:
+       optional subclass_name: new sub-class name (anonymous if none specified).
+       field_subclasses: the fields to combine
+
+    """
+
+    # Deal with the optional subclass name
+    largs=len(args)
+    if largs == 1:
+        subclass_name="AnonymousCombinedRawField"
+        fields=args[0]
+    elif largs == 2:
+        subclass_name=args[0]
+        fields=args[1]
+    else:
+        raise TypeError("combine_fields() missing or invalid arguments")
+
+    # Must combine at least two fields otherwise it doesn't make sense
+    for f in fields:
+        if not inspect.isclass(f) or not issubclass(f,RawField):
+            raise TypeError("{} is not RawField or a sub-class".format(f))
+    if len(fields) < 2:
+        raise TypeError("Must specify at least two fields to combine")
+
+    fields=tuple(fields)
+    def _pytocl(v):
+        for f in fields:
+            try:
+                return f.pytocl(v)
+            except:
+                pass
+        raise TypeError("No combined pytocl() match for value {}".format(v))
+
+    def _cltopy(r):
+        for f in fields:
+            try:
+                return f.cltopy(r)
+            except:
+                pass
+        raise TypeError("No combined cltopy() match for clingo symbol {}".format(r))
+
+    return type(subclass_name, (RawField,),
+                { "pytocl": _pytocl,
+                  "cltopy": _cltopy})
+
 #------------------------------------------------------------------------------
 # Specification of an ordering over a field of a predicate/complex-term
 #------------------------------------------------------------------------------
@@ -1151,6 +1220,7 @@ def _magic_name(name):
 # One PredicateDefn object for each Predicate sub-class
 #--------------------------------------------------------------------------
 class PredicateDefn(object):
+
     """Encapsulates some meta-data for a Predicate definition.
 
     Each Predicate class will have a corresponding PredicateDefn object that specifies some
