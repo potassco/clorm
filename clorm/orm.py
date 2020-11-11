@@ -770,8 +770,14 @@ class IntegerField(RawField):
 # ------------------------------------------------------------------------------
 
 class ConstantField(RawField):
-    """A field to convert between a simple Clingo.Function object and a Python
+    """A field to convert between a simple ``Clingo.Function`` object and a Python
     string.
+
+    Note: currently ``ConstantField`` treats a string with a starting "-" as a
+    negated constant. In hindsight this was a mistake and is now
+    *deprecated*. While I don't think anyone actually used this functionality
+    (since it was never documented) nevertheless I will keep it there until the
+    Clorm version 2.0 release.
 
     """
     def _constant_cltopy(raw):
