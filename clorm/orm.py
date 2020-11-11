@@ -804,9 +804,9 @@ class SimpleField(RawField):
     determine if the string matches an ASP constant or if it should be treated
     as a quoted string.
 
-    Because of this potential ambiguity it is often better to use distinct
-    IntegerField, ConstantField, and StringField classes than the SimpleField
-    class.
+    Because of this potential for ambiguity it is often better to use the
+    distinct ``IntegerField``, ``ConstantField``, and ``StringField`` classes
+    rather than the ``SimpleField`` class.
 
     """
     def cltopy(raw):

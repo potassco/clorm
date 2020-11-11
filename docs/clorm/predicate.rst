@@ -366,6 +366,18 @@ natural Python representations.  ASP has three *simple terms*: *integer*,
 to provide a mapping to these fields: ``IntegerField``, ``StringField``, and
 ``ConstantField``.
 
+Clorm also provides a ``SimpleField`` class that can match to any simple
+term. This is useful when the parameter of a defined predicate can contain
+arbitrary simple term types. Clorm takes care of converting the ASP string,
+constant or integer to a Python string or integer object. Note that both ASP
+strings and constants are both converted to Python string objects.
+
+In order to convert from a Python string object to an ASP string or constant,
+``SimpleField`` uses a regular expression to determine if the string matches the
+pattern of a constant and treats it accordingly. For this reason ``SimpleField``
+should be used with care in order to ensure expected behaviour, and using the
+distinct field types is often preferable.
+
 .. note::
 
    It is worth highlighting that in the above predicate declarations, the field

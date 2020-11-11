@@ -24,6 +24,8 @@ more intuitive Python objects.
 
 .. autoclass:: clorm.IntegerField
 
+.. autoclass:: clorm.SimpleField
+
 .. autofunction:: clorm.refine_field
 
 .. _api_predicates:
