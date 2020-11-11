@@ -53,6 +53,7 @@ __all__ = [
     'IntegerField',
     'StringField',
     'ConstantField',
+    'SimpleField',
     'Placeholder',
     'Predicate',
     'ComplexTerm',
@@ -85,6 +86,9 @@ __all__ = [
 # Global
 #------------------------------------------------------------------------------
 #g_logger = logging.getLogger(__name__)
+
+# A compiled regular expression for matching an ASP constant term
+g_constant_term_regex = re.compile("^_*[a-z][A-Za-z0-9_']*$")
 
 #------------------------------------------------------------------------------
 # A _classproperty decorator. (see
@@ -733,6 +737,7 @@ class RawField(object, metaclass=_RawFieldMeta):
 
 class StringField(RawField):
     """A field to convert between a Clingo.String object and a Python string."""
+
     def _string_cltopy(raw):
         if raw.type != clingo.SymbolType.String:
             raise TypeError("Object {0} is not a clingo.String symbol")
@@ -781,6 +786,48 @@ class ConstantField(RawField):
 
     cltopy = _constant_cltopy
     pytocl = _constant_pytocl
+
+
+
+#------------------------------------------------------------------------------
+# A SimpleField can handle any simple term (constant, string, integer).
+#------------------------------------------------------------------------------
+
+class SimpleField(RawField):
+    """A class that represents a field corresponding to any simple term: *string*,
+    *constant*, or *integer*.
+
+    Converting from an ASP string, constant, or integer will produce the
+    expected Python string or integer object. However, since ASP strings and
+    constants both map to Python strings therefore converting from Python to ASP
+    is less straightforward. In this case it uses a regular expression to
+    determine if the string matches an ASP constant or if it should be treated
+    as a quoted string.
+
+    Because of this potential ambiguity it is often better to use distinct
+    IntegerField, ConstantField, and StringField classes than the SimpleField
+    class.
+
+    """
+    def cltopy(raw):
+        if raw.type == clingo.SymbolType.String:
+            return raw.string
+        elif raw.type == clingo.SymbolType.Number:
+            return raw.number
+        elif raw.type == clingo.SymbolType.Function:
+            if len(raw.arguments) == 0 and raw.positive:
+                return raw.name
+        raise TypeError("Not a simple term (string/constant/integer)")
+
+    def pytocl(value):
+        if isinstance(value,int):
+            return clingo.Number(value)
+        elif not isinstance(value,str):
+            raise TypeError("No translation to a simple term")
+        if g_constant_term_regex.match(value):
+            return clingo.Function(value,[])
+        else:
+            return clingo.String(value)
 
 #------------------------------------------------------------------------------
 # refine_field is a function that creates a sub-class of a RawField (or RawField

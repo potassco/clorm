@@ -10,11 +10,11 @@ import operator
 import collections
 from .support import check_errmsg
 
-from clingo import Number, String, Function,  __version__ as clingo_version
+from clingo import Number, String, Function, __version__ as clingo_version
 from clingo import Control
 from clorm.orm import \
     Predicate, ComplexTerm, \
-    IntegerField, StringField, ConstantField, RawField, \
+    IntegerField, StringField, ConstantField, SimpleField, RawField, \
     _get_field_defn, refine_field, simple_predicate, \
     not_, and_, or_, StaticComparator, BoolComparator, \
     ph_, ph1_, ph2_, _PositionalPlaceholder, _NamedPlaceholder, \
@@ -222,6 +222,42 @@ class RawFieldTestCase(unittest.TestCase):
         f = IntegerField(1,True)
         self.assertTrue(f.index)
 
+    #--------------------------------------------------------------------------
+    # Test simple field
+    #--------------------------------------------------------------------------
+    def test_simplefield(self):
+        symint=Number(10)
+        symstr=String("A string")
+        symconst=Function("aconst")
+
+        symbad1=Function("notaconst",[],positive=False)
+        symbad2=Function("notaconst",[String("blah")])
+
+        self.assertEqual(SimpleField.cltopy(symint),10)
+        self.assertEqual(SimpleField.cltopy(symstr),"A string")
+        self.assertEqual(SimpleField.cltopy(symconst),"aconst")
+
+        with self.assertRaises(TypeError) as ctx:
+            t=SimpleField.cltopy(symbad1)
+        check_errmsg("Not a simple term",ctx)
+
+        with self.assertRaises(TypeError) as ctx:
+            t=SimpleField.cltopy(symbad2)
+        check_errmsg("Not a simple term",ctx)
+
+        self.assertEqual(SimpleField.pytocl(10),symint)
+        self.assertEqual(SimpleField.pytocl("A string"),symstr)
+        self.assertEqual(SimpleField.pytocl("aconst"),symconst)
+
+        self.assertEqual(SimpleField.pytocl("_d"), Function("_d"))
+        self.assertEqual(SimpleField.pytocl("a'"), Function("a'"))
+
+        self.assertEqual(SimpleField.pytocl("_"), String("_"))
+        self.assertEqual(SimpleField.pytocl("$"), String("$"))
+
+        with self.assertRaises(TypeError) as ctx:
+            t=SimpleField.pytocl(3.14)
+        check_errmsg("No translation to a simple term",ctx)
 
     #--------------------------------------------------------------------------
     # Test making a restriction of a field using a list of values
