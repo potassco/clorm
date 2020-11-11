@@ -78,7 +78,7 @@ First the relevant libraries need to be imported.
 
 .. code-block:: python
 
-   from clorm import Predicate, ConstantField, IntegerField, ph1_
+   from clorm import Predicate, ConstantField, IntegerField
    from clorm.clingo import Control
 
 .. note:: Importing from ``clorm.clingo`` instead of ``clingo``.
@@ -152,7 +152,7 @@ static problem domain encoding must be loaded.
 
 .. code-block:: python
 
-    ctrl = Control(unifier=[Driver,Item,Assigment])
+    ctrl = Control(unifier=[Driver,Item,Assignment])
     ctrl.load("quickstart.lp")
 
 The ``clorm.clingo.Control`` object controls how the ASP solver is run. When the
@@ -174,6 +174,8 @@ Next we generate a problem instance by generating a lists of ``Driver`` and
 a specialised set-like container for storing facts (i.e., predicate instances).
 
 .. code-block:: python
+
+    from clorm import FactBase
 
     drivers = [ Driver(name=n) for n in ["dave", "morri", "michael" ] ]
     items = [ Item(name="item{}".format(i)) for i in range(1,6) ]
@@ -204,7 +206,7 @@ is found.
 
     solution=None
     def on_model(model):
-        nonlocal solution
+        global solution     # Note: use `nonlocal` keyword depending on scope
         solution = model.facts(atoms=True)
 
     ctrl.solve(on_model=on_model)
@@ -232,6 +234,8 @@ the relevant facts. To do this we call the ``FactBase.select()`` member function
 that returns a suitable query object.
 
 .. code-block:: python
+
+    from clorm import ph1_
 
     query=solution.select(Assignment).where(Assignment.driver == ph1_).order_by(Assignment.time)
 

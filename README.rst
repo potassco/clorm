@@ -85,7 +85,7 @@ First the relevant libraries need to be imported.
 
 .. code-block:: python
 
-   from clorm import Predicate, ConstantField, IntegerField, ph1_
+   from clorm import Predicate, ConstantField, IntegerField
    from clorm.clingo import Control
 
 Note: Importing from ``clorm.clingo`` instead of ``clingo``.
@@ -169,6 +169,8 @@ interface.
 
 .. code-block:: python
 
+    from clorm import FactBase
+
     drivers = [ Driver(name=n) for n in ["dave", "morri", "michael" ] ]
     items = [ Item(name="item{}".format(i)) for i in range(1,6) ]
     instance = FactBase(drivers + items)
@@ -198,7 +200,7 @@ function will then be called each time a model is found.
 
     solution=None
     def on_model(model):
-        nonlocal solution
+        nonlocal solution        # Note: use `nonlocal` keyword depending on scope
         solution = model.facts(atoms=True)
 
     ctrl.solve(on_model=on_model)
@@ -222,6 +224,8 @@ the relevant parts. To do this we call the ``FactBase.select()`` member function
 that returns a suitable ``Select`` object.
 
 .. code-block:: python
+
+    from clorm import ph1_
 
     query=solution.select(Assignment).where(Assignment.driver == ph1_).order_by(Assignment.time)
 
