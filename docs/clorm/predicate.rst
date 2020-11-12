@@ -520,6 +520,17 @@ will print the expected output:
     Event booking(20181231,"NYE Party"): date "2018-12-31" type <class 'datetime.date'>
 
 
+.. note::
+
+   The ``pytocl`` and ``cltopy`` functions can potentially be passed bad
+   input. For example when converting a clingo String symbol to a date object
+   the passed string may not correspond to an actual date. In such cases these
+   functions can legitamately throw either a ``TypeError`` or a ``ValueError``
+   exception. These exceptions will be treated as a failure to unify when trying
+   to unify clingo symbols to facts. However, any other exception is passed
+   through as a genuine error. This should be kept in mind if you are writing
+   your own field class.
+
 Restricted Sub-class of a Field Definition
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 

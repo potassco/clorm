@@ -10,7 +10,7 @@ import operator
 import collections
 from .support import check_errmsg
 
-from clingo import Control, Number, String, Function, \
+from clingo import Control, Number, String, Function, SymbolType, \
     __version__ as clingo_version
 from clorm.orm import \
     Predicate, ComplexTerm, \
@@ -401,9 +401,9 @@ class RawFieldTestCase(unittest.TestCase):
         self.assertEqual(MF.cltopy(Function("aconst")),"aconst")
 
         # A bad value
-        with self.assertRaises(TypeError) as ctx:
+        with self.assertRaises(AttributeError) as ctx:
             t=MF.cltopy([])
-        check_errmsg("No combined cltopy()",ctx)
+        check_errmsg("'list' object has no attribute 'type'",ctx)
         with self.assertRaises(TypeError) as ctx:
             t=MF.cltopy(String("blah"))
         check_errmsg("No combined cltopy()",ctx)
@@ -1738,6 +1738,54 @@ class ORMTestCase(unittest.TestCase):
 
         with self.assertRaises(ValueError) as ctx:
             bad1 = F1(a=1,sign=False)
+
+    #--------------------------------------------------------------------------
+    # Test unify catching exceptions. When failing to convert a symbol to a
+    # python object we need to catch some exceptions. But we shouldn't catch all
+    # exceptions, otherwise genuine errors (like missing modules) will not be
+    # caught. Thanks to Susana Hahn for finding this problem.
+    # --------------------------------------------------------------------------
+    def test_unify_catch_exceptions(self):
+
+        # Define a class that converts strings but makes bad exceptions for any
+        # other input
+        class TmpField(RawField):
+            def cltopy(raw):
+                if raw.type == SymbolType.String:
+                    return raw.string
+                return blah.blah.error1(raw)
+            def pytocl(v):
+                if isinstance(v,str): return String(v)
+                import blah
+                return blah.error2(v)
+
+        # This is good
+        self.assertEqual(TmpField.cltopy(String("blah")), "blah")
+        self.assertEqual(TmpField.pytocl("blah"), String("blah"))
+
+        # Some things that should throw an exception
+        with self.assertRaises(AttributeError) as ctx:
+            r=TmpField.cltopy(1)
+        check_errmsg("'int' object has no attribute 'type'",ctx)
+        with self.assertRaises(NameError) as ctx:
+            r=TmpField.cltopy(Number(1))
+        check_errmsg("name 'blah' is not defined",ctx)
+        with self.assertRaises(ModuleNotFoundError) as ctx:
+            r=TmpField.pytocl(1)
+        check_errmsg("No module named 'blah'",ctx)
+
+        class F(Predicate):
+            v=TmpField
+
+        # Ok
+        raw=Function("f",[String("astring")])
+        unify([F],[raw])
+
+        # Bad
+        with self.assertRaises(NameError) as ctx:
+            raw=Function("f",[Number(1)])
+            unify([F],[raw])
+        check_errmsg("name 'blah' is not defined",ctx)
 
     #--------------------------------------------------------------------------
     #  Test that the fact comparators work

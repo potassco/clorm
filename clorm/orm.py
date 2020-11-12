@@ -563,7 +563,7 @@ def _rfm_constructor(self, *args, **kwargs):
     if not callable(dval):
         try:
             self.pytocl(dval)
-        except TypeError:
+        except (TypeError,ValueError):
             raise TypeError("Invalid default value \"{}\" for {}".format(
                 dval, type(self).__name__))
 
@@ -649,6 +649,13 @@ class RawField(object, metaclass=_RawFieldMeta):
     To sub-class RawField (or one of its sub-classes) simply specify ``cltopy``
     and ``pytocl`` functions that take an input and perform some translation to
     an output format.
+
+    Note: the ``cltopy`` and ``pytocl`` functions are legitmately allowed to
+    throw either a ``TypeError`` or ``ValueError`` exception when provided with
+    bad input. These exceptions will be treated as a failure to unify when
+    trying to unify clingo symbols to facts. However, any other exception is
+    passed through as a genuine error.  This should be kept in mind if you are
+    writing your own field class.
 
     Example:
        .. code-block:: python
@@ -739,22 +746,20 @@ class RawField(object, metaclass=_RawFieldMeta):
 class StringField(RawField):
     """A field to convert between a Clingo.String object and a Python string."""
 
-    def _string_cltopy(raw):
+    def cltopy(raw):
         if raw.type != clingo.SymbolType.String:
             raise TypeError("Object {0} is not a clingo.String symbol")
         return raw.string
 
-    cltopy = _string_cltopy
     pytocl = lambda v: clingo.String(v)
 
 class IntegerField(RawField):
     """A field to convert between a Clingo.Number object and a Python integer."""
-    def _integer_cltopy(raw):
+    def cltopy(raw):
         if raw.type != clingo.SymbolType.Number:
             raise TypeError("Object {0} is not a clingo.Number symbol")
         return raw.number
 
-    cltopy = _integer_cltopy
     pytocl = lambda v: clingo.Number(v)
 
 #------------------------------------------------------------------------------
@@ -781,19 +786,17 @@ class ConstantField(RawField):
     Clorm version 2.0 release.
 
     """
-    def _constant_cltopy(raw):
+    def cltopy(raw):
         if   (raw.type != clingo.SymbolType.Function or
               not raw.name or len(raw.arguments) != 0):
             raise TypeError("Object {0} is not a Simple symbol")
         return raw.name if raw.positive else "-{}".format(raw.name)
 
-    def _constant_pytocl(v):
+    def pytocl(v):
+        if not isinstance(v,str):
+            raise TypeError("Value '{}' is not a string".format(v))
         if v.startswith('-'): return clingo.Function(v[1:],[],False)
         return clingo.Function(v,[])
-
-    cltopy = _constant_cltopy
-    pytocl = _constant_pytocl
-
 
 
 #------------------------------------------------------------------------------
@@ -864,7 +867,7 @@ def _refine_field_collection(subclass_name, field_class, values):
     for v in values:
         try:
             out = field_class.pytocl(v)
-        except TypeError:
+        except (TypeError,ValueError):
             raise TypeError("Invalid value \"{}\" for {}".format(
                 v, field_class.__name__))
 
@@ -1001,7 +1004,7 @@ def combine_fields(*args):
         for f in fields:
             try:
                 return f.pytocl(v)
-            except:
+            except (TypeError, ValueError):
                 pass
         raise TypeError("No combined pytocl() match for value {}".format(v))
 
@@ -1009,7 +1012,7 @@ def combine_fields(*args):
         for f in fields:
             try:
                 return f.cltopy(r)
-            except:
+            except (TypeError, ValueError):
                 pass
         raise TypeError("No combined cltopy() match for clingo symbol {}".format(r))
 
@@ -1372,7 +1375,7 @@ def _predicate_init_by_raw(self, **kwargs):
         if arity != cls.meta.arity: raise ValueError()
         if cls.meta.sign is not None and cls.meta.sign != raw.positive: raise ValueError()
         self._field_values = [ f.defn.cltopy(raw.arguments[f.index]) for f in self.meta ]
-    except:
+    except (TypeError,ValueError):
         raise ValueError(("Failed to unify clingo.Symbol object {} with "
                           "Predicate class {}").format(raw, cls.__name__))
 
