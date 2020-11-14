@@ -3563,22 +3563,19 @@ class SelectTestCase(unittest.TestCase):
         q = fb.select(Afact).order_by(Afact.num1)
         self.assertEqual([f1,f2,f3,f4,f5], q.get())
 
-        q = fb.select(Afact).order_by(Afact.num1.meta.asc())
-        self.assertEqual([f1,f2,f3,f4,f5], q.get())
-
         q = fb.select(Afact).order_by(asc(Afact.num1))
         self.assertEqual([f1,f2,f3,f4,f5], q.get())
 
-        q = fb.select(Afact).order_by(Afact.num1.meta.desc())
+        q = fb.select(Afact).order_by(desc(Afact.num1))
         self.assertEqual([f5,f4,f3,f2,f1], q.get())
 
         q = fb.select(Afact).order_by(Afact.str2)
         self.assertEqual([f5,f4,f3,f2,f1], q.get())
 
-        q = fb.select(Afact).order_by(Afact.str2.meta.desc())
+        q = fb.select(Afact).order_by(desc(Afact.str2))
         self.assertEqual([f1,f2,f3,f4,f5], q.get())
 
-        q = fb.select(Afact).order_by(Afact.str1.meta.desc(), Afact.num1)
+        q = fb.select(Afact).order_by(desc(Afact.str1), Afact.num1)
         self.assertEqual([f3,f2,f4,f1,f5], q.get())
 
         q = fb.select(Afact).order_by(desc(Afact.str1), Afact.num1)

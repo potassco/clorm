@@ -334,15 +334,6 @@ class PredicatePath(object, metaclass=_PredicatePathMeta):
         #--------------------------------------------------------------------------
 
         #--------------------------------------------------------------------------
-        # Return an OrderBy object for specifying sorting in ascending or
-        # descending order. Used by the Select query.
-        # --------------------------------------------------------------------------
-        def asc(self):
-            return OrderBy(self._parent, asc=True)
-        def desc(self):
-            return OrderBy(self._parent, asc=False)
-
-        #--------------------------------------------------------------------------
         # Resolve (extract the component) the path wrt a fact
         # --------------------------------------------------------------------------
         def resolve(self, fact):
@@ -1051,9 +1042,9 @@ class OrderBy(object):
 # since the order_by parameter will treat a path as ascending order by default.
 # ------------------------------------------------------------------------------
 def desc(path):
-    return path.meta.desc()
+    return OrderBy(path,asc=False)
 def asc(path):
-    return path.meta.asc()
+    return OrderBy(path,asc=True)
 
 #------------------------------------------------------------------------------
 # FieldAccessor - a Python descriptor (similar to a property) to access the
@@ -2566,10 +2557,11 @@ class _Select(Select):
         if not expressions:
             raise TypeError("empty 'order_by' expression")
         field_orders = []
+        # If a PredicatePath is specified assume ascending order
         for exp in expressions:
             if isinstance(exp, OrderBy): field_orders.append(exp)
             elif isinstance(exp, PredicatePath):
-                field_orders.append(exp.meta.asc())
+                field_orders.append(asc(exp))
             else: raise TypeError("Invalid 'order_by' expression: {}".format(exp))
 
         # Check that all the paths refer to the correct predicate type
