@@ -1012,41 +1012,6 @@ def combine_fields(*args):
                   "cltopy": _cltopy})
 
 #------------------------------------------------------------------------------
-# Specification of an ordering over a field of a predicate/complex-term
-#------------------------------------------------------------------------------
-class OrderBy(object):
-    def __init__(self, path, asc):
-        self._path = path
-        self.asc = asc
-    def compare(self, a,b):
-        va = self._path(a)
-        vb = self._path(b)
-        if  va == vb: return 0
-        if self.asc and va < vb: return -1
-        if not self.asc and va > vb: return -1
-        return 1
-
-    @property
-    def path(self):
-        return self._path
-
-    def __str__(self):
-        return "OrderBy(path={},asc={})".format(self._path, self.asc)
-
-    def __repr__(self):
-        return self.__str__()
-
-#------------------------------------------------------------------------------
-# Helper functions to return a OrderBy in descending and ascending order. Input
-# is a PredicatePath. The ascending order function is provided for completeness
-# since the order_by parameter will treat a path as ascending order by default.
-# ------------------------------------------------------------------------------
-def desc(path):
-    return OrderBy(path,asc=False)
-def asc(path):
-    return OrderBy(path,asc=True)
-
-#------------------------------------------------------------------------------
 # FieldAccessor - a Python descriptor (similar to a property) to access the
 # value associated with a field. It has a __get__ overload to return the data of
 # the field if the function is called from an instance, but if called by the
@@ -2496,6 +2461,41 @@ class Delete(abc.ABC):
     @abc.abstractmethod
     def execute(self, *args, **kwargs):
         pass
+
+#------------------------------------------------------------------------------
+# Specification of an ordering over a field of a predicate/complex-term
+#------------------------------------------------------------------------------
+class OrderBy(object):
+    def __init__(self, path, asc):
+        self._path = path
+        self.asc = asc
+    def compare(self, a,b):
+        va = self._path(a)
+        vb = self._path(b)
+        if  va == vb: return 0
+        if self.asc and va < vb: return -1
+        if not self.asc and va > vb: return -1
+        return 1
+
+    @property
+    def path(self):
+        return self._path
+
+    def __str__(self):
+        return "OrderBy(path={},asc={})".format(self._path, self.asc)
+
+    def __repr__(self):
+        return self.__str__()
+
+#------------------------------------------------------------------------------
+# Helper functions to return a OrderBy in descending and ascending order. Input
+# is a PredicatePath. The ascending order function is provided for completeness
+# since the order_by parameter will treat a path as ascending order by default.
+# ------------------------------------------------------------------------------
+def desc(path):
+    return OrderBy(path,asc=False)
+def asc(path):
+    return OrderBy(path,asc=True)
 
 #------------------------------------------------------------------------------
 # Helper function to check a where clause for errors
