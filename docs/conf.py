@@ -36,6 +36,19 @@ def find_major_minor_version(fname):
         raise RuntimeError("Cannot extract major-minor version from: '{}'".format(full_version))
     return version_match.group(1)
 
+def find_full_version(fname):
+    version_file = read_file(fname)
+    full_version_match = re.search(r"^__version__ = ['\"]([^'\"]*)['\"]",
+                                   version_file, re.M)
+    if not full_version_match:
+        raise RuntimeError("Unable to find version string.")
+
+    full_version=full_version_match.group(1)
+    version_match = re.search(r"(^[^\.]*\.[^\.]*\.\S*)", full_version, re.M)
+    if not version_match:
+        raise RuntimeError("Cannot extract X.Y.Z version from: '{}'".format(full_version))
+    return version_match.group(1)
+
 
 # -- Project information -----------------------------------------------------
 
@@ -44,7 +57,8 @@ copyright = '2018, David Rajaratnam'
 author = 'David Rajaratnam'
 
 # The short X.Y version
-version = find_major_minor_version("../clorm/__init__.py")
+#version = find_major_minor_version("../clorm/__init__.py")
+version = find_full_version("../clorm/__init__.py")
 #version = '0.0.0'
 # The full version, including alpha/beta/rc tags
 #release = 'alpha'
