@@ -878,3 +878,78 @@ the ``RawField`` has the useful property that it will unify with any
 ``light/1`` and ``robotlocation/2`` complex terms.
 
 
+Combining Field Definitions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The above example is useful for cases where you don't care about accessing the
+details of individual fluents and therefore it makes sense to simply treat them
+as a ``RawField`` complex term. However, the question naturally arises what to
+do if you do want more fine-grained access to these fluents.
+
+There are a few possible solutions to this problem, but one obvious answer is to
+use a field that combines together multiple fields. Such a combined field could
+be specified manually by explicitly defining a RawField sub-class. However, to
+simplify this process the ``combine_fields()`` factory function has been
+provided that will return such a combined RawField sub-class.
+
+With reference to the ASP code of the previous example we could add the
+following Python integration:
+
+.. code-block:: python
+
+   from clorm import Predicate, ComplexTerm, IntegerField, ConstantField combine_fields
+
+   class Light(ComplexTerm):
+      status=ConstantField
+
+   class RobotLocation(ComplexTerm):
+      robot=ConstantField
+      location=ConstantField
+      class Meta: name = "robotlocation"
+
+   class True(Predicate):
+      fluent = combine_fields("FluentField",[Light,RobotLocation])
+      time = IntegerField
+
+
+The ``combine_fields()`` function takes two arguments; the first is an optional
+field name argument and the second is a list of the sub-fields to combine. Note:
+when trying to unify a value with a combined field the raw symbol values will be
+unified with the underlying field definitions in the order that they are listed
+in the call to ``combine_fields()``. This means that care needs to be taken if
+the raw symbol values could unify with multiple sub-fields; it will only unify
+with the first successful sub-field. In the above example this is not a problem
+as the two fluent field definitions do not overlap.
+
+.. code-block:: python
+
+    from clorm import ph1_
+
+    ctrl = Control(unifier=[True])
+    ctrl.ground([("base",[])])
+
+    solution=None
+    with ctrl.solve(yield_=True) as sh:
+        for m in sh:
+            solution=m.facts(atoms=True)
+            break
+    if not solution:
+        raise ValueError("No solution found")
+
+    fquery = solution.select(True).where(True.time == ph1_)
+    for h in fquery.get(0):
+            f = h.fluent
+            if isinstance(f,Light):
+                print("\tLight is: {}".format(f.status))
+            elif isinstance(f,RobotLocation):
+                print("\tRobot {} is at {}".format(f.robot,f.location))
+
+
+It should be noted that there is one disadvantage of using a combined field
+instead of ``RawField``. Clingo defines a total ordering over all Symbol
+objects. This means that it is always possible to specify an ``.order_by()``
+criteria if the term definition is for a ``RawField``. On the other hand Python
+does not define an ordering over all objects. For example trying to sort a list
+containing integers and strings will fail and throw an exception. In such cases
+where there is no Python ordering between converted values then a query
+specifying an ``.order_by()`` criteria will also throw an exception.
