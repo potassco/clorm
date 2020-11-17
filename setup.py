@@ -25,6 +25,6 @@ setup(
     description="Clingo ORM (CLORM) provides a ORM interface for interacting with the Clingo Answer Set Programming (ASP) solver",
     license="MIT",
     url="https://github.com/potassco/clorm",
-    packages=["clorm","clorm.lib"],
+    packages=["clorm","clorm.util","clorm.lib"],
     long_description=read("README.rst"),
 )
