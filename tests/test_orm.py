@@ -1161,8 +1161,8 @@ class ORMTestCase(unittest.TestCase):
         self.assertTrue(neg_p2 > neg_p1)
 
         # Different predicate sub-classes are incomparable
-        with self.assertRaises(TypeError) as ctx:
-            self.assertTrue(p1 < q1)
+#        with self.assertRaises(TypeError) as ctx:
+#            self.assertTrue(p1 < q1)
 
     #--------------------------------------------------------------------------
     # Test a simple predicate with a field that has a function default

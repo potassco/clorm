@@ -1797,8 +1797,9 @@ class Predicate(object, metaclass=_PredicateMeta):
     #--------------------------------------------------------------------------
     def __eq__(self, other):
         """Overloaded boolean operator."""
-        if not isinstance(other, self.__class__): return NotImplemented
-        return self.raw == other.raw
+        if not isinstance(other, Predicate): return NotImplemented
+        if isinstance(other, self.__class__): return self.raw == other.raw
+        return False
 
     def __ne__(self, other):
         """Overloaded boolean operator."""
@@ -1808,19 +1809,28 @@ class Predicate(object, metaclass=_PredicateMeta):
 
     def __lt__(self, other):
         """Overloaded boolean operator."""
-        if not isinstance(other, self.__class__): return NotImplemented
 
-        # Negative literals are less than positive literals
-        if self.raw.positive != other.raw.positive:
-            return self.raw.positive < other.raw.positive
+        # If it is the same predicate class then compare individual fields
+        if isinstance(other, self.__class__):
 
-        # compare each field in order
-        for idx in range(0,len(self._meta)):
-            selfv = self[idx]
-            otherv = other[idx]
-            if selfv == otherv: continue
-            return selfv < otherv
-        return False
+             # Negative literals are less than positive literals
+            if self.raw.positive != other.raw.positive:
+                return self.raw.positive < other.raw.positive
+
+            # compare each field in order
+            for idx in range(0,len(self._meta)):
+                selfv = self[idx]
+                otherv = other[idx]
+                if selfv == otherv: continue
+                return selfv < otherv
+            return False
+
+        # If different predicates then compare the raw value
+        elif isinstance(other, Predicate):
+            return self.raw < other.raw
+
+        # Else an error
+        return NotImplemented
 
     def __ge__(self, other):
         """Overloaded boolean operator."""
@@ -1830,20 +1840,27 @@ class Predicate(object, metaclass=_PredicateMeta):
 
     def __gt__(self, other):
         """Overloaded boolean operator."""
-        if not isinstance(other, self.__class__): return NotImplemented
 
-        # Positive literals are greater than negative literals
-        if self.raw.positive != other.raw.positive:
-            return self.raw.positive > other.raw.positive
+        # If it is the same predicate class then compare individual fields
+        if isinstance(other, self.__class__):
+            # Positive literals are greater than negative literals
+            if self.raw.positive != other.raw.positive:
+                return self.raw.positive > other.raw.positive
 
-        # compare each field in order
-        for idx in range(0,len(self._meta)):
-            selfv = self[idx]
-            otherv = other[idx]
-            if selfv == otherv: continue
-            return selfv > otherv
+            # compare each field in order
+            for idx in range(0,len(self._meta)):
+                selfv = self[idx]
+                otherv = other[idx]
+                if selfv == otherv: continue
+                return selfv > otherv
+            return False
 
-        return False
+        # If different predicates then compare the raw value
+        if not isinstance(other, Predicate):
+            return self.raw > other.raw
+
+        # Else an error
+        return NotImplemented
 
     def __le__(self, other):
         """Overloaded boolean operator."""
