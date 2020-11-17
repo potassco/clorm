@@ -85,4 +85,4 @@ run_python examples/monkey_patching/quickstart.py
 run_clingo examples/quickstart/embedded_quickstart.lp
 run_python examples/quickstart/quickstart.py
 
-#run_python examples/performance_tests/performance_comparison.py
+run_clingo examples/combine_fields/combine_fields.lp

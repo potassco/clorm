@@ -64,7 +64,6 @@ def main(ctrl_):
     with ctrl.solve(yield_=True) as sh:
         for m in sh:
             solution=m.facts(atoms=True)
-            break
     if not solution:
         raise ValueError("No solution found")
 
