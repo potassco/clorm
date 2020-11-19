@@ -15,8 +15,8 @@ from clingo import Control, Number, String, Function, SymbolType, \
 from clorm.orm import \
     Predicate, ComplexTerm, \
     IntegerField, StringField, ConstantField, SimpleField, RawField, \
-    _get_field_defn, refine_field, combine_fields, nested_list_field, \
-    simple_predicate, \
+    _get_field_defn, refine_field, combine_fields, \
+    define_nested_list_field, simple_predicate, \
     not_, and_, or_, StaticComparator, BoolComparator, \
     ph_, ph1_, ph2_, _PositionalPlaceholder, _NamedPlaceholder, \
     _FactIndex, _FactMap, PredicatePath, path, hashable_path, \
@@ -416,8 +416,8 @@ class RawFieldTestCase(unittest.TestCase):
     # Test nested
     #--------------------------------------------------------------------------
     def test_nested_list_field(self):
-        INLField = nested_list_field("INLField",IntegerField)
-        CNLField = nested_list_field(ConstantField)
+        INLField = define_nested_list_field("INLField",IntegerField)
+        CNLField = define_nested_list_field(ConstantField)
 
         empty_list = Function("",[])
         inl_1st = Function("",[Number(3),empty_list])
@@ -467,13 +467,13 @@ class RawFieldTestCase(unittest.TestCase):
 
         # Some badly defined fields
         with self.assertRaises(TypeError) as ctx:
-            tmp = nested_list_field("FG","FG")
+            tmp = define_nested_list_field("FG","FG")
         check_errmsg("'FG' is not a ",ctx)
 
         # Some badly defined fields
         with self.assertRaises(TypeError) as ctx:
-            tmp = nested_list_field("FG", IntegerField,ConstantField)
-        check_errmsg("nested_list_field() missing or invalid",ctx)
+            tmp = define_nested_list_field("FG", IntegerField,ConstantField)
+        check_errmsg("define_nested_list_field() missing or invalid",ctx)
 
 #------------------------------------------------------------------------------
 # Test definition predicates/complex terms
@@ -778,7 +778,7 @@ class PredicateDefnTestCase(unittest.TestCase):
         # Test declaration of predicates with a nested field
         class F(Predicate):
             a = IntegerField
-            b = nested_list_field(SimpleField)
+            b = define_nested_list_field(SimpleField)
             c = IntegerField
 
         f1 = F(101,[1,"b","G"],202)

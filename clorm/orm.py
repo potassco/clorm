@@ -65,7 +65,7 @@ __all__ = [
     'TypeCastSignature',
     'refine_field',
     'combine_fields',
-    'nested_list_field',
+    'define_nested_list_field',
     'simple_predicate',
     'desc',
     'asc',
@@ -1014,11 +1014,11 @@ def combine_fields(*args):
                   "cltopy": _cltopy})
 
 #------------------------------------------------------------------------------
-# nested_list_field is a function that creates a sub-class of RawField that
+# define_nested_list_field is a function that creates a sub-class of RawField that
 # deals with nested list encoded asp.
 # ------------------------------------------------------------------------------
 
-def nested_list_field(*args):
+def define_nested_list_field(*args):
     """Factory function that returns a RawField sub-class for nested lists
 
     A helper factory function to define a sub-class of RawField that deals with
@@ -1027,7 +1027,7 @@ def nested_list_field(*args):
     Example:
        .. code-block:: python
 
-       NestedListField = nested_list_field("NLField",ConstantField)
+       NestedListField = define_nested_list_field("NLField",ConstantField)
 
     Args (only positional arguments suppported):
        optional subclass_name: new sub-class name (anonymous if none specified).
@@ -1044,7 +1044,7 @@ def nested_list_field(*args):
         subclass_name=args[0]
         efield=args[1]
     else:
-        raise TypeError("nested_list_field() missing or invalid arguments")
+        raise TypeError("define_nested_list_field() missing or invalid arguments")
 
     # The element_field must be a RawField sub-class
     if not inspect.isclass(efield) or not issubclass(efield,RawField):
