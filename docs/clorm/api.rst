@@ -30,6 +30,8 @@ more intuitive Python objects.
 
 .. autofunction:: clorm.combine_fields
 
+.. autofunction:: clorm.define_nested_list_field
+
 .. _api_predicates:
 
 Predicates and Complex Terms

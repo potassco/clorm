@@ -918,9 +918,14 @@ def refine_field(*args):
            WorkDayField = refine_field(ConstantField,
               ["monday", "tuesday", "wednesday", "thursday", "friday"])
 
+    Only positional arguments are supported.
+
     Args:
-       optional subclass_name: new sub-class name (anonymous if none specified).
+
+       subclass_name (optional): new sub-class name (anonymous if none specified).
+
        field_class: the field that is being sub-classed
+
        values|functor: a list of values or a functor to determine validity
 
     """
@@ -966,10 +971,14 @@ def combine_fields(*args):
     Example:
        .. code-block:: python
 
-       MixedField = combine_fields("MixedField",[ConstantField,IntegerField])
+          MixedField = combine_fields("MixedField",[ConstantField,IntegerField])
 
-    Args (only positional arguments suppported):
-       optional subclass_name: new sub-class name (anonymous if none specified).
+    Only positional arguments are supported.
+
+    Args:
+
+       subclass_name (optional): new sub-class name (anonymous if none specified).
+
        field_subclasses: the fields to combine
 
     """
@@ -1021,16 +1030,31 @@ def combine_fields(*args):
 def define_nested_list_field(*args):
     """Factory function that returns a RawField sub-class for nested lists
 
-    A helper factory function to define a sub-class of RawField that deals with
-    a nested list encoding of some other RawField subclass.
+    ASP doesn't have an explicit notion of a list, but sometimes it is useful to
+    encode a list as a series of nested pairs (ie., a head-tail encoding) with
+    an empty tuple indicating the end of the list.
+
+    Example:
+       .. code-block:: prolog
+
+          (1,(2,(3,())))         % Encodes a list [1,2,3]
+
+    This function is a helper factory function to define a sub-class of RawField
+    that deals with a nested list encoding consisting of elements of some other
+    RawField subclass.
 
     Example:
        .. code-block:: python
 
-       NestedListField = define_nested_list_field("NLField",ConstantField)
+          # Unifies against a nested list of constants
+          NestedListField = define_nested_list_field("NLField",ConstantField)
 
-    Args (only positional arguments suppported):
-       optional subclass_name: new sub-class name (anonymous if none specified).
+    Only positional arguments are supported.
+
+    Args:
+
+       subclass_name (optional): new sub-class name (anonymous if none specified).
+
        element_definition: the field type for each list element
 
     """

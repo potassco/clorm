@@ -879,7 +879,7 @@ the ``RawField`` has the useful property that it will unify with any
 
 
 Combining Field Definitions
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
+---------------------------
 
 The above example is useful for cases where you don't care about accessing the
 details of individual fluents and therefore it makes sense to simply treat them
@@ -953,3 +953,48 @@ does not define an ordering over all objects. For example trying to sort a list
 containing integers and strings will fail and throw an exception. In such cases
 where there is no Python ordering between converted values then a query
 specifying an ``.order_by()`` criteria will also throw an exception.
+
+
+Dealing with Nested Lists
+-------------------------
+
+ASP does not have an explicit representation for lists. However a common
+convention for encoding lists is using a nesting of head-tail pairs; where the
+head of the pair is the element of the list and the tail is the remainder of the
+list, being another pair or an empty tuple to indicate the end of the list.
+
+For example encoding a list of "nodes" [1,2,c] for some predicate ``p``, might
+take the form:
+
+.. code-block:: prolog
+
+   p(nodes,(1,(2,(c,())))).
+
+While, such an encoding can be problematic and can lead to a grounding blowout,
+nevertheless when used with care can be very useful.
+
+Unfortunately, getting facts containing these sorts of nested lists into and out
+of Clingo can be very cumbersome. To help support this type of encoding Clorm
+provides the ``define_nested_list_field()`` function. This factory function
+takes an element field class, as well as an optional new class name, and returns
+a newly created ``RawField`` sub-class that can be used to convert to and from a
+list of elements of that field class.
+
+ .. code-block:: python
+
+   from clorm import Predicate, ConstantField, SimpleField, \
+      define_nested_list_field
+
+   SNLField=define_nested_list("SNLField",SimpleField)
+
+   class P(Predicate):
+      param=ConstantField
+      alist=SNLField
+
+   p = P("nodes",[1,2,"c"])
+   assert str(p) == "p(nodes,(1,(2,(c,()))))"
+
+   p = P("nodes",[1,2,"c","A string"])
+   assert str(p) == '''p(nodes,(1,(2,(c,("A string",())))))'''
+
+
