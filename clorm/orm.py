@@ -65,6 +65,7 @@ __all__ = [
     'TypeCastSignature',
     'refine_field',
     'combine_fields',
+    'nested_list_field',
     'simple_predicate',
     'desc',
     'asc',
@@ -780,7 +781,8 @@ class ConstantField(RawField):
     def cltopy(raw):
         if   (raw.type != clingo.SymbolType.Function or
               not raw.name or len(raw.arguments) != 0):
-            raise TypeError("Object {0} is not a Simple symbol")
+            raise TypeError(("Clingo symbol object '{}' is not a unary Function "
+                             "symbol").format(raw))
         return raw.name if raw.positive else "-{}".format(raw.name)
 
     def pytocl(v):
@@ -966,7 +968,7 @@ def combine_fields(*args):
 
        MixedField = combine_fields("MixedField",[ConstantField,IntegerField])
 
-    Args:
+    Args (only positional arguments suppported):
        optional subclass_name: new sub-class name (anonymous if none specified).
        field_subclasses: the fields to combine
 
@@ -1006,6 +1008,72 @@ def combine_fields(*args):
             except (TypeError, ValueError):
                 pass
         raise TypeError("No combined cltopy() match for clingo symbol {}".format(r))
+
+    return type(subclass_name, (RawField,),
+                { "pytocl": _pytocl,
+                  "cltopy": _cltopy})
+
+#------------------------------------------------------------------------------
+# nested_list_field is a function that creates a sub-class of RawField that
+# deals with nested list encoded asp.
+# ------------------------------------------------------------------------------
+
+def nested_list_field(*args):
+    """Factory function that returns a RawField sub-class for nested lists
+
+    A helper factory function to define a sub-class of RawField that deals with
+    a nested list encoding of some other RawField subclass.
+
+    Example:
+       .. code-block:: python
+
+       NestedListField = nested_list_field("NLField",ConstantField)
+
+    Args (only positional arguments suppported):
+       optional subclass_name: new sub-class name (anonymous if none specified).
+       element_definition: the field type for each list element
+
+    """
+
+    # Deal with the optional subclass name
+    largs=len(args)
+    if largs == 1:
+        subclass_name="AnonymousNestedListField"
+        efield=args[0]
+    elif largs == 2:
+        subclass_name=args[0]
+        efield=args[1]
+    else:
+        raise TypeError("nested_list_field() missing or invalid arguments")
+
+    # The element_field must be a RawField sub-class
+    if not inspect.isclass(efield) or not issubclass(efield,RawField):
+        raise TypeError("'{}' is not a RawField or a sub-class".format(efield))
+
+    def _pytocl(v):
+        if isinstance(v,str) or not isinstance(v,collections.Iterable):
+            raise TypeError("'{}' is not a collection (list/seq/etc)".format(v))
+        nested=clingo.Function("",[])
+        for ev in reversed(v):
+            nested=clingo.Function("",[efield.pytocl(ev),nested])
+        return nested
+
+    def _get_next(raw):
+        if raw.type != clingo.SymbolType.Function or raw.name != "":
+            raise TypeError("'{}' is not a nested list".format(raw))
+        rlen = len(raw.arguments)
+        if rlen == 0: return None
+        if rlen == 2: return raw.arguments
+        else:
+            raise TypeError("'{}' is not a nested list".format(raw))
+
+    def _cltopy(raw):
+        elements=[]
+        result = _get_next(raw)
+        while result:
+            elements.append(efield.cltopy(result[0]))
+            result = _get_next(result[1])
+        return elements
 
     return type(subclass_name, (RawField,),
                 { "pytocl": _pytocl,

@@ -15,7 +15,8 @@ from clingo import Control, Number, String, Function, SymbolType, \
 from clorm.orm import \
     Predicate, ComplexTerm, \
     IntegerField, StringField, ConstantField, SimpleField, RawField, \
-    _get_field_defn, refine_field, combine_fields, simple_predicate, \
+    _get_field_defn, refine_field, combine_fields, nested_list_field, \
+    simple_predicate, \
     not_, and_, or_, StaticComparator, BoolComparator, \
     ph_, ph1_, ph2_, _PositionalPlaceholder, _NamedPlaceholder, \
     _FactIndex, _FactMap, PredicatePath, path, hashable_path, \
@@ -411,6 +412,68 @@ class RawFieldTestCase(unittest.TestCase):
             t=MF.cltopy(Function("blah",[Number(1)]))
         check_errmsg("No combined cltopy()",ctx)
 
+    #--------------------------------------------------------------------------
+    # Test nested
+    #--------------------------------------------------------------------------
+    def test_nested_list_field(self):
+        INLField = nested_list_field("INLField",IntegerField)
+        CNLField = nested_list_field(ConstantField)
+
+        empty_list = Function("",[])
+        inl_1st = Function("",[Number(3),empty_list])
+        inl_2nd = Function("",[Number(2),inl_1st])
+        inl_3rd = Function("",[Number(1),inl_2nd])
+
+        cnl_1st = Function("",[Function("c"),empty_list])
+        cnl_2nd = Function("",[Function("b"),cnl_1st])
+        cnl_3rd = Function("",[Function("a"),cnl_2nd])
+
+        # Test pytocl for INLField
+        self.assertEqual(INLField.pytocl([]), empty_list)
+        self.assertEqual(INLField.pytocl([3]), inl_1st)
+        self.assertEqual(INLField.pytocl([2,3]), inl_2nd)
+        self.assertEqual(INLField.pytocl([1,2,3]), inl_3rd)
+
+        # Test pytocl for CNLField
+        self.assertEqual(CNLField.pytocl([]), empty_list)
+        self.assertEqual(CNLField.pytocl(["c"]), cnl_1st)
+        self.assertEqual(CNLField.pytocl(["b","c"]), cnl_2nd)
+        self.assertEqual(CNLField.pytocl(["a","b","c"]), cnl_3rd)
+
+        # Test cltopy for INLField
+        self.assertEqual(INLField.cltopy(empty_list),[])
+        self.assertEqual(INLField.cltopy(inl_1st),[3])
+        self.assertEqual(INLField.cltopy(inl_2nd),[2,3])
+        self.assertEqual(INLField.cltopy(inl_3rd),[1,2,3])
+
+        # Test cltopy for CNLField
+        self.assertEqual(CNLField.cltopy(empty_list),[])
+        self.assertEqual(CNLField.cltopy(cnl_1st),["c"])
+        self.assertEqual(CNLField.cltopy(cnl_2nd),["b","c"])
+        self.assertEqual(CNLField.cltopy(cnl_3rd),["a","b","c"])
+
+        # Test some failures
+        with self.assertRaises(TypeError) as ctx:
+            tmp = CNLField.cltopy(inl_1st)
+        check_errmsg("Clingo symbol object '3'",ctx)
+
+        with self.assertRaises(TypeError) as ctx:
+            tmp = INLField.pytocl([1,"b",3])
+        check_errmsg("an integer is required",ctx)
+
+        with self.assertRaises(TypeError) as ctx:
+            tmp = INLField.pytocl(1)
+        check_errmsg("'1' is not a collection",ctx)
+
+        # Some badly defined fields
+        with self.assertRaises(TypeError) as ctx:
+            tmp = nested_list_field("FG","FG")
+        check_errmsg("'FG' is not a ",ctx)
+
+        # Some badly defined fields
+        with self.assertRaises(TypeError) as ctx:
+            tmp = nested_list_field("FG", IntegerField,ConstantField)
+        check_errmsg("nested_list_field() missing or invalid",ctx)
 
 #------------------------------------------------------------------------------
 # Test definition predicates/complex terms
@@ -706,6 +769,32 @@ class PredicateDefnTestCase(unittest.TestCase):
         self.assertFalse(hashable_path(P.e) in indexes)
         self.assertFalse(hashable_path(P.d.a) in indexes)
         self.assertFalse(hashable_path(P.d.c.arg2) in indexes)
+
+    #--------------------------------------------------------------------------
+    # Test predicate with nested list field
+    # --------------------------------------------------------------------------
+    def test_predicate_with_nested_list_field(self):
+
+        # Test declaration of predicates with a nested field
+        class F(Predicate):
+            a = IntegerField
+            b = nested_list_field(SimpleField)
+            c = IntegerField
+
+        f1 = F(101,[1,"b","G"],202)
+        raw_3rd = Function("",[String("G"),Function("")])
+        raw_2nd = Function("",[Function("b"),raw_3rd])
+        raw_1st = Function("",[Number(1),raw_2nd])
+        raw_f1 = Function("f",[Number(101),raw_1st, Number(202)])
+
+        self.assertEqual(f1.raw, raw_f1)
+        self.assertEqual(F(raw=raw_f1), f1)
+
+        self.assertEqual(str(F(101,[],202)), """f(101,(),202)""")
+        self.assertEqual(str(F(1,[1,2,3,4],2)),
+                             """f(1,(1,(2,(3,(4,())))),2)""")
+        self.assertEqual(str(F(1,["A","b",3,4],2)),
+                             """f(1,("A",(b,(3,(4,())))),2)""")
 
     #--------------------------------------------------------------------------
     # Test that we can distinguish between user defined and anonymous
