@@ -300,8 +300,14 @@ class Control(OControl, metaclass=WrapperMetaClass):
     def add_facts(self, facts):
         '''Add facts to the control object. Note: facts must be added before grounding.
 
+           This function can take an arbitrary collection containing a mixture
+           of ``clorm.Predicate`` and ``clingo.Symbol`` objects. A
+           ``clorm.FactBase`` is also a valid collection but it can only contain
+           ``clorm.Predicate`` instances.
+
         Args:
-          facts: a collection of ``clorm.Predicate`` instances (include a ``clorm.FactBase``)
+          facts: a collection of ``clorm.Predicate`` or ``clingo.Symbol`` objects
+
         '''
 
         # Facts are added by manually generating Abstract Syntax Tree (AST)
@@ -309,20 +315,25 @@ class Control(OControl, metaclass=WrapperMetaClass):
         line = 1
         with self._wrapped.builder() as bldr:
             for f in facts:
+                raw=f.raw if isinstance(f,Predicate) else f
                 floc = { "filename" : "<input>", "line" : line , "column" : 1 }
                 location = { "begin" : floc, "end" : floc }
                 r = ast.Rule(location,
                              ast.Literal(location, ast.Sign.NoSign,
-                                         ast.SymbolicAtom(ast.Symbol(location,f.raw))),
+                                         ast.SymbolicAtom(ast.Symbol(location,raw))),
                              [])
                 bldr.add(r)
                 line += 1
         return
 
+#        # I THINK THE FOLLOWING IS ACTUALLY OK NOW - MAYBE THERE WERE SUBTLE ISSUES WITH
+#        # PREVIOUS VERSIONS OF CLINGO BUT THESE HAVE BEEN RESOLVED.
+#
 #        # DON'T USE BACKEND - COULD CAUSE UNEXPECTED INTERACTION BETWEEN GROUNDER AND SOLVER
 #        with self._wrapped.backend() as bknd:
 #            for f in facts:
-#                atm = bknd.add_atom(f.raw)
+#                raw=f.raw if isinstance(f,Predicate) else f
+#                atm = bknd.add_atom(raw)
 #                bknd.add_rule([atm])
 #        return
 

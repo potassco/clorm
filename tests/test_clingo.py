@@ -181,9 +181,10 @@ class ClingoTestCase(unittest.TestCase):
         tas2=ctrl.control_.theory_atoms
         self.assertEqual(len(list(tas1)),len(list(tas2)))
 
-        # _control_add_facts works with both a list of facts and a FactBase
+        # _control_add_facts works with both a list of facts (either
+        # clorm.Predicate or clingo.Symbol instances) and a FactBase
         ctrl2 = Control()
-        ctrl2.add_facts([af1,af2,af3,bf1,bf2])
+        ctrl2.add_facts([af1,af2,af3.raw,bf1.raw,bf2])
 
         safact1 = fb2.select(Afact).where(Afact.num1 == ph1_)
         safact2 = fb2.select(Afact).where(Afact.num1 < ph1_)
