@@ -78,9 +78,12 @@ functions:
 
 
 * ``add_facts(facts)``.  A new function that adds facts to an ASP program. The
-  facts can be either a list of predicate objects or a fact base. Because the
-  initial facts in an ASP program will affect the grounding, new facts should
-  only be added to the program **before** grounding.
+  input can be any collection of facts (such as a ``list``, ``set``, or
+  ``clorm.FactBase``). A fact can be either a ``clorm.Predicate`` or
+  ``clingo.Symbol`` object. Note however that a ``clorm.FactBase`` can only
+  contain ``clorm.Predicate`` instances.  **Warning**: because the initial facts in
+  an ASP program will affect the grounding, new facts should only be added to
+  the program **before** grounding.
 
 .. code-block:: python
 
