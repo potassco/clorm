@@ -123,6 +123,93 @@ class _lateinit(object):
     def __get__(self, instance, owner):
         return self._value
 
+#------------------------------------------------------------------------------
+# Define the conditional ('where' clause) elements of a query.
+#
+# Note: the reason that this class are defined here rather than with the other
+# aspects of the query API is because the PredicatePath class overloads the
+# comparison operators to return a condition instance.
+# ------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+# Conditional elements of a query. A fact either satisfies a query or it
+# doesn't. A Conditional is either a boolean condition or a comparison condition
+# depending on the operator. A comparison condition involves comparing a
+# component of a fact (specified with a PredicatePath) against some criteria. A
+# boolean condition specifies complex boolean conditions consisting of comparion
+# conditions and other boolean conditions.
+# ------------------------------------------------------------------------------
+
+OpSpec = collections.namedtuple('OpSpec','format numargs isbool')
+g_supported_ops = { operator.and_ : OpSpec("&", 2, True),
+                    operator.or_ : OpSpec("|", 2, True),
+                    operator.not_ : OpSpec("~", 1, True),
+                    operator.eq : OpSpec("==", 2, False),
+                    operator.ne : OpSpec("!=", 2, False),
+                    operator.lt : OpSpec("<", 2, False),
+                    operator.le : OpSpec("<=", 2, False),
+                    operator.gt : OpSpec(">", 2, False),
+                    operator.ge : OpSpec(">=", 2, False) }
+
+class Conditional(object):
+    def __init__(self, operator, *args):
+        opspec = g_supported_ops.get(operator,None)
+        if not opspec:
+            raise ValueError("Unsupported boolean/comparison operator {}".format(operator))
+        if len(args) != opspec.numargs:
+            raise ValueError(("Operator {} expecting {} arguments but "
+                              "got {}").format(operator, opspec.numargs, len(args)))
+        self._operator = operator
+        self._args = args
+
+    @property
+    def operator(self):
+        return self._operator
+
+    @property
+    def args(self):
+        return self._args
+
+    def __and__(self,other):
+        return Conditional(operator.and_,self,other)
+    def __or__(self,other):
+        return Conditional(operator.or_,self,other)
+    def __rand__(self,other):
+        return Conditional(operator.and_,self,other)
+    def __ror__(self,other):
+        return Conditional(operator.or_,self,other)
+    def __invert__(self):
+        return Conditional(operator.not_,self)
+
+    def __eq__(self,other):
+        def getval(val):
+            if isinstance(val,PredicatePath): return val.meta.hashable
+            return val
+
+        if not isinstance(other, Conditional): return NotImplemented
+        if self.operator != other.operator: return False
+        for a,b in zip(self.args,other.args):
+            if getval(a) != getval(b): return False
+        return True
+
+    def __ne__(self,other):
+        result = self.__eq__(other)
+        if result is NotImplemented: return NotImplemented
+        return not result
+
+    def __str__(self):
+        opspec = g_supported_ops[self._operator]
+        args = [ "({})".format(a) if isinstance(a,Conditional) else str(a) \
+                 for a in self._args ]
+        if opspec.numargs == 1:
+            return "{}{}".format(opspec.format,args[0])
+        elif opspec.numargs == 2:
+            return "{} {} {}".format(args[0], opspec.format,args[1])
+        else:
+            return "{}({})".format(opspec.format,",".join([args]))
+
+    def __repr__(self):
+        return self.__str__()
 
 #------------------------------------------------------------------------------
 # PredicatePath class and supporting metaclass and functions. The PredicatePath
@@ -224,7 +311,7 @@ class PredicatePath(object, metaclass=_PredicatePathMeta):
     positional argument specifications.
 
     The other important aspect of the PredicatePath is that it overloads the
-    boolean operators to return a Comparator functor. This is what allows for
+    boolean operators to return a comparison condition. This is what allows for
     query specifications such as 'Pred.a.b == 2' or 'Pred.a.b == ph1_'
 
     Because the name 'meta' is a Clorm keyword and can't be used as a field name
@@ -431,17 +518,17 @@ class PredicatePath(object, metaclass=_PredicatePathMeta):
     # Overload the boolean operators to return a functor
     #--------------------------------------------------------------------------
     def __eq__(self, other):
-        return PredicatePathComparator(operator.eq, self, other)
+        return Conditional(operator.eq, self, other)
     def __ne__(self, other):
-        return PredicatePathComparator(operator.ne, self, other)
+        return Conditional(operator.ne, self, other)
     def __lt__(self, other):
-        return PredicatePathComparator(operator.lt, self, other)
+        return Conditional(operator.lt, self, other)
     def __le__(self, other):
-        return PredicatePathComparator(operator.le, self, other)
+        return Conditional(operator.le, self, other)
     def __gt__(self, other):
-        return PredicatePathComparator(operator.gt, self, other)
+        return Conditional(operator.gt, self, other)
     def __ge__(self, other):
-        return PredicatePathComparator(operator.ge, self, other)
+        return Conditional(operator.ge, self, other)
 
     #--------------------------------------------------------------------------
     # String representation
@@ -2026,24 +2113,8 @@ def simple_predicate(*args):
     return type("ClormAnonPredicate", (Predicate,), proto)
 
 #------------------------------------------------------------------------------
+# Defining and manipulating conditional elements
 #------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-# Fact comparator: is a function that determines if a fact (i.e., predicate
-# instance) satisfies some property or condition. Any function that takes a
-# single fact as an argument and returns a bool is a fact comparator. However,
-# we define a few special types by inheriting from Comparator:
-# PredicatePathComparator, BoolComparator, StaticComparator.
-# ------------------------------------------------------------------------------
-
-# A helper function to return a simplified version of a fact comparator
-def _simplify_fact_comparator(comparator):
-    try:
-        return comparator.simplified()
-    except:
-        if isinstance(comparator, bool):
-            return StaticComparator(comparator)
-        return comparator
 
 #------------------------------------------------------------------------------
 # Placeholder allows for variable substituion of a query. Placeholder is
@@ -2095,6 +2166,15 @@ class _NamedPlaceholder(Placeholder):
         return "ph_(\"{}\"{})".format(self._name, tmpstr)
     def __repr__(self):
         return self.__str__()
+    def __eq__(self, other):
+        if not isinstance(other, _NamedPlaceholder): return NotImplemented
+        if self.name != other.name: return False
+        if self._default != other._default: return False
+        return True
+    def __ne__(self, other):
+        result = self.__eq__(other)
+        if result is NotImplemented: return NotImplemented
+        return not result
 
 class _PositionalPlaceholder(Placeholder):
     def __init__(self, posn):
@@ -2106,6 +2186,13 @@ class _PositionalPlaceholder(Placeholder):
         return "ph{}_".format(self._posn+1)
     def __repr__(self):
         return self.__str__()
+    def __eq__(self, other):
+        if not isinstance(other, _PositionalPlaceholder): return NotImplemented
+        return self._posn == other._posn
+    def __ne__(self, other):
+        result = self.__eq__(other)
+        if result is NotImplemented: return NotImplemented
+        return not result
 
 #def ph_(value,default=None):
 
@@ -2145,246 +2232,283 @@ def ph_(value, *args, **kwargs):
         raise ValueError("Index {} is not a positional argument".format(idx+1))
     return _PositionalPlaceholder(idx)
 
+#------------------------------------------------------------------------------
+# Some pre-defined positional placeholders
+#------------------------------------------------------------------------------
+
 ph1_ = _PositionalPlaceholder(0)
 ph2_ = _PositionalPlaceholder(1)
 ph3_ = _PositionalPlaceholder(2)
 ph4_ = _PositionalPlaceholder(3)
 
-#------------------------------------------------------------------------------
-# A Comparator is a boolean functor that takes a fact instance and returns
-# whether it satisfies some condition (with possible substitutions specified as
-# arguments).
-# ------------------------------------------------------------------------------
 
-class Comparator(abc.ABC):
+def _hashable_paths(cond):
+    if not isinstance(cond,Conditional): return set([])
+    tmp=set([])
+    for a in cond.args:
+        if isinstance(a, PredicatePath): tmp.add(a.meta.hashable)
+        elif isinstance(a, Conditional): tmp.update(_hashable_paths(a))
+    return tmp
 
-    @abc.abstractmethod
-    def __call__(self,fact, *args, **kwargs):
-        pass
+def _placeholders(cond):
+    if not isinstance(cond,Conditional): return set([])
+    tmp=set([])
+    for a in cond.args:
+        if isinstance(a, Placeholder): tmp.add(a.meta.hashable)
+        elif isinstance(a, Conditional): tmp.update(_placeholders(a))
+    return tmp
 
-    @abc.abstractmethod
-    def placeholders(self):
-        pass
-
-    @abc.abstractmethod
-    def hashable_paths(self):
-        pass
-
-    def __and__(self,other):
-        return BoolComparator(operator.and_,self,other)
-    def __or__(self,other):
-        return BoolComparator(operator.or_,self,other)
-    def __rand__(self,other):
-        return BoolComparator(operator.and_,self,other)
-    def __ror__(self,other):
-        return BoolComparator(operator.or_,self,other)
-    def __invert__(self):
-        return BoolComparator(operator.not_,self)
-
-#------------------------------------------------------------------------------
-# A Fact comparator functor that returns a static value
-#------------------------------------------------------------------------------
-
-class StaticComparator(Comparator):
-    def __init__(self, value):
-        self._value=bool(value)
-    def __call__(self,fact, *args, **kwargs):
-        return self._value
-    def simpified(self):
-        return self
-    def placeholders(self): return set([])
-    def hashable_paths(self): return set([])
-    @property
-    def value(self):
-        return self._value
-    def __str__(self):
-        if self._value: return "True"
-        return "False"
-    def __repr__(self):
-        return self.__str__()
-
-#------------------------------------------------------------------------------
-# A fact comparator functor that tests whether a fact satisfies a comparision
-# with the value of some predicate's fields.
-#
-# Note: instances of PredicatePathComparator are constructed by calling the comparison
-# operator for Field objects.
-# ------------------------------------------------------------------------------
-class PredicatePathComparator(Comparator):
-    def __init__(self, compop, arg1, arg2):
-        self._compop = compop
-        self._arg1 = arg1
-        self._arg2 = arg2
-        self._static = False
-
-        if not isinstance(arg1, PredicatePath):
-            raise TypeError(("Internal error: argument 1 is not "
-                             "a PredicatePath {}").format(arg1))
-
-        # Comparison is trivial if the objects are identical or semantically
-        # equivalent. If so return a static identity comparison 1 op 1
-        if arg1 is arg2:
-            self._static = True
-            self._value = compop(1,1)
-        elif isinstance(arg2, PredicatePath) and arg1 is arg2:
-            self._static = True
-            self._value = compop(1,1)
-
-    def __call__(self, fact, *args, **kwargs):
-        if self._static: return self._value
-
-        # Get the value of an argument (resolving placeholder)
-        def getargval(arg):
-            if isinstance(arg, PredicatePath): return arg(fact)
-            elif isinstance(arg, _PositionalPlaceholder): return args[arg.posn]
-            elif isinstance(arg, _NamedPlaceholder): return kwargs[arg.name]
-            else: return arg
-
-        # Get the values of the two arguments and then calculate the operator
-        v1 = self._arg1(fact)
-        v2 = getargval(self._arg2)
-
-        # As much as possible check that the types should match - ie if the
-        # first value is a complex term type then the second value should also
-        # be of the same type. However, if the first value is a complex term and
-        # the second is a tuple then we can try to convert the tuple into
-        # complex term object of the first type.
-        tryconv = False
-        if type(v1) != type(v2):
-            if isinstance(v1, Predicate):
-                tryconv = True
-                if isinstance(v2, Predicate) and v1.meta.name != v2.meta.name:
-                    raise TypeError(("Incompatabile type comparison of "
-                                     "{} and {}").format(v1,v2))
-        if tryconv:
-            try:
-                v2 = type(v1)(*v2)
-            except:
-                raise TypeError(("Incompatabile type comparison of "
-                                 "{} and {}").format(v1,v2))
-        # Return the result of comparing the two values
-        return self._compop(v1,v2)
-
-    def simplified(self):
-        if self._static: return StaticComparator(self._value)
-        return self
-
-    def placeholders(self):
-        if isinstance(self._arg2, Placeholder): return set([self._arg2])
-        return set([])
-
-    def hashable_paths(self):
-        tmp=set([])
-        if isinstance(self._arg1, PredicatePath): tmp.add(self._arg1.meta.hashable)
-        if isinstance(self._arg2, PredicatePath): tmp.add(self._arg2.meta.hashable)
-        return tmp
-
-    def indexable(self):
-        if self._static: return None
-        if isinstance(self._arg2, PredicatePath): return None
-        return (self._arg1, self._compop, self._arg2)
-
-    def __str__(self):
-        if self._compop == operator.eq: opstr = "=="
-        elif self._compop == operator.ne: opstr = "!="
-        elif self._compop == operator.lt: opstr = "<"
-        elif self._compop == operator.le: opstr = "<="
-        elif self._compop == operator.gt: opstr = ">"
-        elif self._compop == operator.et: opstr = ">="
-        else: opstr = "<unknown>"
-        return "{} {} {}".format(self._arg1, opstr, self._arg2)
-
-    def __repr__(self):
-        return self.__str__()
-
-#------------------------------------------------------------------------------
-# A fact comparator that is a boolean operator over other Fact comparators
-# ------------------------------------------------------------------------------
-
-class BoolComparator(Comparator):
-    def __init__(self, boolop, *args):
-        if boolop not in [operator.not_, operator.or_, operator.and_]:
-            raise TypeError("non-boolean operator")
-        if boolop == operator.not_ and len(args) != 1:
-            raise IndexError("'not' operator expects exactly one argument")
-        elif boolop != operator.not_ and len(args) <= 1:
-            raise IndexError("bool operator expects more than one argument")
-
-        self._boolop=boolop
-        self._args = args
-
-    def __call__(self, fact, *args, **kwargs):
-        if self._boolop == operator.not_:
-            return operator.not_(self._args[0](fact,*args,**kwargs))
-        elif self._boolop == operator.and_:
-            for a in self._args:
-                if not a(fact,*args,**kwargs): return False
-            return True
-        elif self._boolop == operator.or_:
-            for a in self._args:
-                if a(fact,*args,**kwargs): return True
-            return False
-        raise ValueError("unsupported operator: {}".format(self._boolop))
-
-    def simplified(self):
-        newargs=[]
-        # Try and simplify each argument
-        for arg in self._args:
-            sarg = _simplify_fact_comparator(arg)
-            if isinstance(sarg, StaticComparator):
-                if self._boolop == operator.not_: return StaticComparator(not sarg.value)
-                if self._boolop == operator.and_ and not sarg.value: return sarg
-                if self._boolop == operator.or_ and sarg.value: return sarg
-            else:
-                newargs.append(sarg)
-        # Now see if we can simplify the combination of the arguments
-        if not newargs:
-            if self._boolop == operator.and_: return StaticComparator(True)
-            if self._boolop == operator.or_: return StaticComparator(False)
-        if self._boolop != operator.not_ and len(newargs) == 1:
-            return newargs[0]
-        # If we get here there then there is a real boolean comparison
-        return BoolComparator(self._boolop, *newargs)
-
-    def placeholders(self):
-        tmp = set([])
-        for a in self._args:
-            if isinstance(a, Comparator): tmp.update(a.placeholders())
-        return tmp
-
-    def hashable_paths(self):
-        tmp = set([])
-        for a in self._args:
-            if isinstance(a, Comparator): tmp.update(a.hashable_paths())
-        return tmp
-
-    @property
-    def boolop(self): return self._boolop
-
-    @property
-    def args(self): return self._args
-
-    def __str__(self):
-        if self._boolop == operator.not_: opstr = "not_"
-        elif self._boolop == operator.and_: opstr = "and_"
-        elif self._boolop == operator.or_: opstr = "or_"
-        else: opstr = "<unknown>"
-        argsstr=", ".join([str(a) for a in self._args])
-        return "{}({})".format(opstr,argsstr)
-
-    def __repr__(self):
-        return self.__str__()
 
 # ------------------------------------------------------------------------------
-# Functions to build BoolComparator instances
+# User callable functions to build boolean conditions
 # ------------------------------------------------------------------------------
 
 def not_(*conditions):
-    return BoolComparator(operator.not_,*conditions)
+    return Conditional(operator.not_,*conditions)
 def and_(*conditions):
-    return BoolComparator(operator.and_,*conditions)
+    return functools.reduce((lambda x,y: Conditional(operator.and_,x,y)),conditions)
 def or_(*conditions):
-    return BoolComparator(operator.or_,*conditions)
+    return functools.reduce((lambda x,y: Conditional(operator.or_,x,y)),conditions)
+
+
+
+#------------------------------------------------------------------------------
+# Functions to check, simplify, resolve placeholders, and execute queries
+# ------------------------------------------------------------------------------
+
+# ------------------------------------------------------------------------------
+# Check a query condition for errors. Raises exceptions if there is an error
+# otherwise does nothing.
+# ------------------------------------------------------------------------------
+def check_query_condition(qcond):
+
+    def check_comp_condition(ccond):
+        for arg in ccond.args:
+            if isinstance(arg,PredicatePath): continue
+            if callable(arg):
+                raise ValueError(("Invalid functor '{}' as argument to a comparison"
+                                  "operator in query '{}'").format(arg,qcond))
+    def check_bool_condition(bcond):
+        for a in bcond.args: check_condition(a)
+        if bcond.operator in [ operator.and_, operator.or_, operator.not_ ]: return
+        raise TypeError(("Internal bug: unknown boolean operator '{}' in query "
+                         "condition '{}'").format(bcond.operator, qcond))
+
+    def check_condition(cond):
+        if isinstance(cond,Placeholder):
+            raise ValueError(("Invalid condition '{}' in query '{}': a Placeholder must be "
+                              "part of a comparison condition").format(cond, qcond))
+        if isinstance(cond,PredicatePath):
+            raise ValueError(("Invalid condition '{}' in query '{}': a PredicatePath must be "
+                              "part of a comparison condition").format(cond, qcond))
+        if callable(cond): return
+        if isinstance(cond,Conditional):
+            if g_supported_ops[cond.operator].isbool:
+                check_bool_condition(cond)
+            else:
+                check_comp_condition(cond)
+
+    return check_condition(qcond)
+
+# ------------------------------------------------------------------------------
+# Simplify a query condition by generating static values for any conditional
+# that is not dependant on the value of a fact field or a placeholder and
+# propagating up any evaluations.
+#
+# NOTE: this function will not pick up all errors in the query condition so you
+# must first test with check_query_condition()
+# ------------------------------------------------------------------------------
+def simplify_query_condition(qcond):
+
+    def getcomparable(arg):
+        if isinstance(arg,PredicatePath): return arg.meta.hashable
+        return arg
+
+    def isdynamicarg(arg):
+        if isinstance(arg,Placeholder): return True
+        elif isinstance(arg,PredicatePath): return True
+        elif callable(arg):
+            raise ValueError(("Invalid functor '{}' as argument to a comparison"
+                              "operator in query '{}'").format(arg,qcond))
+        return False
+
+    def isdynamiccond(cond):
+        if isinstance(cond,Conditional): return True
+        if callable(cond): return True
+        return False
+
+    def simplify_comp_condition(ccond):
+        if ccond.operator in [ operator.eq, operator.ne, operator.gt, operator.ge, \
+                               operator.lt,operator.le ]:
+            if getcomparable(ccond.args[0]) == getcomparable(ccond.args[1]):
+                return ccond.operator(1,1)
+
+        if any(map(isdynamicarg, ccond.args)): return ccond
+        return ccond.operator(*ccond.args)
+
+    def simplify_bool_condition(bcond):
+        if bcond.operator == operator.not_:
+            newsubcond = simplify_condition(bcond.args[0])
+            if not isdynamiccond(newsubcond): return bcond.operator(newsubcond)
+            if newsubcond is bcond.args[0]: return bcond
+            return Conditional(bcond.operator,newsubcond)
+        if bcond.operator != operator.and_ and bcond.operator != operator.or_:
+            print("dfd")
+            raise TypeError(("Internal bug: unknown boolean operator '{}' in query "
+                             "condition '{}'").format(bcond.operator, qcond))
+
+        newargs = [simplify_condition(a) for a in bcond.args]
+        if bcond.operator == operator.and_:
+            if not isdynamiccond(newargs[0]):
+                return False if not newargs[0] else newargs[1]
+            if not isdynamiccond(newargs[1]):
+                return False if not newargs[1] else newargs[0]
+            if newargs[0] is bcond.args[0] and newargs[1] is bcond.args[1]:
+                return bcond
+            return Conditional(bcond.operator,*newargs)
+
+        if bcond.operator == operator.or_:
+            if not isdynamiccond(newargs[0]):
+                return True if newargs[0] else newargs[1]
+            if not isdynamiccond(newargs[1]):
+                return True if newargs[1] else newargs[0]
+            if newargs[0] is bcond.args[0] and newargs[1] is bcond.args[1]:
+                return bcond
+            return Conditional(bcond.operator,*newargs)
+
+    def simplify_condition(cond):
+        if isinstance(cond,Placeholder):
+            raise ValueError(("Invalid condition '{}' in query '{}': a Placeholder must be "
+                              "part of a comparison condition").format(cond, qcond))
+        if isinstance(cond,PredicatePath):
+            raise ValueError(("Invalid condition '{}' in query '{}': a PredicatePath must be "
+                              "part of a comparison condition").format(cond, qcond))
+        if callable(cond): return cond
+        if not isinstance(cond,Conditional): return bool(cond)
+        if g_supported_ops[cond.operator].isbool:
+            return simplify_bool_condition(cond)
+        else:
+            return simplify_comp_condition(cond)
+
+    return simplify_condition(qcond)
+
+# ------------------------------------------------------------------------------
+# Instantiate/resolve placeholders within a query conditional against a set of
+# positional and keyword arguments. Raises a ValueError if there are any
+# unresolved placeholders. Note: for a function or lambda it is impossible to
+# tell what placeholder values to expect. If we find a function or lambda we
+# wrap it in a FunctionalPlaceholderWrapper and assume we have all the necessary
+# arguments.
+# ------------------------------------------------------------------------------
+
+class FuncConditionWrapper(object):
+    def __init__(self,func, *args, **kwargs):
+        self._func = func
+        self._args = args
+        self._kwargs = kwargs
+
+    def __call__(self,fact):
+        return self._func(fact, *self._args, **self._kwargs)
+
+    def __str__(self):
+        result = ("FuncConditionWrapper(\n\tfunc={},\n\targs={},\n\t"
+                  "kwargs={})").format(self._func,self._args,self._kwargs)
+        return result
+
+def instantiate_query_condition(qcond, *args, **kwargs):
+
+    def checkarg(a):
+        if isinstance(a,Placeholder):
+            raise ValueError(("Invalid Placeholder argument '{}' when instantiating "
+                              "'{}' with arguments: {} {}").format(a,qcond,args,kwargs))
+        if isinstance(a,PredicatePath):
+            raise ValueError(("Invalid PredicatePath argument '{}' when instantiating "
+                              "'{}' with arguments: {} {}").format(a,qcond,args,kwargs))
+
+    def instantiate(cond):
+        if isinstance(cond,PredicatePath): return cond
+        elif isinstance(cond,FuncConditionWrapper): return cond
+        elif callable(cond): return FuncConditionWrapper(cond,*args,**kwargs)
+        elif isinstance(cond,_PositionalPlaceholder):
+            if cond.posn < len(args): return args[cond.posn]
+            raise ValueError(("Missing positional placeholder argument '{}' when instantiating "
+                              "'{}' with arguments: {} {}").format(cond,qcond,args,kwargs))
+        elif isinstance(cond,_NamedPlaceholder):
+            v = kwargs.get(cond.name,None)
+            if v: return v
+            if cond.has_default: return cond.default
+            raise ValueError(("Missing named placeholder argument '{}' when instantiating "
+                              "'{}' with arguments: {} {}").format(cond,qcond,args,kwargs))
+        elif isinstance(cond,Conditional):
+            newsubargs = []
+            changed=False
+            for subarg in cond.args:
+                newsubarg = instantiate(subarg)
+                if newsubarg is not subarg: changed=True
+                newsubargs.append(newsubarg)
+            if changed: return Conditional(cond.operator,*newsubargs)
+        return cond
+
+    # argument values cannot be a placeholder or predicatepath
+    for a in args: checkarg(a)
+    for a in kwargs.values(): checkarg(a)
+
+    return instantiate(qcond)
+
+# ------------------------------------------------------------------------------
+# Evaluate whether a given fact satisfies a query condition. Note: the function
+# will raise exceptions if there are any placeholders. So you should only use
+# this function with the output instantiate_query_condition().
+# ------------------------------------------------------------------------------
+
+def evaluate_query_condition(qcond, fact):
+
+    # Get the value of a leaf argument - special case for predicate tuples
+    def getargval(arg):
+        if isinstance(arg, PredicatePath):
+            v = arg(fact)
+            if isinstance(v,Predicate) and v.meta.is_tuple: return tuple(v)
+            return v
+        elif isinstance(arg, Placeholder):
+            raise ValueError(("Unresolved Placeholder {} in "
+                             "query condition {}").format(arg, qcond))
+        return arg
+
+    # Evaluate query conditions with a boolean operator
+    def evaluate_bool_condition(bcond):
+        if bcond.operator == operator.not_:
+            return operator.not_(evaluate(bcond.args[0]))
+        elif bcond.operator == operator.and_:
+            for subcond in bcond.args:
+                if not evaluate(subcond): return False
+            return True
+        elif bcond.operator == operator.or_:
+            for subcond in bcond.args:
+                if evaluate(subcond): return True
+            return False
+        raise TypeError(("Internal bug: unknown boolean operator {} in query "
+                          "condition {}").format(bcond.operator, qcond))
+
+    # Evaluate query conditions with a comparison operator
+    def evaluate_comp_condition(ccond):
+        args=[ getargval(a) for a in ccond.args ]
+        return ccond.operator(*args)
+
+    # Evaluate an arbitrary query condition
+    def evaluate(cond):
+        if isinstance(cond,Conditional):
+            if g_supported_ops[cond.operator].isbool:
+                return evaluate_bool_condition(cond)
+            else:
+                return evaluate_comp_condition(cond)
+        elif isinstance(cond,FuncConditionWrapper):
+            return cond(fact)
+        elif callable(cond):
+            raise TypeError(("Functor '{}' in '{}' has not been wrapped in a "
+                             "FuncConditionWrapper object").format(cond,qcond))
+        return bool(cond)
+
+    return evaluate(qcond)
 
 #------------------------------------------------------------------------------
 # _FactIndex indexes facts by a given field
@@ -2610,10 +2734,11 @@ def asc(path):
 # Helper function to check a where clause for errors
 #------------------------------------------------------------------------------
 def _check_where_clause(where, ptype):
-    # Note: the expression may not be a Comparator, in which case at least check
+    # Note: the expression may not be a Condition, in which case at least check
     # that it is a function/functor
     try:
-        hashable_paths = where.hashable_paths()
+        check_query_condition(where)
+        hashable_paths = _hashable_paths(where)
 
         for p in hashable_paths:
             if p.path.meta.predicate != ptype:
@@ -2646,9 +2771,11 @@ class _Select(Select):
         if not expressions:
             raise TypeError("empty 'where' expression")
         elif len(expressions) == 1:
-            self._where = _simplify_fact_comparator(expressions[0])
+#            self._where = expressions[0]
+            self._where = simplify_query_condition(expressions[0])
         else:
-            self._where = _simplify_fact_comparator(and_(*expressions))
+#            self._where = and_(*expressions)
+            self._where = simplify_query_condition(and_(*expressions))
 
         self._indexable = self._primary_search(self._where)
 
@@ -2693,17 +2820,22 @@ class _Select(Select):
         self._key = functools.cmp_to_key(mycmp)
         return self
 
-    def _primary_search(self, where):
+    def _primary_search(self, cond):
+
+        def get_indexable(where):
+            if isinstance(where.args[1], PredicatePath): return None
+            return (where.args[0], where.operator, where.args[1])
+
         def validate_indexable(indexable):
             if not indexable: return None
             if indexable[0].meta.hashable not in self._index_priority: return None
             return indexable
 
-        if isinstance(where, PredicatePathComparator):
-            return validate_indexable(where.indexable())
+        if isinstance(cond, Conditional) and not g_supported_ops[cond.operator].isbool:
+            return validate_indexable(get_indexable(cond))
         indexable = None
-        if isinstance(where, BoolComparator) and where.boolop == operator.and_:
-            for arg in where.args:
+        if isinstance(cond, Conditional) and cond.operator == operator.and_:
+            for arg in cond.args:
                 tmp = self._primary_search(arg)
                 if tmp:
                     if not indexable: indexable = tmp
@@ -2716,59 +2848,32 @@ class _Select(Select):
     def _debug(self):
         return self._indexable
 
-    # Support function to check that arguments match placeholders and assign any
-    # default values for named placeholders.
-    def _resolve_arguments(self, *args, **kwargs):
-        if not self._where: return kwargs
-        if not isinstance(self._where, Comparator): return kwargs
-        new_kwargs = {}
-        placeholders = self._where.placeholders()
-        for ph in placeholders:
-            if isinstance(ph, _PositionalPlaceholder):
-                if ph.posn < len(args): continue
-                raise TypeError(("missing argument in {} for placeholder "
-                                 "{}").format(args, ph))
-            elif isinstance(ph, _NamedPlaceholder):
-                if ph.name in kwargs: continue
-                elif ph.has_default:
-                    new_kwargs[ph.name] = ph.default
-                    continue
-                raise TypeError(("missing argument in {} for named "
-                                 "placeholder with no default "
-                                 "{}").format(kwargs, args))
-            raise TypeError("unknown placeholder {} ({})".format(ph, type(ph)))
-
-        # Add any new values
-        if not new_kwargs: return kwargs
-        new_kwargs.update(kwargs)
-        return new_kwargs
-
     # Function to execute the select statement
     def get(self, *args, **kwargs):
 
-        nkwargs = self._resolve_arguments(*args, **kwargs)
+        if self._where is None:
+            where = True
+        else:
+            where = instantiate_query_condition(self._where, *args, **kwargs)
+            where = simplify_query_condition(where)
 
-        # Function to get a value - resolving placeholder if necessary
-        def get_value(arg):
-            if isinstance(arg, _PositionalPlaceholder): return args[arg.posn]
-            elif isinstance(arg, _NamedPlaceholder): return nkwargs[arg.name]
-            else: return arg
+        indexable = self._primary_search(where)
 
         # If there is no index test all instances else use the index
         result = []
-        if not self._indexable:
+        if not indexable:
             for f in self._factmap.facts():
-                if not self._where: result.append(f)
-                elif self._where and self._where(f,*args,**nkwargs): result.append(f)
+                if where is True: result.append(f)
+                elif evaluate_query_condition(where,f): result.append(f)
         else:
-            findex = self._factmap.get_factindex(self._indexable[0])
-            value = get_value(self._indexable[2])
+            findex = self._factmap.get_factindex(indexable[0])
+            value = indexable[2]
             field = findex.path.meta.field
             if field:
                 cmplx = field.complex
                 if cmplx and isinstance(value, tuple): value = cmplx(*value)
-            for f in findex.find(self._indexable[1], value):
-                if self._where(f,*args,**nkwargs): result.append(f)
+            for f in findex.find(indexable[1], value):
+                if evaluate_query_condition(where,f): result.append(f)
 
         # Return the results - sorted if necessary
         if self._key: result.sort(key=self._key)
