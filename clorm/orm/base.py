@@ -27,7 +27,7 @@ import re
 # the same program the ordering of the set can change. This is bad for producing
 # deterministic ASP solving. So using an OrderedSet instead.
 
-from .util import OrderedSet as _FactSet
+from ..util import OrderedSet as _FactSet
 
 #_FactSet=set                                # The Python standard set class. Note
                                            # fails some unit tests because I'm
@@ -48,7 +48,6 @@ from .util import OrderedSet as _FactSet
 # ------------------------------------------------------------------------------
 
 __all__ = [
-    '_FactSet',
     'RawField',
     'IntegerField',
     'StringField',
@@ -667,7 +666,7 @@ class _RawFieldMeta(type):
         if len(parents) == 0:
             raise TypeError("Internal bug: number of RawField bases is 0!")
         if len(parents) > 1:
-            raise TypeError("Multiple RawField sub-class inheritance forbidden")
+            raise TypeError("Multiple class inheritence for field classes is forbidden")
         dct["_parentclass"] = parents[0]
 
         # When a conversion is not specified raise a NotImplementedError
@@ -1628,6 +1627,16 @@ def _is_complexterm_declaration(name,obj):
     if not issubclass(obj,ComplexTerm): return False
     return obj.__name__ == name
 
+# Detect a class definition that is not a ComplexTerm subclass or RawField
+# subclass or named 'Meta'
+def _is_bad_predicate_inner_class_declaration(name,obj):
+    if not inspect.isclass(obj): return False
+    if issubclass(obj,ComplexTerm): return False
+    if issubclass(obj,RawField): return False
+    if name == "Meta": return True
+    return obj.__name__ == name
+
+
 # build the metadata for the Predicate - NOTE: this funtion returns a
 # PredicateDefn instance but it also modified the dct paramater to add the fields. It
 # also checks to make sure the class Meta declaration is error free: 1) Setting
@@ -1690,6 +1699,10 @@ def _make_predicatedefn(class_name, dct):
         if fname == "Meta": continue
         if _magic_name(fname): continue
         if _is_complexterm_declaration(fname, fdefn): continue
+        if _is_bad_predicate_inner_class_declaration(fname, fdefn):
+            raise TypeError(("Error defining class '{}': only ComplexTerm "
+                             "sub-classes are allowed as inner classes of "
+                             "a Predicate definition").format(fname))
 
         if fname in reserved:
             raise ValueError(("Error: invalid field name: '{}' "
