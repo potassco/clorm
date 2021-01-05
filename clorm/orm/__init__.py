@@ -4,6 +4,7 @@
 
 from .core import *
 from .factbase import *
+from .unifier import *
 from .atsyntax import *
 
 __all__ = [
