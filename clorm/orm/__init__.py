@@ -1,4 +1,10 @@
-from .base import *
+# -----------------------------------------------------------------------------
+# Combine all the main aspects of the Clorm ORM into one unified export.
+# -----------------------------------------------------------------------------
+
+from .core import *
+from .factbase import *
+from .atsyntax import *
 
 __all__ = [
     'RawField',
@@ -6,14 +12,11 @@ __all__ = [
     'StringField',
     'ConstantField',
     'SimpleField',
-    'Placeholder',
     'Predicate',
     'ComplexTerm',
     'FactBase',
     'SymbolPredicateUnifier',
     'ContextBuilder',
-    'Select',
-    'Delete',
     'TypeCastSignature',
     'refine_field',
     'combine_fields',

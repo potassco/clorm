@@ -16,20 +16,34 @@ from .support import check_errmsg
 
 from clingo import Control, Number, String, Function, SymbolType, \
     __version__ as clingo_version
-from clorm.orm.base import \
+
+# Official Clorm API imports
+from clorm.orm.core import \
+    RawField, IntegerField, StringField, ConstantField, SimpleField,  \
     Predicate, ComplexTerm, \
-    IntegerField, StringField, ConstantField, SimpleField, RawField, \
-    _get_field_defn, refine_field, combine_fields, \
-    define_nested_list_field, simple_predicate, \
-    not_, and_, or_, \
-    ph_, ph1_, ph2_, _PositionalPlaceholder, _NamedPlaceholder, \
-    Conditional, check_query_condition, simplify_query_condition, \
+    refine_field, combine_fields, \
+    define_nested_list_field, simple_predicate, path, hashable_path
+
+# Implementation imports
+from clorm.orm.core import get_field_definition, PredicatePath, Conditional
+
+# Official Clorm API imports
+from clorm.orm.factbase import FactBase, SymbolPredicateUnifier, \
+    desc, asc, not_, ph_, ph1_, ph2_, and_, or_, unify
+
+# Implementation imports
+from clorm.orm.factbase import _PositionalPlaceholder, _NamedPlaceholder, \
+    check_query_condition, simplify_query_condition, \
     instantiate_query_condition, evaluate_query_condition, \
-    _FactIndex, _FactMap, PredicatePath, path, hashable_path, \
-    unify, desc, asc, FactBase, SymbolPredicateUnifier,  \
-    TypeCastSignature, _get_annotations, make_function_asp_callable, \
-    make_method_asp_callable, \
+    _FactIndex, _FactMap
+
+# Official Clorm API imports
+from clorm.orm.atsyntax import TypeCastSignature, \
+    make_function_asp_callable, make_method_asp_callable, \
     ContextBuilder
+
+# Implementation imports
+from clorm.orm.atsyntax import _get_annotations
 
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
@@ -494,34 +508,34 @@ class PredicateDefnTestCase(unittest.TestCase):
         pass
 
     #--------------------------------------------------------------------------
-    # Test the _get_field_defn function that smartly returns field definitions
+    # Test the get_field_definition function that smartly returns field definitions
     #--------------------------------------------------------------------------
-    def test_get_field_defn(self):
+    def test_get_field_definition(self):
         # Simple case of a RawField instance - return the input
         tmp = RawField()
-        self.assertEqual(_get_field_defn(tmp), tmp)
+        self.assertEqual(get_field_definition(tmp), tmp)
         tmp = IntegerField()
-        self.assertEqual(_get_field_defn(tmp), tmp)
+        self.assertEqual(get_field_definition(tmp), tmp)
         tmp = ConstantField()
-        self.assertEqual(_get_field_defn(tmp), tmp)
+        self.assertEqual(get_field_definition(tmp), tmp)
 
         # A raw field subclass returns an instance of the subclass
-        self.assertTrue(isinstance(_get_field_defn(RawField), RawField))
-        self.assertTrue(isinstance(_get_field_defn(StringField), StringField))
+        self.assertTrue(isinstance(get_field_definition(RawField), RawField))
+        self.assertTrue(isinstance(get_field_definition(StringField), StringField))
 
         # Throws an erorr on an unrecognised object
         with self.assertRaises(TypeError) as ctx:
-            t = _get_field_defn("error")
+            t = get_field_definition("error")
 
         # Throws an erorr on an unrecognised class object
         with self.assertRaises(TypeError) as ctx:
-            t = _get_field_defn(int)
+            t = get_field_definition(int)
         with self.assertRaises(TypeError) as ctx:
             class Blah(object): pass
-            t = _get_field_defn(Blah)
+            t = get_field_definition(Blah)
 
         # A simple tuple definition
-        td = _get_field_defn((IntegerField(), ConstantField()))
+        td = get_field_definition((IntegerField(), ConstantField()))
         self.assertTrue(isinstance(td,RawField))
 
         # Test the positional and named argument access of result
@@ -886,7 +900,7 @@ class PredicateDefnTestCase(unittest.TestCase):
 
 
     #--------------------------------------------------------------------------
-    # As part of the _get_field_defn function to flexibly deal with tuples
+    # As part of the get_field_definition function to flexibly deal with tuples
     # extend the complex-term Field() pytocol function to handle tuples in the
     # input (with the arity matches).
     # --------------------------------------------------------------------------
@@ -944,7 +958,7 @@ class PredicateDefnTestCase(unittest.TestCase):
 
 
     #--------------------------------------------------------------------------
-    # As part of the _get_field_defn function extended the field definition to
+    # As part of the get_field_definition function extended the field definition to
     # include a complex class property that returns the complex-term class if
     # the field is based on a complex term or None otherwise.
     # --------------------------------------------------------------------------
