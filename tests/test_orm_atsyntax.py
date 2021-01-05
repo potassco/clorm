@@ -1,10 +1,10 @@
 #------------------------------------------------------------------------------
-# Unit tests for the internals of Clorm ORM @-syntax integration (calling Python
-# from ASP).  Note: this should test the implementation internals of the
-# API. Testing of the API itself should be done in test_orm.py.
+# Unit tests for Clorm ORM @-syntax integration (calling Python from ASP).
 #
-# TODO: Currently contains a lot of duplicates of test_orm.py. Need to strip
-# this out.
+# Note: I'm trying to clearly separate tests of the official Clorm API from
+# tests of the internal implementation. Tests for the API have names
+# "test_api_XXX" while non-API tests are named "test_nonapi_XXX". This is still
+# to be completed.
 # ------------------------------------------------------------------------------
 
 import inspect
@@ -15,18 +15,15 @@ import operator
 import collections
 from .support import check_errmsg
 
-from clingo import Control, Number, String, Function, SymbolType, \
-    __version__ as clingo_version
+from clingo import Control, Number, String, Function, SymbolType
 
 # Official Clorm API imports
-from clorm.orm.core import \
-    RawField, IntegerField, StringField, ConstantField, SimpleField,  \
-    Predicate, ComplexTerm
+from clorm.orm import RawField, IntegerField, StringField, ConstantField, \
+    SimpleField,  Predicate, ComplexTerm
 
 # Official Clorm API imports
-from clorm.orm.atsyntax import TypeCastSignature, \
-    make_function_asp_callable, make_method_asp_callable, \
-    ContextBuilder
+from clorm.orm import TypeCastSignature, ContextBuilder, \
+    make_function_asp_callable, make_method_asp_callable
 
 # Implementation imports
 from clorm.orm.atsyntax import _get_annotations

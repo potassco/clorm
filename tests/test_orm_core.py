@@ -1,28 +1,26 @@
 #------------------------------------------------------------------------------
-# Unit tests for the internals of Clorm ORM RawField, Predicates and associated
-# functions and classes. Note: this should test the implementation internals of
-# the API. Testing of the API itself should be done in test_orm.py.
-#
-# TODO: Currently contains a lot of duplicates of test_orm.py. Need to strip
-# this out.
+# Unit tests for Clorm ORM RawField, Predicates and associated functions and
+# classes.
+
+# Note: I'm trying to clearly separate tests of the official Clorm API from
+# tests of the internal implementation. Tests for the API have names
+# "test_api_XXX" while non-API tests are named "test_nonapi_XXX". This is still
+# to be completed.
 # ------------------------------------------------------------------------------
 
 import inspect
 import unittest
 import datetime
-import calendar
 import operator
 import collections
 from .support import check_errmsg
 
-from clingo import Control, Number, String, Function, SymbolType, \
-    __version__ as clingo_version
+from clingo import Control, Number, String, Function, SymbolType
 
 # Official Clorm API imports
-from clorm.orm.core import \
+from clorm.orm import \
     RawField, IntegerField, StringField, ConstantField, SimpleField,  \
-    Predicate, ComplexTerm, \
-    refine_field, combine_fields, \
+    Predicate, ComplexTerm, refine_field, combine_fields, \
     define_nested_list_field, simple_predicate, path, hashable_path
 
 # Implementation imports
@@ -33,7 +31,7 @@ from clorm.orm.core import get_field_definition, PredicatePath, Conditional
 #------------------------------------------------------------------------------
 
 __all__ = [
-    'RawFieldTestCase',
+    'FieldTestCase',
     'PredicateTestCase',
     'PredicatePathTestCase',
     'PredicateInternalUnifyTestCase',
@@ -44,7 +42,7 @@ __all__ = [
 # Test the RawField class and sub-classes and definining simple sub-classes
 #------------------------------------------------------------------------------
 
-class RawFieldTestCase(unittest.TestCase):
+class FieldTestCase(unittest.TestCase):
     def setUp(self):
         pass
 
@@ -52,10 +50,10 @@ class RawFieldTestCase(unittest.TestCase):
         pass
 
     #--------------------------------------------------------------------------
-    # Test the Simple Fields conversion functions
+    # Test the Field conversion functions for the primitive fields
     # (StringField/ConstantField/IntegerField) as well as sub-classing
     # --------------------------------------------------------------------------
-    def test_simpleterms(self):
+    def test_api_primtive_field_conversion(self):
 
         symstr = String("SYM")
         self.assertEqual(type(StringField.cltopy(symstr)), str)
@@ -78,31 +76,10 @@ class RawFieldTestCase(unittest.TestCase):
         self.assertEqual(IntegerField.pytocl(1), symstr)
 
 
-        with self.assertRaises(TypeError) as ctx:
-            class DateField(StringField, StringField):
-                pass
-
-        class DateField(StringField):
-            pytocl = lambda dt: dt.strftime("%Y%m%d")
-            cltopy = lambda s: datetime.datetime.strptime(s,"%Y%m%d").date()
-
-        symstr = String("20180101")
-        dt = datetime.date(2018,1,1)
-        self.assertEqual(DateField.cltopy(symstr), dt)
-        self.assertEqual(DateField.pytocl(dt), symstr)
-
-        class PartialField(StringField):
-            pytocl = lambda dt: dt.strftime("%Y%m%d")
-
-        with self.assertRaises(NotImplementedError) as ctx:
-            symstr = String("20180101")
-            dt = datetime.date(2018,1,1)
-            self.assertEqual(PartialField.cltopy(symstr), dt)
-
     #--------------------------------------------------------------------------
     # Test that the simple field unify functions work as expected
     #--------------------------------------------------------------------------
-    def test_pytocl_and_cltopy_and_unifies(self):
+    def test_api_pytocl_and_cltopy_and_unifies(self):
         num1 = 1
         str1 = "string"
         sim1 = "name"
@@ -141,18 +118,49 @@ class RawFieldTestCase(unittest.TestCase):
         self.assertTrue(fconst.unifies(csim2))
 
     #--------------------------------------------------------------------------
-    # A default can take arbitrary non-None values. It can also take a
-    # function/functor will be called when the Field's default property is
-    # queried.
+    # Test user-defined RawField sub-classes as well as raising exceptions for
+    # badly defined fields.
     # --------------------------------------------------------------------------
-    def test_field_defaults(self):
+    def test_api_user_defined_subclass(self):
+
+        class DateField(StringField):
+            pytocl = lambda dt: dt.strftime("%Y%m%d")
+            cltopy = lambda s: datetime.datetime.strptime(s,"%Y%m%d").date()
+
+        symstr = String("20180101")
+        dt = datetime.date(2018,1,1)
+        self.assertEqual(DateField.cltopy(symstr), dt)
+        self.assertEqual(DateField.pytocl(dt), symstr)
+
+        class PartialField(StringField):
+            pytocl = lambda dt: dt.strftime("%Y%m%d")
+
+        dt = datetime.date(2018,1,1)
+        self.assertEqual(PartialField.pytocl(dt), symstr)
+        with self.assertRaises(NotImplementedError) as ctx:
+            symstr = String("20180101")
+            dt = datetime.date(2018,1,1)
+            self.assertEqual(PartialField.cltopy(symstr), dt)
+
+
+        with self.assertRaises(TypeError) as ctx:
+            class DateField(StringField, StringField):
+                pass
+
+    #--------------------------------------------------------------------------
+    # When instantiating a field a default value can be given. It can also take
+    # a function/functor which will be called when the Field's default property
+    # is queried.
+    # --------------------------------------------------------------------------
+    def test_api_field_defaults(self):
         val=0
         def inc():
             nonlocal val
             val +=1
             return val
 
-        # Note: distinguish no default value and a default value of None
+        # Note: we can distinguish between having no default value and a default
+        # value of None
         fld = RawField()
         self.assertEqual(fld.default, None)
         self.assertFalse(fld.has_default)
@@ -183,9 +191,10 @@ class RawFieldTestCase(unittest.TestCase):
 
 
     #--------------------------------------------------------------------------
-    # Test catching invalid default values for a field
-    #--------------------------------------------------------------------------
-    def test_catch_bad_field_defaults(self):
+    # Test catching invalid instantiation of a filed (such as giving a bad
+    # default values for a field).
+    # --------------------------------------------------------------------------
+    def test_api_catch_bad_field_instantiation(self):
         with self.assertRaises(TypeError) as ctx:
             fld = IntegerField(default="bad")
         check_errmsg("Invalid default value \"bad\" for IntegerField", ctx)
@@ -200,9 +209,9 @@ class RawFieldTestCase(unittest.TestCase):
                       "unknown1,unknown2"), ctx)
 
     #--------------------------------------------------------------------------
-    # Test setting index for a term
+    # Test setting the index flag for a field
     #--------------------------------------------------------------------------
-    def test_term_index(self):
+    def test_api_field_index(self):
         fint1 = IntegerField()
         fstr1 = StringField()
         fconst1 = ConstantField()
@@ -222,27 +231,17 @@ class RawFieldTestCase(unittest.TestCase):
         self.assertTrue(f.index)
 
     #--------------------------------------------------------------------------
-    # Test simple field
-    #--------------------------------------------------------------------------
-    def test_simplefield(self):
+    # Test the SimpleField class that handles all primitive types
+    # (Integer, String, Constant).
+    # --------------------------------------------------------------------------
+    def test_api_simplefield(self):
         symint=Number(10)
         symstr=String("A string")
         symconst=Function("aconst")
 
-        symbad1=Function("notaconst",[],positive=False)
-        symbad2=Function("notaconst",[String("blah")])
-
         self.assertEqual(SimpleField.cltopy(symint),10)
         self.assertEqual(SimpleField.cltopy(symstr),"A string")
         self.assertEqual(SimpleField.cltopy(symconst),"aconst")
-
-        with self.assertRaises(TypeError) as ctx:
-            t=SimpleField.cltopy(symbad1)
-        check_errmsg("Not a simple term",ctx)
-
-        with self.assertRaises(TypeError) as ctx:
-            t=SimpleField.cltopy(symbad2)
-        check_errmsg("Not a simple term",ctx)
 
         self.assertEqual(SimpleField.pytocl(10),symint)
         self.assertEqual(SimpleField.pytocl("A string"),symstr)
@@ -254,30 +253,29 @@ class RawFieldTestCase(unittest.TestCase):
         self.assertEqual(SimpleField.pytocl("_"), String("_"))
         self.assertEqual(SimpleField.pytocl("$"), String("$"))
 
+        # Bad inputs to SimpleField that throw exceptions
+        symbad1=Function("notaconst",[],positive=False)
+        symbad2=Function("notaconst",[String("blah")])
+
+        with self.assertRaises(TypeError) as ctx:
+            t=SimpleField.cltopy(symbad1)
+        check_errmsg("Not a simple term",ctx)
+
+        with self.assertRaises(TypeError) as ctx:
+            t=SimpleField.cltopy(symbad2)
+        check_errmsg("Not a simple term",ctx)
+
         with self.assertRaises(TypeError) as ctx:
             t=SimpleField.pytocl(3.14)
         check_errmsg("No translation to a simple term",ctx)
 
+
     #--------------------------------------------------------------------------
     # Test making a restriction of a field using a list of values
     #--------------------------------------------------------------------------
-    def test_refine_field_values(self):
+    def test_api_refine_field_by_values(self):
         rf = refine_field
 
-        # Some bad calls
-        with self.assertRaises(TypeError) as ctx:
-            class Something(object):
-                def __init__(self): self._a = 1
-
-            fld = rf("fld", Something, ["a","b"])
-
-        with self.assertRaises(TypeError) as ctx:
-            fld = rf("fld", "notaclass", ["a","b"])
-
-        with self.assertRaises(TypeError) as ctx:
-            fld = rf("fld", IntegerField, ["a"])
-
-        # A good restriction
         ABCField = rf("ABCField", ConstantField, ["a","b","c"])
 
         # Make sure it works
@@ -292,20 +290,10 @@ class RawFieldTestCase(unittest.TestCase):
         self.assertEqual(ABCField.pytocl("b"), r_b)
         self.assertEqual(ABCField.pytocl("c"), r_c)
 
-        with self.assertRaises(TypeError) as ctx:
-            v = ABCField.pytocl("d")
-
-        with self.assertRaises(TypeError) as ctx:
-            v = ABCField.pytocl(1)
-
         # Test the cltopy direction
         self.assertEqual(ABCField.cltopy(r_a), "a")
         self.assertEqual(ABCField.cltopy(r_b), "b")
         self.assertEqual(ABCField.cltopy(r_c), "c")
-        with self.assertRaises(TypeError) as ctx:
-            v = ABCField.cltopy(r_d)
-        with self.assertRaises(TypeError) as ctx:
-            v = ABCField.cltopy(r_1)
 
         self.assertTrue(ABCField.unifies(r_a))
         self.assertTrue(ABCField.unifies(r_b))
@@ -317,6 +305,30 @@ class RawFieldTestCase(unittest.TestCase):
         ABCField2 = rf(ConstantField, ["a","b","c"])
         self.assertEqual(ABCField2.pytocl("a"), r_a)
 
+        # Some conversions that fail
+        with self.assertRaises(TypeError) as ctx:
+            v = ABCField.pytocl("d")
+        with self.assertRaises(TypeError) as ctx:
+            v = ABCField.pytocl(1)
+        with self.assertRaises(TypeError) as ctx:
+            v = ABCField.cltopy(r_d)
+        with self.assertRaises(TypeError) as ctx:
+            v = ABCField.cltopy(r_1)
+
+        # Detect bad input parameters to refine_field
+
+        with self.assertRaises(TypeError) as ctx:
+            class Something(object):
+                def __init__(self): self._a = 1
+
+            fld = rf("fld", Something, ["a","b"])
+
+        with self.assertRaises(TypeError) as ctx:
+            fld = rf("fld", "notaclass", ["a","b"])
+
+        with self.assertRaises(TypeError) as ctx:
+            fld = rf("fld", IntegerField, ["a"])
+
         # But only 2 and 3 arguments are valid
         with self.assertRaises(TypeError) as ctx:
             ABCField3 = rf(["a","b","c"])
@@ -327,7 +339,7 @@ class RawFieldTestCase(unittest.TestCase):
     #--------------------------------------------------------------------------
     # Test making a restriction of a field using a value functor
     #--------------------------------------------------------------------------
-    def test_refine_field_functor(self):
+    def test_api_refine_field_by_functor(self):
         rf = refine_field
 
         # A good restriction
@@ -363,14 +375,13 @@ class RawFieldTestCase(unittest.TestCase):
         self.assertFalse(PosIntField.unifies(r_a))
 
     #--------------------------------------------------------------------------
-    # Test combining fields
+    # Test making a new field that is a combination of other fields
     #--------------------------------------------------------------------------
-    def test_combine_fields(self):
+    def test_api_combine_fields(self):
 
         # Make sure the basic class is setup
         defn=combine_fields([IntegerField,ConstantField])
         self.assertTrue(issubclass(defn,RawField))
-        self.assertEqual(defn.__name__,"AnonymousCombinedRawField")
         defn=combine_fields("MixedField", [IntegerField,ConstantField])
         self.assertTrue(issubclass(defn,RawField))
         self.assertEqual(defn.__name__,"MixedField")
@@ -411,9 +422,19 @@ class RawFieldTestCase(unittest.TestCase):
         check_errmsg("No combined cltopy()",ctx)
 
     #--------------------------------------------------------------------------
-    # Test nested
+    # Test some non-api aspects of combine field
     #--------------------------------------------------------------------------
-    def test_nested_list_field(self):
+    def test_nonapi_combine_fields(self):
+
+        # If no class name is given then an anonymous name is assigned
+        defn=combine_fields([IntegerField,ConstantField])
+        self.assertEqual(defn.__name__,"AnonymousCombinedRawField")
+
+    #--------------------------------------------------------------------------
+    # Test defining a field that handles python lists/sequences as logic
+    # programming nested lists.
+    # --------------------------------------------------------------------------
+    def test_api_nested_list_field(self):
         INLField = define_nested_list_field("INLField",IntegerField)
         CNLField = define_nested_list_field(ConstantField)
 

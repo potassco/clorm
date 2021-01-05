@@ -1,29 +1,28 @@
 #------------------------------------------------------------------------------
-# Unit tests for the internals of Clorm ORM FactBase and associated classes and
-# functions.  Note: this should test the implementation internals of the
-# API. Testing of the API itself should be done in test_orm.py.
+# Unit tests for Clorm ORM FactBase and associated classes and functions. This
+# includes the query API.
 #
-# TODO: Currently contains a lot of duplicates with test_orm.py. Need to strip
-# this out.
+# Note: I'm trying to clearly separate tests of the official Clorm API from
+# tests of the internal implementation. Tests for the API have names
+# "test_api_XXX" while non-API tests are named "test_nonapi_XXX". This is still
+# to be completed.
 # ------------------------------------------------------------------------------
 
 import unittest
 import operator
 from .support import check_errmsg
 
-from clingo import Control, Number, String, Function, SymbolType, \
-    __version__ as clingo_version
+from clingo import Control, Number, String, Function, SymbolType
 
-# Official Clorm API imports
-from clorm.orm.core import \
-    RawField, IntegerField, StringField, ConstantField, SimpleField,  \
+# Official Clorm API imports for the core complements
+from clorm.orm import RawField, IntegerField, StringField, ConstantField, \
     Predicate, ComplexTerm, path, hashable_path
 
 # Implementation imports
 from clorm.orm.core import Conditional
 
-# Official Clorm API imports
-from clorm.orm.factbase import FactBase, desc, asc, not_, and_, or_, \
+# Official Clorm API imports for the fact base components
+from clorm.orm import FactBase, desc, asc, not_, and_, or_, \
     ph_, ph1_, ph2_
 
 # Implementation imports
