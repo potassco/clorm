@@ -14,8 +14,7 @@ import functools
 import itertools
 from collections.abc import Iterable
 from .orm import *
-from .wrapper import WrapperMetaClass, init_wrapper
-#import clorm as orm
+from .util.wrapper import WrapperMetaClass, init_wrapper
 
 # I want to replace the original clingo - re-exporting everything in clingo
 # except replacing the class overides with my version: _class_overides = [

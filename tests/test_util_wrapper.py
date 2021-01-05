@@ -4,7 +4,7 @@
 import unittest
 from .support import check_errmsg
 
-from clorm.wrapper import WrapperMetaClass, init_wrapper
+from clorm.util.wrapper import WrapperMetaClass, init_wrapper
 
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
