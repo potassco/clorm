@@ -1,0 +1,2336 @@
+#------------------------------------------------------------------------------
+# Unit tests for the internals of Clorm ORM FactBase and associated classes and
+# functions.  Note: this should test the implementation internals of the
+# API. Testing of the API itself should be done in test_orm.py.
+#
+# TODO: Currently contains a lot of duplicates with test_orm.py. Need to strip
+# this out.
+# ------------------------------------------------------------------------------
+
+import inspect
+import unittest
+import datetime
+import calendar
+import operator
+import collections
+from .support import check_errmsg
+
+from clingo import Control, Number, String, Function, SymbolType, \
+    __version__ as clingo_version
+
+# Official Clorm API imports
+from clorm.orm.core import \
+    RawField, IntegerField, StringField, ConstantField, SimpleField,  \
+    Predicate, ComplexTerm, path, hashable_path
+
+# Implementation imports
+from clorm.orm.core import Conditional
+
+# Official Clorm API imports
+from clorm.orm.factbase import FactBase, SymbolPredicateUnifier, \
+    desc, asc, not_, ph_, ph1_, ph2_, and_, or_, unify
+
+# Implementation imports
+from clorm.orm.factbase import _PositionalPlaceholder, _NamedPlaceholder, \
+    check_query_condition, simplify_query_condition, \
+    instantiate_query_condition, evaluate_query_condition, \
+    _FactIndex, _FactMap
+
+
+#------------------------------------------------------------------------------
+#------------------------------------------------------------------------------
+
+__all__ = [
+    'UnifyTestCase',
+    'QueryConditionalTestCase',
+    'FactIndexTestCase',
+    'FactMapTestCase',
+    'FactBaseTestCase',
+    'SelectTestCase',
+    ]
+
+
+
+#------------------------------------------------------------------------------
+#
+#------------------------------------------------------------------------------
+
+class UnifyTestCase(unittest.TestCase):
+    def setUp(self):
+        pass
+
+    def tearDown(self):
+        pass
+
+    #--------------------------------------------------------------------------
+    # Simple test to make sure that raw terms unify correctly
+    #--------------------------------------------------------------------------
+    def test_predicate_instance_raw_term(self):
+
+        raw1 = Function("func",[Number(1)])
+        raw2 = Function("bob",[String("no")])
+        rf1 = RawField()
+        rt1 = Function("tmp", [Number(1), raw1])
+        rt2 = Function("tmp", [Number(1), raw2])
+        self.assertTrue(rf1.unifies(raw1))
+
+        class Tmp(Predicate):
+            n1 = IntegerField()
+            r1 = RawField()
+
+        self.assertTrue(Tmp._unifies(rt1))
+        self.assertTrue(Tmp._unifies(rt2))
+        t1 = Tmp(1,raw1)
+        t2 = Tmp(1,raw2)
+
+        self.assertEqual(set([f for f in unify([Tmp], [rt1,rt2])]),set([t1,t2]))
+        self.assertEqual(t1.r1, raw1)
+        self.assertEqual(t2.r1, raw2)
+
+    #--------------------------------------------------------------------------
+    #  Test a generator that takes n-1 Predicate types and a list of raw symbols
+    #  as the last parameter, then tries to unify the raw symbols with the
+    #  predicate types.
+    #  --------------------------------------------------------------------------
+
+    def test_unify(self):
+        raws = [
+            Function("afact",[Number(1),String("test")]),
+            Function("afact",[Number(2),Number(3),String("test")]),
+            Function("afact",[Number(1),Function("fun",[Number(1)])]),
+            Function("bfact",[Number(3),String("test")])
+            ]
+
+        class Afact1(Predicate):
+            anum=IntegerField()
+            astr=StringField()
+            class Meta: name = "afact"
+
+        class Afact2(Predicate):
+            anum1=IntegerField()
+            anum2=IntegerField()
+            astr=StringField()
+            class Meta: name = "afact"
+
+        class Afact3(Predicate):
+            class Fun(ComplexTerm):
+                fnum=IntegerField()
+
+            anum=IntegerField()
+            afun=Fun.Field()
+#            afun=ComplexField(Fun)
+            class Meta: name = "afact"
+
+        class Bfact(Predicate):
+            anum=IntegerField()
+            astr=StringField()
+
+        af1_1=Afact1(anum=1,astr="test")
+        af2_1=Afact2(anum1=2,anum2=3,astr="test")
+        af3_1=Afact3(anum=1,afun=Afact3.Fun(fnum=1))
+        bf_1=Bfact(anum=3,astr="test")
+
+        g1=list(unify([Afact1],raws))
+        g2=list(unify([Afact2],raws))
+        g3=list(unify([Afact3],raws))
+        g4=list(unify([Bfact],raws))
+        g5=list(unify([Afact1,Bfact],raws))
+        self.assertEqual([af1_1], g1)
+        self.assertEqual([af2_1], g2)
+        self.assertEqual([af3_1], g3)
+        self.assertEqual([bf_1], g4)
+        self.assertEqual([af1_1,bf_1], g5)
+
+        # Test the ordered option that returns a list of facts that preserves
+        # the order of the original symbols.
+        g1=unify([Afact1,Afact2,Bfact], raws, ordered=True)
+        self.assertEqual(g1, [af1_1,af2_1,bf_1])
+
+    #--------------------------------------------------------------------------
+    #   Test unifying between predicates which have the same name-arity
+    #   signature. There was a bug in the unify() function where only of the
+    #   unifying classes was ignored leading to failed unification.
+    #   --------------------------------------------------------------------------
+    def test_unify_same_sig(self):
+        class ATuple(ComplexTerm):
+            aconst=ConstantField()
+            bint = IntegerField()
+            class Meta: is_tuple = True
+
+        class Fact1(Predicate):
+            aint = IntegerField()
+            aconst = ConstantField()
+            class Meta: name = "fact"
+
+        class Fact2(Predicate):
+            aint = IntegerField()
+            atuple = ATuple.Field()
+            class Meta: name = "fact"
+
+        r1 = Function("fact",[Number(1), Function("bob",[])])
+        r2 = Function("fact",[Number(1), Function("", [Function("bob",[]),Number(1)])])
+
+        # r1 only unifies with Fact1 and r2 only unifies with Fact2
+        f1 = Fact1(raw=r1)
+        self.assertEqual(f1.raw, r1)
+        with self.assertRaises(ValueError) as ctx:
+            f2 = Fact1(raw=r2)
+        f2 = Fact2(raw=r2)
+        self.assertEqual(f2.raw, r2)
+        with self.assertRaises(ValueError) as ctx:
+            f1 = Fact2(raw=r1)
+
+        # The unify() function should correctly unify both facts
+        res = unify([Fact1,Fact2],[r1,r2])
+        self.assertEqual(len(res), 2)
+
+    #--------------------------------------------------------------------------
+    #   Test unifying between predicates which have the same name-arity
+    #   signature to make sure the order of the predicate classes correctly
+    #   corresponds to the order in which the facts are unified.
+    #   --------------------------------------------------------------------------
+    def test_unify_same_sig2(self):
+
+        class Fact1(Predicate):
+            aint = IntegerField()
+            aconst = ConstantField()
+            class Meta: name = "fact"
+
+        class Fact2(Predicate):
+            aint = IntegerField()
+            araw = RawField()
+            class Meta: name = "fact"
+
+        r1 = Function("fact",[Number(1), Function("bob",[])])
+        r2 = Function("fact",[Number(1), Function("", [Function("bob",[]),Number(1)])])
+
+        # r1 only unifies with Fact1 but both r1 and r2 unify with Fact2
+        f1 = Fact1(raw=r1)
+        self.assertEqual(f1.raw, r1)
+        with self.assertRaises(ValueError) as ctx:
+            f2 = Fact1(raw=r2)
+        f1_alt = Fact2(raw=r1)
+        self.assertEqual(f1_alt.raw, r1)
+        f2 = Fact2(raw=r2)
+        self.assertEqual(f2.raw, r2)
+
+        # unify() unifies r1 with Fact1 (f1) and r2 with Fact2 (f2)
+        res = unify([Fact1,Fact2],[r1,r2])
+        self.assertEqual(len(res), 2)
+        self.assertTrue(f1 in res)
+        self.assertTrue(f2 in res)
+
+        # unify() unifies r1 and r2 with Fact2 (f1_alt and f2)
+        res = unify([Fact2,Fact1],[r1,r2])
+        self.assertEqual(len(res), 2)
+        self.assertTrue(f1_alt in res)
+        self.assertTrue(f2 in res)
+
+    #--------------------------------------------------------------------------
+    # Test unifying with negative facts
+    #--------------------------------------------------------------------------
+    def test_unify_signed_literals(self):
+        class F1(Predicate):
+            a = IntegerField
+            class Meta:
+                name = "f"
+                sign = True
+
+        class F2(Predicate):
+            a = IntegerField
+            class Meta:
+                name = "f"
+                sign = False
+
+        pos_raw1 = Function("f",[Number(1)])
+        pos_raw2 = Function("f",[Number(2)])
+        neg_raw1 = Function("f",[Number(1)],False)
+        neg_raw2 = Function("f",[Number(2)],False)
+
+        pos1 = F1(a=1)
+        pos2 = F1(a=2)
+        neg1 = F2(a=1,sign=False)
+        neg2 = F2(a=2,sign=False)
+
+        # unify with all raw
+        fb = unify([F1,F2], [ pos_raw1, pos_raw2, neg_raw1, neg_raw2])
+        self.assertEqual(len(fb), 4)
+        self.assertEqual(set(fb.select(F1).get()), set([pos1,pos2]))
+        self.assertEqual(set(fb.select(F2).get()), set([neg1,neg2]))
+
+        fb = unify([F1], [ pos_raw1, pos_raw2, neg_raw1, neg_raw2])
+        self.assertEqual(len(fb), 2)
+        self.assertEqual(fb.select(F1).count(), 2)
+
+        fb = unify([F2], [ pos_raw1, pos_raw2, neg_raw1, neg_raw2])
+        self.assertEqual(len(fb), 2)
+        self.assertEqual(fb.select(F2).count(), 2)
+
+        with self.assertRaises(ValueError) as ctx:
+            bad1 = F1(a=1,sign=False)
+
+    #--------------------------------------------------------------------------
+    # Test unify catching exceptions. When failing to convert a symbol to a
+    # python object we need to catch some exceptions. But we shouldn't catch all
+    # exceptions, otherwise genuine errors (like missing modules) will not be
+    # caught. Thanks to Susana Hahn for finding this problem.
+    # --------------------------------------------------------------------------
+    def test_unify_catch_exceptions(self):
+
+        # Define a class that converts strings but makes bad exceptions for any
+        # other input
+        class TmpField(RawField):
+            def cltopy(raw):
+                if raw.type == SymbolType.String:
+                    return raw.string
+                return blah.blah.error1(raw)
+            def pytocl(v):
+                if isinstance(v,str): return String(v)
+                import blah
+                return blah.error2(v)
+
+        # This is good
+        self.assertEqual(TmpField.cltopy(String("blah")), "blah")
+        self.assertEqual(TmpField.pytocl("blah"), String("blah"))
+
+        # Some things that should throw an exception
+        with self.assertRaises(AttributeError) as ctx:
+            r=TmpField.cltopy(1)
+        check_errmsg("'int' object has no attribute 'type'",ctx)
+        with self.assertRaises(NameError) as ctx:
+            r=TmpField.cltopy(Number(1))
+        check_errmsg("name 'blah' is not defined",ctx)
+        with self.assertRaises(ModuleNotFoundError) as ctx:
+            r=TmpField.pytocl(1)
+        check_errmsg("No module named 'blah'",ctx)
+
+        class F(Predicate):
+            v=TmpField
+
+        # Ok
+        raw=Function("f",[String("astring")])
+        unify([F],[raw])
+
+        # Bad
+        with self.assertRaises(NameError) as ctx:
+            raw=Function("f",[Number(1)])
+            unify([F],[raw])
+        check_errmsg("name 'blah' is not defined",ctx)
+
+
+
+
+#------------------------------------------------------------------------------
+# Test functions that manipulate query conditional and evaluate the conditional
+# w.r.t a fact.
+# ------------------------------------------------------------------------------
+
+class QueryConditionalTestCase(unittest.TestCase):
+    def setUp(self):
+        class F(Predicate):
+            anum=IntegerField
+            astr=StringField
+            atuple=(IntegerField,StringField)
+        self.F = F
+
+        class G(Predicate):
+            anum=IntegerField
+            astr=StringField
+        self.G = G
+
+    #--------------------------------------------------------------------------
+    #  Test the overloaded bitwise comparators (&,|,~)
+    #--------------------------------------------------------------------------
+    def _to_rewrite_test_query_bitwise_comparator_overloads(self):
+        class Afact(Predicate):
+            anum1=IntegerField
+            anum2=IntegerField
+            astr=StringField
+
+        fc1 = Afact.anum1 == 1 ; fc2 = Afact.anum1 == 2
+        ac = fc1 & fc2
+        self.assertEqual(type(ac), BoolComparator)
+        self.assertEqual(ac.boolop, operator.and_)
+        self.assertEqual(ac.args, (fc1,fc2))
+
+        oc = (Afact.anum1 == 1) | (Afact.anum2 == 2)
+        self.assertEqual(type(oc), BoolComparator)
+        self.assertEqual(oc.boolop, operator.or_)
+
+        nc1 = ~fc1
+        self.assertEqual(type(nc1), BoolComparator)
+        self.assertEqual(nc1.boolop, operator.not_)
+        self.assertEqual(nc1.args, (fc1,))
+
+        nc2 = ~(Afact.anum1 == 1)
+        self.assertEqual(type(nc2), BoolComparator)
+        self.assertEqual(nc2.boolop, operator.not_)
+
+        # Test the __rand__ and __ror__ operators
+        nc3 = (lambda x: x.astr == "str") | (Afact.anum2 == 2)
+        self.assertEqual(type(nc3), BoolComparator)
+
+        nc4 = (lambda x: x.astr == "str") & (Afact.anum2 == 2)
+        self.assertEqual(type(nc4), BoolComparator)
+
+        # Test that the comparators actually work
+        f1=Afact(1,1,"str")
+        f2=Afact(1,2,"nostr")
+        f3=Afact(1,2,"str")
+
+        self.assertFalse(ac(f1))
+        self.assertFalse(ac(f2))
+        self.assertFalse(ac(f3))
+
+        self.assertTrue(oc(f1))
+        self.assertTrue(oc(f2))
+        self.assertTrue(oc(f3))
+
+        self.assertFalse(nc1(f1)) ; self.assertFalse(nc2(f1))
+        self.assertFalse(nc1(f2)) ; self.assertFalse(nc2(f2))
+        self.assertFalse(nc1(f3)) ; self.assertFalse(nc2(f3))
+
+        self.assertTrue(nc3(f1))
+        self.assertTrue(nc3(f2))
+        self.assertTrue(nc3(f3))
+
+        self.assertFalse(nc4(f1))
+        self.assertFalse(nc4(f2))
+        self.assertTrue(nc4(f3))
+
+
+    #--------------------------------------------------------------------------
+    # Test that simplification is working for the boolean comparator
+    #--------------------------------------------------------------------------
+    def _to_rewrite_test_bool_comparator_simplified(self):
+
+        def is_static(fc):
+            return isinstance(fc, StaticComparator)
+
+        class Afact(Predicate):
+            anum1=IntegerField()
+            anum2=IntegerField()
+            astr=StringField()
+        class Bfact(Predicate):
+            anum=IntegerField()
+            astr=StringField()
+
+        af1 = Afact(1,1,"bbb")
+        af2 = Afact(2,3,"aaa")
+        af3 = Afact(1,3,"aaa")
+        bf1 = Bfact(1,"aaa")
+
+        e1 = Afact.anum1 == 2
+        e2 = Afact.anum1 == Afact.anum2
+        e3 = Afact.anum1 == Afact.anum1
+        e4 = Afact.anum2 != Afact.anum2
+        e5 = Bfact.astr == "aaa"
+
+        and1 = and_(e1, e3)
+        and2 = and_(e2, e4)
+        or1 = or_(e1, e3)
+#        sand1 = and1.simplified()
+#        sand2 = and2.simplified()
+#        sor1 = or1.simplified()
+
+#        self.assertEqual(str(sand1), "Afact.anum1 == 2")
+#        self.assertEqual(str(sand2), "False")
+#        self.assertEqual(str(sor1), "True")
+
+        or2 = or_(or1,and1)
+#        sor2 = or2.simplified()
+#        self.assertEqual(str(sor2),"True")
+
+        and3 = and_(and1,and2)
+#        sand3 = and3.simplified()
+#        self.assertEqual(str(sand3),"False")
+
+        or4 = or_(and3,e1)
+#        sor4 = or4.simplified()
+#        self.assertEqual(str(sor4), "Afact.anum1 == 2")
+
+    def _to_rewrite_test_path_comparator(self):
+
+        F = self.F
+        G = self.G
+        H = self.H
+
+        f1_pos = F(a=1)
+        f1_neg = F(a=2,sign=False)
+        g1 = G(a="a",b="b")
+        h1_pos = H(a=1,b=f1_pos,c=g1)
+        h1_pos2 = H(a=1,b=f1_pos,c=g1)
+        h1_neg = H(a=1,b=f1_pos,c=g1,sign=False)
+        h2_pos = H(a=2,b=f1_neg,c=g1)
+
+        comp = path(H) == h1_pos
+        self.assertTrue(comp(h1_pos))
+        self.assertTrue(comp(h1_pos2))
+        self.assertFalse(comp(h1_neg))
+        self.assertFalse(comp(h2_pos))
+
+        comp = H.sign == True
+        self.assertTrue(comp(h1_pos))
+        self.assertTrue(comp(h2_pos))
+        self.assertFalse(comp(h1_neg))
+
+        comp = H.c.a == "a"
+        self.assertTrue(comp(h1_pos))
+        self.assertTrue(comp(h2_pos))
+        self.assertTrue(comp(h1_neg))
+
+        comp = H.c.a != "a"
+        self.assertFalse(comp(h1_pos))
+        self.assertFalse(comp(h2_pos))
+        self.assertFalse(comp(h1_neg))
+
+        comp = H.a < 2
+        self.assertTrue(comp(h1_pos))
+        self.assertTrue(comp(h1_neg))
+        self.assertFalse(comp(h2_pos))
+
+        comp = H.a <= 2
+        self.assertTrue(comp(h1_pos))
+        self.assertTrue(comp(h1_neg))
+        self.assertTrue(comp(h2_pos))
+
+        comp = H.a > 1
+        self.assertFalse(comp(h1_pos))
+        self.assertFalse(comp(h1_neg))
+        self.assertTrue(comp(h2_pos))
+
+        comp = H.a > 2
+        self.assertFalse(comp(h1_pos))
+        self.assertFalse(comp(h1_neg))
+        self.assertFalse(comp(h2_pos))
+
+        comp = H.a == H.b.a
+        self.assertTrue(comp(h1_pos))
+
+    #--------------------------------------------------------------------------
+    #  Test that the fact comparators work
+    #--------------------------------------------------------------------------
+
+    def test_simple_comparison_conditional(self):
+        F=self.F
+
+        # Test the strings generated for simple comparison operators
+        self.assertEqual(str(F.anum == 2), "F.anum == 2")
+        self.assertEqual(str(F.anum != 2), "F.anum != 2")
+        self.assertEqual(str(F.anum < 2), "F.anum < 2")
+        self.assertEqual(str(F.anum <= 2), "F.anum <= 2")
+        self.assertEqual(str(F.anum > 2), "F.anum > 2")
+        self.assertEqual(str(F.anum >= 2), "F.anum >= 2")
+
+        # Indentical queries with named arguments and positional arguments
+        cn1 = F.anum == 2
+        cn2 = F.anum == F.atuple[0]
+        cn3 = F.astr == F.atuple[1]
+        cn4 = F.anum == ph1_
+        cn5 = F.anum == ph_("anum")
+
+        cp1 = F[0] == 2
+        cp2 = F[0] == F.atuple[0]
+        cp3 = F[1] == F.atuple[1]
+        cp4 = F[0] == ph1_
+        cp5 = F[0] == ph_("anum")
+
+
+        # NOTE: the positional and named queries generate identical strings
+        # because we use a canonical form for the predicate path. Look at
+        # changing this in the future.
+        self.assertEqual(str(cn1),str(cp1))
+        self.assertEqual(str(cn2),str(cp2))
+        self.assertEqual(str(cn3),str(cp3))
+        self.assertEqual(str(cn4),str(cp4))
+        self.assertEqual(str(cn5),str(cp5))
+
+        self.assertEqual(cn1,cp1)
+        self.assertEqual(cn2,cp2)
+        self.assertEqual(cn3,cp3)
+        self.assertEqual(cn4,cp4)
+        self.assertEqual(cn5,cp5)
+
+        self.assertNotEqual(cn1,cn2)
+
+        # Checking query condition doesn't raise exceptions
+        check_query_condition(cn1)
+        check_query_condition(cn2)
+        check_query_condition(cn3)
+        check_query_condition(cn4)
+        check_query_condition(cn5)
+        check_query_condition(cp1)
+        check_query_condition(cp2)
+        check_query_condition(cp3)
+        check_query_condition(cp4)
+        check_query_condition(cp5)
+
+        # Simplification does nothing
+        self.assertEqual(simplify_query_condition(cn1),cn1)
+        self.assertEqual(simplify_query_condition(cn2),cn2)
+        self.assertEqual(simplify_query_condition(cn3),cn3)
+        self.assertEqual(simplify_query_condition(cn4),cn4)
+        self.assertEqual(simplify_query_condition(cn5),cn5)
+
+        # Instantiating the query conditions
+        self.assertEqual(instantiate_query_condition(cn1),cn1)
+        self.assertEqual(instantiate_query_condition(cn2),cn2)
+        self.assertEqual(instantiate_query_condition(cn3),cn3)
+        self.assertNotEqual(instantiate_query_condition(cn4,2),cn4)
+        self.assertNotEqual(instantiate_query_condition(cn5,anum=2),cn4)
+        self.assertEqual(instantiate_query_condition(cn4,2),cn1)
+        self.assertEqual(instantiate_query_condition(cn5,anum=2),cn1)
+
+        # Evaluating condition against some facts
+        af1 = F(2,"bbb",(2,"bbb"))
+        af2 = F(1,"aaa",(3,"bbb"))
+
+        self.assertTrue(evaluate_query_condition(cn1,af1))
+        self.assertTrue(evaluate_query_condition(cn2,af1))
+        self.assertTrue(evaluate_query_condition(cn3,af1))
+
+        c1=instantiate_query_condition(cn4,2)
+        c2=instantiate_query_condition(cn5,anum=2)
+        self.assertEqual(c1,cn1)
+        self.assertEqual(c2,cn1)
+        self.assertTrue(evaluate_query_condition(c1,af1))
+        self.assertTrue(evaluate_query_condition(c2,af1))
+
+        self.assertFalse(evaluate_query_condition(cn1,af2))
+        self.assertFalse(evaluate_query_condition(cn2,af2))
+        self.assertFalse(evaluate_query_condition(cn3,af2))
+        self.assertFalse(evaluate_query_condition(c1,af2))
+        self.assertFalse(evaluate_query_condition(c2,af2))
+
+        # Some other query conditions that can't be defined with the nice syntax
+        c1 = Conditional(operator.eq, 2, F.anum)
+        check_query_condition(c1)
+        self.assertEqual(str(c1), "2 == F.anum")
+        self.assertEqual(simplify_query_condition(c1),c1)
+        self.assertTrue(evaluate_query_condition(c1,af1))
+
+        c1 = Conditional(operator.eq,2,2)
+        check_query_condition(c1)
+        self.assertEqual(str(c1), "2 == 2")
+        c1 = simplify_query_condition(c1)
+        self.assertEqual(c1,True)
+        self.assertTrue(evaluate_query_condition(c1,af1))
+
+        c1 = F.anum == F.anum
+        check_query_condition(c1)
+        self.assertEqual(str(c1), "F.anum == F.anum")
+        c1 = simplify_query_condition(c1)
+        self.assertEqual(c1,True)
+        self.assertTrue(evaluate_query_condition(c1,af1))
+
+        c1 = Conditional(operator.eq,2,1)
+        check_query_condition(c1)
+        self.assertEqual(str(c1), "2 == 1")
+        c1 = simplify_query_condition(c1)
+        self.assertEqual(c1,False)
+        self.assertFalse(evaluate_query_condition(c1,af1))
+
+        f = lambda x : x.anum == 2
+        check_query_condition(f)
+        self.assertEqual(simplify_query_condition(f),f)
+        f2 = instantiate_query_condition(f)
+        self.assertNotEqual(f,f2)
+        f3 = instantiate_query_condition(f,1,anum=2)
+        self.assertNotEqual(f,f3)
+        self.assertTrue(evaluate_query_condition(f2,af1))
+        self.assertFalse(evaluate_query_condition(f2,af2))
+
+        # Test evaluating against a tuple
+        c3 = F.atuple == ph1_
+        c4 = simplify_query_condition(c3)
+        c5 = instantiate_query_condition(c4,(3,"bbb"))
+        self.assertEqual(c3,c4)
+        self.assertNotEqual(c4,c5)
+        self.assertEqual(c5, F.atuple == (3,"bbb"))
+        self.assertTrue(evaluate_query_condition(c5,af2))
+        self.assertFalse(evaluate_query_condition(c5,af1))
+
+        # Test some invalid query conditions and evaluations
+
+        with self.assertRaises(ValueError) as ctx:
+            check_query_condition(F.anum)
+        check_errmsg("Invalid condition \'F.anum\'", ctx)
+
+        with self.assertRaises(ValueError) as ctx:
+            check_query_condition(ph1_)
+        check_errmsg("Invalid condition \'ph1_\'", ctx)
+
+        with self.assertRaises(ValueError) as ctx:
+            f = lambda x: x*2
+            check_query_condition(F.anum == f)
+        check_errmsg("Invalid functor", ctx)
+
+        with self.assertRaises(ValueError) as ctx:
+            f = lambda x: x*2
+            check_query_condition(Conditional(operator.eq, F.anum, f))
+        check_errmsg("Invalid functor", ctx)
+
+        with self.assertRaises(ValueError) as ctx:
+            instantiate_query_condition(cp4)
+        check_errmsg("Missing positional placeholder argument 'ph1_'", ctx)
+
+        with self.assertRaises(ValueError) as ctx:
+            instantiate_query_condition(F.anum == ph_("blah"), anum=3)
+        check_errmsg("Missing named placeholder argument 'ph_(\"blah\")'", ctx)
+
+        with self.assertRaises(ValueError) as ctx:
+            instantiate_query_condition(cp4,ph1_)
+        check_errmsg("Invalid Placeholder argument 'ph1_'", ctx)
+
+        with self.assertRaises(ValueError) as ctx:
+            instantiate_query_condition(cp4,F.anum)
+        check_errmsg("Invalid PredicatePath argument 'F.anum'", ctx)
+
+        with self.assertRaises(ValueError) as ctx:
+            evaluate_query_condition(cn4,af1)
+        check_errmsg("Unresolved Placeholder", ctx)
+
+        # Test evaluation against the wrong type of fact
+        G=self.G
+        with self.assertRaises(TypeError) as ctx:
+            evaluate_query_condition(cn1,G(anum=1,astr="b"))
+        check_errmsg("g(1,\"b\") is not of type ", ctx)
+
+
+    def test_complex_comparison_conditional(self):
+        F=self.F
+
+        # Test that simplifying a complex works as expected
+        c1 = and_(F.anum == 1, F.astr == ph1_)
+        c2 = and_(F.anum == 1, F.astr == ph1_, True)
+        c3 = and_(F.anum == 1, F.anum == F.anum, F.astr == ph1_)
+        c4 = simplify_query_condition(c2)
+        c5 = simplify_query_condition(c3)
+        check_query_condition(c1)
+        check_query_condition(c2)
+        check_query_condition(c3)
+        self.assertEqual(c1,c4)
+        self.assertEqual(c1,c5)
+
+        c1 = ((F.anum == 1) & (F.astr == ph1_)) | ~(F.atuple == ph2_)
+        check_query_condition(c1)
+        c2 = instantiate_query_condition(c1,"bbb",(1,"ccc"))
+
+        self.assertTrue(evaluate_query_condition(c2,F(1,"bbb",(1,"bbb"))))
+        self.assertTrue(evaluate_query_condition(c2,F(1,"ccc",(1,"bbb"))))
+        self.assertFalse(evaluate_query_condition(c2,F(1,"ccc",(1,"ccc"))))
+
+        # TEst simplifying works for a complex disjunction
+        c1 = or_(F.anum == 1, F.anum == F.anum, F.astr == ph1_)
+        c2 = simplify_query_condition(c1)
+        self.assertEqual(c2,True)
+
+        c1 = or_(F.anum == 1, F.anum != F.anum, F.astr == ph1_)
+        c2 = or_(F.anum == 1, F.astr == ph1_)
+        c3 = simplify_query_condition(c1)
+        self.assertEqual(c2,c3)
+
+#------------------------------------------------------------------------------
+# Test the _FactIndex class
+#------------------------------------------------------------------------------
+
+class FactIndexTestCase(unittest.TestCase):
+    def setUp(self):
+        class Afact(Predicate):
+            num1=IntegerField()
+            str1=StringField()
+
+        class Bfact(Predicate):
+            num1=IntegerField()
+            str1=StringField()
+
+        self.Afact = Afact
+        self.Bfact = Bfact
+
+    def test_create(self):
+        Afact = self.Afact
+        fi1 = _FactIndex(Afact.num1)
+        self.assertTrue(fi1)
+
+        # Should only accept fields
+        with self.assertRaises(TypeError) as ctx:
+            f2 = _FactIndex(1)
+        with self.assertRaises(TypeError) as ctx:
+            f2 = _FactIndex(Afact)
+
+    def test_add(self):
+        Afact = self.Afact
+        Bfact = self.Bfact
+        fi1 = _FactIndex(Afact.num1)
+        fi2 = _FactIndex(Afact.str1)
+        self.assertEqual(fi1.keys, [])
+
+        fi1.add(Afact(num1=1, str1="c"))
+        fi2.add(Afact(num1=1, str1="c"))
+        self.assertEqual(fi1.keys, [1])
+        self.assertEqual(fi2.keys, ["c"])
+
+        fi1.add(Afact(num1=2, str1="b"))
+        fi2.add(Afact(num1=2, str1="b"))
+        self.assertEqual(fi1.keys, [1,2])
+        self.assertEqual(fi2.keys, ["b","c"])
+
+        fi1.add(Afact(num1=3, str1="b"))
+        fi2.add(Afact(num1=3, str1="b"))
+        self.assertEqual(fi1.keys, [1,2,3])
+        self.assertEqual(fi2.keys, ["b","c"])
+
+    def test_remove(self):
+        Afact = self.Afact
+        Bfact = self.Bfact
+
+        af1a = Afact(num1=1, str1="a")
+        af2a = Afact(num1=2, str1="a")
+        af2b = Afact(num1=2, str1="b")
+        af3a = Afact(num1=3, str1="a")
+        af3b = Afact(num1=3, str1="b")
+
+        fi = _FactIndex(Afact.num1)
+        for f in [ af1a, af2a, af2b, af3a, af3b ]: fi.add(f)
+        self.assertEqual(fi.keys, [1,2,3])
+
+        fi.remove(af1a)
+        self.assertEqual(fi.keys, [2,3])
+
+        fi.discard(af1a)
+        with self.assertRaises(KeyError) as ctx:
+            fi.remove(af1a)
+
+        fi.remove(af2a)
+        self.assertEqual(fi.keys, [2,3])
+
+        fi.remove(af3a)
+        self.assertEqual(fi.keys, [2,3])
+
+        fi.remove(af2b)
+        self.assertEqual(fi.keys, [3])
+
+        fi.remove(af3b)
+        self.assertEqual(fi.keys, [])
+
+    def test_find(self):
+        Afact = self.Afact
+
+        af1a = Afact(num1=1, str1="a")
+        af2a = Afact(num1=2, str1="a")
+        af2b = Afact(num1=2, str1="b")
+        af3a = Afact(num1=3, str1="a")
+        af3b = Afact(num1=3, str1="b")
+
+        fi = _FactIndex(Afact.num1)
+        allfacts = [ af1a, af2a, af2b, af3a, af3b ]
+        for f in allfacts: fi.add(f)
+
+        self.assertEqual(fi.find(operator.eq, 1), set([af1a]))
+        self.assertEqual(fi.find(operator.eq, 2), set([af2a, af2b]))
+        self.assertEqual(fi.find(operator.ne, 5), set(allfacts))
+        self.assertEqual(fi.find(operator.eq, 5), set([]))
+        self.assertEqual(fi.find(operator.lt, 1), set([]))
+        self.assertEqual(fi.find(operator.lt, 2), set([af1a]))
+        self.assertEqual(fi.find(operator.le, 2), set([af1a, af2a, af2b]))
+        self.assertEqual(fi.find(operator.gt, 2), set([af3a, af3b]))
+        self.assertEqual(fi.find(operator.ge, 3), set([af3a, af3b]))
+        self.assertEqual(fi.find(operator.gt, 3), set([]))
+
+    def test_clear(self):
+        Afact = self.Afact
+        fi = _FactIndex(Afact.num1)
+        fi.add(Afact(num1=1, str1="a"))
+        fi.clear()
+        self.assertEqual(fi.keys,[])
+
+    #--------------------------------------------------------------------------
+    # Test accessing the value of attributes through a FieldPathBuilder properties
+    #--------------------------------------------------------------------------
+    def test_subfield_access(self):
+        class F(ComplexTerm):
+            anum=IntegerField()
+        class G(Predicate):
+            ct1=F.Field()
+            ct2=(IntegerField(),IntegerField())
+
+        f1 = F(1)
+        g1 = G(f1,(2,3))
+
+        self.assertEqual(f1.anum,1)
+        self.assertEqual(g1.ct1.anum,1)
+        self.assertEqual(g1.ct2[0],2)
+        self.assertEqual(g1.ct2[1],3)
+
+#        tmp1 = G.ct1.anum.meta.path
+#        print("TMP: {}, type: {}".format(tmp1,type(tmp1)))
+
+#        tmp2 = G.ct1.sign
+#        print("TMP: {}, type: {}".format(tmp1,type(tmp1)))
+
+#        self.assertEqual(F.anum(f1), 1)
+
+    #--------------------------------------------------------------------------
+    # Test the support for indexes of subfields
+    #--------------------------------------------------------------------------
+    def test_subfields(self):
+        class CT(ComplexTerm):
+            num1=IntegerField()
+            str1=StringField()
+        class Fact(Predicate):
+            ct1=CT.Field()
+            ct2=(IntegerField(),IntegerField())
+
+        fi1 = _FactIndex(Fact.ct1.num1)
+        fi2 = _FactIndex(Fact.ct2[1])
+        fi3 = _FactIndex(Fact.ct1)
+
+        f1=Fact(CT(10,"a"),(1,4))
+        f2=Fact(CT(20,"b"),(2,3))
+        f3=Fact(CT(30,"c"),(5,2))
+        f4=Fact(CT(40,"d"),(6,1))
+
+        fi1.add(f1); fi2.add(f1); fi3.add(f1)
+        fi1.add(f2); fi2.add(f2); fi3.add(f2)
+        fi1.add(f3); fi2.add(f3); fi3.add(f3)
+        fi1.add(f4); fi2.add(f4); fi3.add(f4)
+
+        self.assertEqual(fi1.keys, [10,20,30,40])
+        self.assertEqual(fi2.keys, [1,2,3,4])
+        self.assertEqual(set(fi3.keys),
+                         set([CT(10,"a"),CT(20,"b"),CT(30,"c"),CT(40,"d")]))
+
+#------------------------------------------------------------------------------
+# Test the _FactMap and _Select _Delete class
+#------------------------------------------------------------------------------
+
+class FactMapTestCase(unittest.TestCase):
+    def setUp(self):
+
+        class Afact(Predicate):
+            num1=IntegerField()
+            str1=StringField()
+            str2=ConstantField()
+
+        class Bfact(Predicate):
+            num1=IntegerField()
+            str1=StringField()
+            str2=ConstantField()
+
+        self.Afact = Afact
+        self.Bfact = Bfact
+
+    def test_init(self):
+        Afact = self.Afact
+        Bfact = self.Bfact
+
+        fm1 = _FactMap(Afact)
+        self.assertEqual(fm1.indexes, ())
+
+        fm1 = _FactMap(Afact, [Afact.num1, Afact.str1])
+        self.assertEqual(fm1.indexes, (Afact.num1, Afact.str1))
+
+        with self.assertRaises(TypeError) as ctx:
+            fm = _FactMap(1)
+
+        with self.assertRaises(TypeError) as ctx:
+            fm = _FactMap(Afact.num1)
+
+        with self.assertRaises(TypeError) as ctx:
+            fm = _FactMap(Afact, [Bfact.num1])
+
+    def test_add_and_container_ops(self):
+        Afact = self.Afact
+        fm = _FactMap(Afact, [Afact.num1, Afact.str1])
+
+        af1a = Afact(num1=1, str1="a", str2="a")
+        af2a = Afact(num1=2, str1="a", str2="a")
+        af2b = Afact(num1=2, str1="b", str2="a")
+        af3a = Afact(num1=3, str1="a", str2="c")
+        af3b = Afact(num1=3, str1="b", str2="c")
+
+        # Test add() and  __contains__()
+        allfacts = [ af1a, af2a, af2b, af3a, af3b ]
+        for f in allfacts: fm.add(f)
+        self.assertTrue(af2b in fm)
+        self.assertTrue(af2a in fm)
+        self.assertFalse(Afact(num1=1, str1="a", str2="b") in fm)
+        for f in allfacts: fm.add(f)
+        self.assertTrue(af2b in fm)
+
+        # Test __bool__ and __len__
+        fm2 = _FactMap(Afact, [Afact.num1, Afact.str1])
+        self.assertTrue(bool(fm))
+        self.assertFalse(fm2)
+        self.assertEqual(len(fm), 5)
+        self.assertEqual(len(fm2), 0)
+
+        # Test __iter__
+        self.assertEqual(set(fm), set(allfacts))
+        self.assertEqual(set(fm2), set())
+
+    def test_remove_discard_clear(self):
+        Afact = self.Afact
+        fm = _FactMap(Afact, [Afact.num1, Afact.str1])
+
+        af1a = Afact(num1=1, str1="a", str2="a")
+        af2a = Afact(num1=2, str1="a", str2="a")
+        af2b = Afact(num1=2, str1="b", str2="a")
+        af3a = Afact(num1=3, str1="a", str2="c")
+        af3b = Afact(num1=3, str1="b", str2="c")
+
+        allfacts = [ af1a, af2a, af2b, af3a, af3b ]
+        for f in allfacts: fm.add(f)
+
+        fm.remove(af1a)
+        fm.discard(af1a)
+        with self.assertRaises(KeyError) as ctx:
+            fm.remove(af1a)
+
+        fm.clear()
+        self.assertFalse(af1a in fm)
+        self.assertFalse(af2a in fm)
+        self.assertFalse(af2b in fm)
+        self.assertFalse(af3a in fm)
+        self.assertFalse(af3b in fm)
+
+    def test_set_comparison_ops(self):
+        Afact = self.Afact
+        fm1 = _FactMap(Afact)
+        fm2 = _FactMap(Afact)
+        fm3 = _FactMap(Afact)
+        fm1_alt = _FactMap(Afact)
+
+        af1 = Afact(num1=1, str1="a", str2="a")
+        af2 = Afact(num1=2, str1="a", str2="a")
+        af3 = Afact(num1=3, str1="b", str2="a")
+        af4 = Afact(num1=4, str1="a", str2="c")
+        af5 = Afact(num1=5, str1="b", str2="c")
+
+        fm1.add([af1,af2])
+        fm2.add([af1,af2,af3])
+        fm3.add([af1,af2,af3,af4])
+
+        fm1_alt.add([af1,af2])
+
+        # Test __eq__ and __ne__
+        self.assertTrue(fm1 == fm1_alt)
+        self.assertTrue(fm1 != fm2)
+
+        # Test __lt__, __le__, __gt__, __ge__
+        self.assertFalse(fm1 < fm1_alt)
+        self.assertFalse(fm1 > fm1_alt)
+        self.assertTrue(fm1 <= fm1_alt)
+        self.assertTrue(fm1 >= fm1_alt)
+        self.assertTrue(fm1 < fm2)
+        self.assertFalse(fm1 > fm2)
+        self.assertTrue(fm1 <= fm2)
+        self.assertFalse(fm1 >= fm2)
+        self.assertFalse(fm2 < fm1)
+        self.assertFalse(fm2 <= fm1)
+
+    def test_set_ops(self):
+        Afact = self.Afact
+        fm1 = _FactMap(Afact)
+        fm2 = _FactMap(Afact)
+        fm3 = _FactMap(Afact)
+        fm4 = _FactMap(Afact)
+        fm5 = _FactMap(Afact)
+        fm6 = _FactMap(Afact)
+        fm7 = _FactMap(Afact)
+
+        af1 = Afact(num1=1, str1="a", str2="a")
+        af2 = Afact(num1=2, str1="b", str2="b")
+        af3 = Afact(num1=3, str1="c", str2="c")
+        af4 = Afact(num1=4, str1="d", str2="d")
+        af5 = Afact(num1=5, str1="e", str2="e")
+
+        fm1.add([af1,af2])
+        fm2.add([af2,af3])
+        fm3.add([af3,af4])
+        fm4.add([af1,af2,af3,af4])
+        fm5.add([])
+        fm6.add([af1])
+        fm7.add([af1,af3])
+
+        fmo1=fm1.union(fm2,fm3)
+        fmo2=fm1.intersection(fm2,fm3)
+        fmo3=fm1.difference(fm2)
+        fmo4=fm1.symmetric_difference(fm2)
+        self.assertEqual(fm4,fmo1)
+        self.assertEqual(fm5,fmo2)
+        self.assertEqual(fm6,fmo3)
+        self.assertEqual(fm7,fmo4)
+
+        # Symmetric difference too many arguments
+        with self.assertRaises(TypeError) as ctx:
+            fmo4=fm3.symmetric_difference(fm1,fm4)
+
+        # Test copy function
+        r=fm1.copy() ; self.assertEqual(fm1,r)
+
+        # Update function
+        fm6.update(fm3,fm7)
+        self.assertEqual(fm6.facts(), set([af1,af3,af3,af4]))
+
+        # Intersection update function
+        fm6.intersection_update(fm3,fm7)
+        self.assertEqual(fm6.facts(), set([af3]))
+
+        # Difference update function
+        fm7.difference_update(fm6,fm5)
+        self.assertEqual(fm7.facts(), set([af1]))
+        fm7.difference_update(fm3)
+        self.assertEqual(fm7.facts(), set([af1]))
+
+        # Symmetric difference update function
+        fm1 = _FactMap(Afact)
+        fm2 = _FactMap(Afact)
+        fm1.add([af1,af2,af3])
+        fm2.add([af2,af3,af4])
+        fm1.symmetric_difference_update(fm2)
+        self.assertEqual(fm1.facts(), set([af1,af4]))
+
+#------------------------------------------------------------------------------
+# Test the FactBase
+#------------------------------------------------------------------------------
+class FactBaseTestCase(unittest.TestCase):
+    def setUp(self):
+
+        class Afact(Predicate):
+            num1=IntegerField()
+            str1=StringField()
+            str2=ConstantField()
+
+        class Bfact(Predicate):
+            num1=IntegerField()
+            str1=StringField()
+            str2=ConstantField()
+
+        class Cfact(Predicate):
+            num1=IntegerField()
+
+        self._Afact = Afact
+        self._Bfact = Bfact
+        self._Cfact = Cfact
+
+    def tearDown(self):
+        pass
+
+    #--------------------------------------------------------------------------
+    #
+    #--------------------------------------------------------------------------
+    def test_factbase_normal_init(self):
+
+        Afact = self._Afact
+        Bfact = self._Bfact
+        Cfact = self._Cfact
+
+        af1 = Afact(1,10,"bbb")
+        bf1 = Bfact(1,"aaa", "bbb")
+        cf1 = Cfact(1)
+
+        fs1 = FactBase([af1,bf1,cf1])
+        self.assertTrue(af1 in fs1)
+        self.assertTrue(bf1 in fs1)
+        self.assertTrue(cf1 in fs1)
+
+        fs2 = FactBase()
+        fs2.add([af1,bf1,cf1])
+        self.assertTrue(af1 in fs2)
+        self.assertTrue(bf1 in fs2)
+        self.assertTrue(cf1 in fs2)
+
+        fs3 = FactBase()
+        fs3.add([af1])
+        asp_str = fs3.asp_str().lstrip().rstrip()
+        self.assertEqual(asp_str, "{}.".format(str(af1)))
+
+    #--------------------------------------------------------------------------
+    #
+    #--------------------------------------------------------------------------
+    def test_delayed_init(self):
+
+        Afact = self._Afact
+        Bfact = self._Bfact
+        Cfact = self._Cfact
+
+        af1 = Afact(1,10,"bbb")
+        bf1 = Bfact(1,"aaa","bbb")
+        cf1 = Cfact(1)
+
+        fs1 = FactBase(lambda: [af1,bf1])
+        self.assertTrue(fs1._delayed_init)
+        self.assertTrue(af1 in fs1)
+        self.assertFalse(cf1 in fs1)
+        fs1.add(cf1)
+        self.assertTrue(bf1 in fs1)
+        self.assertTrue(cf1 in fs1)
+
+        fs2 = FactBase([af1,bf1])
+        self.assertFalse(fs2._delayed_init)
+
+
+    #--------------------------------------------------------------------------
+    #
+    #--------------------------------------------------------------------------
+    def test_container_ops(self):
+
+        Afact = self._Afact
+        Bfact = self._Bfact
+
+        delayed_init=lambda: []
+
+        af1 = Afact(num1=1, str1="1", str2="a")
+        af2 = Afact(num1=1, str1="1", str2="b")
+        bf1 = Bfact(num1=1, str1="1", str2="a")
+
+        fb = FactBase([af1])
+        fb3 = FactBase(facts=lambda: [])
+        self.assertTrue(af1 in fb)
+        self.assertFalse(af2 in fb)
+        self.assertFalse(bf1 in fb)
+        self.assertFalse(bf1 in fb3)
+
+        # Test __bool__
+        fb2 = FactBase()
+        fb3 = FactBase(facts=lambda: [])
+        self.assertTrue(fb)
+        self.assertFalse(fb2)
+        self.assertFalse(fb3)
+
+        # Test __len__
+        self.assertEqual(len(fb2), 0)
+        self.assertEqual(len(fb), 1)
+        self.assertEqual(len(FactBase([af1,af2])),2)
+        self.assertEqual(len(FactBase(facts=lambda: [af1,af2, bf1])), 3)
+
+        # Test __iter__
+        input = set([])
+        self.assertEqual(set(FactBase(input)), input)
+        input = set([af1])
+        self.assertEqual(set(FactBase(input)), input)
+        input = set([af1,af2])
+        self.assertEqual(set(FactBase(input)), input)
+        input = set([af1,af2,bf1])
+        self.assertEqual(set(FactBase(input)), input)
+        input = set([af1,af2,bf1])
+        self.assertEqual(set(FactBase(facts=lambda: input)), input)
+
+        # Test pop()
+        fb1 = FactBase([af1])
+        fb2 = FactBase([bf1])
+        fb3 = FactBase([af1,bf1])
+        f = fb3.pop()
+        if f == af1:
+            self.assertEqual(fb3,fb2)
+            self.assertEqual(fb3.pop(), bf1)
+        else:
+            self.assertEqual(fb3,fb1)
+            self.assertEqual(fb3.pop(), af1)
+        self.assertFalse(fb3)
+
+        # popping from an empty factbase should raise error
+        with self.assertRaises(KeyError) as ctx: fb3.pop()
+
+
+    #--------------------------------------------------------------------------
+    #
+    #--------------------------------------------------------------------------
+    def test_comparison_ops(self):
+        Afact = self._Afact
+        Bfact = self._Bfact
+
+        af1 = Afact(num1=1, str1="1", str2="a")
+        af2 = Afact(num1=1, str1="1", str2="b")
+        bf1 = Bfact(num1=1, str1="1", str2="a")
+
+        fb1 = FactBase([af1,af2])
+        fb2 = FactBase([af1,af2,bf1])
+        fb3 = FactBase([af1,af2,bf1])
+        fb4 = FactBase(facts=lambda: [af1,af2])
+        fb5 = FactBase([af2, bf1])
+
+        self.assertTrue(fb1 != fb2)
+        self.assertFalse(fb1 == fb2)
+        self.assertFalse(fb2 == fb5) # a case with same predicates keys
+
+        self.assertTrue(fb1 == fb4)
+        self.assertFalse(fb1 != fb4)
+        self.assertTrue(fb2 == fb3)
+        self.assertFalse(fb2 != fb3)
+
+        # Test comparison against sets and lists
+        self.assertTrue(fb2 == [af1,af2,bf1])
+        self.assertTrue([af1,af2,bf1] == fb2)
+        self.assertTrue(fb2 == set([af1,af2,bf1]))
+
+
+    #--------------------------------------------------------------------------
+    #
+    #--------------------------------------------------------------------------
+    def test_set_comparison_ops(self):
+        Afact = self._Afact
+        Bfact = self._Bfact
+
+        af1 = Afact(num1=1, str1="1", str2="a")
+        af2 = Afact(num1=1, str1="1", str2="b")
+        af3 = Afact(num1=1, str1="1", str2="c")
+        bf1 = Bfact(num1=1, str1="1", str2="a")
+        bf2 = Bfact(num1=1, str1="1", str2="b")
+        bf3 = Bfact(num1=1, str1="1", str2="c")
+
+        fb1 = FactBase([af1,af2,bf1])
+        fb2 = FactBase([af1,af2,bf1,bf2])
+        fb3 = FactBase()
+
+        self.assertTrue(fb1 <= fb1)
+        self.assertTrue(fb1 < fb2)
+        self.assertTrue(fb1 <= fb2)
+        self.assertTrue(fb2 > fb1)
+        self.assertTrue(fb2 >= fb1)
+
+        self.assertFalse(fb1 > fb1)
+        self.assertFalse(fb1 >= fb2)
+        self.assertFalse(fb1 > fb2)
+        self.assertFalse(fb2 <= fb1)
+        self.assertFalse(fb2 < fb1)
+
+        # Test comparison against sets and lists
+        self.assertTrue(fb1 <= [af1,af2,bf1])
+        self.assertTrue(fb1 < [af1,af2,bf1,bf2])
+        self.assertTrue(fb1 <= [af1,af2,bf1,bf2])
+        self.assertTrue(fb2 > [af1,af2,bf1])
+        self.assertTrue(fb2 >= [af1,af2,bf1])
+        self.assertTrue([af1,af2,bf1,bf2] >= fb1)
+
+
+    #--------------------------------------------------------------------------
+    # We want to ignore any insertion order when comparing fact bases. So
+    # equality should return true iff two fact bases have the same facts.
+    # --------------------------------------------------------------------------
+    def test_equality_fb_different_order(self):
+        Afact = self._Afact
+        Bfact = self._Bfact
+
+        af1 = Afact(num1=1, str1="1", str2="a")
+        af2 = Afact(num1=1, str1="1", str2="b")
+        af3 = Afact(num1=1, str1="1", str2="c")
+        bf1 = Bfact(num1=1, str1="1", str2="a")
+        bf2 = Bfact(num1=1, str1="1", str2="b")
+        bf3 = Bfact(num1=1, str1="1", str2="c")
+
+        inlist = [af1,af2,af3,bf1,bf2,bf3]
+        fb1 = FactBase(inlist)
+        inlist.reverse()
+        fb2 = FactBase(inlist)
+
+        self.assertTrue(fb1 == fb2)
+
+    #--------------------------------------------------------------------------
+    #
+    #--------------------------------------------------------------------------
+    def test_set_ops(self):
+        Afact = self._Afact
+        Bfact = self._Bfact
+        Cfact = self._Cfact
+
+        af1 = Afact(num1=1, str1="1", str2="a")
+        af2 = Afact(num1=1, str1="1", str2="b")
+        af3 = Afact(num1=1, str1="1", str2="c")
+        bf1 = Bfact(num1=1, str1="1", str2="a")
+        bf2 = Bfact(num1=1, str1="1", str2="b")
+        bf3 = Bfact(num1=1, str1="1", str2="c")
+        cf1 = Cfact(num1=1)
+        cf2 = Cfact(num1=2)
+        cf3 = Cfact(num1=3)
+
+        fb0 = FactBase()
+        fb1 = FactBase([af1,bf1])
+        fb1_alt = FactBase(lambda: [af1,bf1])
+        fb2 = FactBase([bf1,bf2])
+        fb3 = FactBase([af2,bf3])
+        fb4 = FactBase([af1,af2,bf1,bf2,bf3])
+        fb5 = FactBase([af1,bf1,bf2])
+
+        # Test union
+        r=fb1.union(fb1); self.assertEqual(r,fb1)
+        r=fb1.union(fb1_alt); self.assertEqual(r,fb1)
+        r=fb0.union(fb1,fb2); self.assertEqual(r,fb5)
+        r=fb1.union(fb2,[af2,bf3]); self.assertEqual(r,fb4)
+        r = fb1 | fb2 | [af2,bf3]; self.assertEqual(r,fb4)  # overload version
+
+        # Test intersection
+        r=fb0.intersection(fb1); self.assertEqual(r,fb0)
+        r=fb1.intersection(fb1_alt); self.assertEqual(r,fb1)
+        r=fb1.intersection(fb2); self.assertEqual(r,FactBase([bf1]))
+        r=fb4.intersection(fb2,fb3); self.assertEqual(r,fb0)
+        r=fb4.intersection([af2,bf3]); self.assertEqual(r,fb3)
+        r=fb4.intersection(FactBase([af1])); self.assertEqual(r,FactBase([af1]))
+
+        r = fb5 & [af1,af2,bf1] ; self.assertEqual(r,[af1,bf1])
+
+        # Test difference
+        r=fb0.difference(fb1); self.assertEqual(r,fb0)
+        r=fb1.difference(fb1_alt); self.assertEqual(r,fb0)
+        r=fb2.difference([af1,bf1]); self.assertEqual(r,FactBase([bf2]))
+        r=fb4.difference(fb5); self.assertEqual(r, FactBase([af2,bf3]))
+        r = fb4 - fb5;  self.assertEqual(r, FactBase([af2,bf3]))
+
+        # Test symmetric difference
+        r=fb1.symmetric_difference(fb1_alt); self.assertEqual(r,fb0)
+        r=fb1.symmetric_difference([af2,bf3]); self.assertEqual(r,FactBase([af1,bf1,af2,bf3]))
+        r =fb1 ^ [af2,bf3]; self.assertEqual(r,FactBase([af1,bf1,af2,bf3]))
+
+        # Test copy
+        r=fb1.copy(); self.assertEqual(r,fb1)
+
+        # Test update()
+        fb=FactBase([af1,af2])
+        fb.update(FactBase([af3,bf1]),[cf1,cf2])
+        self.assertEqual(fb, FactBase([af1,af2,af3,bf1,cf1,cf2]))
+        fb=FactBase([af1,af2])
+        fb |= [af3,bf1]
+        self.assertEqual(fb,FactBase([af1,af2,af3,bf1]))
+
+        # Test intersection()
+        fb=FactBase([af1,af2,bf1,cf1])
+        fb.intersection_update(FactBase([af1,bf2]))
+        self.assertEqual(fb, FactBase([af1]))
+        fb=FactBase([af1,af2,bf1,cf1])
+        fb.intersection_update(FactBase([af1,bf2]),[af1])
+        self.assertEqual(fb, FactBase([af1]))
+        fb=FactBase([af1,af2,bf1,cf1])
+        fb &= [af1,bf2]
+        self.assertEqual(fb, FactBase([af1]))
+
+        # Test difference_update()
+        fb=FactBase([af1,af2,bf1])
+        fb.difference_update(FactBase([af2,bf2]),[bf3,cf1])
+        self.assertEqual(fb, FactBase([af1,bf1]))
+        fb=FactBase([af1,af2,bf1])
+        fb -= [af2,bf1]
+        self.assertEqual(fb, FactBase([af1]))
+
+        # Test symmetric_difference_update()
+        fb=FactBase([af1,af2,bf1])
+        fb.symmetric_difference_update(FactBase([af2,bf2]))
+        self.assertEqual(fb, FactBase([af1,bf1,bf2]))
+        fb=FactBase([af1,af2,bf1])
+        fb ^= FactBase([cf2])
+        self.assertEqual(fb, FactBase([af1,af2,bf1,cf2]))
+
+    #--------------------------------------------------------------------------
+    # Test the factbasehelper with double decorators
+    #--------------------------------------------------------------------------
+    def test_symbolpredicateunifier(self):
+
+        # Using the SymbolPredicateUnifier as a decorator
+        spu1 = SymbolPredicateUnifier()
+        spu2 = SymbolPredicateUnifier()
+        spu3 = SymbolPredicateUnifier(suppress_auto_index=True)
+
+        # decorator both
+        @spu3.register
+        @spu2.register
+        @spu1.register
+        class Afact(Predicate):
+            num1=IntegerField(index=True)
+            num2=IntegerField()
+            str1=StringField()
+
+        # decorator without argument
+        @spu1.register
+        class Bfact(Predicate):
+            num1=IntegerField(index=True)
+            str1=StringField()
+
+        self.assertEqual(spu1.predicates, (Afact,Bfact))
+        self.assertEqual(spu2.predicates, (Afact,))
+        self.assertEqual(spu3.predicates, (Afact,))
+        self.assertEqual(spu1.indexes, (Afact.num1,Afact.num1))
+        self.assertEqual(spu2.indexes, (Afact.num1,))
+        self.assertEqual(spu3.indexes, ())
+
+    #--------------------------------------------------------------------------
+    # Test the symbolpredicateunifier when there are subfields defined
+    #--------------------------------------------------------------------------
+    def test_symbolpredicateunifier_with_subfields(self):
+        spu = SymbolPredicateUnifier()
+
+        class CT(ComplexTerm):
+            a = IntegerField
+            b = StringField(index=True)
+            c = (IntegerField(index=True),ConstantField)
+
+        @spu.register
+        class P(Predicate):
+            d = CT.Field(index=True)
+            e = CT.Field()
+
+        expected=set([hashable_path(P.d),
+                      hashable_path(P.d.b), hashable_path(P.d.c.arg1),
+                      hashable_path(P.e.b), hashable_path(P.e.c.arg1)])
+        self.assertEqual(spu.predicates, (P,))
+        self.assertEqual(set([hashable_path(p) for p in spu.indexes]), set(expected))
+
+        ct_func=Function("ct",[Number(1),String("aaa"),
+                               Function("",[Number(1),Function("const",[])])])
+        p1=Function("p",[ct_func,ct_func])
+        fb=spu.unify(symbols=[p1],raise_on_empty=True)
+        self.assertEqual(len(fb),1)
+        self.assertEqual(set([hashable_path(p) for p in fb.indexes]), expected)
+
+    #--------------------------------------------------------------------------
+    # Test that subclass factbase works and we can specify indexes
+    #--------------------------------------------------------------------------
+
+    def test_symbolpredicateunifier_symbols(self):
+
+        class Afact(Predicate):
+            num1=IntegerField()
+            num2=IntegerField()
+            str1=StringField()
+        class Bfact(Predicate):
+            num1=IntegerField()
+            str1=StringField()
+        class Cfact(Predicate):
+            num1=IntegerField()
+
+        af1 = Afact(1,10,"bbb")
+        af2 = Afact(2,20,"aaa")
+        af3 = Afact(3,20,"aaa")
+        bf1 = Bfact(1,"aaa")
+        bf2 = Bfact(2,"bbb")
+        cf1 = Cfact(1)
+
+        raws = [
+            Function("afact",[Number(1), Number(10), String("bbb")]),
+            Function("afact",[Number(2), Number(20), String("aaa")]),
+            Function("afact",[Number(3), Number(20), String("aaa")]),
+            Function("bfact",[Number(1),String("aaa")]),
+            Function("bfact",[Number(2),String("bbb")]),
+            Function("cfact",[Number(1)])
+            ]
+        spu = SymbolPredicateUnifier(predicates=[Afact,Bfact,Cfact])
+
+        # Test the different ways that facts can be added
+        fb = spu.unify(symbols=raws)
+        self.assertFalse(fb._delayed_init)
+        self.assertEqual(set(fb.predicates), set([Afact,Bfact,Cfact]))
+        s_af_all = fb.select(Afact)
+        self.assertEqual(set(s_af_all.get()), set([af1,af2,af3]))
+
+        fb = spu.unify(symbols=raws, delayed_init=True)
+        self.assertTrue(fb._delayed_init)
+        self.assertEqual(set(fb.predicates), set([Afact,Bfact,Cfact]))
+        s_af_all = fb.select(Afact)
+        self.assertEqual(set(s_af_all.get()), set([af1,af2,af3]))
+
+        fb = FactBase()
+        fb.add([af1,af2,af3])
+####        self.assertEqual(fb.add([af1,af2,af3]),3)
+        s_af_all = fb.select(Afact)
+        self.assertEqual(set(s_af_all.get()), set([af1,af2,af3]))
+
+        fb = FactBase()
+        fb.add(af1)
+        fb.add(af2)
+        fb.add(af3)
+####        self.assertEqual(fb.add(af1),1)
+####        self.assertEqual(fb.add(af2),1)
+####        self.assertEqual(fb.add(af3),1)
+        s_af_all = fb.select(Afact)
+        self.assertEqual(set(s_af_all.get()), set([af1,af2,af3]))
+
+        # Test that adding symbols can handle symbols that don't unify
+        fb = spu.unify(symbols=raws)
+        s_af_all = fb.select(Afact)
+        self.assertEqual(set(s_af_all.get()), set([af1,af2,af3]))
+
+        return
+
+        # Test the specification of indexes
+        class MyFactBase3(FactBase):
+            predicates = [Afact, Bfact]
+
+        spu = SymbolPredicateUnifier(predicates=[Afact,Bfact,Cfact],
+                                     indexes=[Afact.num1, Bfact.num1])
+
+        fb = spu.unify(symbols=raws)
+        s = fb.select(Afact).where(Afact.num1 == 1)
+        self.assertEqual(s.get_unique(), af1)
+        s = fb.select(Bfact).where(Bfact.num1 == 1)
+        self.assertEqual(s.get_unique(), bf1)
+
+
+    #--------------------------------------------------------------------------
+    # Test that subclass factbase works and we can specify indexes
+    #--------------------------------------------------------------------------
+
+    def test_factbase_copy(self):
+        class Afact(Predicate):
+            num=IntegerField(index=True)
+            pair=(IntegerField, IntegerField(index=True))
+
+        af1=Afact(num=5,pair=(1,2))
+        af2=Afact(num=6,pair=(1,2))
+        af3=Afact(num=5,pair=(2,3))
+
+        fb1=FactBase([af1,af2,af3],indexes=Afact.meta.indexes)
+        fb2=FactBase(list(fb1))
+        fb3=FactBase(fb1)
+
+        # The data is the same so they are all equal
+        self.assertEqual(fb1, fb2)
+        self.assertEqual(fb2, fb3)
+
+        # But the indexes can be different
+        self.assertEqual(list(fb1.indexes), list(Afact.meta.indexes))
+        self.assertEqual(list(fb2.indexes), [])
+        self.assertEqual(list(fb3.indexes), list(fb1.indexes))
+
+
+    #--------------------------------------------------------------------------
+    # Test deterministic iteration. Namely, that there is determinism when
+    # iterating over two factbases that have been constructed identically
+    # --------------------------------------------------------------------------
+    def test_factbase_iteration(self):
+        class Afact(Predicate):
+            num=IntegerField
+        class Bfact(Predicate):
+            num=IntegerField
+        class Cfact(Predicate):
+            num=IntegerField
+
+        fb=FactBase()
+        bfacts = [Bfact(i) for i in range(0,100)]
+        cfacts = [Cfact(i) for i in range(0,100)]
+        afacts = [Afact(i) for i in range(0,100)]
+        allfacts = bfacts+cfacts+afacts
+        fb.add(bfacts)
+        fb.add(cfacts)
+        fb.add(afacts)
+
+        # Make sure all the different ways to get the list of fact provide the
+        # same ordering as the original creation list
+        output=list(fb)
+        self.assertEqual(allfacts,fb.facts())
+        self.assertEqual(allfacts,output)
+        self.assertEqual(str(fb), "{" + ", ".join([str(f) for f in allfacts]) + "}")
+
+        tmpstr = "".join(["{}.\n".format(f) for f in allfacts])
+        self.assertEqual(tmpstr.strip(), fb.asp_str().strip())
+
+    #--------------------------------------------------------------------------
+    # Test the asp output string
+    # --------------------------------------------------------------------------
+    def test_factbase_aspstr_width(self):
+        class A(Predicate):
+            n=IntegerField
+        class C(Predicate):
+            s=StringField
+            class Meta: name="a_very_long_predicate_name_that_cause_wrapping_well"
+
+        fb=FactBase()
+        afacts = [A(i) for i in range(0,10)]
+        bfacts = [C("A long parameter for wrapping {}".format(i)) for i in range(0,10)]
+        allfacts = afacts+bfacts
+        fb.add(afacts)
+
+        aspstr=fb.asp_str(width=30)
+        afactsstr="a(0). a(1). a(2). a(3). a(4).\na(5). a(6). a(7). a(8). a(9).\n"
+        self.assertEqual(aspstr,afactsstr)
+
+        bfactsstr = "\n".join(["{}.".format(f) for f in bfacts]) + "\n"
+        fb.add(bfacts)
+        aspstr=fb.asp_str(width=30)
+        self.assertEqual(aspstr,afactsstr+bfactsstr)
+
+        aspstr=fb.asp_str(width=30,commented=True)
+        afactspre="% FactBase predicate: a/1\n"
+        bfactspre="% FactBase predicate: {}/1\n".format(C.meta.name)
+        matchstr = afactspre+afactsstr + "\n" + bfactspre+bfactsstr
+        self.assertEqual(aspstr,matchstr)
+
+#------------------------------------------------------------------------------
+# Test the _Select class
+#------------------------------------------------------------------------------
+
+class SelectTestCase(unittest.TestCase):
+    def setUp(self):
+        pass
+
+    #--------------------------------------------------------------------------
+    # Test initialising a placeholder (named and positional)
+    #--------------------------------------------------------------------------
+    def test_placeholder_instantiation(self):
+
+        # Named placeholder with and without default
+        p = ph_("test")
+        self.assertEqual(type(p), _NamedPlaceholder)
+        self.assertFalse(p.has_default)
+        self.assertEqual(p.default,None)
+        self.assertEqual(str(p), "ph_(\"test\")")
+
+        p = ph_("test",default=0)
+        self.assertEqual(type(p), _NamedPlaceholder)
+        self.assertTrue(p.has_default)
+        self.assertEqual(p.default,0)
+        self.assertEqual(str(p), "ph_(\"test\",0)")
+
+        p = ph_("test",default=None)
+        self.assertEqual(type(p), _NamedPlaceholder)
+        self.assertTrue(p.has_default)
+        self.assertEqual(p.default,None)
+
+        # Positional placeholder
+        p = ph_(1)
+        self.assertEqual(type(p), _PositionalPlaceholder)
+        self.assertEqual(p.posn, 0)
+        self.assertEqual(str(p), "ph1_")
+
+        # Some bad initialisation
+        with self.assertRaises(TypeError) as ctx: ph_(1,2)
+        with self.assertRaises(TypeError) as ctx: ph_("a",2,3)
+        with self.assertRaises(TypeError) as ctx: ph_("a",default=2,arg=3)
+
+    #--------------------------------------------------------------------------
+    #   Test that the select works
+    #--------------------------------------------------------------------------
+    def test_select_over_factmap(self):
+        class Afact1(Predicate):
+            num1=IntegerField()
+            num2=StringField()
+            str1=StringField()
+            class Meta: name = "afact"
+
+        fm1 = _FactMap(Afact1, [Afact1.num1,Afact1.str1])
+        fm2 = _FactMap(Afact1)
+        f1 = Afact1(1,1,"1")
+        f3 = Afact1(3,3,"3")
+        f4 = Afact1(4,4,"4")
+        f42 = Afact1(4,42,"42")
+        f10 = Afact1(10,10,"10")
+        fm1.add(f1)
+        fm1.add(f3)
+        fm1.add(f4)
+        fm1.add(f42)
+        fm1.add(f10)
+        fm2.add(f1)
+        fm2.add(f3)
+        fm2.add(f4)
+        fm2.add(f42)
+        fm2.add(f10)
+
+        s1_all = fm1.select()
+        s1_num1_eq_4 = fm1.select().where(Afact1.num1 == 4)
+        s1_num1_ne_4 = fm1.select().where(Afact1.num1 != 4)
+        s1_num1_lt_4 = fm1.select().where(Afact1.num1 < 4)
+        s1_num1_le_4 = fm1.select().where(Afact1.num1 <= 4)
+        s1_num1_gt_4 = fm1.select().where(Afact1.num1 > 4)
+        s1_num1_ge_4 = fm1.select().where(Afact1.num1 >= 4)
+        s1_str1_eq_4 = fm1.select().where(Afact1.str1 == "4")
+        s1_num2_eq_4 = fm1.select().where(Afact1.num2 == 4)
+
+        s2_all = fm1.select()
+        s2_num1_eq_4 = fm2.select().where(Afact1.num1 == 4)
+        s2_num1_ne_4 = fm2.select().where(Afact1.num1 != 4)
+        s2_num1_lt_4 = fm2.select().where(Afact1.num1 < 4)
+        s2_num1_le_4 = fm2.select().where(Afact1.num1 <= 4)
+        s2_num1_gt_4 = fm2.select().where(Afact1.num1 > 4)
+        s2_num1_ge_4 = fm2.select().where(Afact1.num1 >= 4)
+        s2_str1_eq_4 = fm2.select().where(Afact1.str1 == "4")
+        s2_num2_eq_4 = fm2.select().where(Afact1.num2 == 4)
+
+        self.assertFalse(s1_all._debug())
+        self.assertEqual(s1_num1_eq_4._debug()[0], Afact1.num1)
+        self.assertTrue(s1_num1_ne_4._debug())
+        self.assertTrue(s1_num1_lt_4._debug())
+        self.assertTrue(s1_num1_le_4._debug())
+        self.assertTrue(s1_num1_gt_4._debug())
+        self.assertTrue(s1_num1_ge_4._debug())
+        self.assertEqual(s1_str1_eq_4._debug()[0], Afact1.str1)
+        self.assertFalse(s1_num2_eq_4._debug())
+
+        self.assertFalse(s2_all._debug())
+        self.assertFalse(s2_num1_eq_4._debug())
+        self.assertFalse(s2_num1_ne_4._debug())
+        self.assertFalse(s2_num1_lt_4._debug())
+        self.assertFalse(s2_num1_le_4._debug())
+        self.assertFalse(s2_num1_gt_4._debug())
+        self.assertFalse(s2_num1_ge_4._debug())
+        self.assertFalse(s2_str1_eq_4._debug())
+        self.assertFalse(s2_num2_eq_4._debug())
+
+        self.assertEqual(set(list(s1_all.get())), set([f1,f3,f4,f42,f10]))
+        self.assertEqual(set(list(s1_num1_eq_4.get())), set([f4,f42]))
+        self.assertEqual(set(list(s1_num1_ne_4.get())), set([f1,f3,f10]))
+        self.assertEqual(set(list(s1_num1_lt_4.get())), set([f1,f3]))
+        self.assertEqual(set(list(s1_num1_le_4.get())), set([f1,f3,f4,f42]))
+        self.assertEqual(set(list(s1_num1_gt_4.get())), set([f10]))
+        self.assertEqual(set(list(s1_num1_ge_4.get())), set([f4,f42,f10]))
+        self.assertEqual(s1_str1_eq_4.get_unique(), f4)
+        self.assertEqual(s1_num2_eq_4.get_unique(), f4)
+
+        self.assertEqual(set(list(s2_all.get())), set([f1,f3,f4,f42,f10]))
+        self.assertEqual(set(list(s2_num1_eq_4.get())), set([f4,f42]))
+        self.assertEqual(set(list(s2_num1_ne_4.get())), set([f1,f3,f10]))
+        self.assertEqual(set(list(s2_num1_lt_4.get())), set([f1,f3]))
+        self.assertEqual(set(list(s2_num1_le_4.get())), set([f1,f3,f4,f42]))
+        self.assertEqual(set(list(s2_num1_gt_4.get())), set([f10]))
+        self.assertEqual(set(list(s2_num1_ge_4.get())), set([f4,f42,f10]))
+        self.assertEqual(s2_str1_eq_4.get_unique(), f4)
+        self.assertEqual(s2_num2_eq_4.get_unique(), f4)
+
+
+        # Test simple conjunction select
+        s1_conj1 = fm1.select().where(Afact1.str1 == "42", Afact1.num1 == 4)
+        s1_conj2 = fm1.select().where(Afact1.num1 == 4, Afact1.str1 == "42")
+        s1_conj3 = fm1.select().where(lambda x: x.str1 == "42", Afact1.num1 == 4)
+
+        self.assertEqual(s1_conj1._debug()[0], Afact1.num1)
+        self.assertEqual(s1_conj2._debug()[0], Afact1.num1)
+        self.assertEqual(s1_conj3._debug()[0], Afact1.num1)
+
+        self.assertEqual(s1_conj1.get_unique(), f42)
+        self.assertEqual(s1_conj2.get_unique(), f42)
+        self.assertEqual(s1_conj3.get_unique(), f42)
+
+        # Test select with placeholders
+        s1_ph1 = fm1.select().where(Afact1.num1 == ph_("num1"))
+        s1_ph2 = fm1.select().where(Afact1.str1 == ph_("str1","42"),
+                                    Afact1.num1 == ph_("num1"))
+        self.assertEqual(set(s1_ph1.get(num1=4)), set([f4,f42]))
+        self.assertEqual(set(list(s1_ph1.get(num1=3))), set([f3]))
+        self.assertEqual(set(list(s1_ph1.get(num1=2))), set([]))
+        self.assertEqual(s1_ph2.get_unique(num1=4), f42)
+        self.assertEqual(s1_ph2.get_unique(str1="42",num1=4), f42)
+
+        with self.assertRaises(ValueError) as ctx:
+            tmp = list(s1_ph1.get_unique(num1=4))  # fails because of multiple values
+        with self.assertRaises(ValueError) as ctx:
+            tmp = list(s1_ph2.get(num2=5))         # fails because of no values
+        with self.assertRaises(ValueError) as ctx:
+            tmp = list(s1_ph2.get(str1="42"))
+
+
+    #--------------------------------------------------------------------------
+    # Test select by the predicate object itself (and not a field). This is a
+    # boundary case.
+    # --------------------------------------------------------------------------
+
+    def test_select_by_predicate(self):
+
+        class Fact(Predicate):
+            num1=IntegerField()
+            str1=StringField()
+
+        f1 = Fact(1,"bbb")
+        f2 = Fact(2,"aaa")
+        f2b = Fact(2,"bbb")
+        f3 = Fact(3,"aaa")
+        f4 = Fact(4,"aaa")
+        facts=[f1,f2,f2b,f3,f4]
+
+        self.assertTrue(f1 <= f2)
+        self.assertTrue(f1 <= f2b)
+        self.assertTrue(f2 <= f2b)
+        self.assertTrue(f2b <= f2b)
+        self.assertFalse(f3 <= f2b)
+
+        fpb = path(Fact)
+        self.assertEqual(f1, fpb(f1))
+        self.assertFalse(f2 == fpb(f1))
+
+        fb1 = FactBase(facts=facts, indexes=[path(Fact)])
+        fb2 = FactBase(facts=facts)
+        self.assertEqual(fb1, fb2)
+        self.assertEqual(len(fb1), len(facts))
+
+        s1 = fb1.select(Fact).where(fpb == ph1_)
+        self.assertEqual(s1.get(f1), [f1])
+        s1 = fb2.select(Fact).where(fpb == ph1_)
+        self.assertEqual(s1.get(f1), [f1])
+
+        s2 = fb1.select(Fact).where(fpb <= ph1_).order_by(fpb)
+        self.assertEqual(s2.get(f2b), [f1,f2,f2b])
+        s2 = fb2.select(Fact).where(fpb <= ph1_).order_by(fpb)
+        self.assertEqual(s2.get(f2b), [f1,f2,f2b])
+
+    #--------------------------------------------------------------------------
+    # Test basic insert and selection of facts in a factbase
+    #--------------------------------------------------------------------------
+
+    def test_factbase_select(self):
+
+        class Afact(Predicate):
+            num1=IntegerField()
+            num2=IntegerField()
+            str1=StringField()
+        class Bfact(Predicate):
+            num1=IntegerField()
+            str1=StringField()
+        class Cfact(Predicate):
+            num1=IntegerField()
+
+        af1 = Afact(1,10,"bbb")
+        af2 = Afact(2,20,"aaa")
+        af3 = Afact(3,20,"aaa")
+        bf1 = Bfact(1,"aaa")
+        bf2 = Bfact(2,"bbb")
+        cf1 = Cfact(1)
+
+#        fb = FactBase([Afact.num1, Afact.num2, Afact.str1])
+        fb = FactBase()
+        facts=[af1,af2,af3,bf1,bf2,cf1]
+        fb.add(facts)
+#####        self.assertEqual(fb.add(facts), 6)
+
+        self.assertEqual(set(fb.facts()), set(facts))
+        self.assertEqual(set(fb.predicates), set([Afact,Bfact,Cfact]))
+
+        s_af_all = fb.select(Afact)
+        s_af_num1_eq_1 = fb.select(Afact).where(Afact.num1 == 1)
+        s_af_num1_le_2 = fb.select(Afact).where(Afact.num1 <= 2)
+        s_af_num2_eq_20 = fb.select(Afact).where(Afact.num2 == 20)
+        s_bf_str1_eq_aaa = fb.select(Bfact).where(Bfact.str1 == "aaa")
+        s_bf_str1_eq_ccc = fb.select(Bfact).where(Bfact.str1 == "ccc")
+        s_cf_num1_eq_1 = fb.select(Cfact).where(Cfact.num1 == 1)
+
+        self.assertEqual(set(s_af_all.get()), set([af1,af2,af3]))
+        self.assertEqual(s_af_all.count(), 3)
+        self.assertEqual(set(s_af_num1_eq_1.get()), set([af1]))
+        self.assertEqual(set(s_af_num1_le_2.get()), set([af1,af2]))
+        self.assertEqual(set(s_af_num2_eq_20.get()), set([af2, af3]))
+        self.assertEqual(set(s_bf_str1_eq_aaa.get()), set([bf1]))
+        self.assertEqual(set(s_bf_str1_eq_ccc.get()), set([]))
+        self.assertEqual(set(s_cf_num1_eq_1.get()), set([cf1]))
+
+        fb.clear()
+        self.assertEqual(set(s_af_all.get()), set())
+        self.assertEqual(set(s_af_num1_eq_1.get()), set())
+        self.assertEqual(set(s_af_num1_le_2.get()), set())
+        self.assertEqual(set(s_af_num2_eq_20.get()), set())
+        self.assertEqual(set(s_bf_str1_eq_aaa.get()), set())
+        self.assertEqual(set(s_bf_str1_eq_ccc.get()), set())
+        self.assertEqual(set(s_cf_num1_eq_1.get()), set())
+
+        # Test that the select can work with an initially empty factbase
+        fb2 = FactBase()
+        s2 = fb2.select(Afact).where(Afact.num1 == 1)
+        self.assertEqual(set(s2.get()), set())
+        fb2.add([af1,af2])
+        self.assertEqual(set(s2.get()), set([af1]))
+
+        # Test select with placeholders
+#        fb3 = FactBase([Afact.num1])
+        fb3 = FactBase()
+        fb3.add([af1,af2,af3])
+####        self.assertEqual(fb3.add([af1,af2,af3]),3)
+        s3 = fb3.select(Afact).where(Afact.num1 == ph_("num1"))
+        self.assertEqual(s3.get_unique(num1=1), af1)
+        self.assertEqual(s3.get_unique(num1=2), af2)
+        self.assertEqual(s3.get_unique(num1=3), af3)
+
+
+        # Test placeholders with positional arguments
+        s4 = fb3.select(Afact).where(Afact.num1 < ph1_)
+        self.assertEqual(set(list(s4.get(1))), set([]))
+        self.assertEqual(set(list(s4.get(2))), set([af1]))
+        self.assertEqual(set(list(s4.get(3))), set([af1,af2]))
+
+        s5 = fb3.select(Afact).where(Afact.num1 <= ph1_, Afact.num2 == ph2_)
+        self.assertEqual(set(s5.get(3,10)), set([af1]))
+
+        # Missing positional argument
+        with self.assertRaises(ValueError) as ctx:
+            tmp = list(s5.get(1))
+
+        # Test that the fact base index
+        fb = FactBase(indexes=[Afact.num2, Bfact.str1])
+        self.assertEqual(set([hashable_path(p) for p in fb.indexes]),
+                         set([hashable_path(Afact.num2),
+                              hashable_path(Bfact.str1)]))
+
+    #--------------------------------------------------------------------------
+    # Test factbase select with complex where clause
+    #--------------------------------------------------------------------------
+
+    def test_factbase_select_complex_where(self):
+
+        class Afact(Predicate):
+            num1=IntegerField
+            num2=IntegerField
+            str1=StringField
+
+        af1 = Afact(1,10,"bbb")
+        af2 = Afact(2,20,"aaa")
+        af3 = Afact(3,20,"aaa")
+        fb = FactBase([af1,af2,af3])
+
+        q=fb.select(Afact).where((Afact.num1 == 2) | (Afact.num2 == 10))
+        self.assertEqual(set([af1,af2]), set(q.get()))
+
+        q=fb.select(Afact).where((Afact.num1 == 2) & (Afact.num2 == 20))
+        self.assertEqual(set([af2]), set(q.get()))
+
+        q=fb.select(Afact).where(~(Afact.num1 == 2) & (Afact.num2 == 20))
+        self.assertEqual(set([af3]), set(q.get()))
+
+        q=fb.select(Afact).where(~((Afact.num1 == 2) & (Afact.num2 == 20)))
+        self.assertEqual(set([af1,af3]), set(q.get()))
+
+    #--------------------------------------------------------------------------
+    #   Test that we can use the same placeholder multiple times
+    #--------------------------------------------------------------------------
+    def test_factbase_select_multi_placeholder(self):
+        class Afact(Predicate):
+            num1=IntegerField()
+            num2=IntegerField()
+
+        fm1 = _FactMap(Afact, [Afact.num1])
+        f1 = Afact(1,1)
+        f2 = Afact(1,2)
+        f3 = Afact(1,3)
+        f4 = Afact(2,1)
+        f5 = Afact(2,2)
+
+        fm1.add(f1) ; fm1.add(f2) ; fm1.add(f3) ; fm1.add(f4) ; fm1.add(f5)
+
+        s1 = fm1.select().where(Afact.num1 == ph1_, Afact.num2 == ph1_)
+        self.assertTrue(set([f for f in s1.get(1)]), set([f1]))
+        self.assertTrue(set([f for f in s1.get(2)]), set([f5]))
+
+        s2 = fm1.select().where(Afact.num1 == ph_("a",1), Afact.num2 == ph_("a",2))
+        self.assertTrue(set([f for f in s2.get(a=1)]), set([f1]))
+        self.assertTrue(set([f for f in s2.get(a=2)]), set([f5]))
+        self.assertTrue(set([f for f in s2.get()]), set([f2]))
+
+        # test that we can do different parameters with normal functions
+        def tmp(f,a,b=2):
+            return f.num1 == a and f.num2 == 2
+
+        s3 = fm1.select().where(tmp)
+        with self.assertRaises(TypeError) as ctx:
+            r=[f for f in s3.get()]
+
+        self.assertTrue(set([f for f in s3.get(a=1)]), set([f2]))
+        self.assertTrue(set([f for f in s3.get(a=1,b=3)]), set([f3]))
+
+        # Test manually created positional placeholders
+        s1 = fm1.select().where(Afact.num1 == ph1_, Afact.num2 == ph_(1))
+        self.assertTrue(set([f for f in s1.get(1)]), set([f1]))
+        self.assertTrue(set([f for f in s1.get(2)]), set([f5]))
+
+    #--------------------------------------------------------------------------
+    #   Test that select works with order_by
+    #--------------------------------------------------------------------------
+    def test_factbase_select_order_by(self):
+        class Afact(Predicate):
+            num1=IntegerField()
+            str1=StringField()
+            str2=ConstantField()
+
+        f1 = Afact(num1=1,str1="1",str2="5")
+        f2 = Afact(num1=2,str1="3",str2="4")
+        f3 = Afact(num1=3,str1="5",str2="3")
+        f4 = Afact(num1=4,str1="3",str2="2")
+        f5 = Afact(num1=5,str1="1",str2="1")
+        fb = FactBase(facts=[f1,f2,f3,f4,f5])
+
+        q = fb.select(Afact).order_by(Afact.num1)
+        self.assertEqual([f1,f2,f3,f4,f5], q.get())
+
+        q = fb.select(Afact).order_by(asc(Afact.num1))
+        self.assertEqual([f1,f2,f3,f4,f5], q.get())
+
+        q = fb.select(Afact).order_by(desc(Afact.num1))
+        self.assertEqual([f5,f4,f3,f2,f1], q.get())
+
+        q = fb.select(Afact).order_by(Afact.str2)
+        self.assertEqual([f5,f4,f3,f2,f1], q.get())
+
+        q = fb.select(Afact).order_by(desc(Afact.str2))
+        self.assertEqual([f1,f2,f3,f4,f5], q.get())
+
+        q = fb.select(Afact).order_by(desc(Afact.str1), Afact.num1)
+        self.assertEqual([f3,f2,f4,f1,f5], q.get())
+
+        q = fb.select(Afact).order_by(desc(Afact.str1), Afact.num1)
+        self.assertEqual([f3,f2,f4,f1,f5], q.get())
+
+        # Adding a duplicate object to a factbase shouldn't do anything
+        f6 = Afact(num1=5,str1="1",str2="1")
+        fb.add(f6)
+        q = fb.select(Afact).order_by(desc(Afact.str1), Afact.num1)
+        self.assertEqual([f3,f2,f4,f1,f5], q.get())
+
+
+    #--------------------------------------------------------------------------
+    #   Test that select works with order_by for complex term
+    #--------------------------------------------------------------------------
+    def test_factbase_select_order_by_complex_term(self):
+
+        class SwapField(IntegerField):
+            pytocl = lambda x: 100 - x
+            cltopy = lambda x: 100 - x
+
+        class AComplex(ComplexTerm):
+            swap=SwapField(index=True)
+            norm=IntegerField(index=True)
+
+        class AFact(Predicate):
+            astr = StringField(index=True)
+            cmplx = AComplex.Field(index=True)
+
+        cmplx1 = AComplex(swap=99,norm=1)
+        cmplx2 = AComplex(swap=98,norm=2)
+        cmplx3 = AComplex(swap=97,norm=3)
+
+        f1 = AFact(astr="aaa", cmplx=cmplx1)
+        f2 = AFact(astr="bbb", cmplx=cmplx2)
+        f3 = AFact(astr="ccc", cmplx=cmplx3)
+        f4 = AFact(astr="ddd", cmplx=cmplx3)
+
+        fb = FactBase(facts=[f1,f2,f3,f4], indexes = [AFact.astr, AFact.cmplx])
+
+        q = fb.select(AFact).order_by(AFact.astr)
+        self.assertEqual([f1,f2,f3,f4], q.get())
+
+        q = fb.select(AFact).order_by(AFact.cmplx, AFact.astr)
+        self.assertEqual([f3,f4,f2,f1], q.get())
+
+        q = fb.select(AFact).where(AFact.cmplx <= ph1_).order_by(AFact.cmplx, AFact.astr)
+        self.assertEqual([f3,f4,f2], q.get(cmplx2))
+
+    #--------------------------------------------------------------------------
+    #   Test that select works with order_by for complex term
+    #--------------------------------------------------------------------------
+    def test_factbase_select_complex_term_placeholders(self):
+
+        class AFact(Predicate):
+            astr = StringField()
+            cmplx1 = (IntegerField(), IntegerField())
+            cmplx2 = (IntegerField(), IntegerField())
+
+        f1 = AFact(astr="aaa", cmplx1=(1,2), cmplx2=(1,2))
+        f2 = AFact(astr="bbb", cmplx1=(1,2), cmplx2=(1,5))
+        f3 = AFact(astr="ccc", cmplx1=(1,5), cmplx2=(1,5))
+        f4 = AFact(astr="ddd", cmplx1=(1,4), cmplx2=(1,2))
+
+        fb = FactBase(facts=[f1,f2,f3,f4])
+
+        q = fb.select(AFact).where(AFact.cmplx1 == (1,2))
+        self.assertEqual([f1,f2], q.get())
+
+        q = fb.select(AFact).where(AFact.cmplx1 == ph1_)
+        self.assertEqual([f1,f2], q.get((1,2)))
+
+        q = fb.select(AFact).where(AFact.cmplx1 == AFact.cmplx2)
+        self.assertEqual([f1,f3], q.get())
+
+        # Some type mismatch failures
+#        with self.assertRaises(TypeError) as ctx:
+#            fb.select(AFact).where(AFact.cmplx1 == 1).get()
+
+        # Fail because of type mismatch
+#        with self.assertRaises(TypeError) as ctx:
+#            q = fb.select(AFact).where(AFact.cmplx1 == (1,2,3)).get()
+
+#        with self.assertRaises(TypeError) as ctx:
+#            q = fb.select(AFact).where(AFact.cmplx1 == ph1_).get((1,2,3))
+
+    #--------------------------------------------------------------------------
+    #   Test that the indexing works
+    #--------------------------------------------------------------------------
+    def test_factbase_select_indexing(self):
+        class Afact(Predicate):
+            num1=IntegerField()
+            num2=IntegerField()
+
+        fm1 = _FactMap(Afact, [Afact.num1])
+        f1 = Afact(1,1)
+        f2 = Afact(1,2)
+        f3 = Afact(1,3)
+        f4 = Afact(2,1)
+        f5 = Afact(2,2)
+        f6 = Afact(3,1)
+
+        fm1.add(f1); fm1.add(f2); fm1.add(f3); fm1.add(f4); fm1.add(f5); fm1.add(f6)
+
+        # Use a function to track the facts that are visited. This will show
+        # that the first operator selects only the appropriate terms.
+        facts = set()
+        def track(f,a,b):
+            nonlocal facts
+            facts.add(f)
+            return f.num2 == b
+
+        s1 = fm1.select().where(Afact.num1 == ph1_, track)
+        s2 = fm1.select().where(Afact.num1 < ph1_, track)
+
+        self.assertTrue(set([f for f in s1.get(2,1)]), set([f4]))
+        self.assertTrue(facts, set([f4,f5]))
+
+        self.assertTrue(set([f for f in s2.get(2,2)]), set([f2]))
+        self.assertTrue(facts, set([f1,f2,f3]))
+
+    #--------------------------------------------------------------------------
+    #   Test the delete
+    #--------------------------------------------------------------------------
+    def test_delete_over_factmap_and_factbase(self):
+        class Afact(Predicate):
+            num1=IntegerField()
+            num2=StringField()
+            str1=StringField()
+
+        fm1 = _FactMap(Afact, [Afact.num1,Afact.str1])
+        fm2 = _FactMap(Afact)
+        f1 = Afact(1,1,"1")
+        f3 = Afact(3,3,"3")
+        f4 = Afact(4,4,"4")
+        f42 = Afact(4,42,"42")
+        f10 = Afact(10,10,"10")
+        fm1.add(f1) ; fm2.add(f1)
+        fm1.add(f3) ; fm2.add(f3)
+        fm1.add(f4) ; fm2.add(f4)
+        fm1.add(f42) ; fm2.add(f42)
+        fm1.add(f10) ; fm2.add(f10)
+
+        d1_all = fm1.delete()
+        d1_num1 = fm2.delete().where(Afact.num1 == ph1_)
+        s1_num1 = fm2.select().where(Afact.num1 == ph1_)
+
+        self.assertEqual(d1_all.execute(), 5)
+        self.assertEqual(set([f for f in s1_num1.get(4)]), set([f4,f42]))
+        self.assertEqual(d1_num1.execute(4), 2)
+        self.assertEqual(set([f for f in s1_num1.get(4)]), set([]))
+
+#        return
+
+        fb1 = FactBase(facts=[f1,f3, f4,f42,f10], indexes = [Afact.num1, Afact.num2])
+        d1_num1 = fb1.delete(Afact).where(Afact.num1 == ph1_)
+        s1_num1 = fb1.select(Afact).where(Afact.num1 == ph1_)
+        self.assertEqual(set([f for f in s1_num1.get(4)]), set([f4,f42]))
+        self.assertEqual(d1_num1.execute(4), 2)
+        self.assertEqual(set([f for f in s1_num1.get(4)]), set([]))
+
+    #--------------------------------------------------------------------------
+    # Test the support for indexes of subfields
+    #--------------------------------------------------------------------------
+    def test_factbase_select_with_subfields(self):
+        class CT(ComplexTerm):
+            num1=IntegerField()
+            str1=StringField()
+        class Fact(Predicate):
+            ct1=CT.Field()
+            ct2=(IntegerField(),IntegerField())
+            ct3=(IntegerField(),IntegerField())
+
+        fb = FactBase(indexes=[Fact.ct1.num1, Fact.ct1, Fact.ct2])
+
+        f1=Fact(CT(10,"a"),(3,4),(4,3))
+        f2=Fact(CT(20,"b"),(1,2),(2,1))
+        f3=Fact(CT(30,"c"),(5,2),(2,5))
+        f4=Fact(CT(40,"d"),(6,1),(1,6))
+
+        fb.add(f1); fb.add(f2); fb.add(f3); fb.add(f4);
+
+        # Three queries that uses index
+        s1 = fb.select(Fact).where(Fact.ct1.num1 <= ph1_).order_by(Fact.ct2)
+        s2 = fb.select(Fact).where(Fact.ct1 == ph1_)
+        s3 = fb.select(Fact).where(Fact.ct2 == ph1_)
+        s4 = fb.select(Fact).where(Fact.ct3 == ph1_)
+
+        self.assertEqual(s1.get(20), [f2,f1])
+        self.assertEqual(s2.get(CT(20,"b")), [f2])
+        self.assertEqual(s3.get((1,2)), [f2])
+        self.assertEqual(s4.get((2,1)), [f2])
+
+        # One query doesn't use the index
+        s4 = fb.select(Fact).where(Fact.ct1.str1 == ph1_)
+        self.assertEqual(s4.get("c"), [f3])
+
+    #--------------------------------------------------------------------------
+    #   Test badly formed select/delete statements where the where clause (or
+    #   order by clause for select statements) refers to fields that are not
+    #   part of the predicate being queried. Instead of creating an error at
+    #   query time creating the error when the statement is declared can help
+    #   with debugging.
+    #   --------------------------------------------------------------------------
+    def test_bad_factbase_select_delete_statements(self):
+        class F(Predicate):
+            num1=IntegerField()
+            num2=IntegerField()
+        class G(Predicate):
+            num1=IntegerField()
+            num2=IntegerField()
+
+        f = F(1,2)
+        fb = FactBase([f])
+
+        # Making multiple calls to select where()
+        with self.assertRaises(TypeError) as ctx:
+            q = fb.select(F).where(F.num1 == 1).where(F.num2 == 2)
+        check_errmsg("cannot specify 'where' multiple times",ctx)
+
+        # Bad select where clauses
+        with self.assertRaises(TypeError) as ctx:
+            q = fb.select(F).where()
+        check_errmsg("empty 'where' expression",ctx)
+
+        with self.assertRaises(TypeError) as ctx:
+            q = fb.select(F).where(G.num1 == 1)
+        check_errmsg("'where' expression contains path 'G.num1'",ctx)
+
+        with self.assertRaises(TypeError) as ctx:
+            q = fb.select(F).where(F.num1 == G.num1)
+        check_errmsg("'where' expression contains path 'G.num1'",ctx)
+
+        with self.assertRaises(TypeError) as ctx:
+            q = fb.select(F).where(F.num1 == 1, G.num1 == 1)
+        check_errmsg("'where' expression contains path 'G.num1'",ctx)
+
+#        with self.assertRaises(TypeError) as ctx:
+#            q = fb.select(F).where(0)
+#        check_errmsg("'int' object is not callable",ctx)
+
+        # Bad delete where clause
+        with self.assertRaises(TypeError) as ctx:
+            q = fb.delete(F).where(G.num1 == 1)
+        check_errmsg("'where' expression contains path 'G.num1'",ctx)
+
+
+        # Making multiple calls to select order_by()
+        with self.assertRaises(TypeError) as ctx:
+            q = fb.select(F).order_by(F.num1).order_by(F.num2)
+        check_errmsg("cannot specify 'order_by' multiple times",ctx)
+
+        # Bad select where clauses
+        with self.assertRaises(TypeError) as ctx:
+            q = fb.select(F).order_by()
+        check_errmsg("empty 'order_by' expression",ctx)
+
+        with self.assertRaises(TypeError) as ctx:
+            q = fb.select(F).order_by(1)
+        check_errmsg("Invalid 'order_by' expression",ctx)
+
+        with self.assertRaises(TypeError) as ctx:
+            q = fb.select(F).order_by(G.num1)
+        check_errmsg("'order_by' expression contains path 'G.num1'",ctx)
+
+        with self.assertRaises(TypeError) as ctx:
+            q = fb.select(F).order_by(F.num1,G.num1)
+        check_errmsg("'order_by' expression contains path 'G.num1'",ctx)
+
+        with self.assertRaises(TypeError) as ctx:
+            q = fb.select(F).order_by(F.num1,desc(G.num1))
+        check_errmsg("'order_by' expression contains path 'G.num1'",ctx)
+
+
+#------------------------------------------------------------------------------
+# main
+#------------------------------------------------------------------------------
+if __name__ == "__main__":
+    raise RuntimeError('Cannot run modules')
