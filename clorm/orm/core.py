@@ -94,26 +94,27 @@ class _lateinit(object):
 # conditions.
 # ------------------------------------------------------------------------------
 
-OpSpec = collections.namedtuple('OpSpec','format numargs isbool')
-
 class QueryCondition(object):
-    operators = { operator.and_ : OpSpec("&", 2, True),
-                  operator.or_ : OpSpec("|", 2, True),
-                  operator.not_ : OpSpec("~", 1, True),
-                  operator.eq : OpSpec("==", 2, False),
-                  operator.ne : OpSpec("!=", 2, False),
-                  operator.lt : OpSpec("<", 2, False),
-                  operator.le : OpSpec("<=", 2, False),
-                  operator.gt : OpSpec(">", 2, False),
-                  operator.ge : OpSpec(">=", 2, False) }
+    OpSig = collections.namedtuple('OpSig','format numargs')
+    operators = {
+        operator.and_ : OpSig("&", 2),
+        operator.or_ : OpSig("|", 2),
+        operator.not_ : OpSig("~", 1),
+        operator.eq : OpSig("==", 2),
+        operator.ne : OpSig("!=", 2),
+        operator.lt : OpSig("<", 2),
+        operator.le : OpSig("<=", 2),
+        operator.gt : OpSig(">", 2),
+        operator.ge : OpSig(">=", 2) }
 
     def __init__(self, operator, *args):
-        opspec = QueryCondition.operators.get(operator,None)
-        if not opspec:
-            raise ValueError("Unsupported boolean/comparison operator {}".format(operator))
-        if len(args) != opspec.numargs:
-            raise ValueError(("Operator {} expecting {} arguments but "
-                              "got {}").format(operator, opspec.numargs, len(args)))
+        opsig = QueryCondition.operators.get(operator,None)
+        if not opsig:
+            raise ValueError("Unsupported operator {}".format(operator))
+        if len(args) != opsig.numargs:
+            raise ValueError(("Operator {} expecting {} arguments but got "
+                              "{}").format(operator, opsig.numargs, len(args)))
+
         self._operator = operator
         self._args = args
 
@@ -153,15 +154,15 @@ class QueryCondition(object):
         return not result
 
     def __str__(self):
-        opspec = QueryCondition.operators[self._operator]
+        opsig = QueryCondition.operators[self._operator]
         args = [ "({})".format(a) if isinstance(a,QueryCondition) else str(a) \
                  for a in self._args ]
-        if opspec.numargs == 1:
-            return "{}{}".format(opspec.format,args[0])
-        elif opspec.numargs == 2:
-            return "{} {} {}".format(args[0], opspec.format,args[1])
+        if opsig.numargs == 1:
+            return "{}{}".format(opsig.format,args[0])
+        elif opsig.numargs == 2:
+            return "{} {} {}".format(args[0], opsig.format,args[1])
         else:
-            return "{}({})".format(opspec.format,",".join([args]))
+            return "{}({})".format(opsig.format,",".join([args]))
 
     def __repr__(self):
         return self.__str__()

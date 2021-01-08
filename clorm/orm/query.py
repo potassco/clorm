@@ -199,12 +199,31 @@ def or_(*conditions):
 # Functions to check, simplify, resolve placeholders, and execute queries
 # ------------------------------------------------------------------------------
 
+def _is_bool_condition(cond):
+    bool_operators = {
+        operator.and_ : True, operator.or_ : True, operator.not_ : True,
+        operator.eq : False, operator.ne : False, operator.lt : False,
+        operator.le : False, operator.gt : False, operator.ge : False }
+
+    return bool_operators[cond.operator]
+
+CompOpSpec = collections.namedtuple('CompOpSpec','negate')
+
+g_compop_operators = {
+    operator.eq : CompOpSpec(negate=operator.ne),
+    operator.ne : CompOpSpec(negate=operator.eq),
+    operator.lt : CompOpSpec(negate=operator.ge),
+    operator.le : CompOpSpec(negate=operator.gt),
+    operator.gt : CompOpSpec(negate=operator.le),
+    operator.ge : CompOpSpec(negate=operator.lt) }
+
+
+
 # ------------------------------------------------------------------------------
 # Check a query condition for errors. Raises exceptions if there is an error
 # otherwise does nothing.
 # ------------------------------------------------------------------------------
 def check_query_condition(qcond):
-
     def check_comp_condition(ccond):
         for arg in ccond.args:
             if isinstance(arg,PredicatePath): continue
@@ -226,7 +245,7 @@ def check_query_condition(qcond):
                               "part of a comparison condition").format(cond, qcond))
         if callable(cond): return
         if isinstance(cond,QueryCondition):
-            if QueryCondition.operators[cond.operator].isbool:
+            if _is_bool_condition(cond):
                 check_bool_condition(cond)
             else:
                 check_comp_condition(cond)
@@ -308,7 +327,7 @@ def simplify_query_condition(qcond):
                               "part of a comparison condition").format(cond, qcond))
         if callable(cond): return cond
         if not isinstance(cond,QueryCondition): return bool(cond)
-        if QueryCondition.operators[cond.operator].isbool:
+        if _is_bool_condition(cond):
             return simplify_bool_condition(cond)
         else:
             return simplify_comp_condition(cond)
@@ -421,7 +440,7 @@ def evaluate_query_condition(qcond, fact):
     # Evaluate an arbitrary query condition
     def evaluate(cond):
         if isinstance(cond,QueryCondition):
-            if QueryCondition.operators[cond.operator].isbool:
+            if _is_bool_condition(cond):
                 return evaluate_bool_condition(cond)
             else:
                 return evaluate_comp_condition(cond)
@@ -684,8 +703,9 @@ class SelectImpl(Select):
             if indexable[0].meta.hashable not in self._index_priority: return None
             return indexable
 
-        if isinstance(cond, QueryCondition) and not QueryCondition.operators[cond.operator].isbool:
-            return validate_indexable(get_indexable(cond))
+        if isinstance(cond, QueryCondition):
+            if not _is_bool_condition(cond):
+                return validate_indexable(get_indexable(cond))
         indexable = None
         if isinstance(cond, QueryCondition) and cond.operator == operator.and_:
             for arg in cond.args:
