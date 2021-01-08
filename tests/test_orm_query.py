@@ -19,7 +19,7 @@ from clorm.orm import RawField, IntegerField, StringField, ConstantField, \
     Predicate, ComplexTerm, path, hashable_path
 
 # Implementation imports
-from clorm.orm.core import Conditional
+from clorm.orm.core import QueryCondition
 
 # Official Clorm API imports for the fact base components
 from clorm.orm import desc, asc, not_, and_, or_, \
@@ -33,7 +33,7 @@ from clorm.orm.query import PositionalPlaceholder, NamedPlaceholder, \
 #------------------------------------------------------------------------------
 
 __all__ = [
-    'QueryConditionalTestCase'
+    'QueryConditionTestCase'
     ]
 
 #------------------------------------------------------------------------------
@@ -45,7 +45,7 @@ __all__ = [
 # w.r.t a fact.
 # ------------------------------------------------------------------------------
 
-class QueryConditionalTestCase(unittest.TestCase):
+class QueryConditionTestCase(unittest.TestCase):
     def setUp(self):
         class F(Predicate):
             anum=IntegerField
@@ -323,13 +323,13 @@ class QueryConditionalTestCase(unittest.TestCase):
         self.assertFalse(evaluate_query_condition(c2,af2))
 
         # Some other query conditions that can't be defined with the nice syntax
-        c1 = Conditional(operator.eq, 2, F.anum)
+        c1 = QueryCondition(operator.eq, 2, F.anum)
         check_query_condition(c1)
         self.assertEqual(str(c1), "2 == F.anum")
         self.assertEqual(simplify_query_condition(c1),c1)
         self.assertTrue(evaluate_query_condition(c1,af1))
 
-        c1 = Conditional(operator.eq,2,2)
+        c1 = QueryCondition(operator.eq,2,2)
         check_query_condition(c1)
         self.assertEqual(str(c1), "2 == 2")
         c1 = simplify_query_condition(c1)
@@ -343,7 +343,7 @@ class QueryConditionalTestCase(unittest.TestCase):
         self.assertEqual(c1,True)
         self.assertTrue(evaluate_query_condition(c1,af1))
 
-        c1 = Conditional(operator.eq,2,1)
+        c1 = QueryCondition(operator.eq,2,1)
         check_query_condition(c1)
         self.assertEqual(str(c1), "2 == 1")
         c1 = simplify_query_condition(c1)
@@ -387,7 +387,7 @@ class QueryConditionalTestCase(unittest.TestCase):
 
         with self.assertRaises(ValueError) as ctx:
             f = lambda x: x*2
-            check_query_condition(Conditional(operator.eq, F.anum, f))
+            check_query_condition(QueryCondition(operator.eq, F.anum, f))
         check_errmsg("Invalid functor", ctx)
 
         with self.assertRaises(ValueError) as ctx:

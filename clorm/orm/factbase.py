@@ -12,8 +12,7 @@ import functools
 import itertools
 
 from .core import *
-from .core import get_field_definition, Conditional, PredicatePath, \
-    kwargs_check_keys
+from .core import get_field_definition, PredicatePath, kwargs_check_keys
 
 from .query import *
 from .query import Placeholder, check_query_condition, simplify_query_condition, \

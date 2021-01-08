@@ -11,7 +11,7 @@ import functools
 import itertools
 
 from .core import *
-from .core import get_field_definition, Conditional, PredicatePath, \
+from .core import get_field_definition, QueryCondition, PredicatePath, \
     kwargs_check_keys
 
 __all__ = [
@@ -166,19 +166,19 @@ ph4_ = PositionalPlaceholder(3)
 
 
 def _hashable_paths(cond):
-    if not isinstance(cond,Conditional): return set([])
+    if not isinstance(cond,QueryCondition): return set([])
     tmp=set([])
     for a in cond.args:
         if isinstance(a, PredicatePath): tmp.add(a.meta.hashable)
-        elif isinstance(a, Conditional): tmp.update(_hashable_paths(a))
+        elif isinstance(a, QueryCondition): tmp.update(_hashable_paths(a))
     return tmp
 
 def _placeholders(cond):
-    if not isinstance(cond,Conditional): return set([])
+    if not isinstance(cond,QueryCondition): return set([])
     tmp=set([])
     for a in cond.args:
         if isinstance(a, Placeholder): tmp.add(a.meta.hashable)
-        elif isinstance(a, Conditional): tmp.update(_placeholders(a))
+        elif isinstance(a, QueryCondition): tmp.update(_placeholders(a))
     return tmp
 
 
@@ -187,11 +187,11 @@ def _placeholders(cond):
 # ------------------------------------------------------------------------------
 
 def not_(*conditions):
-    return Conditional(operator.not_,*conditions)
+    return QueryCondition(operator.not_,*conditions)
 def and_(*conditions):
-    return functools.reduce((lambda x,y: Conditional(operator.and_,x,y)),conditions)
+    return functools.reduce((lambda x,y: QueryCondition(operator.and_,x,y)),conditions)
 def or_(*conditions):
-    return functools.reduce((lambda x,y: Conditional(operator.or_,x,y)),conditions)
+    return functools.reduce((lambda x,y: QueryCondition(operator.or_,x,y)),conditions)
 
 
 
@@ -225,8 +225,8 @@ def check_query_condition(qcond):
             raise ValueError(("Invalid condition '{}' in query '{}': a PredicatePath must be "
                               "part of a comparison condition").format(cond, qcond))
         if callable(cond): return
-        if isinstance(cond,Conditional):
-            if Conditional.operators[cond.operator].isbool:
+        if isinstance(cond,QueryCondition):
+            if QueryCondition.operators[cond.operator].isbool:
                 check_bool_condition(cond)
             else:
                 check_comp_condition(cond)
@@ -256,7 +256,7 @@ def simplify_query_condition(qcond):
         return False
 
     def isdynamiccond(cond):
-        if isinstance(cond,Conditional): return True
+        if isinstance(cond,QueryCondition): return True
         if callable(cond): return True
         return False
 
@@ -274,7 +274,7 @@ def simplify_query_condition(qcond):
             newsubcond = simplify_condition(bcond.args[0])
             if not isdynamiccond(newsubcond): return bcond.operator(newsubcond)
             if newsubcond is bcond.args[0]: return bcond
-            return Conditional(bcond.operator,newsubcond)
+            return QueryCondition(bcond.operator,newsubcond)
         if bcond.operator != operator.and_ and bcond.operator != operator.or_:
             print("dfd")
             raise TypeError(("Internal bug: unknown boolean operator '{}' in query "
@@ -288,7 +288,7 @@ def simplify_query_condition(qcond):
                 return False if not newargs[1] else newargs[0]
             if newargs[0] is bcond.args[0] and newargs[1] is bcond.args[1]:
                 return bcond
-            return Conditional(bcond.operator,*newargs)
+            return QueryCondition(bcond.operator,*newargs)
 
         if bcond.operator == operator.or_:
             if not isdynamiccond(newargs[0]):
@@ -297,7 +297,7 @@ def simplify_query_condition(qcond):
                 return True if newargs[1] else newargs[0]
             if newargs[0] is bcond.args[0] and newargs[1] is bcond.args[1]:
                 return bcond
-            return Conditional(bcond.operator,*newargs)
+            return QueryCondition(bcond.operator,*newargs)
 
     def simplify_condition(cond):
         if isinstance(cond,Placeholder):
@@ -307,8 +307,8 @@ def simplify_query_condition(qcond):
             raise ValueError(("Invalid condition '{}' in query '{}': a PredicatePath must be "
                               "part of a comparison condition").format(cond, qcond))
         if callable(cond): return cond
-        if not isinstance(cond,Conditional): return bool(cond)
-        if Conditional.operators[cond.operator].isbool:
+        if not isinstance(cond,QueryCondition): return bool(cond)
+        if QueryCondition.operators[cond.operator].isbool:
             return simplify_bool_condition(cond)
         else:
             return simplify_comp_condition(cond)
@@ -363,14 +363,14 @@ def instantiate_query_condition(qcond, *args, **kwargs):
             if cond.has_default: return cond.default
             raise ValueError(("Missing named placeholder argument '{}' when instantiating "
                               "'{}' with arguments: {} {}").format(cond,qcond,args,kwargs))
-        elif isinstance(cond,Conditional):
+        elif isinstance(cond,QueryCondition):
             newsubargs = []
             changed=False
             for subarg in cond.args:
                 newsubarg = instantiate(subarg)
                 if newsubarg is not subarg: changed=True
                 newsubargs.append(newsubarg)
-            if changed: return Conditional(cond.operator,*newsubargs)
+            if changed: return QueryCondition(cond.operator,*newsubargs)
         return cond
 
     # argument values cannot be a placeholder or predicatepath
@@ -420,8 +420,8 @@ def evaluate_query_condition(qcond, fact):
 
     # Evaluate an arbitrary query condition
     def evaluate(cond):
-        if isinstance(cond,Conditional):
-            if Conditional.operators[cond.operator].isbool:
+        if isinstance(cond,QueryCondition):
+            if QueryCondition.operators[cond.operator].isbool:
                 return evaluate_bool_condition(cond)
             else:
                 return evaluate_comp_condition(cond)
@@ -684,10 +684,10 @@ class SelectImpl(Select):
             if indexable[0].meta.hashable not in self._index_priority: return None
             return indexable
 
-        if isinstance(cond, Conditional) and not Conditional.operators[cond.operator].isbool:
+        if isinstance(cond, QueryCondition) and not QueryCondition.operators[cond.operator].isbool:
             return validate_indexable(get_indexable(cond))
         indexable = None
-        if isinstance(cond, Conditional) and cond.operator == operator.and_:
+        if isinstance(cond, QueryCondition) and cond.operator == operator.and_:
             for arg in cond.args:
                 tmp = self._primary_search(arg)
                 if tmp:

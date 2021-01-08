@@ -6,8 +6,7 @@
 
 from .core import *
 from .factbase import *
-from .core import get_field_definition, Conditional, PredicatePath, \
-    kwargs_check_keys
+from .core import get_field_definition, PredicatePath, kwargs_check_keys
 
 
 __all__ = [

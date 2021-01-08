@@ -24,7 +24,7 @@ from clorm.orm import \
     define_nested_list_field, simple_predicate, path, hashable_path
 
 # Implementation imports
-from clorm.orm.core import get_field_definition, PredicatePath, Conditional
+from clorm.orm.core import get_field_definition, PredicatePath
 
 
 #------------------------------------------------------------------------------

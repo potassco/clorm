@@ -86,17 +86,17 @@ class _lateinit(object):
 # ------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-# Conditional elements of a query. A fact either satisfies a query or it
-# doesn't. A Conditional is either a boolean condition or a comparison condition
-# depending on the operator. A comparison condition involves comparing a
-# component of a fact (specified with a PredicatePath) against some criteria. A
-# boolean condition specifies complex boolean conditions consisting of comparion
-# conditions and other boolean conditions.
+# A Conditional elements of a query. A QueryCondition is either a boolean
+# condition or a comparison condition depending on the operator. A comparison
+# condition involves comparing a component of a fact (specified with a
+# PredicatePath) against some criteria. A boolean condition specifies complex
+# boolean relations consisting of comparion conditions and other boolean
+# conditions.
 # ------------------------------------------------------------------------------
 
 OpSpec = collections.namedtuple('OpSpec','format numargs isbool')
 
-class Conditional(object):
+class QueryCondition(object):
     operators = { operator.and_ : OpSpec("&", 2, True),
                   operator.or_ : OpSpec("|", 2, True),
                   operator.not_ : OpSpec("~", 1, True),
@@ -108,7 +108,7 @@ class Conditional(object):
                   operator.ge : OpSpec(">=", 2, False) }
 
     def __init__(self, operator, *args):
-        opspec = Conditional.operators.get(operator,None)
+        opspec = QueryCondition.operators.get(operator,None)
         if not opspec:
             raise ValueError("Unsupported boolean/comparison operator {}".format(operator))
         if len(args) != opspec.numargs:
@@ -126,22 +126,22 @@ class Conditional(object):
         return self._args
 
     def __and__(self,other):
-        return Conditional(operator.and_,self,other)
+        return QueryCondition(operator.and_,self,other)
     def __or__(self,other):
-        return Conditional(operator.or_,self,other)
+        return QueryCondition(operator.or_,self,other)
     def __rand__(self,other):
-        return Conditional(operator.and_,self,other)
+        return QueryCondition(operator.and_,self,other)
     def __ror__(self,other):
-        return Conditional(operator.or_,self,other)
+        return QueryCondition(operator.or_,self,other)
     def __invert__(self):
-        return Conditional(operator.not_,self)
+        return QueryCondition(operator.not_,self)
 
     def __eq__(self,other):
         def getval(val):
             if isinstance(val,PredicatePath): return val.meta.hashable
             return val
 
-        if not isinstance(other, Conditional): return NotImplemented
+        if not isinstance(other, QueryCondition): return NotImplemented
         if self.operator != other.operator: return False
         for a,b in zip(self.args,other.args):
             if getval(a) != getval(b): return False
@@ -153,8 +153,8 @@ class Conditional(object):
         return not result
 
     def __str__(self):
-        opspec = Conditional.operators[self._operator]
-        args = [ "({})".format(a) if isinstance(a,Conditional) else str(a) \
+        opspec = QueryCondition.operators[self._operator]
+        args = [ "({})".format(a) if isinstance(a,QueryCondition) else str(a) \
                  for a in self._args ]
         if opspec.numargs == 1:
             return "{}{}".format(opspec.format,args[0])
@@ -473,17 +473,17 @@ class PredicatePath(object, metaclass=_PredicatePathMeta):
     # Overload the boolean operators to return a functor
     #--------------------------------------------------------------------------
     def __eq__(self, other):
-        return Conditional(operator.eq, self, other)
+        return QueryCondition(operator.eq, self, other)
     def __ne__(self, other):
-        return Conditional(operator.ne, self, other)
+        return QueryCondition(operator.ne, self, other)
     def __lt__(self, other):
-        return Conditional(operator.lt, self, other)
+        return QueryCondition(operator.lt, self, other)
     def __le__(self, other):
-        return Conditional(operator.le, self, other)
+        return QueryCondition(operator.le, self, other)
     def __gt__(self, other):
-        return Conditional(operator.gt, self, other)
+        return QueryCondition(operator.gt, self, other)
     def __ge__(self, other):
-        return Conditional(operator.ge, self, other)
+        return QueryCondition(operator.ge, self, other)
 
     #--------------------------------------------------------------------------
     # String representation

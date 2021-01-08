@@ -18,9 +18,6 @@ from clingo import Control, Number, String, Function, SymbolType
 from clorm.orm import RawField, IntegerField, StringField, ConstantField, \
     Predicate, ComplexTerm, path, hashable_path
 
-# Implementation imports
-from clorm.orm.core import Conditional
-
 # Official Clorm API imports for the fact base components
 from clorm.orm import FactBase, desc, asc, not_, and_, or_, \
     ph_, ph1_, ph2_
