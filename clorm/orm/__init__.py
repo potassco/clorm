@@ -4,6 +4,7 @@
 
 from .core import *
 from .factbase import *
+from .query import *
 from .unifier import *
 from .atsyntax import *
 
@@ -19,6 +20,9 @@ __all__ = [
     'SymbolPredicateUnifier',
     'ContextBuilder',
     'TypeCastSignature',
+    'Select',
+    'Delete',
+    'Placeholder',
     'refine_field',
     'combine_fields',
     'define_nested_list_field',

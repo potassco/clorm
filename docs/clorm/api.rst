@@ -92,10 +92,22 @@ query mechanism for accessing elements.
 .. autoclass:: clorm.Placeholder
 
 .. autoclass:: clorm.Select
-   :members:
+
+   .. automethod:: where
+
+   .. automethod:: order_by
+
+   .. automethod:: get
+
+   .. automethod:: get_unique
+
+   .. automethod:: count
 
 .. autoclass:: clorm.Delete
-   :members:
+
+   .. automethod:: where
+
+   .. automethod:: execute
 
 .. _api_calling_python_from_asp:
 
