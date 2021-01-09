@@ -1758,10 +1758,19 @@ class PredicatePathTestCase(unittest.TestCase):
         with self.assertRaises(AttributeError) as ctx:
             sign = G.sign
 
-    def test_hashable_path(self):
+    def test_path_and_hashable_path_inputs(self):
 
         F = self.F
         H = self.H
+
+        self.assertTrue(isinstance(path(F), PredicatePath))
+        self.assertEqual(path(F).meta.predicate, F)
+        self.assertEqual(path(F), path(path(F)))
+        self.assertEqual(path(hashable_path(F)), path(F))
+        self.assertEqual(hashable_path(F), F.meta.path.meta.hashable)
+        self.assertEqual(hashable_path(F.meta.path), F.meta.path.meta.hashable)
+        self.assertEqual(hashable_path(F.meta.path.meta.hashable),
+                         F.meta.path.meta.hashable)
         fpath = path(F)
         hpath = path(H)
 

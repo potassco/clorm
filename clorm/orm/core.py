@@ -94,18 +94,29 @@ class _lateinit(object):
 # conditions.
 # ------------------------------------------------------------------------------
 
+# support function to _wrap_query_condition in parentheses
+def _wqc(a):
+    return "({})".format(a) if isinstance(a,QueryCondition) else str(a)
+
 class QueryCondition(object):
-    OpSig = collections.namedtuple('OpSig','format numargs')
+
+
+    OpSig = collections.namedtuple('OpSig','numargs tostr')
     operators = {
-        operator.and_ : OpSig("&", 2),
-        operator.or_ : OpSig("|", 2),
-        operator.not_ : OpSig("~", 1),
-        operator.eq : OpSig("==", 2),
-        operator.ne : OpSig("!=", 2),
-        operator.lt : OpSig("<", 2),
-        operator.le : OpSig("<=", 2),
-        operator.gt : OpSig(">", 2),
-        operator.ge : OpSig(">=", 2) }
+        # Boolean operators
+        operator.and_ : OpSig(2, lambda x,y: "{} & {}".format(_wqc(x),_wqc(y))),
+        operator.or_ : OpSig(2, lambda x,y: "{} | {}".format(_wqc(x),_wqc(y))),
+        operator.not_ : OpSig(1, lambda x: "~{}".format(_wqc(x))),
+
+        # Basic comparison operators
+        operator.eq : OpSig(2, lambda x,y: "{} == {}".format(x,y)),
+        operator.ne : OpSig(2, lambda x,y: "{} != {}".format(x,y)),
+        operator.lt : OpSig(2, lambda x,y: "{} < {}".format(x,y)),
+        operator.le : OpSig(2, lambda x,y: "{} <= {}".format(x,y)),
+        operator.gt : OpSig(2, lambda x,y: "{} > {}".format(x,y)),
+        operator.ge : OpSig(2, lambda x,y: "{} >= {}".format(x,y))
+
+    }
 
     def __init__(self, operator, *args):
         opsig = QueryCondition.operators.get(operator,None)
@@ -155,6 +166,7 @@ class QueryCondition(object):
 
     def __str__(self):
         opsig = QueryCondition.operators[self._operator]
+        return opsig.tostr(*self._args)
         args = [ "({})".format(a) if isinstance(a,QueryCondition) else str(a) \
                  for a in self._args ]
         if opsig.numargs == 1:
@@ -506,10 +518,20 @@ class PredicatePath(object, metaclass=_PredicatePathMeta):
 # ------------------------------------------------------------------------------
 
 def path(arg):
-    '''Return the field path corresponding to a predicate.'''
-    if inspect.isclass(arg) and issubclass(arg, Predicate):
-        return arg.meta.path
-    raise TypeError("{} is not a Predicate class".format(arg))
+    '''Return the predicate path (which is a path to some fact component)
+
+    Will try to resolve the input cleverly so if input a predicate path will
+    simply return that path, if input a predicate subclass will return a path
+    corresponding to that path or if input a hashable path will return the
+    corresponding path object.
+
+    '''
+    if isinstance(arg, PredicatePath): return arg
+    elif isinstance(arg, PredicatePath.Hashable): return arg.path
+    elif inspect.isclass(arg) and issubclass(arg, Predicate): return arg.meta.path
+    raise TypeError(("Invalid argument {} (type: {}): expecting either a "
+                     "PredicatePath, a Predicate sub-class, or a "
+                     "PredicatePath.Hashable").format(arg, type(arg)))
 
 #------------------------------------------------------------------------------
 # API function to return the PredicatePath.Hashable instance for a path
@@ -525,12 +547,15 @@ def hashable_path(arg):
     that predicate class.
 
     '''
-    if inspect.isclass(arg) and issubclass(arg, Predicate):
-        return arg.meta.path.meta.hashable
+    if isinstance(arg,PredicatePath.Hashable):
+        return arg
     elif isinstance(arg, PredicatePath):
         return arg.meta.hashable
-    raise TypeError(("Invalid argument {} (type: {}). Expecting a Predicate sub-class "
-                     "or path").format(arg, type(arg)))
+    elif inspect.isclass(arg) and issubclass(arg, Predicate):
+        return arg.meta.path.meta.hashable
+    raise TypeError(("Invalid argument {} (type: {}): expecting either a "
+                     "Predicate sub-class or a PredicatePath or a "
+                     "PredicatePath.Hashable").format(arg, type(arg)))
 
 #------------------------------------------------------------------------------
 # Helper function to check if a second set of keys is a subset of a first
