@@ -1868,7 +1868,17 @@ class PredicatePathTestCase(unittest.TestCase):
         Y = alias(H)        # No default name
         self.assertTrue(str(Y))
 
-        
+    def test_nonapi_predicate_path_root(self):
+
+        H = self.H
+        X = alias(H,"X")
+
+        self.assertEqual(path(H).meta.root,path(H))
+        self.assertEqual(H.c.b.meta.root,path(H))
+        self.assertEqual(X.c.b.meta.root,X)
+        self.assertEqual(X.c.b.meta.root,path(X))
+        self.assertNotEqual(X.c.b.meta.root,path(H))
+
 
 #------------------------------------------------------------------------------
 # main

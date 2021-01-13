@@ -365,6 +365,16 @@ class PredicatePath(object, metaclass=_PredicatePathMeta):
             return self._parent._pathseq[-1] == "sign"
 
         # --------------------------------------------------------------------------
+        # Return the root path (ie. the path corresponds to a predicate definition)
+        # --------------------------------------------------------------------------
+        @property
+        def root(self):
+            if len(self._parent._pathseq) == 1: return self
+            pi = self._parent._pathseq[0]
+            if pi.predicate.__name__ == pi.name: return self
+            return pi.predicate.meta.path_class([pi])
+
+        # --------------------------------------------------------------------------
         # Return the Predicate sub-class that is the root of this path
         # --------------------------------------------------------------------------
         @property
