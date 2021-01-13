@@ -369,9 +369,9 @@ class PredicatePath(object, metaclass=_PredicatePathMeta):
         # --------------------------------------------------------------------------
         @property
         def root(self):
-            if len(self._parent._pathseq) == 1: return self
+            if len(self._parent._pathseq) == 1: return self._parent
             pi = self._parent._pathseq[0]
-            if pi.predicate.__name__ == pi.name: return self
+            if pi.predicate.__name__ == pi.name: return self.predicate.meta.path
             return pi.predicate.meta.path_class([pi])
 
         # --------------------------------------------------------------------------

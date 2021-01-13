@@ -1873,11 +1873,13 @@ class PredicatePathTestCase(unittest.TestCase):
         H = self.H
         X = alias(H,"X")
 
-        self.assertEqual(path(H).meta.root,path(H))
-        self.assertEqual(H.c.b.meta.root,path(H))
-        self.assertEqual(X.c.b.meta.root,X)
-        self.assertEqual(X.c.b.meta.root,path(X))
-        self.assertNotEqual(X.c.b.meta.root,path(H))
+        def _h(a): return hashable_path(a)
+
+        self.assertEqual(_h(path(H).meta.root), _h(H))
+        self.assertEqual(_h(H.c.b.meta.root) ,_h(H))
+        self.assertEqual(_h(X.c.b.meta.root) ,_h(X))
+        self.assertEqual(_h(X.c.b.meta.root) ,_h(X))
+        self.assertNotEqual(_h(X.c.b.meta.root), _h(H))
 
 
 #------------------------------------------------------------------------------
