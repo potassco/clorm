@@ -21,7 +21,7 @@ from clingo import Control, Number, String, Function, SymbolType
 from clorm.orm import \
     RawField, IntegerField, StringField, ConstantField, SimpleField,  \
     Predicate, ComplexTerm, refine_field, combine_fields, \
-    define_nested_list_field, simple_predicate, path, hashable_path
+    define_nested_list_field, simple_predicate, path, hashable_path, alias
 
 # Implementation imports
 from clorm.orm.core import get_field_definition, PredicatePath
@@ -1823,6 +1823,52 @@ class PredicatePathTestCase(unittest.TestCase):
         self.assertEqual(H.sign(h1_neg), h1_neg.sign)
         self.assertEqual(H.sign(h2_pos), h2_pos.sign)
 
+
+    def test_predicate_path_alias(self):
+
+        H = self.H
+
+        Hpath = path(H)
+        X = alias(H,"X")
+
+        self.assertTrue(isinstance(X, PredicatePath))
+        self.assertEqual(type(X), type(path(H)))
+
+        # The path names for the alias follows the normal pattern
+        self.assertEqual(str(X.a), "X.a")
+        self.assertEqual(str(X.b), "X.b")
+        self.assertEqual(str(X.b.a), "X.b.a")
+        self.assertEqual(str(X.b.sign), "X.b.sign")
+        self.assertEqual(str(X.c.a), "X.c.a")
+        self.assertEqual(str(X.c.b), "X.c.b")
+
+        # The PredicatePath subclasses are the same
+        self.assertEqual(type(H.a), type(X.a))
+        self.assertEqual(type(H.b), type(X.b))
+        self.assertEqual(type(H.b.a), type(X.b.a))
+        self.assertEqual(type(H.b.sign), type(X.b.sign))
+        self.assertEqual(type(H.c.a), type(X.c.a))
+        self.assertEqual(type(H.c.a), type(X.c.a))
+
+        # The path and alias refer to the same root predicate
+        self.assertEqual(X.meta.predicate, path(H).meta.predicate)
+        self.assertEqual(X.a.meta.predicate, H.a.meta.predicate)
+        self.assertEqual(X.b.meta.predicate, H.b.meta.predicate)
+        self.assertEqual(X.b.sign.meta.predicate, H.b.sign.meta.predicate)
+
+        # But the paths are not equal
+        def _h(a): return hashable_path(a)
+
+        self.assertNotEqual(_h(X), _h(H))
+        self.assertNotEqual(_h(X.a), _h(H.a))
+        self.assertNotEqual(_h(X.b), _h(H.b))
+        self.assertNotEqual(_h(X.b.a), _h(H.b.a))
+
+        # No alias name specified so generate a random one
+        Y = alias(H)        # No default name
+        self.assertTrue(str(Y))
+
+        
 
 #------------------------------------------------------------------------------
 # main

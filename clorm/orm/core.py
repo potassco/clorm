@@ -22,6 +22,7 @@ import itertools
 import clingo
 import typing
 import re
+import uuid
 
 __all__ = [
     'RawField',
@@ -36,7 +37,8 @@ __all__ = [
     'define_nested_list_field',
     'simple_predicate',
     'path',
-    'hashable_path'
+    'hashable_path',
+    'alias'
     ]
 
 #------------------------------------------------------------------------------
@@ -367,7 +369,7 @@ class PredicatePath(object, metaclass=_PredicatePathMeta):
         # --------------------------------------------------------------------------
         @property
         def predicate(self):
-            return self._parent._pathseq[0]
+            return self._parent._pathseq[0].predicate
 
         #--------------------------------------------------------------------------
         # get the RawField instance associated with this path. If the path is a
@@ -394,7 +396,7 @@ class PredicatePath(object, metaclass=_PredicatePathMeta):
         # --------------------------------------------------------------------------
         def resolve(self, fact):
             pseq = self._parent._pathseq
-            if type(fact) != pseq[0]:
+            if type(fact) != pseq[0].predicate:
                 raise TypeError("{} is not of type {}".format(fact, pseq[0]))
             value = fact
             for name in pseq[1:]: value = value.__getattribute__(name)
@@ -421,9 +423,11 @@ class PredicatePath(object, metaclass=_PredicatePathMeta):
         self._field = self._get_field()
         self._hashable = PredicatePath.Hashable(self)
 
-        if not pathseq or not inspect.isclass(pathseq[0]) or \
-           not issubclass(pathseq[0], Predicate):
-            raise TypeError("Invalid path sequence for PredicatePath: {}".format(pathseq))
+        if not pathseq or not isinstance(pathseq[0], PathIdentity) or \
+           not inspect.isclass(pathseq[0].predicate) or \
+           not issubclass(pathseq[0].predicate, Predicate):
+            raise TypeError(("Internal error: invalid base path sequence for "
+                             "predicate path definition: {}").format(pathseq))
 
         # If this is a leaf path (instance of the base PredicatePath class) then
         # there will be no sub-paths so nothing else to do.
@@ -458,7 +462,7 @@ class PredicatePath(object, metaclass=_PredicatePathMeta):
     def _get_field(self):
         if len(self._pathseq) <= 1: return None
         if self._pathseq[-1] == "sign": return None
-        predicate = self._pathseq[0]
+        predicate = self._pathseq[0].predicate
         for name in self._pathseq[1:]:
             field = predicate.meta[name].defn
             if field.complex: predicate = field.complex
@@ -503,10 +507,11 @@ class PredicatePath(object, metaclass=_PredicatePathMeta):
     # --------------------------------------------------------------------------
 
     def __str__(self):
-        if len(self._pathseq) == 1: return self._pathseq[0].__name__
+        def basename(): return self._pathseq[0].name
+        if len(self._pathseq) == 1: return basename()
 
         tmp = ".".join(self._pathseq[1:])
-        return self._pathseq[0].__name__ + "." + tmp
+        return basename() + "." + tmp
 
     def __repr__(self):
         return self.__str__()
@@ -556,6 +561,46 @@ def hashable_path(arg):
     raise TypeError(("Invalid argument {} (type: {}): expecting either a "
                      "Predicate sub-class or a PredicatePath or a "
                      "PredicatePath.Hashable").format(arg, type(arg)))
+
+
+#------------------------------------------------------------------------------
+# API function to return the an alias path for a predicate
+# ------------------------------------------------------------------------------
+
+def alias(predicate, name=None):
+    '''Return an alias PredicatePath instance for a Predicate sub-class.
+
+    A predicate alias can be used to support joins in queries. The alias has all
+    the same fields (and sub-fields) as the "normal" path associated with the
+    predicate.
+
+    Example:
+       .. code-block:: python
+
+           import clorm Predicate, ConstantField
+
+           class F(Predicate):
+               a = ConstantField
+               b = ConstantField
+
+          X = alias(F)
+          print("field of predicate F: {}".format(F.a))
+          print("field of alias X: {}".format(X.a))
+
+    '''
+    if inspect.isclass(predicate) and issubclass(predicate, Predicate):
+        return predicate.meta.alias(name)
+
+    errormsg = ("predicate argument must refer to a Predicate sub-class "
+                "or the root path corresponding to a Predicate sub-class")
+    arg = predicate
+    if isinstance(arg,PredicatePath.Hashable): arg = predicate.path
+    if isinstance(arg, PredicatePath):
+        if not arg.meta.is_root:
+            raise ValueError("Invalid argument {}: {}".format(arg,errormsg))
+        return arg.meta.predicate.meta.alias(name)
+
+    raise ValueError("Invalid argument {}: {}".format(arg,errormsg))
 
 #------------------------------------------------------------------------------
 # Helper function to check if a second set of keys is a subset of a first
@@ -1333,7 +1378,16 @@ def _magic_name(name):
 
 #------------------------------------------------------------------------------
 # The Predicate base class and supporting functions and classes
-# ------------------------------------------------------------------------------
+#------------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------
+# We want to support aliases to predicate paths so that we can define a join
+# query between a predicate and itself. Eg. something like F.a == F.alias().a So
+# we need a way to distinguish between paths that point to the same underlying
+# predicate but use a different identifier.
+# -----------------------------------------------------------------------------
+
+PathIdentity = collections.namedtuple("PathIdentity", "predicate name")
 
 #--------------------------------------------------------------------------
 # One PredicateDefn object for each Predicate sub-class
@@ -1426,7 +1480,7 @@ class PredicateDefn(object):
                                 "PredicateDefn doesn't make sense"))
         self._parent_cls = pc
         self._path_class = _define_predicate_path_subclass(pc)
-        self._path = self._path_class([pc])
+        self._path = seq = self._path_class([PathIdentity(pc,pc.__name__)])
 
     # Internal property
     @property
@@ -1435,6 +1489,24 @@ class PredicateDefn(object):
     # Internal property
     @property
     def path_class(self): return self._path_class
+
+    #FIXUP
+    def alias(self, name=None):
+        """Create an alias path for the predicate
+
+        This lets the user create a join query between a predicate and itself.
+
+        If a name is specified then a unique name is generated. Uses a component
+        uuid4() as the unique number - aliases shouldn't be used often so
+        using a small component should still be unlikely to clash.
+
+        """
+        if not name:
+            classname = self._parent_cls.__name__
+            num = uuid.uuid4().time_mid
+            name = "({}.alias.{})".format(classname,num)
+        return self._path_class([PathIdentity(self._parent_cls,name)])
+
 
     def __len__(self):
         '''Returns the number of fields'''
