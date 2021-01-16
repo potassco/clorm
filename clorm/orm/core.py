@@ -129,7 +129,7 @@ class QueryCondition(object):
                               "{}").format(operator, opsig.numargs, len(args)))
 
         self._operator = operator
-        self._args = args
+        self._args = tuple(args)
 
     @property
     def operator(self):
