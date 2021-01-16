@@ -532,7 +532,7 @@ class PredicatePath(object, metaclass=_PredicatePathMeta):
 # trying to do strange overloading of the class comparison operator.
 # ------------------------------------------------------------------------------
 
-def path(arg):
+def path(arg,exception=True):
     '''Return the predicate path (which is a path to some fact component)
 
     Will try to resolve the input cleverly so if input a predicate path will
@@ -544,6 +544,7 @@ def path(arg):
     if isinstance(arg, PredicatePath): return arg
     elif isinstance(arg, PredicatePath.Hashable): return arg.path
     elif inspect.isclass(arg) and issubclass(arg, Predicate): return arg.meta.path
+    if not exception: return None
     raise TypeError(("Invalid argument {} (type: {}): expecting either a "
                      "PredicatePath, a Predicate sub-class, or a "
                      "PredicatePath.Hashable").format(arg, type(arg)))
@@ -552,7 +553,7 @@ def path(arg):
 # API function to return the PredicatePath.Hashable instance for a path
 # ------------------------------------------------------------------------------
 
-def hashable_path(arg):
+def hashable_path(arg,exception=True):
     '''Return a PredicatePath.Hashable instance for a path or Predicate sub-class.
 
     A hashable path can be used in a set or dictionary key. If the argument is a
@@ -568,6 +569,7 @@ def hashable_path(arg):
         return arg.meta.hashable
     elif inspect.isclass(arg) and issubclass(arg, Predicate):
         return arg.meta.path.meta.hashable
+    if not exception: return None
     raise TypeError(("Invalid argument {} (type: {}): expecting either a "
                      "Predicate sub-class or a PredicatePath or a "
                      "PredicatePath.Hashable").format(arg, type(arg)))

@@ -1758,6 +1758,33 @@ class PredicatePathTestCase(unittest.TestCase):
         with self.assertRaises(AttributeError) as ctx:
             sign = G.sign
 
+    def test_api_path_and_hashable_path_bad_inputs(self):
+        F = self.F
+        H = self.H
+
+        class Foo(object):
+            def __init__(self,a=1): self._a = a
+
+        # Bad input raises a TypeError with default second param
+        with self.assertRaises(TypeError) as ctx:
+            path(True)
+        check_errmsg("Invalid argument", ctx)
+        with self.assertRaises(TypeError) as ctx:
+            path([1,2])
+        check_errmsg("Invalid argument", ctx)
+        with self.assertRaises(TypeError) as ctx:
+            path(1)
+        check_errmsg("Invalid argument", ctx)
+        with self.assertRaises(TypeError) as ctx:
+            path(Foo(1))
+        check_errmsg("Invalid argument", ctx)
+
+        # Bad input returns None if exception=False
+        self.assertTrue(path([1,2],exception=False) is None)
+        self.assertTrue(path(True,exception=False) is None)
+        self.assertTrue(path(1,exception=False) is None)
+        self.assertTrue(path(Foo(1),exception=False) is None)
+
     def test_path_and_hashable_path_inputs(self):
 
         F = self.F
