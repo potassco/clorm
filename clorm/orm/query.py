@@ -8,8 +8,9 @@ import collections
 import bisect
 import abc
 import functools
-import itertools
+import inspect
 
+from ..util.tools import all_equal
 from .core import *
 from .core import get_field_definition, QueryCondition, PredicatePath, \
     kwargs_check_keys
@@ -28,6 +29,7 @@ __all__ = [
     'not_',
     'and_',
     'or_',
+    'func_',
     ]
 
 #------------------------------------------------------------------------------
@@ -51,7 +53,16 @@ class Placeholder(abc.ABC):
     correspond to the positional arguments of the query execute function call.
 
     """
-    pass
+
+    @abc.abstractmethod
+    def __eq__(self, other): pass
+
+    @abc.abstractmethod
+    def __ne__(self, other): pass
+
+    @abc.abstractmethod
+    def __hash__(self): pass
+
 
 class NamedPlaceholder(Placeholder):
     # None could be a legitimate value so cannot use it to test for default
@@ -98,6 +109,8 @@ class NamedPlaceholder(Placeholder):
         result = self.__eq__(other)
         if result is NotImplemented: return NotImplemented
         return not result
+    def __hash__(self):
+        return hash(self._name)
 
 class PositionalPlaceholder(Placeholder):
     def __init__(self, posn):
@@ -116,6 +129,8 @@ class PositionalPlaceholder(Placeholder):
         result = self.__eq__(other)
         if result is NotImplemented: return NotImplemented
         return not result
+    def __hash__(self):
+        return hash(self._posn)
 
 #def ph_(value,default=None):
 
@@ -165,47 +180,43 @@ ph3_ = PositionalPlaceholder(2)
 ph4_ = PositionalPlaceholder(3)
 
 
-def _hashable_paths(cond):
-    if not isinstance(cond,QueryCondition): return set([])
-    tmp=set([])
-    for a in cond.args:
-        if isinstance(a, PredicatePath): tmp.add(a.meta.hashable)
-        elif isinstance(a, QueryCondition): tmp.update(_hashable_paths(a))
-    return tmp
-
-def _placeholders(cond):
-    if not isinstance(cond,QueryCondition): return set([])
-    tmp=set([])
-    for a in cond.args:
-        if isinstance(a, Placeholder): tmp.add(a.meta.hashable)
-        elif isinstance(a, QueryCondition): tmp.update(_placeholders(a))
-    return tmp
-
-
 # ------------------------------------------------------------------------------
 # User callable functions to build boolean conditions
 # ------------------------------------------------------------------------------
 
 def not_(*conditions):
+    '''Return a boolean condition that is the negation of the input condition'''
     return QueryCondition(operator.not_,*conditions)
+
 def and_(*conditions):
+    '''Return the conjunction of two of more conditions'''
     return functools.reduce((lambda x,y: QueryCondition(operator.and_,x,y)),conditions)
+
 def or_(*conditions):
+    '''Return the disjunction of two of more conditions'''
     return functools.reduce((lambda x,y: QueryCondition(operator.or_,x,y)),conditions)
 
+def func_(paths, func):
+    '''Wrap a boolean functor with predicate paths for use as a query condition'''
+    def get_paths():
+        try:
+            return [path(paths)]
+        except TypeError:
+            return [ path(p) for p in paths]
 
+    return FunctorComparisonCondition(func, get_paths())
+
+# ------------------------------------------------------------------------------
+# Query conditions (whether QueryCondition objects or functors or
+# FunctorComparisonCondition wrapper objects) are treated as immutable. So when
+# manipulating such objects the following functions make modified copies of the
+# objects rather than modifying the objects themselves. So if a function doesn't
+# need to modify an object at all it simply returns the object itself.
+# ------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 # Functions to check, simplify, resolve placeholders, and execute queries
 # ------------------------------------------------------------------------------
-
-def _is_bool_condition(cond):
-    bool_operators = {
-        operator.and_ : True, operator.or_ : True, operator.not_ : True,
-        operator.eq : False, operator.ne : False, operator.lt : False,
-        operator.le : False, operator.gt : False, operator.ge : False }
-
-    return bool_operators[cond.operator]
 
 CompOpSpec = collections.namedtuple('CompOpSpec','negate')
 
@@ -217,6 +228,576 @@ g_compop_operators = {
     operator.gt : CompOpSpec(negate=operator.le),
     operator.ge : CompOpSpec(negate=operator.lt) }
 
+g_bool_operators = {
+    operator.and_ : True, operator.or_ : True, operator.not_ : True,
+    operator.eq : False, operator.ne : False, operator.lt : False,
+    operator.le : False, operator.gt : False, operator.ge : False }
+
+def _is_bool_condition(cond):
+    if isinstance(cond, FunctorComparisonCondition): return False
+    elif not isinstance(cond, QueryCondition): return False
+    return g_bool_operators[cond.operator]
+
+def _is_comparison_condition(cond):
+    if isinstance(cond, FunctorComparisonCondition): return True
+    elif not isinstance(cond, QueryCondition): return False
+    return not g_bool_operators[cond.operator]
+
+# ------------------------------------------------------------------------------
+# Every comparison condition (including a FunctorComparisonCondition) has an
+# operator function and input of some form; eg "F.anum == 3" has operator.eq_
+# and input (F.anum,3) where F.anum is a path and will be replaced by some fact
+# sub-field value.
+#
+# Only the other hand a query needs to test a fact (or a tuple of facts) against
+# this operator. If a search is on a single predicate type then input will be a
+# singleton tuple; if there is a join in the query there will be multiple
+# elements to the tuple. However, the order of facts will be determined by the
+# query optimiser as it may be more efficient to join X with Y rather than Y
+# with X. So we need a way to remap a search input fact-tuple into the expected
+# form for each query condition component. This function returns a function that
+# takes a tuple of facts as given by the input signature and returns a tuple of
+# values as given by the output signature.
+# ------------------------------------------------------------------------------
+def make_query_alignment_functor(input_predicate_signature, output_signature):
+
+    # Input signature are paths that must correspond to predicate types
+    def validate_input_signature():
+        if not input_predicate_signature:
+            raise TypeError("Empty input predicate path signature")
+        inputs=[]
+        try:
+            for p in input_predicate_signature:
+                pp = path(p)
+                if not pp.meta.is_root:
+                    raise ValueError("path '{}' is not a predicate root".format(pp))
+                inputs.append(pp)
+        except Exception as e:
+            raise TypeError(("Invalid input predicate path signature {}: "
+                              "{}").format(input_predicate_signature,e)) from None
+        return inputs
+
+    # Output signature are field paths or statics (but not placeholders)
+    def validate_output_signature():
+        if not output_signature: raise TypeError("Empty output path signature")
+        outputs=[]
+        for a in output_signature:
+            p = path(a,exception=False)
+            outputs.append(p if p else a)
+            if p: continue
+            if isinstance(a, Placeholder):
+                raise TypeError(("Output signature '{}' contains a placeholder "
+                                  "'{}'").format(output_signature,a))
+        return outputs
+
+    insig = validate_input_signature()
+    outsig = validate_output_signature()
+
+    # build list of lambdas one for each output item to return appropriate values
+    pp2idx = { hashable_path(pp) : idx for idx,pp in enumerate(insig) }
+    getters = []
+    for out in outsig:
+        if isinstance(out,PredicatePath):
+            idx = pp2idx.get(hashable_path(out.meta.root),None)
+            if idx is None:
+                raise TypeError(("Invalid signature match between {} and {}: "
+                                 "missing input predicate path for "
+                                 "{}").format(input_predicate_signature,
+                                              output_signature,out))
+            getters.append(lambda facts, p=out, idx=idx: p(facts[idx]))
+        else:
+            getters.append(lambda facts : out)
+
+    getters = tuple(getters)
+
+    # Create the getter
+    def func(facts):
+        try:
+            return tuple(getter(facts) for getter in getters)
+        except IndexError as e:
+            raise TypeError(("Invalid input to getter function: expecting "
+                             "a tuple with {} elements and got a tuple with "
+                             "{}").format(len(insig),len(facts))) from None
+        except TypeError as e:
+            raise TypeError(("Invalid input to getter function: "
+                             "{}").format(e)) from None
+    return func
+
+
+# ------------------------------------------------------------------------------
+# ComparisonCallable is a functional object that wraps a comparison operator and
+# ensures the comparison operator gets the correct input. The input to a
+# ComparisonCallable is a tulple of facts (the form of which is determined by a
+# signature) and returns whether the facts satisfy some condition.
+# ------------------------------------------------------------------------------
+
+class ComparisonCallable(object):
+    def __init__(self, operator, getter_map):
+        self._operator = operator
+        self._getter_map = getter_map
+
+    def __call__(self, facts):
+        args = self._getter_map(facts)
+        return self._operator(*args)
+
+# ------------------------------------------------------------------------------
+# FunctorComparisonCondition is a wrapper around query boolean
+# functions/callables that are not QueryCondition objects. The constructor takes
+# a reference to the function and a path signature.
+# ------------------------------------------------------------------------------
+
+class FunctorComparisonCondition(object):
+    def __init__(self,func,path_signature,negative=False,assignment=None):
+        self._func = func
+        self._funcsig = collections.OrderedDict()
+        self._pathsig = tuple([ hashable_path(p) for p in path_signature])
+        self._negative = negative
+        self._assignment = None if assignment is None else dict(assignment)
+
+        # The function signature must be compatible with the path signature
+        funcsig = inspect.signature(func)
+        if len(funcsig.parameters) < len(self._pathsig):
+            raise TypeError(("More paths specified in the path signature '{}' "
+                             "than there are in the function "
+                             "signature '{}'").format(self._pathsig, funcsig))
+
+        # Track the parameters that are not part of the path signature but are
+        # part of the function signature. This determines if the
+        # FunctorComparisonCondition is "ground".
+        for i,(k,v) in enumerate(funcsig.parameters.items()):
+            if i >= len(self._pathsig): self._funcsig[k]=v
+
+        # Check the path signature
+        if not self._pathsig:
+            raise TypeError("Invalid empty path signature")
+
+        for pp in self._pathsig:
+            if not isinstance(pp,PredicatePath.Hashable):
+                raise TypeError(("The boolean functor call signature must "
+                                  "consist of predicate paths"))
+
+        # if there is an assigned ordereddict then check the keys
+        if self._assignment is not None:
+            self._check_assignment()
+
+    def _check_assignment(self):
+        assignmentkeys=set(list(self._assignment.keys()))
+        funcsigkeys=set(list(self._funcsig.keys()))
+        tmp = assignmentkeys-funcsigkeys
+        if tmp:
+            raise TypeError(("FunctorComparisonCondition is being given "
+                             "an assignment for unrecognised function "
+                             "parameters '{}'").format(tmp))
+
+        unassigned = funcsigkeys-assignmentkeys
+        if not unassigned: return
+
+        # There are unassigned so check if there are default values
+        tmp = set()
+        for name in unassigned:
+            default = self._funcsig[name].default
+            if default == inspect.Parameter.empty:
+                tmp.add(name)
+            else:
+                self._assignment[name] = default
+
+        if tmp:
+            raise ValueError(("Even after the named placeholders have been "
+                              "assigned there are missing functor parameters "
+                              "for '{}'").format(tmp))
+
+    @property
+    def path_signature(self):
+        return self._pathsig
+
+    @property
+    def predicates(self):
+        return set([p.path.meta.predicate for p in self._pathsig])
+
+    @property
+    def is_ground(self):
+        '''Is ground if all the non-path function parameters are assigned or have a
+           default value
+        '''
+        return self._assignment is not None
+
+    def negate(self):
+        neg = not self._negative
+        return FunctorComparisonCondition(self._func,self._pathsig,neg,
+                                          assignment=self._assignment)
+
+    def ground(self, assignment={}):
+        if self._assignment is not None:
+            raise RuntimeError(("Internal bug: cannot ground "
+                                "FunctorComparisonCondition multiple times"))
+        return FunctorComparisonCondition(self._func,self._pathsig,
+                                          self._negative,assignment)
+
+    def make_callable(self, predicate_signature):
+        if not self.is_ground:
+            raise RuntimeError(("Internal bug: make_callable called on a "
+                                "ungrounded object: {}").format(self))
+
+        # from the function signature generate and the assignment
+        # generate the fixed values for the non-path items
+        funcsigparam = [ self._assignment[k] for k,_ in self._funcsig.items() ]
+        outputsig = tuple(list(self._pathsig) + funcsigparam)
+        alignfunc = make_query_alignment_functor(predicate_signature,
+                                                 outputsig)
+        op = self._func if not self._negative else lambda *args : not self._func(*args)
+        return ComparisonCallable(op,alignfunc)
+
+    def __eq__(self, other):
+        if not isinstance(other, FunctorComparisonCondition): return NotImplemented
+        if self._func != other._func: return False
+        if self._pathsig != other._pathsig: return False
+        if self._negative != other._negative: return False
+        if self._assignment != other._assignment: return False
+        return True
+    def __ne__(self, other):
+        result = self.__eq__(other)
+        if result is NotImplemented: return NotImplemented
+        return not result
+
+    def __str__(self):
+        assignstr = ": {}".format(self._assignment) if self._assignment else ""
+        funcstr = "func_({}{}, {})".format(self._pathsig,assignstr,self._func,)
+        if not self._negative: return funcstr
+        return "not_({})".format(funcstr)
+
+# ------------------------------------------------------------------------------
+# Take a predicate path signature and a ground comparison condition (either an
+# appropriate QueryCondition or a FunctorComparisonCondition) and return a
+# ComparisonCallable object that can be used to test whether an input fact tuple
+# satisfies the condition.
+# ------------------------------------------------------------------------------
+
+def make_comparison_callable(predicate_signature, ccond):
+    if isinstance(ccond,FunctorComparisonCondition):
+        return ccond.make_callable(predicate_signature)
+    if not _is_comparison_condition(ccond):
+        raise TypeError(("Internal bug: object is not a comparison "
+                         "condition: {}").format(ccond))
+    if not _is_ground(ccond):
+        raise TypeError(("Internal bug: comparison condition is not"
+                         "ground: {}").format(ccond))
+
+    # It must be a ground comparison QueryCondition object
+    sig = make_query_alignment_functor(predicate_signature, ccond.args)
+    return ComparisonCallable(ccond.operator,sig)
+
+# ------------------------------------------------------------------------------
+# Validates and simplifies a query condition with respect to a set of predicate
+# types. Returns a simplified version of the query condition where: 1) any
+# static conditions (conditions that can be evaluated without a fact) are
+# replaced with their a boolean evaluation, 2) boolean functors are wrapped in a
+# FunctorComparisonCondition object.
+# ------------------------------------------------------------------------------
+def validate_query_condition(qcond, ppaths):
+    try:
+        ppaths = [ hashable_path(pp) for pp in ppaths ]
+    except Exception as e:
+        raise ValueError(("Invalid predicate paths signature {}: "
+                          "{}").format(ppaths,e)) from None
+    for pp in ppaths:
+        if not pp.path.meta.is_root:
+            raise ValueError(("Invalid ppaths element {} does not refer to "
+                              "the root of a predicate path ").format(pp))
+    ppaths = set(ppaths)
+
+    def getcomparable(arg):
+        if isinstance(arg,PredicatePath): return hashable_path(arg)
+        return arg
+
+    # Check if a condition is static - based on recursive call
+    def is_static_condition(cond):
+        if isinstance(cond,QueryCondition): return False
+        if isinstance(cond,FunctorComparisonCondition): return False
+        if callable(cond): return False
+        return True
+
+    # Check callable - construct a FunctorComparisonCondition if not already one
+    def validate_callable(func):
+        if len(ppaths) != 1:
+            raise ValueError(("Incompatible usage between raw functor {} and "
+                              "non-singleton predicates {}").format(func,ppaths))
+        return FunctorComparisonCondition(func,ppaths)
+
+    # Check boolean condition - simplifying if it is a static condition
+    def validate_bool_condition(bcond):
+        if bcond.operator == operator.not_:
+            newsubcond = validate_condition(bcond.args[0])
+            if is_static_condition(newsubcond): return bcond.operator(newsubcond)
+            if newsubcond == bcond.args[0]: return bcond
+            return QueryCondition(bcond.operator,newsubcond)
+        if bcond.operator != operator.and_ and bcond.operator != operator.or_:
+            raise TypeError(("Internal bug: unknown boolean operator '{}' in query "
+                             "condition '{}'").format(bcond.operator, qcond))
+        newargs = [validate_condition(a) for a in bcond.args]
+        if is_static_condition(newargs[0]) and is_static_condition(newargs[1]):
+            return bcond.operator(newargs[0],newargs[1])
+        if bcond.operator == operator.and_:
+            if is_static_condition(newargs[0]):
+                return False if not newargs[0] else newargs[1]
+            if is_static_condition(newargs[1]):
+                return False if not newargs[1] else newargs[0]
+        if bcond.operator == operator.or_:
+            if is_static_condition(newargs[0]):
+                return True if newargs[0] else newargs[1]
+            if is_static_condition(newargs[1]):
+                return True if newargs[1] else newargs[0]
+        if bcond.args == newargs: return bcond
+        return QueryCondition(bcond.operator,*newargs)
+
+    # Check comparison condition - at least one argument must be a predicate path
+    def validate_comp_condition(ccond):
+        if isinstance(ccond,QueryCondition):
+            if all(map(is_static_condition, ccond.args)):
+                raise ValueError(("Invalid comparison condition {} in query {}: "
+                                  "at least one argument must reference a "
+                                  "predicate path").format(ccond,qcond))
+            if all_equal(ccond.args): return ccond
+            return QueryCondition(ccond.operator,*ccond.args)
+
+        # must be a FunctorComparisonCondition
+        for pp in ccond.path_signature:
+            if hashable_path(path(pp).meta.predicate) not in ppaths:
+                raise ValueError(("Boolean functor {} references {} which "
+                                  "is not connected to {}").format(fcc,pp,ppaths))
+        return ccond
+
+    # Validate a condition
+    def validate_condition(cond):
+        if isinstance(cond,Placeholder):
+            raise ValueError(("Invalid condition '{}' in query '{}': a Placeholder must be "
+                              "part of a comparison condition").format(cond, qcond))
+        if isinstance(cond,PredicatePath):
+            raise ValueError(("Invalid condition '{}' in query '{}': a PredicatePath must be "
+                              "part of a comparison condition").format(cond, qcond))
+        if callable(cond): return validate_callable(cond)
+        elif _is_bool_condition(cond): return validate_bool_condition(cond)
+        elif _is_comparison_condition(cond): return validate_comp_condition(cond)
+        else: return bool(cond)
+
+    return validate_condition(qcond)
+
+# ------------------------------------------------------------------------------
+# negate a query condition and push the negation into the leaf nodes - note:
+# input must have already been validated. Because we can negate all comparison
+# conditions we therefore end up with no explicitly negated boolean conditions.
+# ------------------------------------------------------------------------------
+def negate_query_condition(qcond):
+
+    # Note: for not operator negate twice to force negation inward
+    def negate_bool_condition(bcond):
+        if bcond.operator == operator.not_:
+            return negate_condition(negate_condition(bcond.args[0]))
+        if bcond.operator == operator.and_:
+            return or_(negate_condition(bcond.args[0]),
+                       negate_condition(bcond.args[1]))
+        if bcond.operator == operator.or_:
+            return and_(negate_condition(bcond.args[0]),
+                        negate_condition(bcond.args[1]))
+        raise TypeError(("Internal bug: unknown boolean operator '{}' in query "
+                         "condition '{}'").format(bcond.operator, qcond))
+
+    def negate_comp_condition(ccond):
+        spec = g_compop_operators.get(ccond.operator,None)
+        if spec is None:
+            raise TypeError(("Internal bug: unknown comparison operator '{}' in "
+                             "query condition '{}'").format(bcond.operator, qcond))
+        return QueryCondition(spec.negate, *ccond.args)
+
+    # Negate the condition
+    def negate_condition(cond):
+        if isinstance(cond, FunctorComparisonCondition): return cond.negate()
+        if _is_bool_condition(cond):
+            return negate_bool_condition(cond)
+        else:
+            return negate_comp_condition(cond)
+
+    return negate_condition(qcond)
+
+# ------------------------------------------------------------------------------
+# Convert the query condition to negation normal form by pushing any negations
+# inwards. Because we can negate all comparison conditions we therefore end up
+# with no explicit negated boolean conditions. Note: input must have been
+# validated
+# ------------------------------------------------------------------------------
+def normalise_to_nnf_query_condition(qcond):
+    return negate_query_condition(negate_query_condition(qcond))
+
+# ------------------------------------------------------------------------------
+# Convert the query condition to conjunctive normal form. Because we can negate
+# all comparison conditions we therefore end up with no explicit negated boolean
+# conditions.  Note: input must have been validated
+# ------------------------------------------------------------------------------
+def normalise_to_cnf_query_condition(qcond):
+
+    def dist_if_or_over_and(bcond):
+        if bcond.operator != operator.or_: return bcond
+        if bcond.args[0].operator == operator.and_:
+            x = bcond.args[0].args[0]
+            y = bcond.args[0].args[1]
+            return and_(or_(x,bcond.args[1]),or_(y,bcond.args[1]))
+        if bcond.args[1].operator == operator.and_:
+            x = bcond.args[1].args[0]
+            y = bcond.args[1].args[1]
+            return and_(or_(bcond.args[0],x),or_(bcond.args[0],y))
+        return bcond
+
+    def bool_condition_to_cnf(bcond):
+        oldbcond = bcond
+        while True:
+            bcond = dist_if_or_over_and(oldbcond)
+            if bcond is oldbcond: break
+            oldbcond = bcond
+        arg0 = condition_to_cnf(bcond.args[0])
+        arg1 = condition_to_cnf(bcond.args[1])
+        if arg0 is bcond.args[0] and arg1 is bcond.args[1]:
+            return bcond
+        return QueryCondition(bcond.operator,arg0,arg1)
+
+    def condition_to_cnf(cond):
+        if isinstance(cond, FunctorComparisonCondition): return cond
+        if not _is_bool_condition(cond): return cond
+        return bool_condition_to_cnf(cond)
+
+    return condition_to_cnf(normalise_to_nnf_query_condition(qcond))
+
+
+# ------------------------------------------------------------------------------
+# A Clause is a list of comparison conditions that should be interpreted as a
+# disjunction.
+# ------------------------------------------------------------------------------
+
+def _hashable_paths(arg):
+    if isinstance(arg, FunctorComparisonCondition): return set(arg.path_signature)
+    elif isinstance(arg, PredicatePath): return set([hashable_path(arg)])
+    if not isinstance(arg,QueryCondition): return set([])
+    tmp=set([])
+    for a in arg.args: tmp.update(_hashable_paths(a))
+    return tmp
+
+def _is_ground(arg):
+    if isinstance(arg, Placeholder): return False
+    elif isinstance(arg, FunctorComparisonCondition) and not arg.is_ground: return False
+    if not isinstance(arg,QueryCondition): return True
+    for a in arg.args:
+        if not _is_ground(a): return False
+    return True
+
+class Clause(object):
+
+    def __init__(self, cconds):
+        if not cconds:
+            raise ValueError("Empty list of comparison conditions")
+        for ccond in cconds:
+            if not isinstance(ccond,FunctorComparisonCondition) and \
+               _is_bool_condition(ccond):
+                raise ValueError(("Only comparison conditions allowed: "
+                                  "{} ").format(ccond))
+        self._cconds = tuple(cconds)
+
+    @property
+    def is_ground(self):
+        tmp = []
+        for ccond in self._cconds:
+            if not _is_ground(ccond): return False
+        return True
+
+    @property
+    def hashable_paths(self):
+        tmp = []
+        for ccond in self._cconds:
+            tmp.extend(_hashable_paths(ccond))
+        return set(tmp)
+
+    @property
+    def predicates(self):
+        return set([path(hp).meta.predicate for hp in self.hashable_paths])
+
+    def ground(self,args,kwargs):
+        if self.is_ground: return self
+
+    def __eq__(self, other):
+        if not isinstance(other, self.__class__): return NotImplemented
+        return self._cconds == other._cconds
+
+    def __ne__(self, other):
+        result = self.__eq__(other)
+        if result is NotImplemented: return NotImplemented
+        return not result
+
+    def __str__(self):
+       return "[ {} ]".format(" | ".join([str(c) for c in self._cconds]))
+
+    def __repr__(self):
+       return self.__str__()
+
+# ------------------------------------------------------------------------------
+# Normalise takes a formula and turns it into a clausal CNF (a list of lists
+# being a conjuctive list of disjunctive elements. Note: input must have been
+# validated.
+# ------------------------------------------------------------------------------
+def normalise_query_condition(qcond):
+    NEWCL = "new_clause"
+    stack=[NEWCL]
+
+    def is_leaf(arg):
+        if isinstance(arg, FunctorComparisonCondition): return True
+        return not _is_bool_condition(arg)
+
+    def stack_add(cond):
+        if is_leaf(cond):
+            stack.append(cond)
+        else:
+            for arg in cond.args:
+                if cond.operator == operator.and_: stack.append(NEWCL)
+                stack_add(arg)
+                if cond.operator == operator.and_: stack.append(NEWCL)
+
+    def build_clauses():
+        clauses = []
+        tmp = []
+        for a in stack:
+            if a == NEWCL:
+                if tmp: clauses.append(Clause(tmp))
+                tmp = []
+            elif a != NEWCL:
+                tmp.append(a)
+        if tmp: clauses.append(Clause(tmp))
+        return clauses
+
+    stack.append(NEWCL)
+    stack_add(normalise_to_cnf_query_condition(qcond))
+#    print("STACK: {}".format(stack))
+    return build_clauses()
+
+# ------------------------------------------------------------------------------
+# Our normal form is a clausal CNF - a conjunctive list of disjunctive lists
+# ------------------------------------------------------------------------------
+
+class NormalForm(object):
+    pass
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# ------------------------------------------------------------------------------
+# BELOW HERE IS THE OLD QUERY IMPLEMENTATION
+# ------------------------------------------------------------------------------
 
 
 # ------------------------------------------------------------------------------
@@ -295,7 +876,6 @@ def simplify_query_condition(qcond):
             if newsubcond is bcond.args[0]: return bcond
             return QueryCondition(bcond.operator,newsubcond)
         if bcond.operator != operator.and_ and bcond.operator != operator.or_:
-            print("dfd")
             raise TypeError(("Internal bug: unknown boolean operator '{}' in query "
                              "condition '{}'").format(bcond.operator, qcond))
 
