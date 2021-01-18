@@ -1,4 +1,4 @@
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Unit tests for Clorm ORM FactBase and associated classes and functions. This
 # includes the query API.
 #
@@ -87,7 +87,6 @@ class FactIndexTestCase(unittest.TestCase):
         fi2.add(Afact(num1=2, str1="b"))
         self.assertEqual(fi1.keys, [1,2])
         self.assertEqual(fi2.keys, ["b","c"])
-
         fi1.add(Afact(num1=3, str1="b"))
         fi2.add(Afact(num1=3, str1="b"))
         self.assertEqual(fi1.keys, [1,2,3])
@@ -157,31 +156,6 @@ class FactIndexTestCase(unittest.TestCase):
         fi.clear()
         self.assertEqual(fi.keys,[])
 
-    #--------------------------------------------------------------------------
-    # Test accessing the value of attributes through a FieldPathBuilder properties
-    #--------------------------------------------------------------------------
-    def test_subfield_access(self):
-        class F(ComplexTerm):
-            anum=IntegerField()
-        class G(Predicate):
-            ct1=F.Field()
-            ct2=(IntegerField(),IntegerField())
-
-        f1 = F(1)
-        g1 = G(f1,(2,3))
-
-        self.assertEqual(f1.anum,1)
-        self.assertEqual(g1.ct1.anum,1)
-        self.assertEqual(g1.ct2[0],2)
-        self.assertEqual(g1.ct2[1],3)
-
-#        tmp1 = G.ct1.anum.meta.path
-#        print("TMP: {}, type: {}".format(tmp1,type(tmp1)))
-
-#        tmp2 = G.ct1.sign
-#        print("TMP: {}, type: {}".format(tmp1,type(tmp1)))
-
-#        self.assertEqual(F.anum(f1), 1)
 
     #--------------------------------------------------------------------------
     # Test the support for indexes of subfields

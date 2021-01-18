@@ -864,6 +864,26 @@ class PredicateTestCase(unittest.TestCase):
         self.assertEqual(len(Tuple.c.meta.field.complex.meta),2)
 
     #--------------------------------------------------------------------------
+    # Test accessing a fied and subfield of a predicate instance
+    #--------------------------------------------------------------------------
+
+    def test_api_subfield_access(self):
+        class F(ComplexTerm):
+            anum=IntegerField()
+        class G(Predicate):
+            ct1=F.Field()
+            ct2=(IntegerField(),IntegerField())
+
+        f1 = F(1)
+        g1 = G(f1,(2,3))
+
+        self.assertEqual(f1.anum,1)
+        self.assertEqual(g1.ct1.anum,1)
+        self.assertEqual(g1.ct2[0],2)
+        self.assertEqual(g1.ct2[1],3)
+
+
+    #--------------------------------------------------------------------------
     # Test that we can return access the Predicate class fields using positional
     # arguments as well as iterating over them (for both the class itself as
     # well as an instance).
