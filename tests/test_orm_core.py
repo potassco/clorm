@@ -24,7 +24,8 @@ from clorm.orm import \
     define_nested_list_field, simple_predicate, path, hashable_path, alias
 
 # Implementation imports
-from clorm.orm.core import get_field_definition, PredicatePath
+from clorm.orm.core import get_field_definition, PredicatePath, \
+    QCondition, trueall
 
 
 #------------------------------------------------------------------------------
@@ -33,8 +34,9 @@ from clorm.orm.core import get_field_definition, PredicatePath
 __all__ = [
     'FieldTestCase',
     'PredicateTestCase',
-    'PredicatePathTestCase',
     'PredicateInternalUnifyTestCase',
+    'PredicatePathTestCase',
+    'QConditionTestCase',
     ]
 
 
@@ -1689,7 +1691,7 @@ class PredicatePathTestCase(unittest.TestCase):
     # Test that there is an appropriate PredicatePath associated with each
     # Predicate and that it has the appropriate attributes.
     # -----------------------------------------------------------------------------
-    def test_path_class(self):
+    def test_nonapi_path_class(self):
 
         F = self.F
         G = self.G
@@ -1711,7 +1713,10 @@ class PredicatePathTestCase(unittest.TestCase):
         self.assertTrue('c' in HPP.__dict__)
         self.assertTrue('sign' in HPP.__dict__)
 
-    def test_path_instance(self):
+    # -----------------------------------------------------------------------------
+    #
+    # -----------------------------------------------------------------------------
+    def test_api_path_instance(self):
 
         F = self.F
         G = self.G
@@ -1778,34 +1783,10 @@ class PredicatePathTestCase(unittest.TestCase):
         with self.assertRaises(AttributeError) as ctx:
             sign = G.sign
 
-    def test_api_path_and_hashable_path_bad_inputs(self):
-        F = self.F
-        H = self.H
-
-        class Foo(object):
-            def __init__(self,a=1): self._a = a
-
-        # Bad input raises a TypeError with default second param
-        with self.assertRaises(TypeError) as ctx:
-            path(True)
-        check_errmsg("Invalid argument", ctx)
-        with self.assertRaises(TypeError) as ctx:
-            path([1,2])
-        check_errmsg("Invalid argument", ctx)
-        with self.assertRaises(TypeError) as ctx:
-            path(1)
-        check_errmsg("Invalid argument", ctx)
-        with self.assertRaises(TypeError) as ctx:
-            path(Foo(1))
-        check_errmsg("Invalid argument", ctx)
-
-        # Bad input returns None if exception=False
-        self.assertTrue(path([1,2],exception=False) is None)
-        self.assertTrue(path(True,exception=False) is None)
-        self.assertTrue(path(1,exception=False) is None)
-        self.assertTrue(path(Foo(1),exception=False) is None)
-
-    def test_path_and_hashable_path_inputs(self):
+    # -----------------------------------------------------------------------------
+    #
+    # -----------------------------------------------------------------------------
+    def test_api_path_and_hashable_path_inputs(self):
 
         F = self.F
         H = self.H
@@ -1834,6 +1815,39 @@ class PredicatePathTestCase(unittest.TestCase):
         self.assertEqual(id(hp2p[hashable_path(H.c.a)]), id(H.c.a))
 
 
+    # -----------------------------------------------------------------------------
+    #
+    # -----------------------------------------------------------------------------
+    def test_api_path_and_hashable_path_bad_inputs(self):
+        F = self.F
+        H = self.H
+
+        class Foo(object):
+            def __init__(self,a=1): self._a = a
+
+        # Bad input raises a TypeError with default second param
+        with self.assertRaises(TypeError) as ctx:
+            path(True)
+        check_errmsg("Invalid argument", ctx)
+        with self.assertRaises(TypeError) as ctx:
+            path([1,2])
+        check_errmsg("Invalid argument", ctx)
+        with self.assertRaises(TypeError) as ctx:
+            path(1)
+        check_errmsg("Invalid argument", ctx)
+        with self.assertRaises(TypeError) as ctx:
+            path(Foo(1))
+        check_errmsg("Invalid argument", ctx)
+
+        # Bad input returns None if exception=False
+        self.assertTrue(path([1,2],exception=False) is None)
+        self.assertTrue(path(True,exception=False) is None)
+        self.assertTrue(path(1,exception=False) is None)
+        self.assertTrue(path(Foo(1),exception=False) is None)
+
+    # -----------------------------------------------------------------------------
+    #
+    # -----------------------------------------------------------------------------
     def test_resolve_fact_wrt_path(self):
 
         F = self.F
@@ -1871,7 +1885,10 @@ class PredicatePathTestCase(unittest.TestCase):
         self.assertEqual(H.sign(h2_pos), h2_pos.sign)
 
 
-    def test_predicate_path_alias(self):
+    # -----------------------------------------------------------------------------
+    #
+    # -----------------------------------------------------------------------------
+    def test_api_predicate_path_alias(self):
 
         H = self.H
 
@@ -1915,6 +1932,9 @@ class PredicatePathTestCase(unittest.TestCase):
         Y = alias(H)        # No default name
         self.assertTrue(str(Y))
 
+    # -----------------------------------------------------------------------------
+    #
+    # -----------------------------------------------------------------------------
     def test_nonapi_predicate_path_root(self):
 
         H = self.H
@@ -1928,6 +1948,154 @@ class PredicatePathTestCase(unittest.TestCase):
         self.assertEqual(_h(X.c.b.meta.root) ,_h(X))
         self.assertNotEqual(_h(X.c.b.meta.root), _h(H))
 
+
+    # -----------------------------------------------------------------------------
+    # Test that the comparison operator overloads generate QCondition objects
+    # -----------------------------------------------------------------------------
+    def test_api_comparison_operator_overloads(self):
+        F = self.F
+
+        self.assertEqual(type(F.a == 1), QCondition)
+        self.assertEqual(type(F.a != 1), QCondition)
+        self.assertEqual(type(F.a < 1), QCondition)
+        self.assertEqual(type(F.a <= 1), QCondition)
+        self.assertEqual(type(F.a > 1), QCondition)
+        self.assertEqual(type(F.a >= 1), QCondition)
+
+#------------------------------------------------------------------------------
+# Test creation of QCondition objects and overloads
+#------------------------------------------------------------------------------
+
+class QConditionTestCase(unittest.TestCase):
+    def setUp(self):
+        class F(ComplexTerm):
+            anum = IntegerField
+            atuple = (IntegerField,ConstantField)
+
+        self.F=F
+
+    def tearDown(self):
+        pass
+
+    # -------------------------------------------------------------------------
+    # Test creating QCondition objects with different operators
+    # -------------------------------------------------------------------------
+    def test_nonapi_qcondition_creation(self):
+        F=self.F
+
+        # Good creation
+        self.assertTrue(QCondition(operator.and_,2,1))
+        self.assertTrue(QCondition(operator.or_,2,1))
+        self.assertTrue(QCondition(operator.not_,2))
+        self.assertTrue(QCondition(operator.eq,2,1))
+        self.assertTrue(QCondition(operator.ne,2,1))
+        self.assertTrue(QCondition(operator.lt,2,1))
+        self.assertTrue(QCondition(operator.le,2,1))
+        self.assertTrue(QCondition(operator.gt,2,1))
+        self.assertTrue(QCondition(operator.ge,2,1))
+        self.assertTrue(QCondition(trueall,2,1))
+
+        # Bad creation - wrong number of args or unknown operator
+        with self.assertRaises(ValueError) as ctx:
+            QCondition(operator.and_,2)
+        with self.assertRaises(ValueError) as ctx:
+            QCondition(operator.or_,2)
+        with self.assertRaises(ValueError) as ctx:
+            QCondition(operator.not_,2,2)
+        with self.assertRaises(ValueError) as ctx:
+            QCondition(operator.eq,2)
+        with self.assertRaises(ValueError) as ctx:
+            QCondition(operator.ne,2)
+        with self.assertRaises(ValueError) as ctx:
+            QCondition(operator.lt,2)
+        with self.assertRaises(ValueError) as ctx:
+            QCondition(operator.le,2)
+        with self.assertRaises(ValueError) as ctx:
+            QCondition(operator.gt,2)
+        with self.assertRaises(ValueError) as ctx:
+            QCondition(operator.ge,3)
+        with self.assertRaises(ValueError) as ctx:
+            QCondition(lambda: True,3)
+
+    # -------------------------------------------------------------------------
+    # Test the args() and operator() properties work
+    # -------------------------------------------------------------------------
+    def test_nonapi_args_and_operator_access(self):
+        F=self.F
+
+        qc = QCondition(operator.and_,2,1)
+        self.assertEqual(qc.args, (2,1))
+        self.assertEqual(qc.operator, operator.and_)
+
+        qc = QCondition(operator.not_,2)
+        self.assertEqual(qc.args, (2,))
+        self.assertEqual(qc.operator, operator.not_)
+
+    # -------------------------------------------------------------------------
+    # Test QCondition boolean operator overloads
+    # -------------------------------------------------------------------------
+    def test_api_boolean_operator_overloads(self):
+        F=self.F
+
+        ac = (F.anum == 1)  & (F.anum == 2)
+        self.assertEqual(type(ac), QCondition)
+        self.assertEqual(ac.operator, operator.and_)
+        self.assertEqual(ac.args, (F.anum == 1,F.anum == 2))
+
+        oc = (F.anum == 1) | (F.anum == 2)
+        self.assertEqual(type(oc), QCondition)
+        self.assertEqual(oc.operator, operator.or_)
+        self.assertEqual(oc.args, (F.anum == 1,F.anum == 2))
+
+        nc = ~(F.anum == 1)
+        self.assertEqual(type(nc), QCondition)
+        self.assertEqual(nc.operator, operator.not_)
+        self.assertEqual(nc.args, (F.anum == 1,))
+
+        # Test the __rand__ and __ror__ overloads for QCondition - this kicks in
+        # because the first clause is a lambda and not a QCondition built from
+        # the predicate path overload.
+        nc3 = (lambda x: x.astr == "str") | (F.anum == 2)
+        self.assertEqual(type(nc3), QCondition)
+
+        nc4 = (lambda x: x.astr == "str") & (F.anum == 2)
+        self.assertEqual(type(nc4), QCondition)
+
+    # -------------------------------------------------------------------------
+    # Test QCondition equality and inequality operator overloads - Note:
+    # equality test doesn't test for equivalence so order of arguments matters.
+    # -------------------------------------------------------------------------
+    def test_api_boolean_operator_overloads(self):
+        F=self.F
+
+        self.assertEqual((F.anum == 1), (F.anum == 1))
+        self.assertNotEqual((F.anum == 1), (F.anum == 2))
+        self.assertEqual((F.anum == 1)  & (F.anum == 2),
+                         (F.anum == 1)  & (F.anum == 2))
+        self.assertNotEqual((F.anum == 2)  & (F.anum == 1),
+                            (F.anum == 1)  & (F.anum == 2))
+
+    # -------------------------------------------------------------------------
+    # Test the string format of QCondition object
+    # -------------------------------------------------------------------------
+    def test_api_formatting(self):
+        F=self.F
+
+        # Test the strings generated for simple comparison operators
+        self.assertEqual(str(F.anum == 2), "F.anum == 2")
+        self.assertEqual(str(F.anum != 2), "F.anum != 2")
+        self.assertEqual(str(F.anum < 2), "F.anum < 2")
+        self.assertEqual(str(F.anum <= 2), "F.anum <= 2")
+        self.assertEqual(str(F.anum > 2), "F.anum > 2")
+        self.assertEqual(str(F.anum >= 2), "F.anum >= 2")
+
+        self.assertEqual(str((F.anum >= 2) & (F.anum >= 2)),
+                         "(F.anum >= 2) & (F.anum >= 2)")
+        self.assertEqual(str((F.anum >= 2) | (F.anum >= 2)),
+                         "(F.anum >= 2) | (F.anum >= 2)")
+        self.assertEqual(str(~(F.anum >= 2)), "~(F.anum >= 2)")
+
+        self.assertEqual(str(QCondition(trueall,F,F)), "joinall_(F,F)")
 
 #------------------------------------------------------------------------------
 # main

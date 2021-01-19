@@ -88,19 +88,22 @@ class _lateinit(object):
 # ------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-# A Conditional elements of a query. A QueryCondition is either a boolean
-# condition or a comparison condition depending on the operator. A comparison
-# condition involves comparing a component of a fact (specified with a
-# PredicatePath) against some criteria. A boolean condition specifies complex
-# boolean relations consisting of comparion conditions and other boolean
-# conditions.
+# Conditional elements of a query (both the "where" clause as well as the "join"
+# clause. A QCondition is either a boolean condition or a comparison condition
+# depending on the operator. A comparison condition involves comparing a
+# component of a fact (specified with a PredicatePath) against some criteria. A
+# boolean condition specifies complex boolean relations consisting of comparion
+# conditions and other boolean conditions.
 # ------------------------------------------------------------------------------
+
+# A cross product join operator always returns true
+def trueall(x,y): return True
 
 # support function to _wrap_query_condition in parentheses
 def _wqc(a):
-    return "({})".format(a) if isinstance(a,QueryCondition) else str(a)
+    return "({})".format(a) if isinstance(a,QCondition) else str(a)
 
-class QueryCondition(object):
+class QCondition(object):
 
 
     OpSig = collections.namedtuple('OpSig','numargs tostr')
@@ -116,12 +119,14 @@ class QueryCondition(object):
         operator.lt : OpSig(2, lambda x,y: "{} < {}".format(x,y)),
         operator.le : OpSig(2, lambda x,y: "{} <= {}".format(x,y)),
         operator.gt : OpSig(2, lambda x,y: "{} > {}".format(x,y)),
-        operator.ge : OpSig(2, lambda x,y: "{} >= {}".format(x,y))
+        operator.ge : OpSig(2, lambda x,y: "{} >= {}".format(x,y)),
 
+        # A cross-product join operator
+        trueall : OpSig(2, lambda x,y: "joinall_({},{})".format(path(x),path(y)))
     }
 
     def __init__(self, operator, *args):
-        opsig = QueryCondition.operators.get(operator,None)
+        opsig = QCondition.operators.get(operator,None)
         if not opsig:
             raise ValueError("Unsupported operator {}".format(operator))
         if len(args) != opsig.numargs:
@@ -140,22 +145,22 @@ class QueryCondition(object):
         return self._args
 
     def __and__(self,other):
-        return QueryCondition(operator.and_,self,other)
+        return QCondition(operator.and_,self,other)
     def __or__(self,other):
-        return QueryCondition(operator.or_,self,other)
+        return QCondition(operator.or_,self,other)
     def __rand__(self,other):
-        return QueryCondition(operator.and_,self,other)
+        return QCondition(operator.and_,self,other)
     def __ror__(self,other):
-        return QueryCondition(operator.or_,self,other)
+        return QCondition(operator.or_,self,other)
     def __invert__(self):
-        return QueryCondition(operator.not_,self)
+        return QCondition(operator.not_,self)
 
     def __eq__(self,other):
         def getval(val):
             if isinstance(val,PredicatePath): return val.meta.hashable
             return val
 
-        if not isinstance(other, QueryCondition): return NotImplemented
+        if not isinstance(other, QCondition): return NotImplemented
         if self.operator != other.operator: return False
         for a,b in zip(self.args,other.args):
             if getval(a) != getval(b): return False
@@ -167,9 +172,9 @@ class QueryCondition(object):
         return not result
 
     def __str__(self):
-        opsig = QueryCondition.operators[self._operator]
+        opsig = QCondition.operators[self._operator]
         return opsig.tostr(*self._args)
-        args = [ "({})".format(a) if isinstance(a,QueryCondition) else str(a) \
+        args = [ "({})".format(a) if isinstance(a,QCondition) else str(a) \
                  for a in self._args ]
         if opsig.numargs == 1:
             return "{}{}".format(opsig.format,args[0])
@@ -500,17 +505,17 @@ class PredicatePath(object, metaclass=_PredicatePathMeta):
     # Overload the boolean operators to return a functor
     #--------------------------------------------------------------------------
     def __eq__(self, other):
-        return QueryCondition(operator.eq, self, other)
+        return QCondition(operator.eq, self, other)
     def __ne__(self, other):
-        return QueryCondition(operator.ne, self, other)
+        return QCondition(operator.ne, self, other)
     def __lt__(self, other):
-        return QueryCondition(operator.lt, self, other)
+        return QCondition(operator.lt, self, other)
     def __le__(self, other):
-        return QueryCondition(operator.le, self, other)
+        return QCondition(operator.le, self, other)
     def __gt__(self, other):
-        return QueryCondition(operator.gt, self, other)
+        return QCondition(operator.gt, self, other)
     def __ge__(self, other):
-        return QueryCondition(operator.ge, self, other)
+        return QCondition(operator.ge, self, other)
 
     #--------------------------------------------------------------------------
     # String representation

@@ -19,13 +19,15 @@ from clorm.orm import RawField, IntegerField, StringField, ConstantField, \
     Predicate, ComplexTerm, path, hashable_path, alias
 
 # Implementation imports
-from clorm.orm.core import QueryCondition
+from clorm.orm.core import QCondition
 
 # Official Clorm API imports for the fact base components
 from clorm.orm import desc, asc, not_, and_, or_, \
-    ph_, ph1_, ph2_, func_
+    ph_, ph1_, ph2_, func_, joinall_
 
 from clorm.orm.query import PositionalPlaceholder, NamedPlaceholder, \
+    is_boolean_condition, is_comparison_condition, \
+    is_join_condition, \
     FunctorComparisonCondition, make_query_alignment_functor, \
     make_comparison_callable, \
     validate_query_condition, \
@@ -39,8 +41,8 @@ from clorm.orm.query import PositionalPlaceholder, NamedPlaceholder, \
 #------------------------------------------------------------------------------
 
 __all__ = [
-    'QueryConditionTestCase',
-    'QueryConditionManipulateTestCase'
+    'QQConditionTestCase',
+    'QConditionManipulateTestCase'
     ]
 
 #------------------------------------------------------------------------------
@@ -52,7 +54,7 @@ __all__ = [
 # w.r.t a fact.
 # ------------------------------------------------------------------------------
 
-class QueryConditionTestCase(unittest.TestCase):
+class QQConditionTestCase(unittest.TestCase):
     def setUp(self):
         class F(Predicate):
             anum=IntegerField
@@ -68,66 +70,15 @@ class QueryConditionTestCase(unittest.TestCase):
     #--------------------------------------------------------------------------
     #  Test the overloaded bitwise comparators (&,|,~)
     #--------------------------------------------------------------------------
-    def _to_rewrite_test_query_bitwise_comparator_overloads(self):
+    def test_api_specifying_where_clauses_and_predicatepath_overloads(self):
         class Afact(Predicate):
             anum1=IntegerField
             anum2=IntegerField
             astr=StringField
 
-        fc1 = Afact.anum1 == 1 ; fc2 = Afact.anum1 == 2
-        ac = fc1 & fc2
-        self.assertEqual(type(ac), BoolComparator)
-        self.assertEqual(ac.boolop, operator.and_)
-        self.assertEqual(ac.args, (fc1,fc2))
-
-        oc = (Afact.anum1 == 1) | (Afact.anum2 == 2)
-        self.assertEqual(type(oc), BoolComparator)
-        self.assertEqual(oc.boolop, operator.or_)
-
-        nc1 = ~fc1
-        self.assertEqual(type(nc1), BoolComparator)
-        self.assertEqual(nc1.boolop, operator.not_)
-        self.assertEqual(nc1.args, (fc1,))
-
-        nc2 = ~(Afact.anum1 == 1)
-        self.assertEqual(type(nc2), BoolComparator)
-        self.assertEqual(nc2.boolop, operator.not_)
-
-        # Test the __rand__ and __ror__ operators
-        nc3 = (lambda x: x.astr == "str") | (Afact.anum2 == 2)
-        self.assertEqual(type(nc3), BoolComparator)
-
-        nc4 = (lambda x: x.astr == "str") & (Afact.anum2 == 2)
-        self.assertEqual(type(nc4), BoolComparator)
-
-        # Test that the comparators actually work
-        f1=Afact(1,1,"str")
-        f2=Afact(1,2,"nostr")
-        f3=Afact(1,2,"str")
-
-        self.assertFalse(ac(f1))
-        self.assertFalse(ac(f2))
-        self.assertFalse(ac(f3))
-
-        self.assertTrue(oc(f1))
-        self.assertTrue(oc(f2))
-        self.assertTrue(oc(f3))
-
-        self.assertFalse(nc1(f1)) ; self.assertFalse(nc2(f1))
-        self.assertFalse(nc1(f2)) ; self.assertFalse(nc2(f2))
-        self.assertFalse(nc1(f3)) ; self.assertFalse(nc2(f3))
-
-        self.assertTrue(nc3(f1))
-        self.assertTrue(nc3(f2))
-        self.assertTrue(nc3(f3))
-
-        self.assertFalse(nc4(f1))
-        self.assertFalse(nc4(f2))
-        self.assertTrue(nc4(f3))
-
 
     #--------------------------------------------------------------------------
-    # Test that simplification is working for the boolean comparator
+    # Test the explicit
     #--------------------------------------------------------------------------
     def _to_rewrite_test_bool_comparator_simplified(self):
 
@@ -241,13 +192,6 @@ class QueryConditionTestCase(unittest.TestCase):
     def test_simple_comparison_conditional(self):
         F=self.F
 
-        # Test the strings generated for simple comparison operators
-        self.assertEqual(str(F.anum == 2), "F.anum == 2")
-        self.assertEqual(str(F.anum != 2), "F.anum != 2")
-        self.assertEqual(str(F.anum < 2), "F.anum < 2")
-        self.assertEqual(str(F.anum <= 2), "F.anum <= 2")
-        self.assertEqual(str(F.anum > 2), "F.anum > 2")
-        self.assertEqual(str(F.anum >= 2), "F.anum >= 2")
 
         # Indentical queries with named arguments and positional arguments
         cn1 = F.anum == 2
@@ -330,13 +274,13 @@ class QueryConditionTestCase(unittest.TestCase):
         self.assertFalse(evaluate_query_condition(c2,af2))
 
         # Some other query conditions that can't be defined with the nice syntax
-        c1 = QueryCondition(operator.eq, 2, F.anum)
+        c1 = QCondition(operator.eq, 2, F.anum)
         check_query_condition(c1)
         self.assertEqual(str(c1), "2 == F.anum")
         self.assertEqual(simplify_query_condition(c1),c1)
         self.assertTrue(evaluate_query_condition(c1,af1))
 
-        c1 = QueryCondition(operator.eq,2,2)
+        c1 = QCondition(operator.eq,2,2)
         check_query_condition(c1)
         self.assertEqual(str(c1), "2 == 2")
         c1 = simplify_query_condition(c1)
@@ -350,7 +294,7 @@ class QueryConditionTestCase(unittest.TestCase):
         self.assertEqual(c1,True)
         self.assertTrue(evaluate_query_condition(c1,af1))
 
-        c1 = QueryCondition(operator.eq,2,1)
+        c1 = QCondition(operator.eq,2,1)
         check_query_condition(c1)
         self.assertEqual(str(c1), "2 == 1")
         c1 = simplify_query_condition(c1)
@@ -394,7 +338,7 @@ class QueryConditionTestCase(unittest.TestCase):
 
         with self.assertRaises(ValueError) as ctx:
             f = lambda x: x*2
-            check_query_condition(QueryCondition(operator.eq, F.anum, f))
+            check_query_condition(QCondition(operator.eq, F.anum, f))
         check_errmsg("Invalid functor", ctx)
 
         with self.assertRaises(ValueError) as ctx:
@@ -457,11 +401,24 @@ class QueryConditionTestCase(unittest.TestCase):
         c3 = simplify_query_condition(c1)
         self.assertEqual(c2,c3)
 
+    #-------------------------------------------------------------------------
+    # Since we want to use the condition to model joins (such as using __mult__
+    # to model a cross-product) so we now have non-bool and non-comparison
+    # conditions. Make sure we can handle this
+    # -------------------------------------------------------------------------
+    def test_nonapi_not_bool_not_comparison_condition(self):
+        F=self.F
+        G=self.G
+
+        self.assertTrue(is_boolean_condition((F.anum == 1) & (G.anum == 1)))
+        self.assertFalse(is_boolean_condition(F.anum == 1))
+        self.assertFalse(is_boolean_condition(joinall_(F,G)))
+
 #------------------------------------------------------------------------------
 # Tests of manipulating/cleaning the query conditions
 #------------------------------------------------------------------------------
 
-class QueryConditionManipulateTestCase(unittest.TestCase):
+class QConditionManipulateTestCase(unittest.TestCase):
     def setUp(self):
         class F(Predicate):
             anum=IntegerField
@@ -829,21 +786,22 @@ class QueryConditionManipulateTestCase(unittest.TestCase):
                          c1.hashable_paths)
         self.assertEqual(c1.predicates,set([F,G]))
 
-        #### FIXUP
-        return
-        
         f = func_([F.anum], lambda x : x == 2)
         c1 = Clause([f])
-        self.assertTrue(c1.is_ground)
+        self.assertFalse(c1.is_ground)
         self.assertEqual(set([hashable_path(p) for p in [F.anum]]), c1.hashable_paths)
         self.assertEqual(c1.predicates,set([F]))
 
+        # Iterate over the conditions within a clause
+        c1 = Clause([G.anum == ph1_, F.astr == "b", F.atuple[0] == 6])
+        self.assertEqual(list(c1), [G.anum == ph1_, F.astr == "b", F.atuple[0] == 6])
+
+    # ------------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------
     def test_nonapi_normalise_query_condition(self):
         F = self.F
         tonorm = normalise_query_condition
 
-#        return
-    
         f = F.anum == 4
         self.assertEqual(tonorm(f), [Clause([f])])
 
@@ -856,6 +814,27 @@ class QueryConditionManipulateTestCase(unittest.TestCase):
         norm = tonorm(f)
         self.assertEqual(tonorm(f),clauses)
 
+    # ------------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+# Tests of manipulating/cleaning the query conditions
+#------------------------------------------------------------------------------
+
+class JoinConditionTestCase(unittest.TestCase):
+    def setUp(self):
+        class F(Predicate):
+            anum=IntegerField
+        self.F = F
+
+        class G(Predicate):
+            anum=IntegerField
+        self.G = G
+
+    # ------------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------
+    def test_nonapi_normalise_query_condition(self):
+        F = self.F
 
 
 #------------------------------------------------------------------------------
