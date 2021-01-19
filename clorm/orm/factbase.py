@@ -169,9 +169,9 @@ class _FactIndex(object):
         elif op == operator.ge: keys = self._keys_ge(key)
         else: raise ValueError("unsupported operator {}".format(op))
 
-        sets = [ self._key2values[k] for k in keys ]
-        if not sets: return set()
-        return set.union(*sets)
+        for k in keys:
+            for fact in self._key2values[k]:
+                yield fact
 
 #------------------------------------------------------------------------------
 # A helper function to determine if two collections have the same elements
