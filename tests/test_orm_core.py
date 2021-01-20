@@ -21,7 +21,8 @@ from clingo import Control, Number, String, Function, SymbolType
 from clorm.orm import \
     RawField, IntegerField, StringField, ConstantField, SimpleField,  \
     Predicate, ComplexTerm, refine_field, combine_fields, \
-    define_nested_list_field, simple_predicate, path, hashable_path, alias
+    define_nested_list_field, simple_predicate, path, hashable_path, alias, \
+    not_, and_, or_, joinall_
 
 # Implementation imports
 from clorm.orm.core import get_field_definition, PredicatePath, \
@@ -1970,6 +1971,7 @@ class QConditionTestCase(unittest.TestCase):
     def setUp(self):
         class F(ComplexTerm):
             anum = IntegerField
+            astr = StringField
             atuple = (IntegerField,ConstantField)
 
         self.F=F
@@ -1995,6 +1997,7 @@ class QConditionTestCase(unittest.TestCase):
         self.assertTrue(QCondition(operator.ge,2,1))
         self.assertTrue(QCondition(trueall,2,1))
 
+
         # Bad creation - wrong number of args or unknown operator
         with self.assertRaises(ValueError) as ctx:
             QCondition(operator.and_,2)
@@ -2016,6 +2019,27 @@ class QConditionTestCase(unittest.TestCase):
             QCondition(operator.ge,3)
         with self.assertRaises(ValueError) as ctx:
             QCondition(lambda: True,3)
+
+    #--------------------------------------------------------------------------
+    # Test that the explicit and implicit (operator overload) creates the same
+    # thing
+    # --------------------------------------------------------------------------
+    def test_nonapi_explicit_and_implicit_creation(self):
+
+        F = self.F
+        self.assertEqual(and_(F.anum == 1, F.astr=="fg"),
+                         (F.anum == 1) & (F.astr=="fg"))
+        self.assertEqual(or_(F.anum == 1, F.astr=="fg"),
+                         (F.anum == 1) | (F.astr=="fg"))
+        self.assertNotEqual(or_(F.anum == 1, F.astr=="fg"),
+                            (F.anum == 1) & (F.astr=="fg"))
+        self.assertEqual(not_(F.anum == 1), ~(F.anum == 1))
+
+        self.assertEqual(and_(not_(F.anum == 1), F.astr=="fg"),
+                            ~(F.anum == 1) & (F.astr=="fg"))
+
+        self.assertEqual(and_(not_(F.anum == 1), or_(F.astr=="fg",F.anum==5)),
+                            ~(F.anum == 1) & ((F.astr=="fg") | (F.anum == 5)))
 
     # -------------------------------------------------------------------------
     # Test the args() and operator() properties work
@@ -2088,6 +2112,8 @@ class QConditionTestCase(unittest.TestCase):
         self.assertEqual(str(F.anum <= 2), "F.anum <= 2")
         self.assertEqual(str(F.anum > 2), "F.anum > 2")
         self.assertEqual(str(F.anum >= 2), "F.anum >= 2")
+
+        self.assertEqual(str(F.anum >= 'foo'), "F.anum >= 'foo'")
 
         self.assertEqual(str((F.anum >= 2) & (F.anum >= 2)),
                          "(F.anum >= 2) & (F.anum >= 2)")

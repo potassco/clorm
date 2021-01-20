@@ -38,7 +38,11 @@ __all__ = [
     'simple_predicate',
     'path',
     'hashable_path',
-    'alias'
+    'alias',
+    'not_',
+    'and_',
+    'or_',
+    'joinall_'
     ]
 
 #------------------------------------------------------------------------------
@@ -99,9 +103,14 @@ class _lateinit(object):
 # A cross product join operator always returns true
 def trueall(x,y): return True
 
-# support function to _wrap_query_condition in parentheses
+# support functions to _wrap_query_condition in parentheses and wrap string
+# comparison elements in quotes
+def _wsce(a):
+    if isinstance(a,str): return "'{}'".format(a)
+    return "{}".format(a)
 def _wqc(a):
-    return "({})".format(a) if isinstance(a,QCondition) else str(a)
+    return "({})".format(a) if isinstance(a,QCondition) else str(_wsce(a))
+
 
 class QCondition(object):
 
@@ -114,12 +123,12 @@ class QCondition(object):
         operator.not_ : OpSig(1, lambda x: "~{}".format(_wqc(x))),
 
         # Basic comparison operators
-        operator.eq : OpSig(2, lambda x,y: "{} == {}".format(x,y)),
-        operator.ne : OpSig(2, lambda x,y: "{} != {}".format(x,y)),
-        operator.lt : OpSig(2, lambda x,y: "{} < {}".format(x,y)),
-        operator.le : OpSig(2, lambda x,y: "{} <= {}".format(x,y)),
-        operator.gt : OpSig(2, lambda x,y: "{} > {}".format(x,y)),
-        operator.ge : OpSig(2, lambda x,y: "{} >= {}".format(x,y)),
+        operator.eq : OpSig(2, lambda x,y: "{} == {}".format(_wsce(x),_wsce(y))),
+        operator.ne : OpSig(2, lambda x,y: "{} != {}".format(_wsce(x),_wsce(y))),
+        operator.lt : OpSig(2, lambda x,y: "{} < {}".format(_wsce(x),_wsce(y))),
+        operator.le : OpSig(2, lambda x,y: "{} <= {}".format(_wsce(x),_wsce(y))),
+        operator.gt : OpSig(2, lambda x,y: "{} > {}".format(_wsce(x),_wsce(y))),
+        operator.ge : OpSig(2, lambda x,y: "{} >= {}".format(_wsce(x),_wsce(y))),
 
         # A cross-product join operator
         trueall : OpSig(2, lambda x,y: "joinall_({},{})".format(path(x),path(y)))
@@ -185,6 +194,26 @@ class QCondition(object):
 
     def __repr__(self):
         return self.__str__()
+
+# ------------------------------------------------------------------------------
+# User callable functions to build QConditions
+# ------------------------------------------------------------------------------
+
+def not_(*conditions):
+    '''Return a boolean condition that is the negation of the input condition'''
+    return QCondition(operator.not_,*conditions)
+
+def and_(*conditions):
+    '''Return the conjunction of two of more conditions'''
+    return functools.reduce((lambda x,y: QCondition(operator.and_,x,y)),conditions)
+
+def or_(*conditions):
+    '''Return the disjunction of two of more conditions'''
+    return functools.reduce((lambda x,y: QCondition(operator.or_,x,y)),conditions)
+
+def joinall_(*conditions):
+    '''Return a cross-product join condition'''
+    return functools.reduce((lambda x,y: QCondition(trueall,x,y)),conditions)
 
 #------------------------------------------------------------------------------
 # PredicatePath class and supporting metaclass and functions. The PredicatePath
