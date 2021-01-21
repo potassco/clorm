@@ -19,30 +19,31 @@ from clorm.orm import RawField, IntegerField, StringField, ConstantField, \
     Predicate, ComplexTerm, path, hashable_path, alias
 
 # Implementation imports
-from clorm.orm.core import QCondition
+from clorm.orm.core import QCondition, trueall
 
 # Official Clorm API imports for the fact base components
 from clorm.orm import desc, asc, ph_, ph1_, ph2_, func_, not_, and_, or_, \
     joinall_
 
 from clorm.orm.query import PositionalPlaceholder, NamedPlaceholder, \
-    is_boolean_condition, is_comparison_condition, \
-    is_join_condition, \
-    FunctorComparisonCondition, make_query_alignment_functor, \
-    make_comparison_callable, \
-    validate_query_condition, \
+    is_boolean_qcondition, is_comparison_qcondition, \
+    StandardComparator, FunctionComparator, \
+    make_query_alignment_functor, \
+    validate_which_expression, negate_which_expression, \
+    which_expression_to_nnf, which_expression_to_cnf, \
+    Clause, ClauseBlock, normalise_which_expression, \
+    Join, validate_join_expression, \
     check_query_condition, simplify_query_condition, \
-    instantiate_query_condition, evaluate_query_condition, \
-    negate_query_condition, \
-    normalise_to_nnf_query_condition, normalise_to_cnf_query_condition, \
-    Clause, normalise_query_condition
+    instantiate_query_condition, evaluate_query_condition
 
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
 
 __all__ = [
     'QQConditionTestCase',
-    'QConditionManipulateTestCase'
+    'ComparatorTestCase',
+    'WhichExpressionTestCase',
+    'JoinExpressionTestCase',
     ]
 
 #------------------------------------------------------------------------------
@@ -66,8 +67,6 @@ class QQConditionTestCase(unittest.TestCase):
             anum=IntegerField
             astr=StringField
         self.G = G
-
-
 
     def _to_rewrite_test_path_comparator(self):
 
@@ -352,15 +351,16 @@ class QQConditionTestCase(unittest.TestCase):
         F=self.F
         G=self.G
 
-        self.assertTrue(is_boolean_condition((F.anum == 1) & (G.anum == 1)))
-        self.assertFalse(is_boolean_condition(F.anum == 1))
-        self.assertFalse(is_boolean_condition(joinall_(F,G)))
+        self.assertTrue(is_boolean_qcondition((F.anum == 1) & (G.anum == 1)))
+        self.assertFalse(is_boolean_qcondition(F.anum == 1))
+        self.assertFalse(is_boolean_qcondition(joinall_(F,G)))
+
 
 #------------------------------------------------------------------------------
-# Tests of manipulating/cleaning the query conditions
-#------------------------------------------------------------------------------
+# Testing of Comparator and related items - make_
+# ------------------------------------------------------------------------------
 
-class QConditionManipulateTestCase(unittest.TestCase):
+class ComparatorTestCase(unittest.TestCase):
     def setUp(self):
         class F(Predicate):
             anum=IntegerField
@@ -370,6 +370,7 @@ class QConditionManipulateTestCase(unittest.TestCase):
 
         class G(Predicate):
             anum=IntegerField
+            astr=StringField
         self.G = G
 
     #------------------------------------------------------------------------------
@@ -380,7 +381,7 @@ class QConditionManipulateTestCase(unittest.TestCase):
         G = self.G
         f1 = F(1,"a",(2,"b"))
         f2 = F(3,"c",(4,"d"))
-        g1 = G(4)
+        g1 = G(4,"df")
 
         getter = make_query_alignment_functor([F], [F.anum,F.atuple[0]])
         self.assertEqual(getter((f1,)), (1,2))
@@ -442,31 +443,98 @@ class QConditionManipulateTestCase(unittest.TestCase):
             getter((f1,2))
         check_errmsg("Invalid input to getter function: 2 is not", ctx)
 
+    # ------------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------
+    def test_nonapi_StandardComparator(self):
+        F = self.F
+        G = self.G
+        def hps(paths): return set([ hashable_path(p) for p in paths])
+        SC=StandardComparator
+
+        # Test __str__
+        self.assertEqual(str(SC(operator.eq,[F.anum,4])), "F.anum == 4")
+
+        # Test __eq__ and __ne__
+        self.assertEqual(SC(operator.eq,[F.anum,4]),SC(operator.eq,[F.anum,4]))
+        self.assertNotEqual(SC(operator.eq,[F.anum,4]),SC(operator.eq,[F.anum,3]))
+
+        # Test __hash__
+        self.assertEqual(hash(SC(operator.eq,[F.anum,4])),
+                         hash(SC(operator.eq,[F.anum,4])))
+
+        # Test negating
+        self.assertEqual(SC(operator.eq,[F.anum,4]).negate(),SC(operator.ne,[F.anum,4]))
+        self.assertEqual(SC(operator.ne,[F.anum,4]).negate(),SC(operator.eq,[F.anum,4]))
+        self.assertEqual(SC(operator.lt,[F.anum,4]).negate(),SC(operator.ge,[F.anum,4]))
+        self.assertEqual(SC(operator.le,[F.anum,4]).negate(),SC(operator.gt,[F.anum,4]))
+        self.assertEqual(SC(operator.gt,[F.anum,4]).negate(),SC(operator.le,[F.anum,4]))
+        self.assertEqual(SC(operator.ge,[F.anum,4]).negate(),SC(operator.lt,[F.anum,4]))
+
+        self.assertNotEqual(SC(operator.eq,[F.anum,4]).negate(),SC(operator.eq,[F.anum,4]))
+
+        # Test paths
+        self.assertEqual(hps(SC(operator.eq,[F.anum,4]).paths), hps([F.anum]))
+        self.assertEqual(hps(SC(operator.eq,[F.anum,F.anum]).paths), hps([F.anum]))
+        self.assertEqual(hps(SC(operator.eq,[F.anum,F.astr]).paths), hps([F.anum,F.astr]))
+
+        # Test roots
+        self.assertEqual(hps(SC(operator.eq,[F.anum,4]).roots), hps([F]))
+        self.assertEqual(hps(SC(operator.eq,[F.anum,F.anum]).roots), hps([F]))
+        self.assertEqual(hps(SC(operator.eq,[F.anum,F.astr]).roots), hps([F]))
+        self.assertEqual(hps(SC(operator.eq,[F.anum,G.anum]).roots), hps([F,G]))
+        X=alias(F)
+        self.assertEqual(hps(SC(operator.eq,[X.anum,F.anum]).roots), hps([X,F]))
+
+        # Test grounding
+        self.assertEqual(SC(operator.eq,[F.anum,4]), SC(operator.eq,[F.anum,4]).ground())
+        self.assertEqual(SC(operator.eq,[F.anum,ph2_]).ground(1,4),
+                         SC(operator.eq,[F.anum,4]))
+        self.assertEqual(SC(operator.eq,[F.anum,ph_("val")]).ground(1,4,val=4),
+                         SC(operator.eq,[F.anum,4]))
+
+        # Bad grounding
+        with self.assertRaises(ValueError) as ctx:
+            SC(operator.eq,[F.anum,ph_("val")]).ground(1,4)
+        check_errmsg("Missing named", ctx)
+        with self.assertRaises(ValueError) as ctx:
+            SC(operator.eq,[F.anum,ph2_]).ground(1)
+        check_errmsg("Missing positional", ctx)
+
+        # Test make_callable
+        self.assertTrue(SC(operator.eq,[1,1]).make_callable([G])(5))
+        self.assertTrue(SC(operator.eq,[G.anum,1]).make_callable([G])((G(1,"b"),)))
+        self.assertFalse(SC(operator.eq,[G.anum,1]).make_callable([G])((G(2,"b"),)))
+        sc=SC(operator.eq,[G.anum,1]).make_callable([F,G])
+        self.assertFalse(sc((F(1,"b",(1,"b")),G(2,"b"))))
+        self.assertTrue(sc((F(1,"b",(1,"b")),G(1,"b"))))
+
+        # Cannot make_callable on ungrounded
+        with self.assertRaises(TypeError) as ctx:
+            SC(operator.eq,[G.anum,ph1_]).make_callable([F,G])
+
     #------------------------------------------------------------------------------
-    # Test the wrapping of comparison functors in FunctorComparisonCondition
+    # Test the wrapping of comparison functors in FunctionComparator
     #------------------------------------------------------------------------------
-    def test_nonapi_FunctorComparisonCondition(self):
+    def test_nonapi_FunctionComparator(self):
         def hps(paths):
-            return [hashable_path(p) for p in paths ]
+            return set([hashable_path(p) for p in paths ])
 
         F = self.F
+        G = self.G
 
         func1 = lambda x : x.anum >= 0
         func2 = lambda x,y : x == y
 
-        bf1 = FunctorComparisonCondition(func1,[path(F)])
-        bf2 = FunctorComparisonCondition(func2,[F.anum, F.atuple[0]])
+        bf1 = FunctionComparator(func1,[path(F)])
+        bf2 = FunctionComparator(func2,[F.anum, F.atuple[0]])
 
         self.assertTrue(bf1.ground().is_ground)
         self.assertTrue(bf2.ground().is_ground)
 
-        self.assertEqual(hps(bf1.path_signature), hps([path(F)]))
-        self.assertEqual(hps(bf2.path_signature), hps([F.anum,F.atuple[0]]))
+        self.assertEqual(hps(bf1.paths), hps([F]))
+        self.assertEqual(hps(bf2.paths), hps([F.anum,F.atuple[0]]))
 
-        self.assertEqual(bf1.predicates, set([F]))
-        self.assertEqual(bf2.predicates, set([F]))
-
-        nbf1 = FunctorComparisonCondition(func1,[path(F)],negative=True)
+        nbf1 = FunctionComparator(func1,[path(F)],negative=True)
         self.assertEqual(bf1.negate(), nbf1)
 
         sat1 = bf1.ground().make_callable([F])
@@ -483,23 +551,28 @@ class QConditionManipulateTestCase(unittest.TestCase):
         self.assertTrue(nsat1((fact2,)))
         self.assertTrue(nsat2((fact2,)))
 
-        with self.assertRaises(RuntimeError) as ctx:
-            bf1.ground().ground()
-        check_errmsg("Internal bug: cannot ground", ctx)
+        self.assertEqual(bf1.ground(),bf1.ground().ground())
+
+        # Test the paths and roots properties
+        func3 = lambda x,y,z : x==y+z
+        X=alias(F)
+        bf = func_([F.anum,X.anum,G.anum], func3)
+        self.assertEqual(hps(bf.paths),hps([F.anum,X.anum,G.anum]))
+        self.assertEqual(hps(bf.roots),hps([F,X,G]))
 
         with self.assertRaises(RuntimeError) as ctx:
             bf1.make_callable([F])
         check_errmsg("Internal bug: make_callable", ctx)
 
         with self.assertRaises(TypeError) as ctx:
-            bf = FunctorComparisonCondition(func1,[])
+            bf = FunctionComparator(func1,[])
         check_errmsg("Invalid empty path signature", ctx)
 
     #------------------------------------------------------------------------------
     # Test more complex case of wrapping of comparison functors in
-    # FunctorComparisonCondition
+    # FunctionComparator
     # ------------------------------------------------------------------------------
-    def test_nonapi_FunctorComparisonCondition_with_args(self):
+    def test_nonapi_FunctionComparator_with_args(self):
         def hps(paths):
             return [hashable_path(p) for p in paths ]
 
@@ -507,42 +580,42 @@ class QConditionManipulateTestCase(unittest.TestCase):
         func1 = lambda x, y : x.anum >= y
         func2 = lambda x, y=10 : x.anum >= y
 
-        bf1 = FunctorComparisonCondition(func1,[F.anum,F.astr])
+        bf1 = FunctionComparator(func1,[F.anum,F.astr])
         self.assertTrue(bf1.ground().is_ground)
-        bf1 = FunctorComparisonCondition(func1,[F.anum])
+        bf1 = FunctionComparator(func1,[F.anum])
         self.assertFalse(bf1.is_ground)
-        bf1 = FunctorComparisonCondition(func1,[F.anum],assignment={'y': 5})
+        bf1 = FunctionComparator(func1,[F.anum],assignment={'y': 5})
         self.assertTrue(bf1.is_ground)
 
-        bf1 = FunctorComparisonCondition(func2,[F.anum])
+        bf1 = FunctionComparator(func2,[F.anum])
         self.assertFalse(bf1.is_ground)
         self.assertTrue(bf1.ground().is_ground)
-        self.assertTrue(bf1.ground({'y':10}).is_ground)
-        self.assertEqual(bf1.ground(),bf1.ground({'y':10}))
-        self.assertNotEqual(bf1.ground(),bf1.ground({'y':11}))
+        self.assertTrue(bf1.ground(y=10).is_ground)
+        self.assertEqual(bf1.ground(),bf1.ground(y=10))
+        self.assertNotEqual(bf1.ground(),bf1.ground(y=11))
 
-        bf1 = FunctorComparisonCondition(func1,[path(F)])
+        bf1 = FunctionComparator(func1,[path(F)])
         assignment={'y' : 1}
-        gbf1 = FunctorComparisonCondition(func1,[path(F)],False,assignment)
-        self.assertEqual(gbf1,bf1.ground(assignment))
+        gbf1 = FunctionComparator(func1,[path(F)],False,assignment)
+        self.assertEqual(gbf1,bf1.ground(**assignment))
 
         # Partial grounding will fail
         with self.assertRaises(ValueError) as ctx:
-            bf1.ground({})
+            bf1.ground()
         check_errmsg("Even after the named placeholders", ctx)
 
         # Too many paths
         with self.assertRaises(TypeError) as ctx:
-            bf1 = FunctorComparisonCondition(func1,[F.anum,F.astr,F.atuple])
+            bf1 = FunctionComparator(func1,[F.anum,F.astr,F.atuple])
         check_errmsg("More paths specified", ctx)
 
         # Bad assignment parameter value
         with self.assertRaises(TypeError) as ctx:
-            bf1 = FunctorComparisonCondition(func1,[F.anum],assignment={'k': 5})
-        check_errmsg("FunctorComparisonCondition is being given an assignment", ctx)
+            bf1 = FunctionComparator(func1,[F.anum],assignment={'k': 5})
+        check_errmsg("FunctionComparator is being given an assignment", ctx)
 
 
-        bf1 = FunctorComparisonCondition(lambda x,y : x < y,[F.anum,F.atuple[0]])
+        bf1 = FunctionComparator(lambda x,y : x < y,[F.anum,F.atuple[0]])
         sat1 = bf1.ground().make_callable([F])
         nsat1 = bf1.negate().ground().make_callable([F])
         fact1 = F(1,"ab",(-2,"abc"))
@@ -552,7 +625,7 @@ class QConditionManipulateTestCase(unittest.TestCase):
         self.assertTrue(sat1((fact2,))) ; self.assertFalse(nsat1((fact2,)))
 
     #------------------------------------------------------------------------------
-    # Test the func_ API functor for creating FunctorComparisonCondition
+    # Test the func_ API functor for creating FunctionComparator
     # ------------------------------------------------------------------------------
     def test_api_func_(self):
 
@@ -560,7 +633,7 @@ class QConditionManipulateTestCase(unittest.TestCase):
         G = self.G
         func1 = lambda x, y : x.anum == y.anum
 
-        wrap1 = FunctorComparisonCondition(func1,[F,G])
+        wrap1 = FunctionComparator(func1,[F,G])
         wrap2 = func_([F,G],func1)
         self.assertEqual(wrap1,wrap2)
         sat1 = wrap1.ground().make_callable([F,G])
@@ -568,8 +641,8 @@ class QConditionManipulateTestCase(unittest.TestCase):
 
         f1 = F(1,"ab",(-2,"abc"))
         f2 = F(-1,"ab",(2,"abc"))
-        g1 = G(1)
-        g2 = G(-1)
+        g1 = G(1,2)
+        g2 = G(-1,4)
         self.assertTrue(sat1((f1,g1)))
         self.assertEqual(sat1((f1,g1)),sat2((f1,g1)))
 
@@ -579,19 +652,19 @@ class QConditionManipulateTestCase(unittest.TestCase):
     # ------------------------------------------------------------------------------
     # Make ComparisonCallable objects from either any ground comparison condition.
     # ------------------------------------------------------------------------------
-    def test_nonapi_make_comparison_callable(self):
+    def test_nonapi_comparison_callables(self):
         F = self.F
         G = self.G
         func1 = lambda x, y : x == y
 
         wrap2 = func_([F.anum,G.anum],func1)
-        sat1 = make_comparison_callable([G,F], wrap2.ground())
-        sat2 = make_comparison_callable([G,F], F.anum == G.anum)
+        sat1 = wrap2.ground().make_callable([G,F])
+        sat2 = StandardComparator.from_qcondition(F.anum == G.anum).make_callable([G,F])
 
         f1 = F(1,"ab",(-2,"abc"))
         f2 = F(-1,"ab",(2,"abc"))
-        g1 = G(1)
-        g2 = G(-1)
+        g1 = G(1,4)
+        g2 = G(-1,4)
 
         self.assertTrue(sat1((g1,f1)))
         self.assertTrue(sat2((g1,f1)))
@@ -614,171 +687,342 @@ class QConditionManipulateTestCase(unittest.TestCase):
 
         # Bad calls to make_comparison_callable
         with self.assertRaises(TypeError) as ctx:
-            make_comparison_callable([G], F.anum == G.anum)
+            sc = StandardComparator.from_qcondition(F.anum == G.anum)
+            sc.make_callable([G])
         check_errmsg("Invalid signature match", ctx)
 
-    # ------------------------------------------------------------------------------
-    # ------------------------------------------------------------------------------
+#------------------------------------------------------------------------------
+# Test query "which" expressions. Turning nested QConditions into a set of
+# clauses.
+# ------------------------------------------------------------------------------
 
-    def test_nonapi_validate_query_condition_single_predicate(self):
+class WhichExpressionTestCase(unittest.TestCase):
+    def setUp(self):
+        class F(Predicate):
+            anum=IntegerField
+            astr=StringField
+            atuple=(IntegerField,StringField)
+        self.F = F
+
+        class G(Predicate):
+            anum=IntegerField
+            astr=StringField
+        self.G = G
+
+    # ------------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------
+    def test_nonapi_validate_which_expression(self):
         F = self.F
-        vqc = validate_query_condition
+        G = self.G
 
-        # Some valid conditionals where no simpification is done
-        self.assertEqual(vqc((F.anum == 4), (F,)), F.anum == 4)
-        self.assertEqual(vqc(~(F.anum == 4), (F,)), ~(F.anum == 4))
-        self.assertEqual(vqc((F.anum == 4) & (F.astr == "df"), (F,)),
-                         (F.anum == 4) & (F.astr == "df"))
-        self.assertEqual(vqc((F.anum == 4) | (F.astr == "df"), (F,)),
-                         (F.anum == 4) | (F.astr == "df"))
-        self.assertEqual(vqc((F.anum == 4) | \
-                             ((F.astr == "df") & ~(F.atuple[0] < 2)), (F,)),
-                         (F.anum == 4) | \
-                         ((F.astr == "df") & ~(F.atuple[0] < 2)))
+        vwe = validate_which_expression
+        msc = StandardComparator.from_qcondition
+        mfc = FunctionComparator.from_specification
+
+        # Comparison QConditions and raw functions are turned into Comparators
+        self.assertEqual(vwe((F.anum == 4), [F]), msc(F.anum == 4))
+        self.assertEqual(vwe(~(F.anum == 4), [F]), not_(msc(F.anum == 4)))
+        self.assertEqual(vwe((F.anum == 4) & (F.astr == "df"), [F]),
+                         and_(msc(F.anum == 4),msc(F.astr == "df")))
+        self.assertEqual(vwe((F.anum == 4) | (F.astr == "df"), [F]),
+                         or_(msc(F.anum == 4),msc(F.astr == "df")))
+        self.assertEqual(vwe((F.anum == 4) | \
+                             ((F.astr == "df") & ~(F.atuple[0] < 2)), [F]),
+                         or_(msc(F.anum == 4),
+                             and_(msc(F.astr == "df"),not_(msc(F.atuple[0] < 2)))))
 
         f=lambda x: x + F.anum
-        self.assertEqual(vqc(f,[F]), func_([F], f))
-
-        cond1 = F.anum == 4
-        cond2 = F.anum == 4
-        self.assertEqual(vqc(cond1, (F,)),cond2)
-
-        cond1 = (F.anum == 4) & (F.astr == "df")
-        cond2 = (F.anum == 4) & (F.astr == "df")
-        self.assertEqual(vqc(cond1, (F,)),cond2)
+        self.assertEqual(vwe(f,[F]), mfc([F], f))
 
         cond1 = (F.anum == 4) & f
-        cond2 = (F.anum == 4) & func_([F],f)
-        self.assertEqual(vqc(cond1, (F,)),cond2)
-        self.assertEqual(vqc(cond2, (F,)),cond2)
+        cond2 = and_(msc(F.anum == 4),mfc([F],f))
+        self.assertEqual(vwe(cond1, [F]),cond2)
+        self.assertEqual(vwe(cond2, [F]),cond2)
 
     # ------------------------------------------------------------------------------
     # ------------------------------------------------------------------------------
-    def test_nonapi_negate_query_condition(self):
+    def test_nonapi_negate_which_expression(self):
         F = self.F
-        nqc = negate_query_condition
+        G = self.G
+        vwe = validate_which_expression
+        nwe = negate_which_expression
 
-        bf = func_([F.anum],lambda x: x < 2)
+        bf = vwe(func_([F.anum],lambda x: x < 2),[F])
         nbf = bf.negate()
 
-        self.assertEqual(nqc(nbf), bf)
-        self.assertEqual(nqc(F.anum == 3), F.anum != 3)
-        self.assertEqual(nqc(F.anum != 3), F.anum == 3)
-        self.assertEqual(nqc(F.anum < 3), F.anum >= 3)
-        self.assertEqual(nqc(F.anum <= 3), F.anum > 3)
-        self.assertEqual(nqc(F.anum > 3), F.anum <= 3)
-        self.assertEqual(nqc(F.anum >= 3), F.anum < 3)
+        self.assertEqual(nwe(nbf), bf)
+        self.assertEqual(nwe(vwe(F.anum == 3,[F])), vwe(F.anum != 3,[F]))
 
-        c = (F.anum == 3) | (bf)
-        nc = (F.anum != 3) & (nbf)
-        self.assertEqual(nqc(c),nc)
-        self.assertEqual(nqc(nc),c)
 
-        c = ~(~(F.anum == 3) | ~(F.anum != 4))
-        nc = (F.anum != 3) | (F.anum == 4)
-        self.assertEqual(nqc(c),nc)
+
+        self.assertEqual(nwe(vwe(F.anum != 3)), vwe(F.anum == 3))
+        self.assertEqual(nwe(vwe(F.anum < 3)) , vwe(F.anum >= 3))
+        self.assertEqual(nwe(vwe(F.anum <= 3)), vwe(F.anum > 3))
+        self.assertEqual(nwe(vwe(F.anum > 3)) , vwe(F.anum <= 3))
+        self.assertEqual(nwe(vwe(F.anum >= 3)), vwe(F.anum < 3))
+
+        c = vwe((F.anum == 3) | (bf))
+        nc = vwe((F.anum != 3) & (nbf))
+        self.assertEqual(nwe(c),nc)
+        self.assertEqual(nwe(nc),c)
+
+        c = vwe(~(~(F.anum == 3) | ~(F.anum != 4)))
+        nc = vwe((F.anum != 3) | (F.anum == 4))
+        self.assertEqual(nwe(c),nc)
 
     # ------------------------------------------------------------------------------
+    # Test turning the which expression into NNF
     # ------------------------------------------------------------------------------
-    def test_nonapi_normalise_to_nnf_query_condition(self):
+    def test_nonapi_which_expression_to_nnf(self):
         F = self.F
-        tonnf = normalise_to_nnf_query_condition
+        vwe = validate_which_expression
+        tonnf = which_expression_to_nnf
 
-        c = ~(~(F.anum == 3) | ~(F.anum == 4))
-        nnfc = (F.anum == 3) & (F.anum == 4)
+        c = vwe(~(~(F.anum == 3) | ~(F.anum == 4)))
+        nnfc = vwe((F.anum == 3) & (F.anum == 4))
         self.assertEqual(tonnf(c),nnfc)
 
     # ------------------------------------------------------------------------------
     # ------------------------------------------------------------------------------
-    def test_nonapi_normalise_to_cnf_query_condition(self):
+    def test_nonapi_which_expression_to_cnf(self):
         F = self.F
-        tocnf = normalise_to_cnf_query_condition
+        vwe = validate_which_expression
+        tocnf = which_expression_to_cnf
 
         # NOTE: Equality test relies on the order - to make this better would
         # need to introduce ordering over comparison conditions.
 
-        f = ((F.anum == 4) & (F.anum == 3)) | (F.anum == 6)
-        cnf = ((F.anum == 4) | (F.anum == 6)) & ((F.anum == 3) | (F.anum == 6))
+        f = vwe(((F.anum == 4) & (F.anum == 3)) | (F.anum == 6))
+        cnf = vwe(((F.anum == 4) | (F.anum == 6)) & ((F.anum == 3) | (F.anum == 6)))
         self.assertEqual(tocnf(f),cnf)
 
-        f = (F.anum == 6) | ((F.anum == 4) & (F.anum == 3))
-        cnf = ((F.anum == 6) | (F.anum == 4)) & ((F.anum == 6) | (F.anum == 3))
+        f = vwe((F.anum == 6) | ((F.anum == 4) & (F.anum == 3)))
+        cnf = vwe(((F.anum == 6) | (F.anum == 4)) & ((F.anum == 6) | (F.anum == 3)))
         self.assertEqual(tocnf(f),cnf)
 
-        f = ((F.anum == 6) & (F.anum == 5)) | ((F.anum == 4) & (F.anum == 3))
-        cnf = (((F.anum == 6) | (F.anum == 4)) & ((F.anum == 6) | (F.anum == 3))) & \
-              (((F.anum == 5) | (F.anum == 4)) & ((F.anum == 5) | (F.anum == 3)))
+        f = vwe(((F.anum == 6) & (F.anum == 5)) | ((F.anum == 4) & (F.anum == 3)))
+        cnf = vwe((((F.anum == 6) | (F.anum == 4)) & ((F.anum == 6) | (F.anum == 3))) & \
+                  (((F.anum == 5) | (F.anum == 4)) & ((F.anum == 5) | (F.anum == 3))))
         self.assertEqual(tocnf(f),cnf)
 
     # ------------------------------------------------------------------------------
     # ------------------------------------------------------------------------------
     def test_nonapi_clause(self):
+        def hps(paths):
+            return set([hashable_path(p) for p in paths ])
+        vwe = validate_which_expression
+
         F = self.F
         G = self.G
 
-        c1 = Clause([F.anum == 4, F.astr == "b", F.atuple[0] == 6])
-        self.assertTrue(c1.is_ground)
-        self.assertEqual(set([hashable_path(p) for p in [F.anum,F.astr,F.atuple[0]]]),
-                         c1.hashable_paths)
-        self.assertEqual(c1.predicates,set([F]))
+        c1 = Clause([vwe(F.anum == 4), vwe(F.astr == "b"), vwe(F.atuple[0] == 6)])
 
-        c1 = Clause([G.anum == ph1_, F.astr == "b", F.atuple[0] == 6])
-        self.assertFalse(c1.is_ground)
-        self.assertEqual(set([hashable_path(p) for p in [G.anum,F.astr,F.atuple[0]]]),
-                         c1.hashable_paths)
-        self.assertEqual(c1.predicates,set([F,G]))
+        self.assertEqual(hps([F.anum,F.astr,F.atuple[0]]), hps(c1.paths))
+        self.assertEqual(hps(c1.roots),hps([F]))
+        self.assertEqual(c1,c1.ground())
+
+        c2 = Clause([vwe(F.anum == ph1_), vwe(F.astr == "b"), vwe(F.atuple[0] == 6)])
+        self.assertEqual(hps([F.anum,F.astr,F.atuple[0]]), hps(c2.paths))
+        self.assertEqual(c2.ground(4),c1)
+        self.assertEqual(hps(c1.roots),hps([F]))
 
         f = func_([F.anum], lambda x : x == 2)
         c1 = Clause([f])
-        self.assertFalse(c1.is_ground)
-        self.assertEqual(set([hashable_path(p) for p in [F.anum]]), c1.hashable_paths)
-        self.assertEqual(c1.predicates,set([F]))
+
+        self.assertEqual(hps(c1.paths), hps([F.anum]))
+        self.assertEqual(hps(c1.roots),hps([F]))
 
         # Iterate over the conditions within a clause
-        c1 = Clause([G.anum == ph1_, F.astr == "b", F.atuple[0] == 6])
-        self.assertEqual(list(c1), [G.anum == ph1_, F.astr == "b", F.atuple[0] == 6])
+        c1 = Clause([vwe(G.anum == ph1_),vwe(F.astr == "b"),vwe(F.atuple[0] == 6)])
+        self.assertEqual(list(c1),
+                         [vwe(G.anum == ph1_),vwe(F.astr == "b"),vwe(F.atuple[0] == 6)])
+
+        # Test make_callable
+        c1 = Clause([vwe(G.anum == ph1_),vwe(F.astr == "b")])
+        cc = c1.ground(5).make_callable([F,G])
+
+        f1 = F(1,"b",(2,"b"))
+        f2 = F(3,"c",(4,"d"))
+        g1 = G(4,"df")
+        g2 = G(5,"df")
+        self.assertTrue(cc((f1,g1)))
+        self.assertTrue(cc((f2,g2)))
+        self.assertTrue(cc((f1,g2)))
+        self.assertFalse(cc((f2,g1)))
+
+        # Test cannot make callable an ungrounded clause
+        with self.assertRaises(TypeError) as ctx:
+            cc = c1.make_callable([F,G])
+        check_errmsg("Internal bug", ctx)
 
     # ------------------------------------------------------------------------------
     # ------------------------------------------------------------------------------
-    def test_nonapi_normalise_query_condition(self):
+    def test_nonapi_clause_block(self):
+        def hps(paths):
+            return set([hashable_path(p) for p in paths ])
+        vwe = validate_which_expression
+
         F = self.F
-        tonorm = normalise_query_condition
+        G = self.G
+        X = alias(F)
+        Y = alias(G)
 
-        f = F.anum == 4
-        self.assertEqual(tonorm(f), [Clause([f])])
+        c1 = Clause([vwe(F.anum == 4), vwe(F.astr == "b")])
+        c2 = Clause([vwe(X.anum == 5), vwe(X.astr == "c")])
+        c3 = Clause([vwe(G.anum == 6)])
+        cb1 = ClauseBlock([c1,c2,c3])
+        cb2 = ClauseBlock([c1,c2,c3])
+        self.assertEqual(hps([F.anum,F.astr,X.anum,X.astr,G.anum]), hps(cb1.paths))
+        self.assertEqual(hps([F,X,G]), hps(cb1.roots))
+
+        # Test the concatenation of clause blocks
+        x1 = ClauseBlock([c1])
+        x2 = ClauseBlock([c2])
+        x3 = ClauseBlock([c1,c2])
+        self.assertEqual(x1+x2,x3)
+
+        self.assertEqual(cb1,cb2)
+        self.assertEqual(cb1.ground(),cb2)
+        self.assertEqual(list(cb1), [c1,c2,c3])
+
+        c1 = Clause([vwe(F.anum == ph1_)])
+        c2 = Clause([vwe(G.anum == ph2_)])
+        c1a = Clause([vwe(F.anum == 1)])
+        c2b = Clause([vwe(G.anum == 2)])
+        cb1 = ClauseBlock([c1,c2])
+        cb2 = ClauseBlock([c1a,c2b])
+        self.assertEqual(cb1.ground(1,2),cb2)
+
+        testfunc = cb2.make_callable([F,G])
+
+        f1 = F(1,"a",(2,"b"))
+        f2 = F(2,"a",(2,"b"))
+        g1 = G(2,"a")
+        g2 = G(3,"a")
+
+        self.assertFalse(testfunc((f1,g2)))
+        self.assertFalse(testfunc((f2,g1)))
+        self.assertFalse(testfunc((f2,g2)))
+        self.assertTrue(testfunc((f1,g1)))
+
+    # ------------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------
+    def test_nonapi_normalise_which_expression(self):
+        F = self.F
+        vwe = validate_which_expression
+        tonorm = normalise_which_expression
+
+        # Simple cases containing a single clause block
+        f = vwe(F.anum == 4)
+        self.assertEqual(tonorm(f), [ClauseBlock([Clause([f])])])
 
         f = func_([F.anum], lambda x : x == 2)
-        self.assertEqual(tonorm(f), [Clause([f])])
+        self.assertEqual(tonorm(f), [ClauseBlock([Clause([f])])])
 
-        f = ((F.anum == 4) & (F.anum == 3)) | (F.anum == 6)
-        clauses = [Clause([F.anum == 4, F.anum == 6]),
-                   Clause([F.anum == 3, F.anum == 6])]
+        f = vwe(((F.anum == 4) & (F.anum == 3)) | (F.anum == 6))
+        clauses = [Clause([vwe(F.anum == 4), vwe(F.anum == 6)]),
+                   Clause([vwe(F.anum == 3), vwe(F.anum == 6)])]
         norm = tonorm(f)
-        self.assertEqual(tonorm(f),clauses)
+        self.assertEqual(tonorm(f),[ClauseBlock(clauses)])
 
-    # ------------------------------------------------------------------------------
-    # ------------------------------------------------------------------------------
+        # More complex cases with multiple blocks
+        G = self.G
+        X = alias(F)
+        Y = alias(G)
+
+        f = vwe(and_(or_(F.anum == 4, F.astr == "b"),
+                     X.anum == 5,
+                     or_(X.anum == 6, Y.astr == "d"),
+                     X.astr == "a"))
+        cbs = tonorm(f)
+        cf1 = Clause([vwe(F.anum == 4), vwe(F.astr == "b")])
+        cx1 = Clause([vwe(X.anum == 5)])
+        cx2 = Clause([vwe(X.astr == "a")])
+        cxy1 = Clause([vwe(X.anum == 6), vwe(Y.astr == "d")])
+
+        self.assertEqual(set(cbs),
+                         set([ClauseBlock([cf1]),
+                              ClauseBlock([cx1,cx2]),
+                              ClauseBlock([cxy1])]))
+
 
 #------------------------------------------------------------------------------
 # Tests of manipulating/cleaning the query conditions
 #------------------------------------------------------------------------------
 
-class JoinConditionTestCase(unittest.TestCase):
+class JoinExpressionTestCase(unittest.TestCase):
     def setUp(self):
         class F(Predicate):
             anum=IntegerField
+            astr=IntegerField
         self.F = F
 
         class G(Predicate):
             anum=IntegerField
+            astr=IntegerField
         self.G = G
 
     # ------------------------------------------------------------------------------
     # ------------------------------------------------------------------------------
-    def test_nonapi_normalise_query_condition(self):
+    def test_nonapi_validate_join_expression(self):
         F = self.F
+        G = self.G
+        vje = validate_join_expression
+        joins = vje([F.anum == G.anum],[F,G])
+        self.assertEqual(joins,[Join(operator.eq, [F.anum,G.anum])])
+        self.assertEqual(Join(operator.eq, [F.anum,G.anum]).paths, (F.anum,G.anum))
+        self.assertEqual(Join(operator.eq, [F.anum,G.anum]).roots, (path(F),path(G)))
+        self.assertEqual(hash(Join(operator.eq, [F.anum,G.anum])),
+                         hash(Join(operator.eq, [F.anum,G.anum])))
+
+        joins = vje([F.anum != G.anum],[F,G])
+        self.assertEqual(joins,[Join(operator.ne, [F.anum,G.anum])])
+
+        joins = vje([F.anum < G.anum],[F,G])
+        self.assertEqual(joins,[Join(operator.lt, [F.anum,G.anum])])
+
+        joins = vje([F.anum <= G.anum],[F,G])
+        self.assertEqual(joins,[Join(operator.le, [F.anum,G.anum])])
+
+        joins = vje([F.anum > G.anum],[F,G])
+        self.assertEqual(joins,[Join(operator.gt, [F.anum,G.anum])])
+
+        joins = vje([F.anum >= G.anum],[F,G])
+        self.assertEqual(joins,[Join(operator.ge, [F.anum,G.anum])])
+
+        joins = vje([joinall_(F,G)],[F,G])
+        self.assertEqual(joins,[Join(trueall, [path(F),path(G)])])
+
+        with self.assertRaises(ValueError) as ctx:
+            vje([F.anum <= G.anum],[F])
+        check_errmsg("Join specification", ctx)
+
+        with self.assertRaises(ValueError) as ctx:
+            vje([F.anum <= 1],[F,G])
+        check_errmsg("Invalid argument", ctx)
+
+        with self.assertRaises(ValueError) as ctx:
+            vje([F.anum == F.anum],[F,G])
+        check_errmsg("Invalid join condition", ctx)
 
 
+        X = alias(F)
+        Y = alias(G)
+
+        # A disconnected graph
+        with self.assertRaises(ValueError) as ctx:
+            vje([F.anum == G.anum, X.anum == Y.anum],[F,G,X,Y])
+        check_errmsg("Invalid join specification: contains un-joined", ctx)
+
+        Z = alias(G)
+        # Missing base root
+        with self.assertRaises(ValueError) as ctx:
+            vje([F.anum == G.anum, X.anum == Y.anum],[F,G,X,Y,Z])
+        check_errmsg("Invalid join specification: missing joins", ctx)
+
+
+    def test_nonapi(self):
+        pass
 #------------------------------------------------------------------------------
 # main
 #------------------------------------------------------------------------------

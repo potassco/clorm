@@ -211,9 +211,10 @@ def or_(*conditions):
     '''Return the disjunction of two of more conditions'''
     return functools.reduce((lambda x,y: QCondition(operator.or_,x,y)),conditions)
 
-def joinall_(*conditions):
+def joinall_(*args):
     '''Return a cross-product join condition'''
-    return functools.reduce((lambda x,y: QCondition(trueall,x,y)),conditions)
+    newargs = [ path(a) for a in args ]
+    return QCondition(trueall, *newargs)
 
 #------------------------------------------------------------------------------
 # PredicatePath class and supporting metaclass and functions. The PredicatePath
