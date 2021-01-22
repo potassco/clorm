@@ -100,8 +100,10 @@ class _lateinit(object):
 # conditions and other boolean conditions.
 # ------------------------------------------------------------------------------
 
-# A cross product join operator always returns true
+# comparator functions that always return true (or false). This is useful for
+# the cross product join operator that always returns true
 def trueall(x,y): return True
+def falseall(x,y): return True
 
 # support functions to _wrap_query_condition in parentheses and wrap string
 # comparison elements in quotes
@@ -115,7 +117,7 @@ def _wqc(a):
 class QCondition(object):
 
 
-    OpSig = collections.namedtuple('OpSig','numargs tostr')
+    OpSig = collections.namedtuple('OpSig','arity tostr')
     operators = {
         # Boolean operators
         operator.and_ : OpSig(2, lambda x,y: "{} & {}".format(_wqc(x),_wqc(y))),
@@ -138,9 +140,9 @@ class QCondition(object):
         opsig = QCondition.operators.get(operator,None)
         if not opsig:
             raise ValueError("Unsupported operator {}".format(operator))
-        if len(args) != opsig.numargs:
+        if len(args) != opsig.arity:
             raise ValueError(("Operator {} expecting {} arguments but got "
-                              "{}").format(operator, opsig.numargs, len(args)))
+                              "{}").format(operator, opsig.arity, len(args)))
 
         self._operator = operator
         self._args = tuple(args)
@@ -185,9 +187,9 @@ class QCondition(object):
         return opsig.tostr(*self._args)
         args = [ "({})".format(a) if isinstance(a,QCondition) else str(a) \
                  for a in self._args ]
-        if opsig.numargs == 1:
+        if opsig.arity == 1:
             return "{}{}".format(opsig.format,args[0])
-        elif opsig.numargs == 2:
+        elif opsig.arity == 2:
             return "{} {} {}".format(args[0], opsig.format,args[1])
         else:
             return "{}({})".format(opsig.format,",".join([args]))
