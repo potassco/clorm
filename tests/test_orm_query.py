@@ -32,7 +32,9 @@ from clorm.orm.query import PositionalPlaceholder, NamedPlaceholder, \
     validate_which_expression, negate_which_expression, \
     which_expression_to_nnf, which_expression_to_cnf, \
     Clause, ClauseBlock, normalise_which_expression, \
-    Join, validate_join_expression, \
+    clauses_to_clauseblocks, \
+    validate_join_expression, simple_query_join_order, \
+    match_roots_joins_clauses, \
     check_query_condition, simplify_query_condition, \
     instantiate_query_condition, evaluate_query_condition
 
@@ -472,6 +474,14 @@ class ComparatorTestCase(unittest.TestCase):
 
         self.assertNotEqual(SC(operator.eq,[F.anum,4]).negate(),SC(operator.eq,[F.anum,4]))
 
+        # Test swap operation
+        self.assertEqual(SC(operator.eq,[F.anum,4]).swap(),SC(operator.eq,[4,F.anum]))
+        self.assertEqual(SC(operator.ne,[F.anum,4]).swap(),SC(operator.ne,[4,F.anum]))
+        self.assertEqual(SC(operator.lt,[F.anum,4]).swap(),SC(operator.gt,[4,F.anum]))
+        self.assertEqual(SC(operator.le,[F.anum,4]).swap(),SC(operator.ge,[4,F.anum]))
+        self.assertEqual(SC(operator.gt,[F.anum,4]).swap(),SC(operator.lt,[4,F.anum]))
+        self.assertEqual(SC(operator.ge,[F.anum,4]).swap(),SC(operator.le,[4,F.anum]))
+
         # Test paths
         self.assertEqual(hps(SC(operator.eq,[F.anum,4]).paths), hps([F.anum]))
         self.assertEqual(hps(SC(operator.eq,[F.anum,F.anum]).paths), hps([F.anum]))
@@ -659,7 +669,7 @@ class ComparatorTestCase(unittest.TestCase):
 
         wrap2 = func_([F.anum,G.anum],func1)
         sat1 = wrap2.ground().make_callable([G,F])
-        sat2 = StandardComparator.from_qcondition(F.anum == G.anum).make_callable([G,F])
+        sat2 = StandardComparator.from_which_qcondition(F.anum == G.anum).make_callable([G,F])
 
         f1 = F(1,"ab",(-2,"abc"))
         f2 = F(-1,"ab",(2,"abc"))
@@ -687,7 +697,7 @@ class ComparatorTestCase(unittest.TestCase):
 
         # Bad calls to make_comparison_callable
         with self.assertRaises(TypeError) as ctx:
-            sc = StandardComparator.from_qcondition(F.anum == G.anum)
+            sc = StandardComparator.from_which_qcondition(F.anum == G.anum)
             sc.make_callable([G])
         check_errmsg("Invalid signature match", ctx)
 
@@ -716,7 +726,7 @@ class WhichExpressionTestCase(unittest.TestCase):
         G = self.G
 
         vwe = validate_which_expression
-        msc = StandardComparator.from_qcondition
+        msc = StandardComparator.from_which_qcondition
         mfc = FunctionComparator.from_specification
 
         # Comparison QConditions and raw functions are turned into Comparators
@@ -872,8 +882,10 @@ class WhichExpressionTestCase(unittest.TestCase):
         c3 = Clause([vwe(G.anum == 6)])
         cb1 = ClauseBlock([c1,c2,c3])
         cb2 = ClauseBlock([c1,c2,c3])
+        cbt = ClauseBlock()
         self.assertEqual(hps([F.anum,F.astr,X.anum,X.astr,G.anum]), hps(cb1.paths))
         self.assertEqual(hps([F,X,G]), hps(cb1.roots))
+        self.assertEqual(cb1.clauses, (c1,c2,c3))
 
         # Test the concatenation of clause blocks
         x1 = ClauseBlock([c1])
@@ -894,7 +906,7 @@ class WhichExpressionTestCase(unittest.TestCase):
         self.assertEqual(cb1.ground(1,2),cb2)
 
         testfunc = cb2.make_callable([F,G])
-
+        trivialtrue = cbt.make_callable([F,G])
         f1 = F(1,"a",(2,"b"))
         f2 = F(2,"a",(2,"b"))
         g1 = G(2,"a")
@@ -905,28 +917,35 @@ class WhichExpressionTestCase(unittest.TestCase):
         self.assertFalse(testfunc((f2,g2)))
         self.assertTrue(testfunc((f1,g1)))
 
+        self.assertTrue(trivialtrue((f1,g2)))
+        self.assertTrue(trivialtrue((f2,g1)))
+        self.assertTrue(trivialtrue((f2,g2)))
+        self.assertTrue(trivialtrue((f1,g1)))
+
     # ------------------------------------------------------------------------------
     # ------------------------------------------------------------------------------
     def test_nonapi_normalise_which_expression(self):
-        F = self.F
+        F = alias(self.F)
         vwe = validate_which_expression
         tonorm = normalise_which_expression
 
         # Simple cases containing a single clause block
         f = vwe(F.anum == 4)
-        self.assertEqual(tonorm(f), [ClauseBlock([Clause([f])])])
+#        self.assertEqual(tonorm(f), [ClauseBlock([Clause([f])])])
+        self.assertEqual(tonorm(f), [Clause([f])])
 
         f = func_([F.anum], lambda x : x == 2)
-        self.assertEqual(tonorm(f), [ClauseBlock([Clause([f])])])
+#        self.assertEqual(tonorm(f), [ClauseBlock([Clause([f])])])
+        self.assertEqual(tonorm(f), [Clause([f])])
 
         f = vwe(((F.anum == 4) & (F.anum == 3)) | (F.anum == 6))
         clauses = [Clause([vwe(F.anum == 4), vwe(F.anum == 6)]),
                    Clause([vwe(F.anum == 3), vwe(F.anum == 6)])]
         norm = tonorm(f)
-        self.assertEqual(tonorm(f),[ClauseBlock(clauses)])
+        self.assertEqual(tonorm(f),clauses)
 
         # More complex cases with multiple blocks
-        G = self.G
+        G = alias(self.G)
         X = alias(F)
         Y = alias(G)
 
@@ -934,16 +953,36 @@ class WhichExpressionTestCase(unittest.TestCase):
                      X.anum == 5,
                      or_(X.anum == 6, Y.astr == "d"),
                      X.astr == "a"))
-        cbs = tonorm(f)
+        norm = tonorm(f)
+        clauses = [Clause([vwe(F.anum == 4), vwe(F.astr == "b")]),
+                   Clause([vwe(X.anum == 5)]),
+                   Clause([vwe(X.anum == 6), vwe(Y.astr == "d")]),
+                   Clause([vwe(X.astr == "a")])]
+        self.assertEqual(norm,clauses)
+
+    # ------------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------
+    def test_nonapi_clauses_to_clauseblocks(self):
+        F = path(self.F)
+        G = path(self.G)
+        X = alias(F)
+        Y = alias(G)
+        vwe = validate_which_expression
+
+        cf1 = Clause([vwe(F.anum == 4)])
+        cx1 = Clause([vwe(X.anum == 5)])
+        cbs, catchall = clauses_to_clauseblocks([cf1,cx1])
+        self.assertEqual(cbs,[ClauseBlock([cf1]),ClauseBlock([cx1])])
+        self.assertEqual(catchall, None)
+
         cf1 = Clause([vwe(F.anum == 4), vwe(F.astr == "b")])
         cx1 = Clause([vwe(X.anum == 5)])
         cx2 = Clause([vwe(X.astr == "a")])
         cxy1 = Clause([vwe(X.anum == 6), vwe(Y.astr == "d")])
+        cbs, catchall = clauses_to_clauseblocks([cf1,cx1,cx2,cxy1])
+        self.assertEqual(cbs,[ClauseBlock([cf1]),ClauseBlock([cx1,cx2])])
+        self.assertEqual(catchall, ClauseBlock([cxy1]))
 
-        self.assertEqual(set(cbs),
-                         set([ClauseBlock([cf1]),
-                              ClauseBlock([cx1,cx2]),
-                              ClauseBlock([cxy1])]))
 
 
 #------------------------------------------------------------------------------
@@ -963,48 +1002,57 @@ class JoinExpressionTestCase(unittest.TestCase):
         self.G = G
 
     # ------------------------------------------------------------------------------
+    # Test validating a join expression (a list of join clauses)
     # ------------------------------------------------------------------------------
     def test_nonapi_validate_join_expression(self):
-        F = self.F
-        G = self.G
+        F = path(self.F)
+        G = path(self.G)
+        SC=StandardComparator
         vje = validate_join_expression
         joins = vje([F.anum == G.anum],[F,G])
-        self.assertEqual(joins,[Join(operator.eq, [F.anum,G.anum])])
-        self.assertEqual(Join(operator.eq, [F.anum,G.anum]).paths, (F.anum,G.anum))
-        self.assertEqual(Join(operator.eq, [F.anum,G.anum]).roots, (path(F),path(G)))
-        self.assertEqual(hash(Join(operator.eq, [F.anum,G.anum])),
-                         hash(Join(operator.eq, [F.anum,G.anum])))
+        self.assertEqual(joins,[SC(operator.eq, [F.anum,G.anum])])
+        self.assertEqual(SC(operator.eq, [F.anum,G.anum]).paths, (F.anum,G.anum))
+        self.assertEqual(SC(operator.eq, [F.anum,G.anum]).roots, (path(F),path(G)))
+        self.assertEqual(hash(SC(operator.eq, [F.anum,G.anum])),
+                         hash(SC(operator.eq, [F.anum,G.anum])))
 
         joins = vje([F.anum != G.anum],[F,G])
-        self.assertEqual(joins,[Join(operator.ne, [F.anum,G.anum])])
+        self.assertEqual(joins,[SC(operator.ne, [F.anum,G.anum])])
 
         joins = vje([F.anum < G.anum],[F,G])
-        self.assertEqual(joins,[Join(operator.lt, [F.anum,G.anum])])
+        self.assertEqual(joins,[SC(operator.lt, [F.anum,G.anum])])
 
         joins = vje([F.anum <= G.anum],[F,G])
-        self.assertEqual(joins,[Join(operator.le, [F.anum,G.anum])])
+        self.assertEqual(joins,[SC(operator.le, [F.anum,G.anum])])
 
         joins = vje([F.anum > G.anum],[F,G])
-        self.assertEqual(joins,[Join(operator.gt, [F.anum,G.anum])])
+        self.assertEqual(joins,[SC(operator.gt, [F.anum,G.anum])])
 
         joins = vje([F.anum >= G.anum],[F,G])
-        self.assertEqual(joins,[Join(operator.ge, [F.anum,G.anum])])
+        self.assertEqual(joins,[SC(operator.ge, [F.anum,G.anum])])
 
         joins = vje([joinall_(F,G)],[F,G])
-        self.assertEqual(joins,[Join(trueall, [path(F),path(G)])])
+        self.assertEqual(joins,[SC(trueall, [path(F),path(G)])])
 
+        # Missing root path
         with self.assertRaises(ValueError) as ctx:
             vje([F.anum <= G.anum],[F])
         check_errmsg("Join specification", ctx)
 
+        # Only a single path
         with self.assertRaises(ValueError) as ctx:
             vje([F.anum <= 1],[F,G])
-        check_errmsg("Invalid argument", ctx)
+        check_errmsg("A join specification must have", ctx)
 
+        # Indentical argument
         with self.assertRaises(ValueError) as ctx:
             vje([F.anum == F.anum],[F,G])
-        check_errmsg("Invalid join condition", ctx)
+        check_errmsg("A join specification must have", ctx)
 
+        # Bad cross-product specification
+        with self.assertRaises(ValueError) as ctx:
+            vje([joinall_(F.anum,G.anum)],[F,G])
+        check_errmsg("Cross-product expression", ctx)
 
         X = alias(F)
         Y = alias(G)
@@ -1020,11 +1068,55 @@ class JoinExpressionTestCase(unittest.TestCase):
             vje([F.anum == G.anum, X.anum == Y.anum],[F,G,X,Y,Z])
         check_errmsg("Invalid join specification: missing joins", ctx)
 
+    # ------------------------------------------------------------------------------
+    # Test geneating the query plan when give the root join order, the joins,
+    # and the where clauses.
+    # ------------------------------------------------------------------------------
 
-    def test_nonapi(self):
-        pass
+    def test_nonapi_match_roots_joins_clauses(self):
+        F = path(self.F)
+        G = path(self.G)
+        FA = alias(F)
+        GA = alias(G)
+        vje = validate_join_expression
+        vwe = validate_which_expression
+        tonorm = normalise_which_expression
+
+        joins = vje([G.anum == F.anum, F.anum < GA.anum, joinall_(G,FA)],[F,G,FA,GA])
+        which = tonorm(vwe((F.anum == 4) & (FA.anum < 2)))
+
+        queryplans = match_roots_joins_clauses([FA,GA,G,F],joins,which)
+        for q in queryplans: print("\n{}".format(q))
+#        self.assertEqual(ass, [(FA,[]),(GA,[]),(G,vje([joinall_(G,FA)],[G,FA])),
+#                               (F,vje([F.anum == G.anum, F.anum < GA.anum],[F,G,GA]))])
+        q=3
+
+    # ------------------------------------------------------------------------------
+    # Test the simple heuristic for generating the join order
+    # ------------------------------------------------------------------------------
+    def test_nonapi_simple_query_join_order(self):
+        F = path(self.F)
+        G = path(self.G)
+        FA = alias(F)
+        GA = alias(G)
+        vje = validate_join_expression
+
+        joins = vje([F.anum == G.anum, F.anum < GA.anum, joinall_(G,FA)],[F,G,FA,GA])
+        qorder = simple_query_join_order(joins)
+        self.assertEqual(qorder,[FA,GA,G,F])
+
+    # ------------------------------------------------------------------------------
+    #
+    # ------------------------------------------------------------------------------
+
+
+
+
 #------------------------------------------------------------------------------
 # main
 #------------------------------------------------------------------------------
 if __name__ == "__main__":
     raise RuntimeError('Cannot run modules')
+
+
+

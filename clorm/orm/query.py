@@ -14,7 +14,7 @@ import enum
 from ..util.tools import all_equal
 from .core import *
 from .core import get_field_definition, QCondition, PredicatePath, \
-    kwargs_check_keys, trueall
+    kwargs_check_keys, trueall, falseall
 
 __all__ = [
     'Placeholder',
@@ -241,14 +241,29 @@ class Comparator(abc.ABC):
 # ------------------------------------------------------------------------------
 
 class StandardComparator(Comparator):
-    OpSpec = collections.namedtuple('OpSpec','negate')
+    class Preference(enum.IntEnum):
+        LOW= 0
+        MEDIUM= 1
+        HIGH=2
+
+    OpSpec = collections.namedtuple('OpSpec','pref join which negop swapop')
     operators = {
-        operator.eq : OpSpec(negate=operator.ne),
-        operator.ne : OpSpec(negate=operator.eq),
-        operator.lt : OpSpec(negate=operator.ge),
-        operator.le : OpSpec(negate=operator.gt),
-        operator.gt : OpSpec(negate=operator.le),
-        operator.ge : OpSpec(negate=operator.lt) }
+        operator.eq : OpSpec(pref=Preference.HIGH, join=True, which=True,
+                             negop=operator.ne, swapop=operator.eq),
+        operator.ne : OpSpec(pref=Preference.LOW, join=True, which=True,
+                             negop=operator.eq, swapop=operator.ne),
+        operator.lt : OpSpec(pref=Preference.MEDIUM, join=True, which=True,
+                             negop=operator.ge, swapop=operator.gt),
+        operator.le : OpSpec(pref=Preference.MEDIUM, join=True, which=True,
+                             negop=operator.gt, swapop=operator.ge),
+        operator.gt : OpSpec(pref=Preference.MEDIUM, join=True, which=True,
+                             negop=operator.le, swapop=operator.lt),
+        operator.ge : OpSpec(pref=Preference.MEDIUM, join=True, which=True,
+                             negop=operator.lt, swapop=operator.le),
+        trueall     : OpSpec(pref=Preference.LOW, join=True, which=False,
+                             negop=falseall, swapop=trueall),
+        falseall    : OpSpec(pref=Preference.HIGH, join=True, which=False,
+                             negop=trueall, swapop=falseall)}
 
 
     def __init__(self,operator,args):
@@ -278,7 +293,7 @@ class StandardComparator(Comparator):
     # -------------------------------------------------------------------------
 
     @classmethod
-    def from_qcondition(cls,qcond):
+    def from_which_qcondition(cls,qcond):
         def normalise_arg(arg):
             p=path(arg,exception=False)
             if p is None: return arg
@@ -297,7 +312,38 @@ class StandardComparator(Comparator):
                               "(at least one argument must reference a "
                               "a component of a fact): {}").format(qcond))
 
+        if qcond.operator == falseall:
+            raise ValueError("Internal bug: cannot use falseall operator in QCondition")
+
+        spec = StandardComparator.operators.get(qcond.operator,None)
+        if spec is None:
+            raise TypeError(("Internal bug: cannot create StandardComparator() with "
+                             "non-comparison operator '{}' ").format(qcond.operator))
+        if not spec.which and spec.join:
+            raise ValueError(("Invalid which comparison operator '{}' is only "
+                              "valid for a join specification").format(qcond.operator))
         return cls(qcond.operator,newargs)
+
+    @classmethod
+    def from_join_qcondition(cls,qcond):
+        if not isinstance(qcond, QCondition):
+            raise TypeError(("Internal bug: trying to make Join() "
+                             "from non QCondition object: {}").format(qcond))
+        if qcond.operator == falseall:
+            raise ValueError("Internal bug: cannot use falseall operator in QCondition")
+
+        paths = list(filter(lambda x: isinstance(x,PredicatePath), qcond.args))
+        paths = set(map(lambda x: hashable_path(x), paths))
+        roots = set(map(lambda x: hashable_path(path(x).meta.root), paths))
+        if len(roots) != 2:
+            raise ValueError(("A join specification must have "
+                              "exactly two root paths: '{}'").format(qcond))
+
+        if qcond.operator == trueall:
+            if paths != roots:
+                raise ValueError(("Cross-product expression '{}' must contain only "
+                                  "root paths").format(qcond))
+        return cls(qcond.operator,qcond.args)
 
     # -------------------------------------------------------------------------
     # Implement ABC functions
@@ -325,11 +371,34 @@ class StandardComparator(Comparator):
 
     def negate(self):
         spec = StandardComparator.operators[self._operator]
-        return StandardComparator(spec.negate, self._args)
+        return StandardComparator(spec.negop, self._args)
+
+    def swap(self):
+        spec = StandardComparator.operators[self._operator]
+        if not spec.swapop:
+            raise ValueError(("Internal bug: comparator '{}' doesn't support "
+                              "the swap operation").format(self._operator))
+        return StandardComparator(spec.swapop, reversed(self._args))
 
     @property
     def paths(self):
         return self._paths
+
+    @property
+    def preference(self):
+        pref = StandardComparator.operators[self._operator].pref
+        if pref is None:
+            raise ValueError(("Operator '{}' does not have a join "
+                              "preference").format(self._operator))
+        return pref
+
+    @property
+    def operator(self):
+        return self._operator
+
+    @property
+    def args(self):
+        return self._args
 
     @property
     def roots(self):
@@ -366,7 +435,7 @@ class StandardComparator(Comparator):
         # For convenience just return a QCondition string
         return str(QCondition(self._operator, *self._args))
 
-    def __repr(self):
+    def __repr__(self):
         return self.__str__()
 
 # ------------------------------------------------------------------------------
@@ -532,6 +601,8 @@ class FunctionComparator(Comparator):
         if not self._negative: return funcstr
         return "not_({})".format(funcstr)
 
+    def __repr__(self):
+        return self.__str__()
 
 # ------------------------------------------------------------------------------
 # Comparators (Standard and Function) have a comparison function and input of
@@ -724,7 +795,7 @@ def validate_which_expression(qcond, ppaths=[]):
 
     # Check comparison condition - at least one argument must be a predicate path
     def validate_comp_condition(ccond):
-        return StandardComparator.from_qcondition(ccond)
+        return StandardComparator.from_which_qcondition(ccond)
 
     # Validate a condition
     def validate_condition(cond):
@@ -903,14 +974,16 @@ class Clause(object):
 # is that the query will consists of multiple queries for each predicate/alias
 # type. Then the joins are performed and finally the joined tuples are filtered
 # by the multi-root clause block.
+#
+# Note: an empty clause block is treated as trivially true
 # ------------------------------------------------------------------------------
 
 class ClauseBlock(object):
 
-    def __init__(self, clauses):
+    def __init__(self, clauses=[]):
         self._clauses = tuple(clauses)
-        if not clauses:
-            raise ValueError("Internal error: mpty list of clauses")
+#        if not clauses:
+#            raise ValueError("Internal error: mpty list of clauses")
 
         tmppaths = set([])
         tmproots = set([])
@@ -927,6 +1000,10 @@ class ClauseBlock(object):
     @property
     def roots(self):
         return self._roots
+
+    @property
+    def clauses(self):
+        return self._clauses
 
     def ground(self,*args, **kwargs):
         newclauses = [ clause.ground(*args,**kwargs) for clause in self._clauses]
@@ -1004,135 +1081,46 @@ def normalise_which_expression(qcond):
         if tmp: clauses.append(Clause(tmp))
         return clauses
 
-    def build_clauseblocks(clauses):
-        clauseblocks = []
-        root2clauses = {}
-        catchall = []
-        for clause in clauses:
-            roots = [hashable_path(p) for p in clause.roots]
-            if len(roots) == 1:
-                root2clauses.setdefault(roots[0],[]).append(clause)
-            else:
-                catchall.append(clause)
-        for root,clauses in root2clauses.items():
-            clauseblocks.append(ClauseBlock(clauses))
-        if catchall:
-            clauseblocks.append(ClauseBlock(catchall))
-        return clauseblocks
-
     stack.append(NEWCL)
     stack_add(which_expression_to_cnf(qcond))
-    return build_clauseblocks(build_clauses())
+    return (build_clauses())
 
 # ------------------------------------------------------------------------------
+# Given a list of clauses breaks the clauses up into two pairs. The first
+# contains a list of clausal blocks consisting of blocks for clauses that refer
+# to only one root path. The second is a catch all block containing clauses that
+# references multiple roots. The second can also be None. This is used to break
+# up the query into separate parts for the different join components
 # ------------------------------------------------------------------------------
+def clauses_to_clauseblocks(clauses=[]):
+    catchall = []
+    root2clauses = {}
+    # Separate the clauses
+    for clause in clauses:
+        roots = [hashable_path(p) for p in clause.roots]
+        if len(roots) == 1:
+            root2clauses.setdefault(roots[0],[]).append(clause)
+        else:
+            catchall.append(clause)
 
+    # Generate clause blocks
+    clauseblocks = []
+    for root,clauses in root2clauses.items():
+        clauseblocks.append(ClauseBlock(clauses))
+
+    if catchall: return (clauseblocks, ClauseBlock(catchall))
+    else: return (clauseblocks, None)
 
 # ------------------------------------------------------------------------------
 # To support database-like inner joins.  Join conditions are made from
 # QCondition objects with the standard comparison operators
 # ------------------------------------------------------------------------------
 
-# ------------------------------------------------------------------------------
-# Comparator for the standard operators
-# ------------------------------------------------------------------------------
-
-class Join(object):
-    class Preference(enum.IntEnum):
-        LOW= 0
-        MEDIUM= 1
-        HIGH=2
-
-    OpSpec = collections.namedtuple('OpSpec','pref swapop')
-
-    operators = {
-        operator.eq : OpSpec(pref=Preference.HIGH, swapop=operator.eq),
-        operator.ne : OpSpec(pref=Preference.LOW, swapop=operator.ne),
-        operator.lt : OpSpec(pref=Preference.MEDIUM, swapop=operator.ge),
-        operator.le : OpSpec(pref=Preference.MEDIUM, swapop=operator.gt),
-        operator.gt : OpSpec(pref=Preference.MEDIUM, swapop=operator.le),
-        operator.ge : OpSpec(pref=Preference.MEDIUM, swapop=operator.lt),
-        trueall     : OpSpec(pref=Preference.LOW, swapop=trueall) }
-
-
-    def __init__(self,operator,args):
-        spec = Join.operators.get(operator,None)
-        if spec is None:
-            raise TypeError(("Internal bug: cannot create Join() with "
-                             "unknown operator '{}' ").format(operator))
-        self._operator = operator
-
-        tmpargs = []
-        tmphargs = []
-        for p in args:
-            if not isinstance(p, PredicatePath):
-                raise ValueError(("Invalid argument '{}': join operators requires "
-                                  "a field path specification").format(p))
-            tmpargs.append(p)
-            tmphargs.append(hashable_path(p))
-
-        self._args = tuple(tmpargs)
-        self._hashableargs = tuple(tmphargs)
-
-        tmproots = set([])
-        for p in self._args:
-            tmproots.add(hashable_path(p.meta.root))
-        self._roots=tuple([path(hp) for hp in tmproots])
-
-        if len(self._roots) <= 1:
-            raise ValueError(("Invalid join condition '{}' does not refer "
-                              "to different root paths").format(self))
-
-    # -------------------------------------------------------------------------
-    # -------------------------------------------------------------------------
-
-    @classmethod
-    def from_qcondition(cls,qcond):
-        if not isinstance(qcond, QCondition):
-            raise TypeError(("Internal bug: trying to make Join() "
-                             "from non QCondition object: {}").format(qcond))
-        return cls(qcond.operator,qcond.args)
-
-    # -------------------------------------------------------------------------
-    # -------------------------------------------------------------------------
-
-    @property
-    def paths(self):
-        return self._args
-
-    @property
-    def roots(self):
-        return self._roots
-
-    def __eq__(self,other):
-        if not isinstance(other, Join): return NotImplemented
-        if self._operator != other._operator: return False
-        if self._hashableargs != other._hashableargs: return False
-        return True
-
-    def __ne__(self,other):
-        result = self.__eq__(other)
-        if result is NotImplemented: return NotImplemented
-        return not result
-
-    def __hash__(self):
-        return hash((self._operator,) + self._hashableargs)
-
-    def __str__(self):
-        # For convenience just return a QCondition string
-        return str(QCondition(self._operator, *self._args))
-
-    def __repr(self):
-        return self.__str__()
-
-# ------------------------------------------------------------------------------
-#
-# ------------------------------------------------------------------------------
-
 def is_join_qcondition(cond):
     if not isinstance(cond, QCondition): return False
-    v = Join.operators.get(cond.operator, False)
-    return v
+    spec = StandardComparator.operators.get(cond.operator, None)
+    if spec is None: return False
+    return spec.join
 
 # ------------------------------------------------------------------------------
 # validate join expression. Turns QCondition objects into Join objects
@@ -1145,6 +1133,7 @@ def validate_join_expression(qconds, roots):
 
     def add_join(join):
         nonlocal edges, joins, jroots
+
         joins.append(join)
         jr = set([ hashable_path(r) for r in join.roots])
         jroots.update(jr)
@@ -1173,8 +1162,6 @@ def validate_join_expression(qconds, roots):
         for start in jroots:
             visit(start)
             break
-
-        print("Connectedness: {} == {}".format(visited, jroots))
         return visited == jroots
 
     # Make sure we have a set of hashable paths
@@ -1195,7 +1182,7 @@ def validate_join_expression(qconds, roots):
         if not is_join_qcondition(qcond):
             raise ValueError(("Invalid join operator '{}' in "
                               "{}").format(qcond.operator,qcond))
-        add_join(Join.from_qcondition(qcond))
+        add_join(StandardComparator.from_join_qcondition(qcond))
 
     # Check that we have all roots in the join matches the base roots
     if jroots != broots:
@@ -1207,15 +1194,137 @@ def validate_join_expression(qconds, roots):
     return joins
 
 # ------------------------------------------------------------------------------
-# Order a list of join expressions heuristically
+#
 # ------------------------------------------------------------------------------
 
-def order_joins(joins):
-    pass
-    
+class QueryPlan(object):
+    def __init__(self,input_signature, root, joins=[], clauses=[]):
+        self._insig = tuple(input_signature)
+        self._root = path(root)
+        self._joins = tuple(joins)
+
+        print("\nIN CLAUSES: {}".format(clauses))
+        print("\nRESULT: {}".format(clauses_to_clauseblocks(clauses)))
+        rootcbses, catchall = clauses_to_clauseblocks(clauses)
+        if not rootcbses: self._prejoin = None
+        elif len(rootcbses) == 1: self._prejoin = rootcbses[0]
+        else:
+            raise ValueError(("Internal bug: unexpected multiple root clauses for "
+                              "root '{}': {}").format(root,rootcbses))
+
+        if not catchall: self._postjoin = None
+        else: self._postjoin = catchall
+
+    # -------------------------------------------------------------------------
+    # Implement ABC functions
+    # -------------------------------------------------------------------------
+
+    def ground(self,*args,**kwargs):
+        def get(arg):
+            if isinstance(arg,PositionalPlaceholder):
+                if arg.posn < len(args): return args[arg.posn]
+                raise ValueError(("Missing positional placeholder argument '{}' "
+                                  "when grounding '{}' with positional arguments: "
+                                  "{}").format(arg,self,args))
+            elif isinstance(arg,NamedPlaceholder):
+                v = kwargs.get(arg.name,None)
+                if v: return v
+                if arg.has_default: return arg.default
+                raise ValueError(("Missing named placeholder argument '{}' "
+                                  "when grounding '{}' with arguments: "
+                                  "{}").format(arg,self,kwargs))
+            else:
+                return arg
+        newargs = tuple([get(a) for a in self._args])
+        if newargs == self._args: return self
+        return StandardComparator(self._operator, newargs)
+
+    def to_str(self):
+        out = io.StringIO()
+        print("QueryPlan:", file=out)
+        print("\tInput Signature: {}".format(self._insig), file=out)
+        print("\tRoot path: {}".format(self._root), file=out)
+        print("\tJoins: {}".format(self._joins), file=out)
+        print("\tPre-join clauses: {}".format(self._prejoin), file=out)
+        print("\tPost-join clauses: {}".format(self._postjoin), file=out)
+        return out.getvalue()
+        out.close()
+
+    def __str__(self):
+        return self.to_str()
+
+    def __repr(self):
+        return self.__str__()
 
 
+# ------------------------------------------------------------------------------
+# Take a list of root paths and a list of joins and associates the join with roots
+# ------------------------------------------------------------------------------
 
+def match_roots_joins_clauses(root_join_order, joins, whereclauses=[]):
+    joinset=set(joins)
+    clauseset=set(whereclauses)
+    output=[]
+    visited=set({})
+
+    def alignpath(r,join):
+        def isgood(r,j):
+            return hashable_path(path(j.args[0]).meta.root) == hashable_path(r)
+
+        if not isgood(r,join): join = join.swap()
+        if not isgood(r,join):
+            raise ValueError(("Internal bug: unexpected join '{}' for root "
+                              "'{}' ").format(join, r))
+        return join
+
+    def visitedsubset(inset):
+        outlist=[]
+        for a in inset:
+            if visited.issuperset([hashable_path(r) for r in a.roots]):
+                outlist.append(a)
+        for a in outlist: inset.remove(a)
+        return outlist
+
+    for idx,rp in enumerate(root_join_order):
+        visited.add(hashable_path(rp))
+        rpjoins = visitedsubset(joinset)
+        rpjoins.sort(key=lambda j: j.preference, reverse=True)
+        rpjoins = list(map(functools.partial(alignpath,rp), rpjoins))
+        rpclauses = visitedsubset(clauseset)
+        output.append(QueryPlan(root_join_order[:idx],rp,rpjoins,rpclauses))
+    return output
+
+# ------------------------------------------------------------------------------
+# Order a list of join expressions heuristically. Returns a list of root paths
+# where the first should be the outer loop query and the last should be the
+# inner loop query.
+#
+# The idea is to assign a preference value to each join expression based on the
+# number of join expressions connected with a root path and the operator
+# preference. The higher the value the further it is to the inner loop. The
+# intuition is that the inner loop will be repeated the most so should be the
+# one that can the executed the quickes.
+#
+# ------------------------------------------------------------------------------
+
+def simple_query_join_order(joins):
+    root2val = {}
+    for join in joins:
+        for rp in join.roots:
+            hrp = hashable_path(rp)
+            v = root2val.setdefault(hrp, 0)
+            root2val[hrp] += join.preference
+    return [path(hrp) for hrp in sorted(root2val.keys(), key = lambda k : root2val[k])]
+
+
+# ------------------------------------------------------------------------------
+# Take a join order heuristic, a list of joins, and a list of clause blocks and
+# and generates a query.
+# ------------------------------------------------------------------------------
+
+def make_query_plans(join_order_heuristic, joins, whereclauses):
+    root_join_order=join_order_heuristic(joins)
+    return match_roots_joins_clauses(root_join_order,joins,whereclauses)
 
 
 
