@@ -1,0 +1,43 @@
+name: tests
+
+on:
+  - push
+  - pull_request
+
+jobs:
+  build:
+    name: clorm ${{ matrix.python-version }} ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ['ubuntu-latest', 'macos-latest', 'windows-latest']
+        python-version: ['3.7', '3.9']
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: setup miniconda
+      uses: conda-incubator/setup-miniconda@v2
+      with:
+        auto-update-conda: true
+        python-version: ${{ matrix.python-version }}
+        activate-environment: clorm
+        channels: potassco/label/dev,conda-forge
+
+    - name: install prerequisites
+      shell: pwsh
+      run: |
+        conda install clingo pytest
+        python setup.py install
+
+    - name: info
+      shell: pwsh
+      run: |
+        conda info
+        conda list
+        python -VV
+
+    - name: test
+      shell: pwsh
+      run: pytest
