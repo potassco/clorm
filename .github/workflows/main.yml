@@ -23,7 +23,7 @@ jobs:
         auto-update-conda: true
         python-version: ${{ matrix.python-version }}
         activate-environment: clorm
-        channels: potassco/label/dev,conda-forge
+        channels: potassco,conda-forge
 
     - name: install prerequisites
       shell: pwsh
