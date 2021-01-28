@@ -418,6 +418,19 @@ class PredicatePath(object, metaclass=_PredicatePathMeta):
         def predicate(self):
             return self._parent._pathseq[0].predicate
 
+        # --------------------------------------------------------------------------
+        # Return a dealiased version of this path
+        # --------------------------------------------------------------------------
+        @property
+        def dealiased(self):
+            pi = self._parent._pathseq[0]
+            if pi.predicate.__name__ == pi.name: return self._parent
+            dealised = pi.predicate.meta.path
+            for key in self._parent._pathseq[1:]:
+                dealised = dealised[key]
+            return dealised
+
+
         #--------------------------------------------------------------------------
         # get the RawField instance associated with this path. If the path is a
         # root path or a sign path then it won't have an associated field so
@@ -650,6 +663,26 @@ def alias(predicate, name=None):
         return arg.meta.predicate.meta.alias(name)
 
     raise ValueError("Invalid argument {}: {}".format(arg,errormsg))
+
+#------------------------------------------------------------------------------
+# API function to return a de-aliased path. If the path is not an alias returns
+# itself.
+# ------------------------------------------------------------------------------
+
+def dealiased_path(path):
+    if inspect.isclass(arg) and issubclass(arg, Predicate): return arg.meta.path
+
+    def getpath():
+        if isinstance(arg, PredicatePath): return arg
+        elif isinstance(arg, PredicatePath.Hashable): return arg.path
+        if not exception: return None
+        raise TypeError(("Invalid argument {} (type: {}): expecting either a "
+                         "PredicatePath, a Predicate sub-class, or a "
+                         "PredicatePath.Hashable").format(arg, type(arg)))
+    cleanpath = getpath()
+    if cleanpath is None: return None
+    return cleanpath.meta.dealised
+
 
 #------------------------------------------------------------------------------
 # Helper function to check if a second set of keys is a subset of a first
@@ -1529,7 +1562,8 @@ class PredicateDefn(object):
                                 "PredicateDefn doesn't make sense"))
         self._parent_cls = pc
         self._path_class = _define_predicate_path_subclass(pc)
-        self._path = seq = self._path_class([PathIdentity(pc,pc.__name__)])
+#        self._path = seq = self._path_class([PathIdentity(pc,pc.__name__)])
+        self._path = self._path_class([PathIdentity(pc,pc.__name__)])
 
     # Internal property
     @property
@@ -1539,7 +1573,6 @@ class PredicateDefn(object):
     @property
     def path_class(self): return self._path_class
 
-    #FIXUP
     def alias(self, name=None):
         """Create an alias path for the predicate
 

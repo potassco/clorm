@@ -1921,6 +1921,21 @@ class PredicatePathTestCase(unittest.TestCase):
         self.assertEqual(X.b.meta.predicate, H.b.meta.predicate)
         self.assertEqual(X.b.sign.meta.predicate, H.b.sign.meta.predicate)
 
+        # Dealiased paths
+        self.assertTrue(X.meta.dealiased is Hpath)
+        self.assertTrue(Hpath.meta.dealiased is Hpath)
+        self.assertTrue(H.a.meta.dealiased is H.a)
+        self.assertTrue(H.b.meta.dealiased is H.b)
+        self.assertTrue(H.c.a.meta.dealiased is H.c.a)
+
+        self.assertTrue(X.a.meta.dealiased is H.a)
+        self.assertTrue(X.b.meta.dealiased is H.b)
+        self.assertTrue(X.b.a.meta.dealiased is H.b.a)
+        self.assertTrue(X.b.sign.meta.dealiased is H.b.sign)
+        self.assertTrue(X.c.meta.dealiased is H.c)
+        self.assertTrue(X[0].meta.dealiased is H[0])
+        self.assertTrue(X.c[1].meta.dealiased is H.c[1])
+
         # But the paths are not equal
         def _h(a): return hashable_path(a)
 
