@@ -4,7 +4,7 @@
 
 from .core import *
 from .factbase import *
-from .query import *
+from .queryplan import *
 from .unifier import *
 from .atsyntax import *
 

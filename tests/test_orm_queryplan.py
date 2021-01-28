@@ -25,7 +25,7 @@ from clorm.orm.core import QCondition, trueall
 from clorm.orm import desc, asc, ph_, ph1_, ph2_, func_, not_, and_, or_, \
     joinall_
 
-from clorm.orm.query import PositionalPlaceholder, NamedPlaceholder, \
+from clorm.orm.queryplan import PositionalPlaceholder, NamedPlaceholder, \
     is_boolean_qcondition, is_comparison_qcondition, \
     StandardComparator, FunctionComparator, \
     make_query_alignment_functor, \
@@ -33,8 +33,9 @@ from clorm.orm.query import PositionalPlaceholder, NamedPlaceholder, \
     which_expression_to_nnf, which_expression_to_cnf, \
     Clause, ClauseBlock, normalise_which_expression, \
     clauses_to_clauseblocks, \
-    validate_join_expression, simple_query_join_order, \
-    match_roots_joins_clauses, \
+    PreJoinPlan, JoinQueryPlan, QueryPlan, validate_join_expression, \
+    simple_query_join_order, match_roots_joins_clauses, \
+    make_prejoin_plan, make_query_plan, \
     check_query_condition, simplify_query_condition, \
     instantiate_query_condition, evaluate_query_condition
 
@@ -42,6 +43,7 @@ from clorm.orm.query import PositionalPlaceholder, NamedPlaceholder, \
 #------------------------------------------------------------------------------
 
 __all__ = [
+    'PlaceholderTestCase',
     'QQConditionTestCase',
     'ComparatorTestCase',
     'WhichExpressionTestCase',
@@ -51,6 +53,60 @@ __all__ = [
 #------------------------------------------------------------------------------
 #
 #------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+# Test functions for Placeholder sub-classes
+# ------------------------------------------------------------------------------
+
+class PlaceholderTestCase(unittest.TestCase):
+    def setUp(self):
+        pass
+
+    def test_NamedPlaceholder(self):
+        ph1 = NamedPlaceholder(name="foo")
+        ph1alt = NamedPlaceholder(name="foo")
+        ph2 = NamedPlaceholder(name="foo", default="bar")
+        ph3 = NamedPlaceholder(name="foo", default=None)
+        self.assertEqual(ph1,ph1alt)
+        self.assertNotEqual(ph1,ph2)
+
+        self.assertEqual(ph1.name, "foo")
+        self.assertFalse(ph1.has_default)
+        self.assertTrue(ph2.has_default)
+        self.assertTrue(ph3.has_default)
+        self.assertEqual(ph2.default, "bar")
+        self.assertEqual(ph3.default, None)
+
+        with self.assertRaises(TypeError) as ctx:
+            ph = NamedPlaceholder("foo")
+        check_errmsg("__init__() takes 1 positional", ctx)
+
+        with self.assertRaises(TypeError) as ctx:
+            ph = NamedPlaceholder("foo","bar")
+        check_errmsg("__init__() takes 1 positional", ctx)
+
+        self.assertFalse(ph1 == 1)
+        self.assertFalse(ph1 == 'a')
+
+    def test_PositionalPlaceholder(self):
+        ph2 = PositionalPlaceholder(posn=1)
+        ph2alt = PositionalPlaceholder(posn=1)
+        ph3 = PositionalPlaceholder(posn=2)
+
+        self.assertEqual(ph2,ph2alt)
+        self.assertNotEqual(ph2,ph3)
+
+        self.assertEqual(ph2,ph2_)
+
+        with self.assertRaises(TypeError) as ctx:
+            ph = PositionalPlaceholder(0)
+        check_errmsg("__init__() takes 1 positional", ctx)
+
+        self.assertFalse(1 == ph2)
+        self.assertTrue(1 != ph2)
+        self.assertFalse(ph2 == 1)
+        self.assertTrue(ph2 != 1)
+        self.assertFalse(ph2 == 'a')
 
 #------------------------------------------------------------------------------
 # Test functions that manipulate query conditional and evaluate the conditional
@@ -78,6 +134,7 @@ class QQConditionTestCase(unittest.TestCase):
 
         f1_pos = F(a=1)
         f1_neg = F(a=2,sign=False)
+
         g1 = G(a="a",b="b")
         h1_pos = H(a=1,b=f1_pos,c=g1)
         h1_pos2 = H(a=1,b=f1_pos,c=g1)
@@ -450,6 +507,8 @@ class ComparatorTestCase(unittest.TestCase):
     def test_nonapi_StandardComparator(self):
         F = self.F
         G = self.G
+        X = alias(F)
+
         def hps(paths): return set([ hashable_path(p) for p in paths])
         SC=StandardComparator
 
@@ -459,6 +518,7 @@ class ComparatorTestCase(unittest.TestCase):
         # Test __eq__ and __ne__
         self.assertEqual(SC(operator.eq,[F.anum,4]),SC(operator.eq,[F.anum,4]))
         self.assertNotEqual(SC(operator.eq,[F.anum,4]),SC(operator.eq,[F.anum,3]))
+        self.assertNotEqual(SC(operator.eq,[F.anum,4]),SC(operator.eq,[F.anum,ph1_]))
 
         # Test __hash__
         self.assertEqual(hash(SC(operator.eq,[F.anum,4])),
@@ -474,6 +534,12 @@ class ComparatorTestCase(unittest.TestCase):
 
         self.assertNotEqual(SC(operator.eq,[F.anum,4]).negate(),SC(operator.eq,[F.anum,4]))
 
+        # Test dealiasing
+        self.assertEqual(SC(operator.eq,[F.anum,4]).dealias(), SC(operator.eq,[F.anum,4]))
+        self.assertEqual(SC(operator.eq,[X.anum,4]).dealias(), SC(operator.eq,[F.anum,4]))
+        self.assertEqual(SC(operator.eq,[X.anum,X.astr]).dealias(),
+                         SC(operator.eq,[F.anum,F.astr]))
+
         # Test swap operation
         self.assertEqual(SC(operator.eq,[F.anum,4]).swap(),SC(operator.eq,[4,F.anum]))
         self.assertEqual(SC(operator.ne,[F.anum,4]).swap(),SC(operator.ne,[4,F.anum]))
@@ -487,6 +553,11 @@ class ComparatorTestCase(unittest.TestCase):
         self.assertEqual(hps(SC(operator.eq,[F.anum,F.anum]).paths), hps([F.anum]))
         self.assertEqual(hps(SC(operator.eq,[F.anum,F.astr]).paths), hps([F.anum,F.astr]))
 
+        # Test placeholders
+        self.assertEqual(SC(operator.eq,[F.anum,4]).placeholders, set())
+        self.assertEqual(SC(operator.eq,[F.anum,ph1_]).placeholders, set([ph1_]))
+        self.assertEqual(SC(operator.eq,[F.anum,ph_("b")]).placeholders, set([ph_("b")]))
+
         # Test roots
         self.assertEqual(hps(SC(operator.eq,[F.anum,4]).roots), hps([F]))
         self.assertEqual(hps(SC(operator.eq,[F.anum,F.anum]).roots), hps([F]))
@@ -497,6 +568,7 @@ class ComparatorTestCase(unittest.TestCase):
 
         # Test grounding
         self.assertEqual(SC(operator.eq,[F.anum,4]), SC(operator.eq,[F.anum,4]).ground())
+
         self.assertEqual(SC(operator.eq,[F.anum,ph2_]).ground(1,4),
                          SC(operator.eq,[F.anum,4]))
         self.assertEqual(SC(operator.eq,[F.anum,ph_("val")]).ground(1,4,val=4),
@@ -538,9 +610,6 @@ class ComparatorTestCase(unittest.TestCase):
         bf1 = FunctionComparator(func1,[path(F)])
         bf2 = FunctionComparator(func2,[F.anum, F.atuple[0]])
 
-        self.assertTrue(bf1.ground().is_ground)
-        self.assertTrue(bf2.ground().is_ground)
-
         self.assertEqual(hps(bf1.paths), hps([F]))
         self.assertEqual(hps(bf2.paths), hps([F.anum,F.atuple[0]]))
 
@@ -570,6 +639,15 @@ class ComparatorTestCase(unittest.TestCase):
         self.assertEqual(hps(bf.paths),hps([F.anum,X.anum,G.anum]))
         self.assertEqual(hps(bf.roots),hps([F,X,G]))
 
+        func4 = lambda x : x > 5
+        bf1 = func_([F.anum], func4)
+        bf2 = func_([X.anum], func4)
+        self.assertNotEqual(bf1,bf2)
+        self.assertNotEqual(hps(bf1.roots),hps(bf2.roots))
+        self.assertEqual(bf1,bf2.dealias())
+        self.assertEqual(hps(bf1.roots),hps(bf2.dealias().roots))
+
+
         with self.assertRaises(RuntimeError) as ctx:
             bf1.make_callable([F])
         check_errmsg("Internal bug: make_callable", ctx)
@@ -591,16 +669,13 @@ class ComparatorTestCase(unittest.TestCase):
         func2 = lambda x, y=10 : x.anum >= y
 
         bf1 = FunctionComparator(func1,[F.anum,F.astr])
-        self.assertTrue(bf1.ground().is_ground)
+        self.assertEqual(bf1.ground().placeholders, set())
         bf1 = FunctionComparator(func1,[F.anum])
-        self.assertFalse(bf1.is_ground)
+        self.assertEqual(bf1.placeholders, set([ph_("y")]))
         bf1 = FunctionComparator(func1,[F.anum],assignment={'y': 5})
-        self.assertTrue(bf1.is_ground)
+        self.assertEqual(bf1.placeholders, set())
 
         bf1 = FunctionComparator(func2,[F.anum])
-        self.assertFalse(bf1.is_ground)
-        self.assertTrue(bf1.ground().is_ground)
-        self.assertTrue(bf1.ground(y=10).is_ground)
         self.assertEqual(bf1.ground(),bf1.ground(y=10))
         self.assertNotEqual(bf1.ground(),bf1.ground(y=11))
 
@@ -817,7 +892,7 @@ class WhichExpressionTestCase(unittest.TestCase):
 
     # ------------------------------------------------------------------------------
     # ------------------------------------------------------------------------------
-    def test_nonapi_clause(self):
+    def test_nonapi_Clause(self):
         def hps(paths):
             return set([hashable_path(p) for p in paths ])
         vwe = validate_which_expression
@@ -825,8 +900,17 @@ class WhichExpressionTestCase(unittest.TestCase):
         F = self.F
         G = self.G
 
+        cx1 = Clause([vwe(F.anum == 4)])
+        cx2 = Clause([vwe(F.anum == 4)])
+        cx3 = Clause([vwe(F.anum == ph1_)])
+
+        # Test __eq__ and __ne__
+        self.assertEqual(cx1,cx2)
+        self.assertNotEqual(cx1,cx3)
+
         c1 = Clause([vwe(F.anum == 4), vwe(F.astr == "b"), vwe(F.atuple[0] == 6)])
 
+        # Test paths and ground
         self.assertEqual(hps([F.anum,F.astr,F.atuple[0]]), hps(c1.paths))
         self.assertEqual(hps(c1.roots),hps([F]))
         self.assertEqual(c1,c1.ground())
@@ -841,6 +925,29 @@ class WhichExpressionTestCase(unittest.TestCase):
 
         self.assertEqual(hps(c1.paths), hps([F.anum]))
         self.assertEqual(hps(c1.roots),hps([F]))
+
+        # Test dealiasing
+        X = alias(F)
+        c3 = Clause([vwe(F.anum == 4)])
+        c4 = Clause([vwe(X.anum == 4)])
+        self.assertNotEqual(c3,c4)
+        self.assertEqual(c3,c4.dealias())
+
+        # Test __len__, __getitem__ and __iter__
+        cmp10 = vwe(F.anum == 4)
+        cmp11 = vwe(X.anum == 4)
+        c10 = Clause([cmp10,cmp11])
+        self.assertEqual(len(c10),2)
+        self.assertEqual(list(c10),[cmp10,cmp11])
+        self.assertEqual(c10[1],cmp11)
+
+
+        # Test placeholders
+        self.assertEqual(cx3.placeholders,set([ph1_]))
+        fy = func_([F.anum], lambda x, y : x == y)
+        self.assertEqual(Clause([fy]).placeholders,set([ph_("y")]))
+        fy = func_([F.anum], lambda x, y=10 : x == y)
+        self.assertEqual(Clause([fy]).placeholders,set([ph_("y",10)]))
 
         # Iterate over the conditions within a clause
         c1 = Clause([vwe(G.anum == ph1_),vwe(F.astr == "b"),vwe(F.atuple[0] == 6)])
@@ -867,7 +974,7 @@ class WhichExpressionTestCase(unittest.TestCase):
 
     # ------------------------------------------------------------------------------
     # ------------------------------------------------------------------------------
-    def test_nonapi_clause_block(self):
+    def test_nonapi_ClauseBlock(self):
         def hps(paths):
             return set([hashable_path(p) for p in paths ])
         vwe = validate_which_expression
@@ -880,12 +987,39 @@ class WhichExpressionTestCase(unittest.TestCase):
         c1 = Clause([vwe(F.anum == 4), vwe(F.astr == "b")])
         c2 = Clause([vwe(X.anum == 5), vwe(X.astr == "c")])
         c3 = Clause([vwe(G.anum == 6)])
+        c4 = Clause([vwe(G.anum == ph1_)])
         cb1 = ClauseBlock([c1,c2,c3])
         cb2 = ClauseBlock([c1,c2,c3])
+        cb3 = ClauseBlock([c1,c2,c4])
+
+        # Equality and inequlity
+        self.assertEqual(cb1,cb2)
+        self.assertNotEqual(cb2,cb3)
+
+        # Test placeholders
+        self.assertEqual(cb1.placeholders,set())
+
         cbt = ClauseBlock()
         self.assertEqual(hps([F.anum,F.astr,X.anum,X.astr,G.anum]), hps(cb1.paths))
         self.assertEqual(hps([F,X,G]), hps(cb1.roots))
         self.assertEqual(cb1.clauses, (c1,c2,c3))
+
+        # Test dealiasing
+        c10 = Clause([vwe(F.anum == 4)])
+        c11 = Clause([vwe(X.anum == 4)])
+        cb10 = ClauseBlock([c10])
+        cb11 = ClauseBlock([c11])
+        self.assertNotEqual(cb10,cb11)
+        self.assertEqual(cb10,cb11.dealias())
+
+        # Test __len__, __getitem__ and __iter__
+        c10 = Clause([vwe(F.anum == 4)])
+        c11 = Clause([vwe(X.anum == 4)])
+        cb10 = ClauseBlock([c10,c11])
+        self.assertEqual(len(cb10),2)
+        self.assertEqual(list(cb10),[c10,c11])
+        self.assertEqual(cb10[1],c11)
+
 
         # Test the concatenation of clause blocks
         x1 = ClauseBlock([c1])
@@ -893,7 +1027,6 @@ class WhichExpressionTestCase(unittest.TestCase):
         x3 = ClauseBlock([c1,c2])
         self.assertEqual(x1+x2,x3)
 
-        self.assertEqual(cb1,cb2)
         self.assertEqual(cb1.ground(),cb2)
         self.assertEqual(list(cb1), [c1,c2,c3])
 
@@ -904,6 +1037,9 @@ class WhichExpressionTestCase(unittest.TestCase):
         cb1 = ClauseBlock([c1,c2])
         cb2 = ClauseBlock([c1a,c2b])
         self.assertEqual(cb1.ground(1,2),cb2)
+
+        # Test placeholders
+        self.assertEqual(cb1.placeholders,set([ph1_,ph2_]))
 
         testfunc = cb2.make_callable([F,G])
         trivialtrue = cbt.make_callable([F,G])
@@ -1032,7 +1168,7 @@ class JoinExpressionTestCase(unittest.TestCase):
         self.assertEqual(joins,[SC(operator.ge, [F.anum,G.anum])])
 
         joins = vje([joinall_(F,G)],[F,G])
-        self.assertEqual(joins,[SC(trueall, [path(F),path(G)])])
+        self.assertEqual(joins,[])
 
         # Missing root path
         with self.assertRaises(ValueError) as ctx:
@@ -1069,6 +1205,205 @@ class JoinExpressionTestCase(unittest.TestCase):
         check_errmsg("Invalid join specification: missing joins", ctx)
 
     # ------------------------------------------------------------------------------
+    # Test the PreJoinPlan class
+    # ------------------------------------------------------------------------------
+
+    def test_nonapi_PreJoinPlan(self):
+        F = path(self.F)
+        G = path(self.G)
+        FA = alias(F)
+        GA = alias(G)
+        vwe = validate_which_expression
+        tonorm = normalise_which_expression
+
+        cmp1 = vwe(F.anum == 5)
+        cmp2 = vwe(F.anum == ph1_)
+        cmp3 = vwe(FA.anum == 5)
+        cmp4 = vwe(F.anum < F.astr)
+        cmp5 = vwe(F.anum < FA.astr)
+
+        cb1 = ClauseBlock([Clause([cmp4])])
+        cb2 = ClauseBlock([Clause([cmp5])])
+
+        pjp1 = PreJoinPlan(F.meta.predicate,cmp1,None)
+        pjp2 = PreJoinPlan(F.meta.predicate,cmp2,None)
+        self.assertTrue(pjp1.keycomparator == cmp1)
+        self.assertTrue(pjp1.remainder is None)
+
+        self.assertNotEqual(pjp1,pjp2)
+        self.assertTrue(pjp1.ground() is pjp1)
+        self.assertEqual(pjp2.ground(5), pjp1)
+        self.assertEqual(pjp2.placeholders, set([ph1_]))
+
+        pjp1 = PreJoinPlan(F.meta.predicate,None,cb1)
+        self.assertTrue(pjp1.keycomparator is None)
+        self.assertTrue(pjp1.remainder == cb1)
+
+    # ------------------------------------------------------------------------------
+    # Test the JoinQueryPlan class
+    # ------------------------------------------------------------------------------
+
+    def test_nonapi_JoinQueryPlan(self):
+        F = path(self.F)
+        G = path(self.G)
+        FA = alias(F)
+        GA = alias(G)
+        vje = validate_join_expression
+        vwe = validate_which_expression
+        tonorm = normalise_which_expression
+
+        joins = vje([G.anum == F.anum, F.anum < GA.anum, joinall_(G,FA)],[F,G,FA,GA])
+
+        cfcomplex = Clause([vwe(F.anum == GA.anum)])
+        cfa1 = Clause([vwe(F.anum == 5)])
+        cfa1alt = Clause([vwe(F.anum == ph1_)])
+
+        # Good input
+        qp1 =     JoinQueryPlan((F,G,GA),FA,joins,
+                                PreJoinPlan(F.meta.predicate,None,ClauseBlock([cfa1])),
+                                ClauseBlock([cfcomplex]))
+        qp1copy = JoinQueryPlan((F,G,GA),FA,joins,
+                                PreJoinPlan(F.meta.predicate,None,ClauseBlock([cfa1])),
+                                ClauseBlock([cfcomplex]))
+
+        qp2 = JoinQueryPlan((F,G,GA),FA,joins,
+                            PreJoinPlan(F.meta.predicate,None,ClauseBlock([cfa1alt])),
+                            ClauseBlock([cfcomplex]))
+
+        # Test the equality and inequality overloads
+        self.assertEqual(qp1,qp1copy)
+        self.assertEqual(qp1.ground(),qp1)
+        self.assertEqual(qp1.ground(5),qp1)
+        self.assertNotEqual(qp1,qp2)
+        self.assertEqual(qp2.ground(5),qp1)
+
+        # Test placeholders
+        self.assertEqual(qp1.placeholders,set())
+        self.assertEqual(qp2.placeholders,set([ph1_]))
+
+        self.assertEqual(qp1.input_signature, (path(F),path(G),path(GA)))
+        self.assertEqual(qp1.root, path(FA))
+        self.assertEqual(qp1.prejoin,
+                         PreJoinPlan(F.meta.predicate,None,ClauseBlock([cfa1])))
+        self.assertEqual(qp1.postjoin, ClauseBlock([cfcomplex]))
+
+        # Missing roots in the input signature
+        with self.assertRaises(ValueError) as ctx:
+            qp1 = JoinQueryPlan((),F,joins,None,None)
+        check_errmsg("Internal bug: join", ctx)
+
+        # Bad root path and bad signature path
+        with self.assertRaises(ValueError) as ctx:
+            qp1 = JoinQueryPlan((),F.anum,joins,None,None)
+        check_errmsg("Internal bug: 'F.anum' is not a root", ctx)
+
+        with self.assertRaises(ValueError) as ctx:
+            qp1 = JoinQueryPlan((G.anum,),F,joins,None,None)
+        check_errmsg("Internal bug: 'G.anum' in input", ctx)
+
+        # Bad join
+        with self.assertRaises(ValueError) as ctx:
+            qp1 = JoinQueryPlan((G,),F,joins,None,None)
+        check_errmsg("Internal bug: join 'F.anum <", ctx)
+
+        # Bad prejoin
+        with self.assertRaises(ValueError) as ctx:
+            pjp = PreJoinPlan(G.meta.predicate,None,
+                              ClauseBlock([Clause([vwe(G.anum == 5)])]))
+            qp1 = JoinQueryPlan((G,),F,[],pjp,None)
+        check_errmsg("Internal bug: prejoin query", ctx)
+        with self.assertRaises(ValueError) as ctx:
+            qp1 = JoinQueryPlan((G,),F,[],ClauseBlock([cfcomplex]),None)
+        check_errmsg("Internal bug: prejoin query", ctx)
+
+        # Bad postjoin
+        with self.assertRaises(ValueError) as ctx:
+            qp1 = JoinQueryPlan((G,),F,[],None, ClauseBlock([cfcomplex]))
+        check_errmsg("Internal bug: postjoin query", ctx)
+
+    # ------------------------------------------------------------------------------
+    # Test geneating the query plan when give the root join order, the joins,
+    # and the where clauses.
+    # ------------------------------------------------------------------------------
+
+    def test_nonapi_make_prejoin_plan(self):
+        F = path(self.F)
+        G = path(self.G)
+        FA = alias(F)
+        GA = alias(G)
+        vje = validate_join_expression
+        vwe = validate_which_expression
+        tonorm = normalise_which_expression
+
+        which = tonorm(vwe((FA.anum < 4) & (FA.astr == "foo" ) & (FA.anum == FA.astr) &
+                           ((FA.anum > 10) | (FA.astr == "bar"))))
+        cb = ClauseBlock(which)
+
+        which2 = tonorm(vwe((F.anum < 4) & (F.anum == F.astr) &
+                            ((F.anum > 10) | (F.astr == "bar"))))
+        cbother = ClauseBlock(which2)
+        pjp = make_prejoin_plan(F.meta.predicate,[F.anum,F.astr],cb)
+        self.assertEqual(pjp.keycomparator, vwe(F.astr == "foo"))
+        self.assertEqual(len(pjp.remainder), len(cbother))
+
+    # ------------------------------------------------------------------------------
+    # Test the JoinQueryPlan class
+    # ------------------------------------------------------------------------------
+
+    def test_nonapi_QueryPlan(self):
+        F = path(self.F)
+        G = path(self.G)
+        FA = alias(F)
+        GA = alias(G)
+        vje = validate_join_expression
+        vwe = validate_which_expression
+        tonorm = normalise_which_expression
+
+        joins1 = []
+        joins2 = vje([G.anum == F.anum],[F,G])
+        joins3 = vje([G.anum == F.anum, F.anum < FA.anum],[F,G,FA])
+
+        c1 = Clause([vwe(F.anum == 5)])
+        c1ph = Clause([vwe(F.anum == ph1_)])
+        c2 = Clause([vwe(F.astr == G.astr)])
+
+        qpj1 = JoinQueryPlan((),F,joins1,c1,None)
+        qpj1ph = JoinQueryPlan((),F,joins1,c1ph,None)
+        qpj2 = JoinQueryPlan((F,),G,joins2,None,c2)
+        qpj3 = JoinQueryPlan((F,G),FA,joins3,None,None)
+
+        qp1 = QueryPlan([qpj1])
+        self.assertEqual(len(qp1),1)
+        self.assertEqual(qp1[0],qpj1)
+
+        qp2 = QueryPlan([qpj1,qpj2])
+        self.assertEqual(len(qp2),2)
+        self.assertEqual(qp2[0],qpj1)
+        self.assertEqual(qp2[1],qpj2)
+
+        qp3 = QueryPlan([qpj1,qpj2,qpj3])
+        self.assertEqual(len(qp3),3)
+
+        self.assertEqual(list(qp3), [qpj1,qpj2,qpj3])
+
+        qp3ph = QueryPlan([qpj1ph,qpj2,qpj3])
+        self.assertNotEqual(qp3,qp3ph)
+        self.assertEqual(qp3,qp3ph.ground(5))
+
+        # Test placeholders
+        self.assertEqual(qp3.placeholders,set())
+        self.assertEqual(qp3ph.placeholders,set([ph1_]))
+        self.assertEqual(qp3ph.ground(4).placeholders,set())
+
+        # Bad query plans
+        with self.assertRaises(ValueError) as ctx:
+            qp = QueryPlan([qpj2])
+        check_errmsg("Invalid 'input_signature'", ctx)
+        with self.assertRaises(ValueError) as ctx:
+            qp = QueryPlan([qpj2,qpj1,qpj3])
+        check_errmsg("Invalid 'input_signature'", ctx)
+
+    # ------------------------------------------------------------------------------
     # Test geneating the query plan when give the root join order, the joins,
     # and the where clauses.
     # ------------------------------------------------------------------------------
@@ -1085,11 +1420,7 @@ class JoinExpressionTestCase(unittest.TestCase):
         joins = vje([G.anum == F.anum, F.anum < GA.anum, joinall_(G,FA)],[F,G,FA,GA])
         which = tonorm(vwe((F.anum == 4) & (FA.anum < 2)))
 
-        queryplans = match_roots_joins_clauses([FA,GA,G,F],joins,which)
-        for q in queryplans: print("\n{}".format(q))
-#        self.assertEqual(ass, [(FA,[]),(GA,[]),(G,vje([joinall_(G,FA)],[G,FA])),
-#                               (F,vje([F.anum == G.anum, F.anum < GA.anum],[F,G,GA]))])
-        q=3
+        queryplan = match_roots_joins_clauses([],[FA,GA,G,F],joins,which)
 
     # ------------------------------------------------------------------------------
     # Test the simple heuristic for generating the join order
@@ -1102,13 +1433,31 @@ class JoinExpressionTestCase(unittest.TestCase):
         vje = validate_join_expression
 
         joins = vje([F.anum == G.anum, F.anum < GA.anum, joinall_(G,FA)],[F,G,FA,GA])
-        qorder = simple_query_join_order(joins)
+        qorder = simple_query_join_order([], joins, [F,G,FA,GA])
         self.assertEqual(qorder,[FA,GA,G,F])
+
+    # ------------------------------------------------------------------------------
+    # Test making a plan from joins and whereclauses
+    # ------------------------------------------------------------------------------
+    def test_make_query_plan(self):
+        F = path(self.F)
+        G = path(self.G)
+        FA = alias(F)
+        GA = alias(G)
+        vje = validate_join_expression
+        vwe = validate_which_expression
+        tonorm = normalise_which_expression
+
+        joins = vje([G.anum == F.anum, F.anum < GA.anum, joinall_(G,FA)],[F,G,FA,GA])
+        which = tonorm(vwe((F.anum == 4) & (FA.anum < 2)))
+
+        queryplan = make_query_plan(simple_query_join_order,[F.anum],
+                                    [F,G,FA,GA],joins,which)
+
 
     # ------------------------------------------------------------------------------
     #
     # ------------------------------------------------------------------------------
-
 
 
 

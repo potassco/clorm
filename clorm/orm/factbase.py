@@ -14,8 +14,8 @@ import itertools
 from .core import *
 from .core import get_field_definition, PredicatePath, kwargs_check_keys
 
-from .query import *
-from .query import Placeholder, check_query_condition, simplify_query_condition, \
+from .queryplan import *
+from .queryplan import Placeholder, check_query_condition, simplify_query_condition, \
     instantiate_query_condition, evaluate_query_condition, SelectImpl, DeleteImpl
 
 # ------------------------------------------------------------------------------

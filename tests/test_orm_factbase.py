@@ -25,7 +25,7 @@ from clorm.orm import FactBase, desc, asc, not_, and_, or_, \
 # Implementation imports
 from clorm.orm.factbase import _FactIndex, _FactMap
 
-from clorm.orm.query import PositionalPlaceholder, NamedPlaceholder, \
+from clorm.orm.queryplan import PositionalPlaceholder, NamedPlaceholder, \
     check_query_condition, simplify_query_condition, \
     instantiate_query_condition, evaluate_query_condition
 
