@@ -30,8 +30,7 @@ from clorm.orm.queryplan import PositionalPlaceholder, NamedPlaceholder, \
     check_query_condition, simplify_query_condition, \
     instantiate_query_condition, evaluate_query_condition
 
-from clorm.orm.queryplan import validate_which_expression, \
-    normalise_which_expression, validate_join_expression, make_query_plan, \
+from clorm.orm.queryplan import process_which, process_join, make_query_plan, \
     simple_query_join_order, make_query_alignment_functor
 
 #------------------------------------------------------------------------------
@@ -851,13 +850,12 @@ class QueryTestCase(unittest.TestCase):
         def strip(it): return [f for f, in it]
 
         G = self.G
-        vwe = validate_which_expression
-        tonorm = normalise_which_expression
+        pw = process_which
 
         indexes = self.indexes
         factsets = self.factsets
 
-        which1 = tonorm(vwe((G.anum > 4) & (G.astr == "foo")))
+        which1 = pw((G.anum > 4) & (G.astr == "foo"),[G])
         qp1 = make_query_plan(simple_query_join_order,[G.astr],
                               [G],[],which1)
 
@@ -865,7 +863,7 @@ class QueryTestCase(unittest.TestCase):
         self.assertEqual(set(strip(query1())), set([G(5,"foo")]))
 
 
-        which2 = tonorm(vwe((G.anum > 4) | (G.astr == "foo")))
+        which2 = pw((G.anum > 4) | (G.astr == "foo"),[G])
         qp2 = make_query_plan(simple_query_join_order,[G.astr],
                               [G],[],which2)
 
@@ -883,13 +881,12 @@ class QueryTestCase(unittest.TestCase):
         Gp = path(self.G)
         F = self.F
         G = self.G
-        vwe = validate_which_expression
-        tonorm = normalise_which_expression
+        pw = process_which
 
         indexes = self.indexes
         factsets = self.factsets
 
-        which1 = tonorm(vwe((G.anum > 4) & (G.astr == "foo") & (F.anum == 1)))
+        which1 = pw((G.anum > 4) & (G.astr == "foo") & (F.anum == 1),[G,F])
         qp1 = make_query_plan(simple_query_join_order,[G.astr,F.anum],
                               [G,F],[],which1)
         #        print("\nQP:\n{}".format(qp1))
@@ -901,7 +898,7 @@ class QueryTestCase(unittest.TestCase):
                          set([(F(1,"a"),G(5,"foo")), (F(1,"foo"),G(5,"foo"))]))
 
 
-        which1 = tonorm(vwe((F.anum > 4) & (F.astr == "foo") & (G.anum == 1)))
+        which1 = pw((F.anum > 4) & (F.astr == "foo") & (G.anum == 1),[F,G])
         qp1 = make_query_plan(simple_query_join_order,[G.astr,F.anum],
                               [F,G],[],which1)
         #print("\nQP:\n{}".format(qp1))
@@ -924,13 +921,12 @@ class QueryTestCase(unittest.TestCase):
         G = self.G
         indexes = self.indexes
         factsets = self.factsets
-        vwe = validate_which_expression
-        vje = validate_join_expression
-        tonorm = normalise_which_expression
+        pw = process_which
+        pj = process_join
 
         return
-        which2 = tonorm(vwe((G.anum > 4) & (G.astr == "foo")))
-        joins = vje([F.anum == G.anum],[F,G])
+        which2 = pw((G.anum > 4) & (G.astr == "foo"),[G])
+        joins = pj([F.anum == G.anum],[F,G])
         qp2 = make_query_plan(simple_query_join_order,[G.astr,F.anum],
                               [G,F],[],which2)
 

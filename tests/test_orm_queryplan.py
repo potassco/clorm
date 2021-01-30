@@ -32,10 +32,11 @@ from clorm.orm.queryplan import PositionalPlaceholder, NamedPlaceholder, \
     validate_which_expression, negate_which_expression, \
     which_expression_to_nnf, which_expression_to_cnf, \
     Clause, ClauseBlock, normalise_which_expression, \
-    clauses_to_clauseblocks, \
-    JoinQueryPlan, QueryPlan, validate_join_expression, \
+    process_which, partition_clauses, \
+    validate_join_expression, process_join, \
     simple_query_join_order, make_query_plan_preordered_roots, \
     make_prejoin_pair, make_join_pair, make_query_plan, \
+    JoinQueryPlan, QueryPlan, \
     check_query_condition, simplify_query_condition, \
     instantiate_query_condition, evaluate_query_condition
 
@@ -743,26 +744,26 @@ class WhichExpressionTestCase(unittest.TestCase):
         G = self.G
 
         vwe = validate_which_expression
-        msc = StandardComparator.from_which_qcondition
+        wsc = StandardComparator.from_which_qcondition
         mfc = FunctionComparator.from_specification
 
         # Comparison QConditions and raw functions are turned into Comparators
-        self.assertEqual(vwe((F.anum == 4), [F]), msc(F.anum == 4))
-        self.assertEqual(vwe(~(F.anum == 4), [F]), not_(msc(F.anum == 4)))
+        self.assertEqual(vwe((F.anum == 4), [F]), wsc(F.anum == 4))
+        self.assertEqual(vwe(~(F.anum == 4), [F]), not_(wsc(F.anum == 4)))
         self.assertEqual(vwe((F.anum == 4) & (F.astr == "df"), [F]),
-                         and_(msc(F.anum == 4),msc(F.astr == "df")))
+                         and_(wsc(F.anum == 4),wsc(F.astr == "df")))
         self.assertEqual(vwe((F.anum == 4) | (F.astr == "df"), [F]),
-                         or_(msc(F.anum == 4),msc(F.astr == "df")))
+                         or_(wsc(F.anum == 4),wsc(F.astr == "df")))
         self.assertEqual(vwe((F.anum == 4) | \
                              ((F.astr == "df") & ~(F.atuple[0] < 2)), [F]),
-                         or_(msc(F.anum == 4),
-                             and_(msc(F.astr == "df"),not_(msc(F.atuple[0] < 2)))))
+                         or_(wsc(F.anum == 4),
+                             and_(wsc(F.astr == "df"),not_(wsc(F.atuple[0] < 2)))))
 
         f=lambda x: x + F.anum
         self.assertEqual(vwe(f,[F]), mfc([F], f))
 
         cond1 = (F.anum == 4) & f
-        cond2 = and_(msc(F.anum == 4),mfc([F],f))
+        cond2 = and_(wsc(F.anum == 4),mfc([F],f))
         self.assertEqual(vwe(cond1, [F]),cond2)
         self.assertEqual(vwe(cond2, [F]),cond2)
 
@@ -784,21 +785,19 @@ class WhichExpressionTestCase(unittest.TestCase):
         self.assertEqual(nwe(nbf), bf)
         self.assertEqual(nwe(vwe(F.anum == 3,[F])), vwe(F.anum != 3,[F]))
 
+        self.assertEqual(nwe(vwe(F.anum != 3,[F])), vwe(F.anum == 3,[F]))
+        self.assertEqual(nwe(vwe(F.anum < 3,[F])) , vwe(F.anum >= 3,[F]))
+        self.assertEqual(nwe(vwe(F.anum <= 3,[F])), vwe(F.anum > 3,[F]))
+        self.assertEqual(nwe(vwe(F.anum > 3,[F])) , vwe(F.anum <= 3,[F]))
+        self.assertEqual(nwe(vwe(F.anum >= 3,[F])), vwe(F.anum < 3,[F]))
 
-
-        self.assertEqual(nwe(vwe(F.anum != 3)), vwe(F.anum == 3))
-        self.assertEqual(nwe(vwe(F.anum < 3)) , vwe(F.anum >= 3))
-        self.assertEqual(nwe(vwe(F.anum <= 3)), vwe(F.anum > 3))
-        self.assertEqual(nwe(vwe(F.anum > 3)) , vwe(F.anum <= 3))
-        self.assertEqual(nwe(vwe(F.anum >= 3)), vwe(F.anum < 3))
-
-        c = vwe((F.anum == 3) | (bf))
-        nc = vwe((F.anum != 3) & (nbf))
+        c = vwe((F.anum == 3) | (bf),[F])
+        nc = vwe((F.anum != 3) & (nbf),[F])
         self.assertEqual(nwe(c),nc)
         self.assertEqual(nwe(nc),c)
 
-        c = vwe(~(~(F.anum == 3) | ~(F.anum != 4)))
-        nc = vwe((F.anum != 3) | (F.anum == 4))
+        c = vwe(~(~(F.anum == 3) | ~(F.anum != 4)),[F])
+        nc = vwe((F.anum != 3) | (F.anum == 4),[F])
         self.assertEqual(nwe(c),nc)
 
     # ------------------------------------------------------------------------------
@@ -809,8 +808,8 @@ class WhichExpressionTestCase(unittest.TestCase):
         vwe = validate_which_expression
         tonnf = which_expression_to_nnf
 
-        c = vwe(~(~(F.anum == 3) | ~(F.anum == 4)))
-        nnfc = vwe((F.anum == 3) & (F.anum == 4))
+        c = vwe(~(~(F.anum == 3) | ~(F.anum == 4)),[F])
+        nnfc = vwe((F.anum == 3) & (F.anum == 4),[F])
         self.assertEqual(tonnf(c),nnfc)
 
     # ------------------------------------------------------------------------------
@@ -823,17 +822,17 @@ class WhichExpressionTestCase(unittest.TestCase):
         # NOTE: Equality test relies on the order - to make this better would
         # need to introduce ordering over comparison conditions.
 
-        f = vwe(((F.anum == 4) & (F.anum == 3)) | (F.anum == 6))
-        cnf = vwe(((F.anum == 4) | (F.anum == 6)) & ((F.anum == 3) | (F.anum == 6)))
+        f = vwe(((F.anum == 4) & (F.anum == 3)) | (F.anum == 6),[F])
+        cnf = vwe(((F.anum == 4) | (F.anum == 6)) & ((F.anum == 3) | (F.anum == 6)),[F])
         self.assertEqual(tocnf(f),cnf)
 
-        f = vwe((F.anum == 6) | ((F.anum == 4) & (F.anum == 3)))
-        cnf = vwe(((F.anum == 6) | (F.anum == 4)) & ((F.anum == 6) | (F.anum == 3)))
+        f = vwe((F.anum == 6) | ((F.anum == 4) & (F.anum == 3)),[F])
+        cnf = vwe(((F.anum == 6) | (F.anum == 4)) & ((F.anum == 6) | (F.anum == 3)),[F])
         self.assertEqual(tocnf(f),cnf)
 
-        f = vwe(((F.anum == 6) & (F.anum == 5)) | ((F.anum == 4) & (F.anum == 3)))
+        f = vwe(((F.anum == 6) & (F.anum == 5)) | ((F.anum == 4) & (F.anum == 3)),[F])
         cnf = vwe((((F.anum == 6) | (F.anum == 4)) & ((F.anum == 6) | (F.anum == 3))) & \
-                  (((F.anum == 5) | (F.anum == 4)) & ((F.anum == 5) | (F.anum == 3))))
+                  (((F.anum == 5) | (F.anum == 4)) & ((F.anum == 5) | (F.anum == 3))),[F])
         self.assertEqual(tocnf(f),cnf)
 
     # ------------------------------------------------------------------------------
@@ -842,26 +841,27 @@ class WhichExpressionTestCase(unittest.TestCase):
         def hps(paths):
             return set([hashable_path(p) for p in paths ])
         vwe = validate_which_expression
+        wsc = StandardComparator.from_which_qcondition
 
         F = self.F
         G = self.G
 
-        cx1 = Clause([vwe(F.anum == 4)])
-        cx2 = Clause([vwe(F.anum == 4)])
-        cx3 = Clause([vwe(F.anum == ph1_)])
+        cx1 = Clause([wsc(F.anum == 4)])
+        cx2 = Clause([wsc(F.anum == 4)])
+        cx3 = Clause([wsc(F.anum == ph1_)])
 
         # Test __eq__ and __ne__
         self.assertEqual(cx1,cx2)
         self.assertNotEqual(cx1,cx3)
 
-        c1 = Clause([vwe(F.anum == 4), vwe(F.astr == "b"), vwe(F.atuple[0] == 6)])
+        c1 = Clause([wsc(F.anum == 4), wsc(F.astr == "b"), wsc(F.atuple[0] == 6)])
 
         # Test paths and ground
         self.assertEqual(hps([F.anum,F.astr,F.atuple[0]]), hps(c1.paths))
         self.assertEqual(hps(c1.roots),hps([F]))
         self.assertEqual(c1,c1.ground())
 
-        c2 = Clause([vwe(F.anum == ph1_), vwe(F.astr == "b"), vwe(F.atuple[0] == 6)])
+        c2 = Clause([wsc(F.anum == ph1_), wsc(F.astr == "b"), wsc(F.atuple[0] == 6)])
         self.assertEqual(hps([F.anum,F.astr,F.atuple[0]]), hps(c2.paths))
         self.assertEqual(c2.ground(4),c1)
         self.assertEqual(hps(c1.roots),hps([F]))
@@ -874,14 +874,14 @@ class WhichExpressionTestCase(unittest.TestCase):
 
         # Test dealiasing
         X = alias(F)
-        c3 = Clause([vwe(F.anum == 4)])
-        c4 = Clause([vwe(X.anum == 4)])
+        c3 = Clause([wsc(F.anum == 4)])
+        c4 = Clause([wsc(X.anum == 4)])
         self.assertNotEqual(c3,c4)
         self.assertEqual(c3,c4.dealias())
 
         # Test __len__, __getitem__ and __iter__
-        cmp10 = vwe(F.anum == 4)
-        cmp11 = vwe(X.anum == 4)
+        cmp10 = wsc(F.anum == 4)
+        cmp11 = wsc(X.anum == 4)
         c10 = Clause([cmp10,cmp11])
         self.assertEqual(len(c10),2)
         self.assertEqual(list(c10),[cmp10,cmp11])
@@ -896,12 +896,12 @@ class WhichExpressionTestCase(unittest.TestCase):
         self.assertEqual(Clause([fy]).placeholders,set([ph_("y",10)]))
 
         # Iterate over the conditions within a clause
-        c1 = Clause([vwe(G.anum == ph1_),vwe(F.astr == "b"),vwe(F.atuple[0] == 6)])
+        c1 = Clause([wsc(G.anum == ph1_),wsc(F.astr == "b"),wsc(F.atuple[0] == 6)])
         self.assertEqual(list(c1),
-                         [vwe(G.anum == ph1_),vwe(F.astr == "b"),vwe(F.atuple[0] == 6)])
+                         [wsc(G.anum == ph1_),wsc(F.astr == "b"),wsc(F.atuple[0] == 6)])
 
         # Test make_callable
-        c1 = Clause([vwe(G.anum == ph1_),vwe(F.astr == "b")])
+        c1 = Clause([wsc(G.anum == ph1_),wsc(F.astr == "b")])
         cc = c1.ground(5).make_callable([F,G])
 
         f1 = F(1,"b",(2,"b"))
@@ -924,16 +924,17 @@ class WhichExpressionTestCase(unittest.TestCase):
         def hps(paths):
             return set([hashable_path(p) for p in paths ])
         vwe = validate_which_expression
+        wsc = StandardComparator.from_which_qcondition
 
         F = self.F
         G = self.G
         X = alias(F)
         Y = alias(G)
 
-        c1 = Clause([vwe(F.anum == 4), vwe(F.astr == "b")])
-        c2 = Clause([vwe(X.anum == 5), vwe(X.astr == "c")])
-        c3 = Clause([vwe(G.anum == 6)])
-        c4 = Clause([vwe(G.anum == ph1_)])
+        c1 = Clause([wsc(F.anum == 4), wsc(F.astr == "b")])
+        c2 = Clause([wsc(X.anum == 5), wsc(X.astr == "c")])
+        c3 = Clause([wsc(G.anum == 6)])
+        c4 = Clause([wsc(G.anum == ph1_)])
         cb1 = ClauseBlock([c1,c2,c3])
         cb2 = ClauseBlock([c1,c2,c3])
         cb3 = ClauseBlock([c1,c2,c4])
@@ -951,16 +952,16 @@ class WhichExpressionTestCase(unittest.TestCase):
         self.assertEqual(cb1.clauses, (c1,c2,c3))
 
         # Test dealiasing
-        c10 = Clause([vwe(F.anum == 4)])
-        c11 = Clause([vwe(X.anum == 4)])
+        c10 = Clause([wsc(F.anum == 4)])
+        c11 = Clause([wsc(X.anum == 4)])
         cb10 = ClauseBlock([c10])
         cb11 = ClauseBlock([c11])
         self.assertNotEqual(cb10,cb11)
         self.assertEqual(cb10,cb11.dealias())
 
         # Test __len__, __getitem__ and __iter__
-        c10 = Clause([vwe(F.anum == 4)])
-        c11 = Clause([vwe(X.anum == 4)])
+        c10 = Clause([wsc(F.anum == 4)])
+        c11 = Clause([wsc(X.anum == 4)])
         cb10 = ClauseBlock([c10,c11])
         self.assertEqual(len(cb10),2)
         self.assertEqual(list(cb10),[c10,c11])
@@ -976,10 +977,10 @@ class WhichExpressionTestCase(unittest.TestCase):
         self.assertEqual(cb1.ground(),cb2)
         self.assertEqual(list(cb1), [c1,c2,c3])
 
-        c1 = Clause([vwe(F.anum == ph1_)])
-        c2 = Clause([vwe(G.anum == ph2_)])
-        c1a = Clause([vwe(F.anum == 1)])
-        c2b = Clause([vwe(G.anum == 2)])
+        c1 = Clause([wsc(F.anum == ph1_)])
+        c2 = Clause([wsc(G.anum == ph2_)])
+        c1a = Clause([wsc(F.anum == 1)])
+        c2b = Clause([wsc(G.anum == 2)])
         cb1 = ClauseBlock([c1,c2])
         cb2 = ClauseBlock([c1a,c2b])
         self.assertEqual(cb1.ground(1,2),cb2)
@@ -1010,21 +1011,22 @@ class WhichExpressionTestCase(unittest.TestCase):
         F = alias(self.F)
         vwe = validate_which_expression
         tonorm = normalise_which_expression
+        wsc = StandardComparator.from_which_qcondition
 
         # Simple cases containing a single clause block
-        f = vwe(F.anum == 4)
+        f = vwe(F.anum == 4,[F])
 #        self.assertEqual(tonorm(f), [ClauseBlock([Clause([f])])])
-        self.assertEqual(tonorm(f), [Clause([f])])
+        self.assertEqual(tonorm(f), ClauseBlock([Clause([f])]))
 
         f = func_([F.anum], lambda x : x == 2)
 #        self.assertEqual(tonorm(f), [ClauseBlock([Clause([f])])])
-        self.assertEqual(tonorm(f), [Clause([f])])
+        self.assertEqual(tonorm(f), ClauseBlock([Clause([f])]))
 
-        f = vwe(((F.anum == 4) & (F.anum == 3)) | (F.anum == 6))
-        clauses = [Clause([vwe(F.anum == 4), vwe(F.anum == 6)]),
-                   Clause([vwe(F.anum == 3), vwe(F.anum == 6)])]
+        f = vwe(((F.anum == 4) & (F.anum == 3)) | (F.anum == 6), [F])
+        clauses = [Clause([wsc(F.anum == 4), wsc(F.anum == 6)]),
+                   Clause([wsc(F.anum == 3), wsc(F.anum == 6)])]
         norm = tonorm(f)
-        self.assertEqual(tonorm(f),clauses)
+        self.assertEqual(tonorm(f),ClauseBlock(clauses))
 
         # More complex cases with multiple blocks
         G = alias(self.G)
@@ -1034,34 +1036,34 @@ class WhichExpressionTestCase(unittest.TestCase):
         f = vwe(and_(or_(F.anum == 4, F.astr == "b"),
                      X.anum == 5,
                      or_(X.anum == 6, Y.astr == "d"),
-                     X.astr == "a"))
+                     X.astr == "a"), [F,X,Y])
         norm = tonorm(f)
-        clauses = [Clause([vwe(F.anum == 4), vwe(F.astr == "b")]),
-                   Clause([vwe(X.anum == 5)]),
-                   Clause([vwe(X.anum == 6), vwe(Y.astr == "d")]),
-                   Clause([vwe(X.astr == "a")])]
-        self.assertEqual(norm,clauses)
+        clauses = [Clause([wsc(F.anum == 4), wsc(F.astr == "b")]),
+                   Clause([wsc(X.anum == 5)]),
+                   Clause([wsc(X.anum == 6), wsc(Y.astr == "d")]),
+                   Clause([wsc(X.astr == "a")])]
+        self.assertEqual(norm,ClauseBlock(clauses))
 
     # ------------------------------------------------------------------------------
     # ------------------------------------------------------------------------------
-    def test_nonapi_clauses_to_clauseblocks(self):
+    def test_nonapi_partition_clauses(self):
         F = path(self.F)
         G = path(self.G)
         X = alias(F)
         Y = alias(G)
-        vwe = validate_which_expression
+        wsc = StandardComparator.from_which_qcondition
 
-        cf1 = Clause([vwe(F.anum == 4)])
-        cx1 = Clause([vwe(X.anum == 5)])
-        cbs, catchall = clauses_to_clauseblocks([cf1,cx1])
+        cf1 = Clause([wsc(F.anum == 4)])
+        cx1 = Clause([wsc(X.anum == 5)])
+        cbs, catchall = partition_clauses([cf1,cx1])
         self.assertEqual(cbs,[ClauseBlock([cf1]),ClauseBlock([cx1])])
         self.assertEqual(catchall, None)
 
-        cf1 = Clause([vwe(F.anum == 4), vwe(F.astr == "b")])
-        cx1 = Clause([vwe(X.anum == 5)])
-        cx2 = Clause([vwe(X.astr == "a")])
-        cxy1 = Clause([vwe(X.anum == 6), vwe(Y.astr == "d")])
-        cbs, catchall = clauses_to_clauseblocks([cf1,cx1,cx2,cxy1])
+        cf1 = Clause([wsc(F.anum == 4), wsc(F.astr == "b")])
+        cx1 = Clause([wsc(X.anum == 5)])
+        cx2 = Clause([wsc(X.astr == "a")])
+        cxy1 = Clause([wsc(X.anum == 6), wsc(Y.astr == "d")])
+        cbs, catchall = partition_clauses([cf1,cx1,cx2,cxy1])
         self.assertEqual(cbs,[ClauseBlock([cf1]),ClauseBlock([cx1,cx2])])
         self.assertEqual(catchall, ClauseBlock([cxy1]))
 
@@ -1174,17 +1176,16 @@ class QueryPlanTestCase(unittest.TestCase):
 
     def test_nonapi_make_prejoin_pair_simple(self):
         F = path(self.F)
-        vwe = validate_which_expression
-        tonorm = normalise_which_expression
+        pw = process_which
+        wsc = StandardComparator.from_which_qcondition
 
-        clauses = tonorm(vwe((F.anum < 4) & (F.astr == "foo" )))
-        cb = ClauseBlock(clauses)
-        (prejoinsc, prejoincb) = make_prejoin_pair([F.anum,F.astr],cb)
+        clauses = pw((F.anum < 4) & (F.astr == "foo" ),[F])
+        (prejoinsc, prejoincb) = make_prejoin_pair([F.anum,F.astr],clauses)
         self.assertEqual(type(prejoincb),ClauseBlock)
         self.assertEqual(len(prejoincb),1)
         self.assertEqual(type(prejoincb[0]),Clause)
-        self.assertEqual(prejoinsc, vwe(F.astr == "foo"))
-        self.assertEqual(list(prejoincb), tonorm(vwe(F.anum < 4)))
+        self.assertEqual(prejoinsc, wsc(F.astr == "foo"))
+        self.assertEqual(prejoincb, pw(F.anum < 4,[F]))
 
 
     def test_nonapi_make_prejoin_pair(self):
@@ -1192,27 +1193,25 @@ class QueryPlanTestCase(unittest.TestCase):
         G = path(self.G)
         FA = alias(F)
         GA = alias(G)
-        vje = validate_join_expression
-        vwe = validate_which_expression
-        tonorm = normalise_which_expression
+        pw = process_which
+        pj = process_join
+        wsc = StandardComparator.from_which_qcondition
 
-        which = tonorm(vwe((FA.anum < 4) & (FA.astr == "foo" ) & (FA.anum == FA.astr) &
-                           ((FA.anum > 10) | (FA.astr == "bar"))))
-        cb = ClauseBlock(which)
+        which = pw((FA.anum < 4) & (FA.astr == "foo" ) & (FA.anum == FA.astr) &
+                           ((FA.anum > 10) | (FA.astr == "bar")),[FA])
 
-        which2 = tonorm(vwe((FA.anum < 4) & (FA.anum == F.astr) &
-                            ((FA.anum > 10) | (FA.astr == "bar"))))
-        cbother = ClauseBlock(which2)
-        (prejoinsc, prejoincb) = make_prejoin_pair([F.anum,F.astr],cb)
-        self.assertEqual(prejoinsc, vwe(FA.astr == "foo"))
-        self.assertEqual(len(prejoincb), len(cbother))
+        which2 = pw((FA.anum < 4) & (FA.anum == F.astr) &
+                    ((FA.anum > 10) | (FA.astr == "bar")),[FA,F])
+        (prejoinsc, prejoincb) = make_prejoin_pair([F.anum,F.astr],which)
+        self.assertEqual(prejoinsc, wsc(FA.astr == "foo"))
+        self.assertEqual(len(prejoincb), len(which2))
 
-        (prejoinsc, prejoincb) = make_prejoin_pair([F.anum],cb)
-        self.assertEqual(prejoinsc, vwe(FA.anum < 4))
+        (prejoinsc, prejoincb) = make_prejoin_pair([F.anum],which)
+        self.assertEqual(prejoinsc, wsc(FA.anum < 4))
 
-        (prejoinsc, prejoincb) = make_prejoin_pair([],cb)
+        (prejoinsc, prejoincb) = make_prejoin_pair([],which)
         self.assertEqual(prejoinsc, None)
-        self.assertEqual(prejoincb,cb)
+        self.assertEqual(prejoincb,which)
 
 
     # ------------------------------------------------------------------------------
@@ -1224,22 +1223,22 @@ class QueryPlanTestCase(unittest.TestCase):
         G = path(self.G)
         FA = alias(F)
         GA = alias(G)
-        vje = validate_join_expression
-        vwe = validate_which_expression
-        tonorm = normalise_which_expression
 
-        which = tonorm(vwe((FA.anum < G.anum) |
-                           ((FA.astr == "foo")  &  (FA.anum == FA.astr))))
-        cb = ClauseBlock(which)
-        joins = vje([FA.anum == G.anum, G.anum > FA.anum], [FA,G])
+        pw = process_which
+        pj = process_join
+        wsc = StandardComparator.from_which_qcondition
 
-        (joinsc, joincb) = make_join_pair(joins,cb)
-        self.assertEqual(joinsc, vje([FA.anum == G.anum],[FA,G])[0])
-        self.assertEqual(len(joincb), len(cb)+1)
+        which = pw((FA.anum < G.anum) |
+                   ((FA.astr == "foo")  &  (FA.anum == FA.astr)),[FA,G])
+        joins = pj([FA.anum == G.anum, G.anum > FA.anum], [FA,G])
 
-        (joinsc, joincb) = make_join_pair([],cb)
+        (joinsc, joincb) = make_join_pair(joins,which)
+        self.assertEqual(joinsc, pj([FA.anum == G.anum],[FA,G])[0])
+        self.assertEqual(len(joincb), len(which)+1)
+
+        (joinsc, joincb) = make_join_pair([],which)
         self.assertEqual(joinsc, None)
-        self.assertEqual(len(joincb), len(cb))
+        self.assertEqual(len(joincb), len(which))
 
         (joinsc, joincb) = make_join_pair([],None)
         self.assertEqual(joinsc, None)
@@ -1256,41 +1255,42 @@ class QueryPlanTestCase(unittest.TestCase):
         G = path(self.G)
         FA = alias(F)
         GA = alias(G)
-        vje = validate_join_expression
-        vwe = validate_which_expression
-        tonorm = normalise_which_expression
-        jqp_from = JoinQueryPlan.from_specification
-        wsc_from = StandardComparator.from_which_qcondition
-        jsc_from = StandardComparator.from_join_qcondition
 
-        joins = vje([G.anum == FA.anum, FA.anum < GA.anum,
+        pw = process_which
+        pj = process_join
+        wsc = StandardComparator.from_which_qcondition
+        jsc = StandardComparator.from_join_qcondition
+        jqp = JoinQueryPlan.from_specification
+
+
+        joins = pj([G.anum == FA.anum, FA.anum < GA.anum,
                      joinall_(F,G),joinall_(G,FA)],[F,G,FA,GA])
-        joinsc = jsc_from(G.anum == F.anum)
-        cl1 = Clause([vwe(F.anum == GA.anum)])
-        cl2 = Clause([vwe(F.anum == 5)])
-        cl3 = Clause([vwe(F.anum == ph1_)])
+        joinsc = jsc(G.anum == F.anum)
+        cl1 = Clause([wsc(F.anum == GA.anum)])
+        cl2 = Clause([wsc(F.anum == 5)])
+        cl3 = Clause([wsc(F.anum == ph1_)])
 
-        clauses = tonorm(vwe( (FA.anum < G.anum) | ((FA.astr == "foo")  &  (GA.anum == 4))))
-        qp1 = jqp_from([],(F,G,GA),FA, joins, clauses)
+        clauses = pw((FA.anum < G.anum)|((FA.astr == "foo") & (GA.anum == 4)),[FA,G,GA])
+        qp1 = jqp([],(F,G,GA),FA, joins, clauses)
 
         self.assertEqual(hps(qp1.input_signature), hps((F,G,GA)))
         self.assertEqual(hps([qp1.root]), hps([FA]))
         self.assertEqual(qp1.prejoin_key,None)
-        self.assertEqual(qp1.join_key, jsc_from(FA.anum == G.anum))
+        self.assertEqual(qp1.join_key, jsc(FA.anum == G.anum))
         self.assertEqual(qp1.prejoin_clauses, None)
 
-        clauses = tonorm(vwe( (FA.anum < G.anum) & (FA.astr == "foo") & (FA.anum > 4)))
-        qp2 = jqp_from([F.astr],(F,G,GA),FA, joins, clauses)
+        clauses = pw( (FA.anum < G.anum) & (FA.astr == "foo") & (FA.anum > 4),[FA,G])
+        qp2 = jqp([F.astr],(F,G,GA),FA, joins, clauses)
 
-        self.assertEqual(qp2.prejoin_key,wsc_from(F.astr == "foo"))
-        self.assertEqual(qp2.prejoin_clauses, ClauseBlock([Clause([wsc_from(F.anum > 4)])]))
-        self.assertEqual(qp2.join_key, jsc_from(FA.anum == G.anum))
+        self.assertEqual(qp2.prejoin_key,wsc(F.astr == "foo"))
+        self.assertEqual(qp2.prejoin_clauses, ClauseBlock([Clause([wsc(F.anum > 4)])]))
+        self.assertEqual(qp2.join_key, jsc(FA.anum == G.anum))
         self.assertEqual(len(qp2.join_clauses),2)
         self.assertEqual(qp2.placeholders,set())
 
-        clauses = tonorm(vwe( (FA.anum < G.anum) & (FA.astr == ph1_) & (FA.anum > 4)))
-        qp3 = jqp_from([F.astr],(F,G,GA),FA, joins, clauses)
-        self.assertEqual(qp3.prejoin_key,wsc_from(F.astr == ph1_))
+        clauses = pw( (FA.anum < G.anum) & (FA.astr == ph1_) & (FA.anum > 4),[FA,G])
+        qp3 = jqp([F.astr],(F,G,GA),FA, joins, clauses)
+        self.assertEqual(qp3.prejoin_key,wsc(F.astr == ph1_))
         self.assertEqual(qp3.placeholders,set([ph1_]))
         self.assertEqual(qp3.ground("foo"), qp2)
 
@@ -1298,32 +1298,38 @@ class QueryPlanTestCase(unittest.TestCase):
     # Test the JoinQueryPlan class
     # ------------------------------------------------------------------------------
 
-    def _test_nonapi_QueryPlan(self):
+    def test_nonapi_QueryPlan(self):
         F = path(self.F)
         G = path(self.G)
         FA = alias(F)
         GA = alias(G)
-        vje = validate_join_expression
+
+        pw = process_which
+        pj = process_join
+        wsc = StandardComparator.from_which_qcondition
         jsc = StandardComparator.from_join_qcondition
-        vwe = validate_which_expression
-        tonorm = normalise_which_expression
+        jqp = JoinQueryPlan.from_specification
 
         joins1 = []
-        joins2 = vje([G.anum == F.anum],[F,G])
-        joins3 = vje([G.anum == F.anum, F.anum < FA.anum],[F,G,FA])
+        joins2 = pj([G.anum == F.anum],[F,G])
+        joins3 = pj([G.anum == F.anum, F.anum < FA.anum],[F,G,FA])
 
-        c1 = Clause([vwe(F.anum == 5)])
-        c1ph = Clause([vwe(F.anum == ph1_)])
-        c2 = Clause([vwe(F.astr == G.astr)])
+        c1 = pw(F.anum == 5,[F])
+        c1ph = pw(F.anum == ph1_,[F])
+        c2 = pw(F.astr == G.astr,[F,G])
 
-        qpj1 = JoinQueryPlan((),F,None,c1,None)
-        qpj1ph = JoinQueryPlan((),F,None,c1ph,None)
-        qpj2 = JoinQueryPlan((F,),G,jsc(G.anum == F.anum),None,c2)
-        qpj3 = JoinQueryPlan((F,G),FA,jsc(G.anum == F.anum),None,None)
+        qpj1 = JoinQueryPlan((),F,None,c1,None,None)
+        qpj1ph = JoinQueryPlan((),F,None,c1ph,None,None)
 
         qp1 = QueryPlan([qpj1])
+        qp1ph = QueryPlan([qpj1ph])
         self.assertEqual(len(qp1),1)
         self.assertEqual(qp1[0],qpj1)
+        self.assertNotEqual(qp1,qp1ph)
+        self.assertEqual(qp1,qp1ph.ground(5))
+
+        qpj2 = JoinQueryPlan((F,),G,None, None, jsc(G.anum == F.anum),c2)
+        qpj3 = JoinQueryPlan((F,G),FA,None, None, jsc(G.anum == FA.anum),None)
 
         qp2 = QueryPlan([qpj1,qpj2])
         self.assertEqual(len(qp2),2)
@@ -1331,16 +1337,14 @@ class QueryPlanTestCase(unittest.TestCase):
         self.assertEqual(qp2[1],qpj2)
 
         qp3 = QueryPlan([qpj1,qpj2,qpj3])
+        qp3ph = QueryPlan([qpj1ph,qpj2,qpj3])
+        self.assertEqual(list(qp3), [qpj1,qpj2,qpj3])
         self.assertEqual(len(qp3),3)
+        self.assertNotEqual(qp3,qp3ph)
+        self.assertEqual(qp3,qp3ph.ground(5))
 
         self.assertEqual(qp3.output_signature,
                          tuple(qpj3.input_signature + (qpj3.root,)))
-
-        self.assertEqual(list(qp3), [qpj1,qpj2,qpj3])
-
-        qp3ph = QueryPlan([qpj1ph,qpj2,qpj3])
-        self.assertNotEqual(qp3,qp3ph)
-        self.assertEqual(qp3,qp3ph.ground(5))
 
         # Test placeholders
         self.assertEqual(qp3.placeholders,set())
@@ -1365,15 +1369,16 @@ class QueryPlanTestCase(unittest.TestCase):
         G = path(self.G)
         FA = alias(F)
         GA = alias(G)
-        vje = validate_join_expression
-        vwe = validate_which_expression
-        tonorm = normalise_which_expression
-        wsc_from = StandardComparator.from_which_qcondition
-        jsc_from = StandardComparator.from_join_qcondition
+
+        pw = process_which
+        pj = process_join
+        wsc = StandardComparator.from_which_qcondition
+        jsc = StandardComparator.from_join_qcondition
+        jqp = JoinQueryPlan.from_specification
         hp = hashable_path
 
-        joins = vje([G.anum == F.anum, F.anum < GA.anum, joinall_(G,FA)],[F,G,FA,GA])
-        which = tonorm(vwe((F.anum == 4) & (FA.anum < 2)))
+        joins = pj([G.anum == F.anum, F.anum < GA.anum, joinall_(G,FA)],[F,G,FA,GA])
+        which = pw((F.anum == 4) & (FA.anum < 2),[F,FA])
 
         qp1 = make_query_plan_preordered_roots([F.anum],[FA,GA,G,F],joins,which)
         self.assertEqual(len(qp1),4)
@@ -1382,10 +1387,10 @@ class QueryPlanTestCase(unittest.TestCase):
         self.assertEqual(hp(qp1[2].root), hp(G))
         self.assertEqual(hp(qp1[3].root), hp(F))
 
-        self.assertEqual(qp1[0].prejoin_key, wsc_from(F.anum < 2))
+        self.assertEqual(qp1[0].prejoin_key, wsc(F.anum < 2))
         self.assertEqual(qp1[1].prejoin_key, None)
         self.assertEqual(qp1[2].prejoin_key, None)
-        self.assertEqual(qp1[3].prejoin_key, wsc_from(F.anum == 4))
+        self.assertEqual(qp1[3].prejoin_key, wsc(F.anum == 4))
 
         self.assertEqual(qp1[0].prejoin_clauses, None)
         self.assertEqual(qp1[1].prejoin_clauses, None)
@@ -1395,22 +1400,22 @@ class QueryPlanTestCase(unittest.TestCase):
         self.assertEqual(qp1[0].join_key, None)
         self.assertEqual(qp1[1].join_key, None)
         self.assertEqual(qp1[2].join_key, None)
-        self.assertEqual(qp1[3].join_key, jsc_from(F.anum == G.anum))
+        self.assertEqual(qp1[3].join_key, jsc(F.anum == G.anum))
 
         self.assertEqual(qp1[0].join_clauses, None)
         self.assertEqual(qp1[1].join_clauses, None)
         self.assertEqual(qp1[2].join_clauses, None)
-        self.assertEqual(list(qp1[3].join_clauses), [Clause([wsc_from(F.anum < GA.anum)])])
+        self.assertEqual(list(qp1[3].join_clauses), [Clause([wsc(F.anum < GA.anum)])])
 
         # Same as qp1 but with placeholder - so equal after grounding
-        which2 = tonorm(vwe((F.anum == ph1_) & (FA.anum < ph2_)))
+        which2 = pw((F.anum == ph1_) & (FA.anum < ph2_),[F,FA])
         qp2 = make_query_plan_preordered_roots([F.anum],[FA,GA,G,F],joins,which2)
         self.assertEqual(qp2.placeholders, set([ph1_,ph2_]))
 
-        self.assertEqual(qp2[0].prejoin_key, wsc_from(F.anum < ph2_))
+        self.assertEqual(qp2[0].prejoin_key, wsc(F.anum < ph2_))
         self.assertEqual(qp2[1].prejoin_key, None)
         self.assertEqual(qp2[2].prejoin_key, None)
-        self.assertEqual(qp2[3].prejoin_key, wsc_from(F.anum == ph1_))
+        self.assertEqual(qp2[3].prejoin_key, wsc(F.anum == ph1_))
         self.assertNotEqual(qp1,qp2)
         self.assertEqual(qp1.ground(4,2),qp1)
         self.assertEqual(qp2.ground(4,2),qp1)
@@ -1423,15 +1428,15 @@ class QueryPlanTestCase(unittest.TestCase):
         self.assertEqual(hp(qp3[2].root), hp(F))
         self.assertEqual(hp(qp3[3].root), hp(G))
 
-        self.assertEqual(qp3[0].prejoin_key, wsc_from(F.anum < 2))
+        self.assertEqual(qp3[0].prejoin_key, wsc(F.anum < 2))
         self.assertEqual(qp3[1].prejoin_key, None)
-        self.assertEqual(qp3[2].prejoin_key, wsc_from(F.anum == 4))
+        self.assertEqual(qp3[2].prejoin_key, wsc(F.anum == 4))
         self.assertEqual(qp3[3].prejoin_key, None)
 
         self.assertEqual(qp3[0].join_key, None)
         self.assertEqual(qp3[1].join_key, None)
-        self.assertEqual(qp3[2].join_key, jsc_from(F.anum < GA.anum))
-        self.assertEqual(qp3[3].join_key, jsc_from(G.anum == F.anum))
+        self.assertEqual(qp3[2].join_key, jsc(F.anum < GA.anum))
+        self.assertEqual(qp3[3].join_key, jsc(G.anum == F.anum))
 
         self.assertEqual(qp3[0].join_clauses, None)
         self.assertEqual(qp3[1].join_clauses, None)
@@ -1449,9 +1454,9 @@ class QueryPlanTestCase(unittest.TestCase):
         G = path(self.G)
         FA = alias(F)
         GA = alias(G)
-        vje = validate_join_expression
+        pj = process_join
 
-        joins = vje([F.anum == G.anum, F.anum < GA.anum, joinall_(G,FA)],[F,G,FA,GA])
+        joins = pj([F.anum == G.anum, F.anum < GA.anum, joinall_(G,FA)],[F,G,FA,GA])
         qorder = simple_query_join_order([], joins, [F,G,FA,GA])
         self.assertEqual(qorder,[FA,GA,G,F])
 
@@ -1463,12 +1468,16 @@ class QueryPlanTestCase(unittest.TestCase):
         G = path(self.G)
         FA = alias(F)
         GA = alias(G)
-        vje = validate_join_expression
-        vwe = validate_which_expression
-        tonorm = normalise_which_expression
 
-        joins = vje([G.anum == F.anum, F.anum < GA.anum, joinall_(G,FA)],[F,G,FA,GA])
-        which = tonorm(vwe((F.anum == 4) & (FA.anum < 2)))
+        pw = process_which
+        pj = process_join
+        wsc = StandardComparator.from_which_qcondition
+        jsc = StandardComparator.from_join_qcondition
+        jqp = JoinQueryPlan.from_specification
+        hp = hashable_path
+
+        joins = pj([G.anum == F.anum, F.anum < GA.anum, joinall_(G,FA)],[F,G,FA,GA])
+        which = pw((F.anum == 4) & (FA.anum < 2),[F,FA])
 
         qp1 = make_query_plan(simple_query_join_order,[F.anum],
                               [F,G,FA,GA],joins,which)

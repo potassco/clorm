@@ -694,7 +694,8 @@ def make_query_alignment_functor(input_predicate_signature, output_signature):
     insig = validate_input_signature()
     outsig = validate_output_signature()
 
-    # build list of lambdas one for each output item to return appropriate values
+    # build a list of lambdas one for each output item that chooses the
+    # appropriate item from the input.
     pp2idx = { hashable_path(pp) : idx for idx,pp in enumerate(insig) }
     getters = []
     for out in outsig:
@@ -776,18 +777,25 @@ def is_comparison_qcondition(cond):
 # reference in the query.
 # ------------------------------------------------------------------------------
 
-def validate_which_expression(qcond, ppaths=[]):
+def validate_which_expression(qcond, roots=[]):
 
     # Make sure we have a set of hashable paths
     try:
-        ppaths = set([ hashable_path(pp) for pp in ppaths ])
+        roots = set([ hashable_path(r) for r in roots ])
     except Exception as e:
         raise ValueError(("Invalid predicate paths signature {}: "
-                          "{}").format(ppaths,e)) from None
-    for pp in ppaths:
+                          "{}").format(roots,e)) from None
+    for pp in roots:
         if not pp.path.meta.is_root:
-            raise ValueError(("Invalid ppaths element {} does not refer to "
+            raise ValueError(("Invalid roots element {} does not refer to "
                               "the root of a predicate path ").format(pp))
+
+    # Check that the path is a sub-path of one of the roots
+    def check_path(path):
+        if hashable_path(path.meta.root) not in roots:
+            raise ValueError(("Invalid which expression '{}' contains a path "
+                              "'{}' that is not a sub-path of one of the "
+                              "roots '{}'").format(qcond, path, roots))
 
     # Check if a condition is static - to be called after validating the
     # sub-parts of the conidition.
@@ -801,10 +809,10 @@ def validate_which_expression(qcond, ppaths=[]):
 
     # Check callable - construct a FunctionComparator
     def validate_callable(func):
-        if len(ppaths) != 1:
+        if len(roots) != 1:
             raise ValueError(("Incompatible usage between raw functor {} and "
-                              "non-singleton predicates {}").format(func,ppaths))
-        return FunctionComparator.from_specification(ppaths,func)
+                              "non-singleton predicates {}").format(func,roots))
+        return FunctionComparator.from_specification(roots,func)
 
     # Check boolean condition - simplifying if it is a static condition
     def validate_bool_condition(bcond):
@@ -831,6 +839,8 @@ def validate_which_expression(qcond, ppaths=[]):
 
     # Check comparison condition - at least one argument must be a predicate path
     def validate_comp_condition(ccond):
+        for a in ccond.args:
+            if isinstance(a,PredicatePath): check_path(a)
         return StandardComparator.from_which_qcondition(ccond)
 
     # Validate a condition
@@ -850,7 +860,9 @@ def validate_which_expression(qcond, ppaths=[]):
         elif is_comparison_qcondition(cond): return validate_comp_condition(cond)
         else: return bool(cond)
 
-    return validate_condition(qcond)
+#    which = validate_condition(qcond)
+#    hroots = set([ hashable_path(r) for r in which.roots])
+    return  validate_condition(qcond)
 
 # ------------------------------------------------------------------------------
 # negate a query condition and push the negation into the leaf nodes - note:
@@ -1154,7 +1166,19 @@ def normalise_which_expression(qcond):
 
     stack.append(NEWCL)
     stack_add(which_expression_to_cnf(qcond))
-    return (build_clauses())
+    return (ClauseBlock(build_clauses()))
+
+
+# ------------------------------------------------------------------------------
+#  process_which takes a which expression from the user select statement as well
+#  as a list of roots; validates the which statement (ensuring that it only
+#  refers to paths derived from one of the roots) and turns it into CNF in the
+#  form of a clauseblock.
+#  ------------------------------------------------------------------------------
+
+def process_which(which_expression, roots=[]):
+    which = validate_which_expression(which_expression,roots)
+    return normalise_which_expression(which)
 
 # ------------------------------------------------------------------------------
 # Given a list of clauses breaks the clauses up into two pairs. The first
@@ -1163,7 +1187,7 @@ def normalise_which_expression(qcond):
 # references multiple roots. The second can also be None. This is used to break
 # up the query into separate parts for the different join components
 # ------------------------------------------------------------------------------
-def clauses_to_clauseblocks(clauses=[]):
+def partition_clauses(clauses=[]):
     catchall = []
     root2clauses = {}
     # Separate the clauses
@@ -1268,6 +1292,19 @@ def validate_join_expression(qconds, roots):
     # Now that we've validated the graph can remove all the pure
     # cross-product/join-all joins.
     return list(filter(lambda x: x.operator != trueall, joins))
+
+
+# ------------------------------------------------------------------------------
+#  process_join takes a join expression (a list of join statements) from the
+#  user select statement as well as a list of roots; validates the join
+#  statements (ensuring that they only refers to paths derived from one of the
+#  roots) and turns it into a list of validated StandardComparators that have
+#  paths as both arguments
+#  ------------------------------------------------------------------------------
+
+def process_join(join_expression, roots=[]):
+    return validate_join_expression(join_expression,roots)
+
 
 # ------------------------------------------------------------------------------
 # make_prejoin_pair(indexed_paths, clauses)
@@ -1416,7 +1453,7 @@ class JoinQueryPlan(object):
     @classmethod
     def from_specification(cls, indexed_paths, input_signature,
                            root, joins=[], clauses=[]):
-        rootcbses, catchall = clauses_to_clauseblocks(clauses)
+        rootcbses, catchall = partition_clauses(clauses)
         if not rootcbses:
             (prejoinsc,prejoincb) = (None,None)
         elif len(rootcbses) == 1:
