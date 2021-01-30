@@ -18,6 +18,8 @@ from .queryplan import *
 from .queryplan import Placeholder, check_query_condition, simplify_query_condition, \
     instantiate_query_condition, evaluate_query_condition, SelectImpl, DeleteImpl
 
+from .queryplan import JoinQueryPlan, QueryPlan
+
 # ------------------------------------------------------------------------------
 # In order to implement FactBase I originally used the built in 'set'
 # class. However this uses the hash value, which for Predicate instances uses
@@ -172,6 +174,19 @@ class _FactIndex(object):
         for k in keys:
             for fact in self._key2values[k]:
                 yield fact
+
+    #--------------------------------------------------------------------------
+    #
+    #--------------------------------------------------------------------------
+
+    def __str__(self):
+        if not self: return "{}"
+        tmp = []
+        for k,v in self._key2values.items(): tmp.extend(v)
+        return "{" + ", ".join([repr(f) for f in tmp]) + "}"
+
+    def __repr__(self):
+        return self.__str__()
 
 #------------------------------------------------------------------------------
 # A helper function to determine if two collections have the same elements
@@ -857,7 +872,122 @@ class FactBase(object):
         return fb
 
 #------------------------------------------------------------------------------
+# Implementing Queries - the abstraction underneath Select and Delete
+# statements.
+# ------------------------------------------------------------------------------
+
+# ------------------------------------------------------------------------------
+# prejoin query is the querying of the underlying factset or factindex
+# ------------------------------------------------------------------------------
+
+def make_prejoin_query(jqp, predicate_to_factset, hpath_to_factindex):
+
+    factset = predicate_to_factset.get(jqp.root.meta.predicate, _FactSet())
+    prejsc = jqp.prejoin_key
+    prejcb = jqp.prejoin_clauses
+    factindex = None
+    if prejsc:
+        factindex=hpath_to_factindex.get(hashable_path(prejsc.args[0]),None)
+        if not factindex:
+            raise ValueError(("Internal error: missing FactIndex for "
+                              "path '{}'").format(prejsc.args[0]))
+
+    # Iterate over the factset or the factindex find
+    def base():
+        if factindex: return factindex.find(prejsc.operator,prejsc.args[1])
+        else: return iter(factset)
+
+    def query_without_prejcb():
+        for f in base(): yield (f,)
+
+    def query_with_prejcb():
+        cc = prejcb.make_callable([jqp.root])
+        for f in base():
+            if cc((f,)): yield (f,)
+
+    if prejcb: return query_with_prejcb
+    else: return query_without_prejcb
+
+# ------------------------------------------------------------------------------
+#
+# ------------------------------------------------------------------------------
+
+def make_first_join_query(jqp, predicate_to_factset, hpath_to_factindex):
+
+    if jqp.input_signature:
+        raise ValueError(("A first JoinQueryPlan must have an empty input "
+                          "signature but '{}' found").format(jqp.input_signature))
+    return make_prejoin_query(jqp,predicate_to_factset, hpath_to_factindex)
+
+# ------------------------------------------------------------------------------
+#
+# ------------------------------------------------------------------------------
+
+def make_chained_join_query(jqp, inquery,
+                            predicate_to_factset, hpath_to_factindex):
+
+    if not jqp.input_signature:
+        raise ValueError(("A non-first JoinQueryPlan must have a non-empty input "
+                          "signature but '{}' found").format(jqp.input_signature))
+
+    prejoin_query = make_prejoin_query(jqp,predicate_to_factset, hpath_to_factindex)
+
+    jsc = jqp.join_key
+    jcb = jqp.join_clauses
+
+    if jsc:
+        source = _FactIndex(jsc.args[0])
+        inalign = make_query_alignment_functor(jqp.input_signature,jsc.args[1])
+    else:
+        source = _FactSet()
+    for (f,) in prejoin_query(): source.add(f)
+
+    if jcb:
+        jcbcc = jcb.make_callable(list(jqp.input_signature) + [jqp.root])
+
+    def query_factset_with_jcb():
+        for intuple in inquery():
+            for f in source:
+                out = tuple(intuple + (f,))
+                if jcbcc(out): yield out
+    def query_factindex_with_jcb():
+        for intuple in inquery():
+            v, = inalign(intuple)
+            for f in source.find(v):
+                out = tuple(intuple + (f,))
+                if jcbcc(out): yield out
+
+    def query_factset_without_jcb():
+        for intuple in inquery():
+            for f in source:
+                yield tuple(intuple + (f,))
+
+    def query_factindex_without_jcb():
+        for intuple in inquery():
+            v, = inalign(intuple)
+            for f in source.find(v):
+                yield tuple(intuple + (f,))
+
+
+    if jcb and isinstance(source,_FactSet): return query_factset_with_jcb
+    elif jcb and isinstance(source,_FactIndex): return query_factindex_with_jcb
+    elif not jcb and isinstance(source,_FactSet): return query_factset_without_jcb
+    elif not jcb and isinstance(source,_FactIndex): return query_factindex_without_jcb
+
 #------------------------------------------------------------------------------
+#
+#------------------------------------------------------------------------------
+
+def make_query(qp, predicate_to_factset, hpath_to_factindex):
+    queries = []
+    inquery = None
+    for idx,jqp in enumerate(qp):
+        if not inquery:
+            inquery = make_first_join_query(
+                jqp,predicate_to_factset,hpath_to_factindex)
+        else:
+            inquery = make_chained_join_query(
+                jqp,inquery,predicate_to_factset,hpath_to_factindex)
 
 #------------------------------------------------------------------------------
 # main

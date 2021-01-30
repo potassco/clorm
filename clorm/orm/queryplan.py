@@ -13,6 +13,7 @@ import itertools
 import inspect
 import enum
 
+from ..util import OrderedSet as FactSet
 from ..util.tools import all_equal
 from .core import *
 from .core import get_field_definition, QCondition, PredicatePath, \
@@ -727,7 +728,7 @@ def make_query_alignment_functor(input_predicate_signature, output_signature):
 # ------------------------------------------------------------------------------
 # ComparisonCallable is a functional object that wraps a comparison operator and
 # ensures the comparison operator gets the correct input. The input to a
-# ComparisonCallable is a tulple of facts (the form of which is determined by a
+# ComparisonCallable is a tuple of facts (the form of which is determined by a
 # signature) and returns whether the facts satisfy some condition.
 # ------------------------------------------------------------------------------
 
@@ -1039,6 +1040,10 @@ class ClauseBlock(object):
         tmppaths = set([])
         tmproots = set([])
         for clause in self._clauses:
+            if not isinstance(clause, Clause):
+                raise ValueError(("A ClauseBlock must consist of a list of "
+                                  "Clause elements. '{}' is of type "
+                                  "'{}'").format(clause,type(clause)))
             for p in clause.paths: tmppaths.add(hashable_path(p))
             for r in clause.roots: tmproots.add(hashable_path(r))
         self._paths=tuple([path(hp) for hp in tmppaths])
@@ -1116,9 +1121,8 @@ class ClauseBlock(object):
        return self.__str__()
 
 # ------------------------------------------------------------------------------
-# Normalise takes a formula and turns it into a clausal CNF (a list of lists
-# being a conjuctive list of disjunctive elements. Note: input must have been
-# validated.
+# Normalise takes a formula and turns it into a clausal CNF (a list of
+# disjunctive clauses). Note: input must have been validated.
 # ------------------------------------------------------------------------------
 def normalise_which_expression(qcond):
     NEWCL = "new_clause"
@@ -1265,185 +1269,117 @@ def validate_join_expression(qconds, roots):
     # cross-product/join-all joins.
     return list(filter(lambda x: x.operator != trueall, joins))
 
-
 # ------------------------------------------------------------------------------
+# make_prejoin_pair(indexed_paths, clauses)
+# - indexed_paths - a list of paths for which there is a factindex
+# - clauses - a clause block that can only refer to a single root
 #
+# Tries to extract a single unit clause that can be used for indexing and
+# returns a pair consisting of the (comparator, remainder)
+# Note: we can't deal with disjunctive clauses (future work)
 # ------------------------------------------------------------------------------
+def make_prejoin_pair(indexed_paths, clauseblock):
+    def is_candidate(indexes, cl):
+        if len(cl) != 1: return False
+        if not isinstance(cl[0], StandardComparator): return False
+        hpaths = set([hashable_path(p.meta.dealiased) for p in cl.paths])
+        if len(hpaths) != 1: return False
+        return next(iter(hpaths)) in indexes
 
-class FactIndex(abc.ABC):
+    if not clauseblock: return (None,None)
 
-    """An abstract class for defining an index.
-    """
-
-    @abc.abstractmethod
-    def add(self,fact): pass
-
-    @abc.abstractmethod
-    def discard(self,fact): pass
-
-    @abc.abstractmethod
-    def clear(self): pass
-
-    @abc.abstractmethod
-    def find(self, op, key): pass
-
-    @abc.abstractmethod
-    def __iter__(self): pass
-
-
-# ------------------------------------------------------------------------------
-# PreJoinPlan - specifies a prejoin query. A prejoin query must refer to a
-# single predicate type and not contain aliases. It can have 'keycomparator'
-# which will be used for an indexed query and a 'remainder' clause block for the
-# rest of the query. The two are treated like a conjunction. Either can be None
-# (but not both).
-# ------------------------------------------------------------------------------
-
-class PreJoinPlan(object):
-    def __init__(self, predicate, keycomparator=None, remainder=None):
-        self._predicate = predicate
-        self._keycomparator = keycomparator
-        self._remainder = remainder
-
-        tmppaths = set()
-        tmproots = set()
-        if keycomparator: tmppaths.update(
-                [hashable_path(p) for p in self._keycomparator.paths])
-        if remainder: tmppaths.update(
-                [hashable_path(p) for p in self._remainder.paths])
-        if keycomparator: tmproots.update(
-                [hashable_path(p) for p in self._keycomparator.roots])
-        if remainder: tmproots.update(
-                [hashable_path(p) for p in self._remainder.roots])
-
-        self._paths=tuple([path(hp) for hp in tmppaths])
-        self._roots=tuple([path(hp) for hp in tmproots])
-
-        if keycomparator is None and remainder is None:
-            raise ValueError("Invalid PreJoinPlan with empty parts")
-        if keycomparator and not isinstance(keycomparator,StandardComparator):
-            raise ValueError(("keycomparator '{}' is not a "
-                              "StandardComparator").format(keycomparator))
-        if remainder and not isinstance(remainder,ClauseBlock):
-            raise ValueError("remainder '{}' is not a ClauseBlock".format(remainder))
-        if len(self.roots) != 1:
-            raise ValueError(("PreJoinClause cannot reference multiple "
-                              "roots: <{}> : <{}>").format(keycomparator,remainder))
-        if keycomparator and len(keycomparator.paths) != 1:
-            raise ValueError(("Invalid keycomparator '{}' cannot be used for "
-                              "indexed search").format(keycomparator))
-        if self._roots[0].meta.predicate != predicate:
-            raise ValueError(("The root '{}' from the query <{}>,<{}> doesn't match "
-                              "the predicate '{}'").format(
-                                  self._roots[0], keycomparator, remainder, predicate))
-        if not inspect.isclass(predicate) and not issubclass(predicate, Predicate):
-            raise ValueError(("Object '{}' (type: {}) is not a Predicate "
-                              "subclass").format(predicate,type(predicate)))
-
-    @property
-    def keycomparator(self):
-        return self._keycomparator
-
-    @property
-    def remainder(self):
-        return self._remainder
-
-    @property
-    def paths(self):
-        return self._paths
-
-    @property
-    def roots(self):
-        return self._roots
-
-    @property
-    def placeholders(self):
-        tmp = set()
-        if self._keycomparator: tmp.update(self._keycomparator.placeholders)
-        if self._remainder: tmp.update(self._remainder.placeholders)
-        return tmp
-
-
-    def ground(self,*args,**kwargs):
-        newkc = self._keycomparator.ground(*args,**kwargs) \
-            if self._keycomparator else None
-        newrem = self._remainder.ground(*args,**kwargs) \
-            if self._remainder else None
-        if newkc == self._keycomparator and newrem == self._remainder: return self
-        return PreJoinPlan(self._predicate, newkc,newrem)
-
-    def __eq__(self, other):
-        if not isinstance(other, self.__class__): return NotImplemented
-        if self._keycomparator != other._keycomparator: return False
-        if self._remainder != other._remainder: return False
-        return True
-
-    def __ne__(self, other):
-        result = self.__eq__(other)
-        if result is NotImplemented: return NotImplemented
-        return not result
-
-    def print(self,file=sys.stdout,pre=""):
-        tmp = ("{}PreJoinPlan: predicate: ' {}', index search: '{}', remainder: "
-               "'{}'").format(pre,path(self._predicate),
-                              self._keycomparator, self._remainder)
-        print(tmp,file=file)
-
-    def __str__(self):
-        return "PreJoinPlan({}, {}, {})".format(
-            path(self._predicate), self._keycomparator, self._remainder)
-
-    def __repr__(self):
-        return self.__str__()
-
-# ------------------------------------------------------------------------------
-# make_prejoin_plan(indexed_paths, prejoin_clauseblock) Note: currently aren't
-# too smart and is only able to use an index if the clause has a single
-# disjunct. Future work to look at indexing with disjunctive clauses.
-# ------------------------------------------------------------------------------
-def make_prejoin_plan(predicate, indexed_paths, prejoin_clauseblock):
-    # Prejoins are all dealiased since we access the underlying factset or
-    # factindexes of the factbase. Also a prejoin_clauseblock must have exactly
-    # one root
-
-    indexes = set([hashable_path(p) for p in indexed_paths])
-    cb = prejoin_clauseblock.dealias()
-    if len(cb.roots) != 1:
-        raise ValueError(("Prejoin ClauseBlock doesn't have a single "
-                          "root: ").format(prejoin_clauseblock))
+    tmp = set([hashable_path(p.meta.dealiased) for p in clauseblock.paths])
+    indexes = set(filter(lambda x: x in tmp,
+                         [hashable_path(p) for p in indexed_paths]))
 
     # Search for a candidate to use with a fact index
     keyclause = None
     candidates = []
     rest = []
-    for cl in cb:
-        hpaths = [ hashable_path(p) for p in cl.paths ]
-        if len(cl) == 1 and len(hpaths) == 1 and \
-           isinstance(cl[0],StandardComparator) and hpaths[0] in indexes:
-            candidates.append(cl[0])
-        else:
-            rest.append(cl)
-
-    if not candidates: return PreJoinPlan(predicate, None, cb)
+    for cl in clauseblock:
+        if is_candidate(indexes, cl): candidates.append(cl[0])
+        else: rest.append(cl)
+    if not candidates: return (None, clauseblock)
 
     # order the candidates by their comparator preference and take the first
     candidates.sort(key=lambda c : c.preference, reverse=True)
-    rest.extend(candidates[1:])
+    rest.extend([ Clause([sc]) for sc in candidates[1:] ])
     cb = ClauseBlock(rest) if rest else None
-    return PreJoinPlan(predicate, candidates[0],cb)
+    return (candidates[0],cb)
+
+# ------------------------------------------------------------------------------
+# make_join_pair(joins, clauseblock)
+# - a list of join StandardComparators
+# - an existing clauseblock (or None)
+#
+# Takes a list of joins and picks the best one for indexing (based on their
+# operator preference). Returns a pair that is the chosen join and the rest of
+# the joins added to the input clauseblock.
+# ------------------------------------------------------------------------------
+def make_join_pair(joins, clauseblock):
+    if not joins: return (None,clauseblock)
+    joins = sorted(joins, key=lambda x : x.preference, reverse=True)
+    joinsc = joins[0]
+    remainder = joins[1:]
+    if remainder:
+        remainder = ClauseBlock([Clause([sc]) for sc in remainder])
+        if clauseblock: return (joinsc, clauseblock + remainder)
+        else: return (joinsc, remainder)
+    else:
+        if clauseblock: return (joinsc, clauseblock)
+        else: return (joinsc, None)
 
 # ------------------------------------------------------------------------------
 # JoinQueryPlan is a part of the query plan that describes the plan to execute a
 # single link in a join.
 # ------------------------------------------------------------------------------
 
+# Check that the formula only refers to paths with the allowable roots
+def _check_roots(allowable_roots, formula):
+    if not formula: return True
+    allowable_hroots = set([hashable_path(rp) for rp in allowable_roots])
+    hroots = set([hashable_path(rp) for rp in formula.roots])
+    return hroots.issubset(allowable_hroots)
+
+# Align the arguments in a standard comparator so that the first argument is a
+# path whose root is the given root
+def _align_sc_path(root, sc):
+    hroot = hashable_path(root)
+    if not sc: return None
+    if isinstance(sc.args[0], PredicatePath) and \
+       hashable_path(sc.args[0].meta.root) == hroot: return sc
+    sc = sc.swap()
+    if not isinstance(sc.args[0], PredicatePath) or \
+       hashable_path(sc.args[0].meta.root) != hroot:
+        raise ValueError(("Cannot align key comparator '{}' with root '{}' since "
+                          "it doesn't reference the root").format(root,sc))
+    return sc
+
+# Extract the placeholders
+def _extract_placeholders(elements):
+    output = set()
+    for f in elements:
+        if not f: continue
+        output.update(f.placeholders)
+    return output
+
 class JoinQueryPlan(object):
-    def __init__(self,input_signature, root, joins, prejoin, postjoin):
+    '''Input:
+       - input_signature tuple,
+       - root,
+       - a prejoin standard-comparator (or None),
+       - a prejoin clauseblock (or None),
+       - a join standard comparator (or None),
+       - a join clauseblock (or None)
+    '''
+    def __init__(self,input_signature, root, prejoinsc, prejoincb, joinsc, joincb):
         self._insig = tuple([path(r) for r in input_signature])
         self._root = path(root)
-        self._joins = tuple(joins)
-        self._prejoin = prejoin
-        self._postjoin = postjoin
+        self._predicate = self._root.meta.predicate
+        self._joinsc = _align_sc_path(self._root, joinsc)
+        self._joincb = joincb
+        self._prejoinsc = _align_sc_path(self._root.meta.dealiased, prejoinsc)
+        self._prejoincb = prejoincb
 
         # Check that the input signature and root are valid root paths
         if not self._root.meta.is_root:
@@ -1453,28 +1389,26 @@ class JoinQueryPlan(object):
                 raise ValueError(("Internal bug: '{}' in input signature is not a "
                                   "root path").format(p))
 
-        # Check that the joins, prejoin, and postjoin contain roots that are in
-        # the input_signature+root
-        roots = set([hashable_path(rp) for rp in input_signature])
-        roots.add(hashable_path(self._root))
+        # The prejoin parts must only refer to the dealised root
+        if not _check_roots([self._root.meta.dealiased], prejoinsc):
+            raise ValueError(("Pre-join comparator '{}' refers to non '{}' "
+                              "paths").format(prejoinsc,self._root))
+        if not _check_roots([self._root.meta.dealiased], prejoincb):
+            raise ValueError(("Pre-join clause block '{}' refers to non '{}' "
+                              "paths").format(prejoincb,self._root))
 
-        errmsg = ("Internal bug: {} '{}' contains a root '{}' "
-                  "that is not in the input signature '{}' or the root '{}'")
-        for j in joins:
-            for rp in j.roots:
-                if  hashable_path(rp) not in roots:
-                    raise ValueError(errmsg.format("join",j,rp,self._insig, self._root))
-        if self._prejoin:
-            hroot = hashable_path(self._root.meta.dealiased)
-            pjroots = [ hashable_path(rp) for rp in self._prejoin.roots]
-            if len(pjroots) != 1 or pjroots[0] != hroot:
-                raise ValueError(("Internal bug: prejoin query '{}' must only reference "
-                                  "the query root '{}'").format(self._prejoin, self._root))
-        if self._postjoin:
-            for rp in postjoin.roots:
-                if  hashable_path(rp) not in roots:
-                    raise ValueError(errmsg.format("postjoin query",self._postjoin,
-                                                   rp, self._insig, self._root))
+        # The joinsc and joincb must refer only to the insig + root
+        allroots = list(self._insig) + [self._root]
+        if not _check_roots(allroots, joinsc):
+            raise ValueError(("Join comparator '{}' refers to non '{}' "
+                              "paths").format(joinsc,allroots))
+        if not _check_roots(allroots, joincb):
+            raise ValueError(("Join clause block '{}' refers to non '{}' "
+                              "paths").format(joincb,allroots))
+
+        self._placeholders = _extract_placeholders(
+            [self._joinsc, self._joincb, self._prejoinsc, self._prejoincb])
+
 
     # -------------------------------------------------------------------------
     #
@@ -1483,15 +1417,20 @@ class JoinQueryPlan(object):
     def from_specification(cls, indexed_paths, input_signature,
                            root, joins=[], clauses=[]):
         rootcbses, catchall = clauses_to_clauseblocks(clauses)
-        if not rootcbses: prejoin = None
+        if not rootcbses:
+            (prejoinsc,prejoincb) = (None,None)
         elif len(rootcbses) == 1:
-            prejoin = make_prejoin_plan(root.meta.predicate, indexed_paths, rootcbses[0])
+            (prejoinsc,prejoincb) = make_prejoin_pair(indexed_paths, rootcbses[0])
+            prejoinsc = prejoinsc.dealias() if prejoinsc else None
+            prejoincb = prejoincb.dealias() if prejoincb else None
         else:
-            raise ValueError(("Internal bug: unexpected multiple root clauses for "
-                              "root '{}': {}").format(root,rootcbses))
+            raise ValueError(("Internal bug: unexpected multiple single root "
+                              "clauses '{}' when we expected only "
+                              "clauses for root {}").format(rootcbses,root))
 
-        postjoin = catchall if catchall else None
-        return cls(input_signature,root,joins=joins,prejoin=prejoin,postjoin=postjoin)
+        (joinsc,joincb) = make_join_pair(joins, catchall)
+        return cls(input_signature,root,prejoinsc, prejoincb,joinsc,joincb)
+
 
     # -------------------------------------------------------------------------
     #
@@ -1503,39 +1442,49 @@ class JoinQueryPlan(object):
     def root(self): return self._root
 
     @property
-    def prejoin(self): return self._prejoin
+    def prejoin_key(self): return self._prejoinsc
 
     @property
-    def postjoin(self): return self._postjoin
+    def join_key(self): return self._joinsc
+
+    @property
+    def prejoin_clauses(self): return self._prejoincb
+
+    @property
+    def join_clauses(self): return self._joincb
 
     @property
     def placeholders(self):
-        tmp1 = self._prejoin.placeholders if self._prejoin else set()
-        tmp2 = self._postjoin.placeholders if self._postjoin else set()
-        return tmp1 | tmp2
+        return self._placeholders
 
     def ground(self,*args,**kwargs):
-        gprejoin  = self._prejoin.ground(*args,**kwargs)  if self._prejoin else None
-        gpostjoin = self._postjoin.ground(*args,**kwargs) if self._postjoin else None
+        gprejoinsc  = self._prejoinsc.ground(*args,**kwargs)  if self._prejoinsc else None
+        gprejoincb  = self._prejoincb.ground(*args,**kwargs)  if self._prejoincb else None
+        gjoinsc = self._joinsc.ground(*args,**kwargs) if self._joinsc else None
+        gjoincb = self._joincb.ground(*args,**kwargs) if self._joincb else None
 
-        if gprejoin == self._prejoin and gpostjoin == self._postjoin: return self
-        return JoinQueryPlan(self._insig,self._root, self._joins, gprejoin, gpostjoin)
+        if gprejoinsc == self._prejoinsc and gprejoincb == self._prejoincb and \
+           gjoinsc == self._joinsc and gjoincb == self._joincb: return self
+        return JoinQueryPlan(self._insig,self._root,
+                             gprejoinsc,gprejoincb,gjoinsc,gjoincb)
 
     def print(self,file=sys.stdout,pre=""):
         print("{}JoinQueryPlan:".format(pre), file=file)
         print("{}\tInput Signature: {}".format(pre,self._insig), file=file)
         print("{}\tRoot path: {}".format(pre,self._root), file=file)
-        print("{}\tJoins: {}".format(pre,self._joins), file=file)
-        if self._prejoin: self._prejoin.print(file,pre+"\t")
-        else: print("{}\tPre-join: None".format(pre), file=file)
-        print("{}\tPost-join clauses: {}".format(pre,self._postjoin), file=file)
+        print("{}\tPrejoin key: {}".format(pre,self._prejoinsc), file=file)
+        print("{}\tPrejoin clauses: {}".format(pre,self._prejoincb), file=file)
+        print("{}\tJoin key: {}".format(pre,self._joinsc), file=file)
+        print("{}\tJoin clauses: {}".format(pre,self._joincb), file=file)
 
     def __eq__(self, other):
         if not isinstance(other, self.__class__): return NotImplemented
         if self._insig != other._insig: return False
         if self._root.meta.hashable != other._root.meta.hashable: return False
-        if self._prejoin != other._prejoin: return False
-        if self._postjoin != other._postjoin: return False
+        if self._prejoinsc != other._prejoinsc: return False
+        if self._prejoincb != other._prejoincb: return False
+        if self._joinsc != other._joinsc: return False
+        if self._joincb != other._joincb: return False
         return True
 
     def __ne__(self, other):
@@ -1560,32 +1509,36 @@ class JoinQueryPlan(object):
 # ------------------------------------------------------------------------------
 
 class QueryPlan(object):
-    def __init__(self, query_plan_joins):
-        if not query_plan_joins:
+    def __init__(self, subplans):
+        if not subplans:
             raise ValueError("An empty QueryPlan is not valid")
         sig = []
-        for qpj in query_plan_joins:
-            insig = [hashable_path(rp) for rp in qpj.input_signature]
+        for jqp in subplans:
+            insig = [hashable_path(rp) for rp in jqp.input_signature]
             if sig != insig:
                 raise ValueError(("Invalid 'input_signature' for JoinQueryPlan. "
                                   "Got '{}' but expecting '{}'").format(insig, sig))
-            sig.append(hashable_path(qpj.root))
-        self._qpjs = tuple(query_plan_joins)
+            sig.append(hashable_path(jqp.root))
+        self._jqps = tuple(subplans)
 
     @property
     def placeholders(self):
         return set(itertools.chain.from_iterable(
-            [qp.placeholders for qp in self._qpjs]))
+            [jqp.placeholders for jqp in self._jqps]))
 
+    @property
+    def output_signature(self):
+        jqp = self._jqps[-1]
+        return tuple(jqp.input_signature + (jqp.root,))
 
     def ground(self,*args,**kwargs):
-        newqpjs = [qpj.ground(*args,**kwargs) for qpj in self._qpjs]
-        if tuple(newqpjs) == self._qpjs: return self
+        newqpjs = [qpj.ground(*args,**kwargs) for qpj in self._jqps]
+        if tuple(newqpjs) == self._jqps: return self
         return QueryPlan(newqpjs)
 
     def __eq__(self, other):
         if not isinstance(other, self.__class__): return NotImplemented
-        return self._qpjs == other._qpjs
+        return self._jqps == other._jqps
 
     def __ne__(self, other):
         result = self.__eq__(other)
@@ -1593,17 +1546,17 @@ class QueryPlan(object):
         return not result
 
     def __len__(self):
-        return len(self._qpjs)
+        return len(self._jqps)
 
     def __getitem__(self, idx):
-        return self._qpjs[idx]
+        return self._jqps[idx]
 
     def __iter__(self):
-        return iter(self._qpjs)
+        return iter(self._jqps)
 
     def print(self,file=sys.stdout,pre=""):
         print("------------------------------------------------------",file=file)
-        for qpj in self._qpjs: qpj.print(file,pre)
+        for qpj in self._jqps: qpj.print(file,pre)
         print("------------------------------------------------------",file=file)
 
     def __str__(self):
@@ -1623,40 +1576,36 @@ class QueryPlan(object):
 # list of root paths and a list of joins, builds the queryplan.
 # ------------------------------------------------------------------------------
 
-def match_roots_joins_clauses(indexed_paths,
-                              root_join_order, joins, whereclauses=[]):
+def make_query_plan_preordered_roots(indexed_paths, root_join_order,
+                                     joins=[], whereclauses=[]):
     joinset=set(joins)
     clauseset=set(whereclauses)
-    output=[]
     visited=set({})
 
-    def alignpath(r,join):
-        def isgood(r,j):
-            return hashable_path(path(j.args[0]).meta.root) == hashable_path(r)
+    if not root_join_order:
+        raise ValueError("Cannot make query plan with empty root join order")
 
-        if not isgood(r,join): join = join.swap()
-        if not isgood(r,join):
-            raise ValueError(("Internal bug: unexpected join '{}' for root "
-                              "'{}' ").format(join, r))
-        return join
-
-    def visitedsubset(inset):
+    # For a set of visited root paths and a set of comparator
+    # statements return the subset of join statements that only reference paths
+    # that have been visited.  Removes these joins from the original set.
+    def visitedsubset(visited, inset):
         outlist=[]
-        for a in inset:
-            if visited.issuperset([hashable_path(r) for r in a.roots]):
-                outlist.append(a)
-        for a in outlist: inset.remove(a)
+        for comp in inset:
+            if visited.issuperset([hashable_path(r) for r in comp.roots]):
+                outlist.append(comp)
+        for comp in outlist: inset.remove(comp)
         return outlist
 
-    for idx,rp in enumerate(root_join_order):
-        visited.add(hashable_path(rp))
-        rpjoins = visitedsubset(joinset)
-        rpjoins.sort(key=lambda j: j.preference, reverse=True)
-        rpjoins = list(map(functools.partial(alignpath,rp), rpjoins))
-        rpclauses = visitedsubset(clauseset)
+    # Generate a list of JoinQueryPlan consisting of a root path and join
+    # comparator and clauses that only reference previous plans in the list.
+    output=[]
+    for idx,root in enumerate(root_join_order):
+        visited.add(hashable_path(root))
+        rpjoins = visitedsubset(visited, joinset)
+        rpclauses = visitedsubset(visited, clauseset)
         output.append(JoinQueryPlan.from_specification(indexed_paths,
                                                        root_join_order[:idx],
-                                                       rp,rpjoins,rpclauses))
+                                                       root,rpjoins,rpclauses))
     return QueryPlan(output)
 
 # ------------------------------------------------------------------------------
@@ -1690,16 +1639,26 @@ def simple_query_join_order(indexed_paths, joins,roots):
 def make_query_plan(join_order_heuristic, indexed_paths,
                     roots, joins, whereclauses):
     root_join_order=join_order_heuristic(indexed_paths, joins, roots)
-    return match_roots_joins_clauses(indexed_paths, root_join_order,joins,whereclauses)
+    return make_query_plan_preordered_roots(indexed_paths, root_join_order,
+                                            joins,whereclauses)
 
 
 # ------------------------------------------------------------------------------
-# A pre-join query
+#
 # ------------------------------------------------------------------------------
 
 
-# ------------------------------------------------------------------------------
-# ------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
 
 
 

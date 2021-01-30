@@ -23,11 +23,16 @@ from clorm.orm import FactBase, desc, asc, not_, and_, or_, \
     ph_, ph1_, ph2_
 
 # Implementation imports
-from clorm.orm.factbase import _FactIndex, _FactMap
+from clorm.orm.factbase import _FactIndex, _FactMap, _FactSet, \
+    make_first_join_query, make_chained_join_query
 
 from clorm.orm.queryplan import PositionalPlaceholder, NamedPlaceholder, \
     check_query_condition, simplify_query_condition, \
     instantiate_query_condition, evaluate_query_condition
+
+from clorm.orm.queryplan import validate_which_expression, \
+    normalise_which_expression, validate_join_expression, make_query_plan, \
+    simple_query_join_order, make_query_alignment_functor
 
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
@@ -36,6 +41,7 @@ __all__ = [
     'FactIndexTestCase',
     'FactMapTestCase',
     'FactBaseTestCase',
+    'QueryTestCase',
     'SelectTestCase',
     ]
 
@@ -795,6 +801,150 @@ class FactBaseTestCase(unittest.TestCase):
         bfactspre="% FactBase predicate: {}/1\n".format(C.meta.name)
         matchstr = afactspre+afactsstr + "\n" + bfactspre+bfactsstr
         self.assertEqual(aspstr,matchstr)
+
+
+
+
+
+
+
+
+
+#------------------------------------------------------------------------------
+# Test functions that manipulate query conditional and evaluate the conditional
+# w.r.t a fact.
+# ------------------------------------------------------------------------------
+
+class QueryTestCase(unittest.TestCase):
+    def setUp(self):
+        class F(Predicate):
+            anum=IntegerField
+            astr=StringField
+        self.F = F
+
+        class G(Predicate):
+            anum=IntegerField
+            astr=StringField
+        self.G = G
+
+        self.factsets = {}
+        self.indexes = {}
+
+        factset = _FactSet()
+        factindex = _FactIndex(G.astr)
+        for f in [G(1,"a"),G(1,"foo"),G(5,"a"),G(5,"foo")]:
+            factset.add(f)
+            factindex.add(f)
+        self.indexes[hashable_path(G.astr)] = factindex
+        self.factsets[G] = factset
+
+        factset = _FactSet()
+        factindex = _FactIndex(F.anum)
+        for f in [F(1,"a"),F(1,"foo"),F(5,"a"),F(5,"foo")]:
+            factset.add(f)
+            factindex.add(f)
+        self.indexes[hashable_path(F.anum)] = factindex
+        self.factsets[F] = factset
+
+
+    def test_make_first_join_query(self):
+        def strip(it): return [f for f, in it]
+
+        G = self.G
+        vwe = validate_which_expression
+        tonorm = normalise_which_expression
+
+        indexes = self.indexes
+        factsets = self.factsets
+
+        which1 = tonorm(vwe((G.anum > 4) & (G.astr == "foo")))
+        qp1 = make_query_plan(simple_query_join_order,[G.astr],
+                              [G],[],which1)
+
+        query1 = make_first_join_query(qp1[0], factsets, indexes)
+        self.assertEqual(set(strip(query1())), set([G(5,"foo")]))
+
+
+        which2 = tonorm(vwe((G.anum > 4) | (G.astr == "foo")))
+        qp2 = make_query_plan(simple_query_join_order,[G.astr],
+                              [G],[],which2)
+
+        query2 = make_first_join_query(qp2[0], factsets, indexes)
+        self.assertEqual(set(strip(query2())),
+                         set([G(1,"foo"), G(5,"a"), G(5,"foo")]))
+
+
+    def test_make_chained_join_query(self):
+        def align_facts(insig, outsig, it):
+            f = make_query_alignment_functor(insig,outsig)
+            return [ f(t) for t in it ]
+
+        Fp = path(self.F)
+        Gp = path(self.G)
+        F = self.F
+        G = self.G
+        vwe = validate_which_expression
+        tonorm = normalise_which_expression
+
+        indexes = self.indexes
+        factsets = self.factsets
+
+        which1 = tonorm(vwe((G.anum > 4) & (G.astr == "foo") & (F.anum == 1)))
+        qp1 = make_query_plan(simple_query_join_order,[G.astr,F.anum],
+                              [G,F],[],which1)
+        #        print("\nQP:\n{}".format(qp1))
+        query1 = make_first_join_query(qp1[0], factsets, indexes)
+        query2 = make_chained_join_query(qp1[1], query1, factsets, indexes)
+        output = align_facts(qp1.output_signature, (Fp,Gp), query2())
+        #        print("RESULT: {}".format(output))
+        self.assertEqual(set(output),
+                         set([(F(1,"a"),G(5,"foo")), (F(1,"foo"),G(5,"foo"))]))
+
+
+        which1 = tonorm(vwe((F.anum > 4) & (F.astr == "foo") & (G.anum == 1)))
+        qp1 = make_query_plan(simple_query_join_order,[G.astr,F.anum],
+                              [F,G],[],which1)
+        #print("\nQP:\n{}".format(qp1))
+        query1 = make_first_join_query(qp1[0], factsets, indexes)
+        query2 = make_chained_join_query(qp1[1], query1, factsets, indexes)
+        output = align_facts(qp1.output_signature, (Fp,Gp), query2())
+        #print("RESULT: {}".format(output))
+        self.assertEqual(set(query2()),
+                         set([(F(5,"foo"),G(1,"a")), (F(5,"foo"),G(1,"foo"))]))
+
+
+    def test_make_chained_join_query(self):
+        def align_facts(insig, outsig, it):
+            f = make_query_alignment_functor(insig,outsig)
+            return [ f(t) for t in it ]
+
+        Fp = path(self.F)
+        Gp = path(self.G)
+        F = self.F
+        G = self.G
+        indexes = self.indexes
+        factsets = self.factsets
+        vwe = validate_which_expression
+        vje = validate_join_expression
+        tonorm = normalise_which_expression
+
+        return
+        which2 = tonorm(vwe((G.anum > 4) & (G.astr == "foo")))
+        joins = vje([F.anum == G.anum],[F,G])
+        qp2 = make_query_plan(simple_query_join_order,[G.astr,F.anum],
+                              [G,F],[],which2)
+
+        query1 = make_first_join_query(qp2[0], factsets, indexes)
+        query2 = make_c_join_query(qp2[1], factsets, indexes)
+
+        print("HERE1: {}".format(list(query1())))
+
+        print("HERE2: {}".format(list(query2(query1))))
+        self.assertEqual(set(query2(query1)),
+                         set([(G(5,"foo"),F(1,"a")), (G(5,"foo"),F(1,"foo"))]))
+
+
+        FA = alias(F)
 
 #------------------------------------------------------------------------------
 # Test the Select class
