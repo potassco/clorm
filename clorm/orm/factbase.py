@@ -18,7 +18,10 @@ from .queryplan import *
 from .queryplan import Placeholder, check_query_condition, simplify_query_condition, \
     instantiate_query_condition, evaluate_query_condition, SelectImpl, DeleteImpl
 
-from .queryplan import JoinQueryPlan, QueryPlan
+from .queryplan import Select, Delete, OrderBy, desc, asc
+
+from .queryplan import JoinQueryPlan, QueryPlan, \
+    make_input_alignment_functor, simple_query_join_order, make_query_plan
 
 # ------------------------------------------------------------------------------
 # In order to implement FactBase I originally used the built in 'set'
@@ -537,9 +540,20 @@ class FactBase(object):
         """Create a Select query for a predicate type."""
 
         self._check_init()  # Check for delayed init
+
         if ptype not in self._factmaps:
             self._factmaps[ptype] = _FactMap(ptype)
-        return self._factmaps[ptype].select()
+
+        fm =  self._factmaps[ptype]
+        return fm.select()
+
+#        pred2factset = { hashable_path(ptype) : fm._allfacts }
+#        path2factindexes = fm._findexes if fm._findexes else {}
+
+#        print("HERE: {} ||  {} ||  {}".format([hashable_path(ptype)], pred2factset,path2factindexes))
+#        return SelectNew([ptype], pred2factset,path2factindexes)
+#        return fm.select()
+
 
     def delete(self, ptype):
         """Create a Select query for a predicate type."""
@@ -917,7 +931,14 @@ def make_first_join_query(jqp, predicate_to_factset, hpath_to_factindex):
     if jqp.input_signature:
         raise ValueError(("A first JoinQueryPlan must have an empty input "
                           "signature but '{}' found").format(jqp.input_signature))
-    return make_prejoin_query(jqp,predicate_to_factset, hpath_to_factindex)
+
+    base_query=make_prejoin_query(jqp,predicate_to_factset, hpath_to_factindex)
+    def sorted_query():
+        orderby_cmp = jqp.join_orderbys.make_cmp([jqp.root])
+        return sorted(base_query(),key=functools.cmp_to_key(orderby_cmp))
+
+    if jqp.join_orderbys: return sorted_query
+    else: return base_query
 
 # ------------------------------------------------------------------------------
 #
@@ -937,7 +958,9 @@ def make_chained_join_query(jqp, inquery,
 
     if jsc:
         source = _FactIndex(jsc.args[0])
-        inalign = make_query_alignment_functor(jqp.input_signature,jsc.args[1])
+        operator = jsc.operator
+        align_query_input = make_input_alignment_functor(
+            jqp.input_signature,(jsc.args[1],))
     else:
         source = _FactSet()
     for (f,) in prejoin_query(): source.add(f)
@@ -945,15 +968,17 @@ def make_chained_join_query(jqp, inquery,
     if jcb:
         jcbcc = jcb.make_callable(list(jqp.input_signature) + [jqp.root])
 
+    # Return a different query depending on the inputs
     def query_factset_with_jcb():
         for intuple in inquery():
             for f in source:
                 out = tuple(intuple + (f,))
                 if jcbcc(out): yield out
+
     def query_factindex_with_jcb():
         for intuple in inquery():
-            v, = inalign(intuple)
-            for f in source.find(v):
+            v, = align_query_input(intuple)
+            for f in source.find(operator,v):
                 out = tuple(intuple + (f,))
                 if jcbcc(out): yield out
 
@@ -964,30 +989,251 @@ def make_chained_join_query(jqp, inquery,
 
     def query_factindex_without_jcb():
         for intuple in inquery():
-            v, = inalign(intuple)
-            for f in source.find(v):
+            v, = align_query_input(intuple)
+            for f in source.find(operator,v):
                 yield tuple(intuple + (f,))
 
 
-    if jcb and isinstance(source,_FactSet): return query_factset_with_jcb
-    elif jcb and isinstance(source,_FactIndex): return query_factindex_with_jcb
-    elif not jcb and isinstance(source,_FactSet): return query_factset_without_jcb
-    elif not jcb and isinstance(source,_FactIndex): return query_factindex_without_jcb
+    if jcb and isinstance(source,_FactSet): outquery=query_factset_with_jcb
+    elif jcb and isinstance(source,_FactIndex): outquery=query_factindex_with_jcb
+    elif not jcb and isinstance(source,_FactSet): outquery=query_factset_without_jcb
+    elif not jcb and isinstance(source,_FactIndex): outquery=query_factindex_without_jcb
+
+    def sorted_outquery():
+        tmp = list(jqp.input_signature) + [jqp.root]
+        orderby_cmp = jqp.join_orderbys.make_cmp(tmp)
+        return sorted(outquery(),key=functools.cmp_to_key(orderby_cmp))
+
+    if jqp.join_orderbys: return sorted_outquery
+    else: return outquery
 
 #------------------------------------------------------------------------------
-#
-#------------------------------------------------------------------------------
+# Makes a query given a ground QueryPlan and the underlying data. The returned
+# query object is a Python generator function that takes no arguments.
+# ------------------------------------------------------------------------------
 
 def make_query(qp, predicate_to_factset, hpath_to_factindex):
-    queries = []
-    inquery = None
+    query = None
     for idx,jqp in enumerate(qp):
-        if not inquery:
-            inquery = make_first_join_query(
+        if not query:
+            query = make_first_join_query(
                 jqp,predicate_to_factset,hpath_to_factindex)
         else:
-            inquery = make_chained_join_query(
-                jqp,inquery,predicate_to_factset,hpath_to_factindex)
+            query = make_chained_join_query(
+                jqp,query,predicate_to_factset,hpath_to_factindex)
+    return query
+
+
+#------------------------------------------------------------------------------
+# QueryOutput allows you to output the results of a Select query it different
+# ways.
+# ------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+# Check if all the paths in a collection are root paths
+#------------------------------------------------------------------------------
+def validate_root_paths(paths):
+    def checkroot(p):
+        p = path(p)
+        if not p.meta.is_root:
+            raise ValueError("'{}' in '{}' is not a root path".format(p,paths))
+        return p
+    return list(map(checkroot,paths))
+
+class QueryOutput(object):
+    def __init__(self, query, insig, outsig):
+        self._query = query
+        self._insig = tuple(validate_root_paths(insig))
+        self._outsig = tuple(validate_root_paths(outsig))
+        self._unique = False
+        self._sigoverride = False
+        self._tuple_called = False
+        self._unwrap = len(outsig) == 1
+
+        tmp = tuple(validate_root_paths(outsig))
+        self._align = make_input_alignment_functor(self._insig, tmp)
+        self._executed = False
+
+    #--------------------------------------------------------------------------
+    # Functions to modify the output
+    #--------------------------------------------------------------------------
+
+    def tuple(self):
+        if self._executed:
+            raise RuntimeError("The query instance has already been executed")
+        if self._tuple_called:
+            raise ValueError("tuple() can only be specified once")
+        self._tuple_called = True
+        self._unwrap = False
+        return self
+
+    def unique(self):
+        if self._executed:
+            raise RuntimeError("The query instance has already been executed")
+        if self._unique:
+            raise ValueError("unique() can only be specified once")
+        self._unique = True
+        return self
+
+    def output(self, *outsig):
+        if self._executed:
+            raise RuntimeError("The query instance has already been executed")
+        if self._sigoverride:
+            raise ValueError("output() can only be specified once")
+        self._sigoverride = True
+        tmp = tuple(outsig)
+        if not self._tuple_called:
+            self._unwrap = len(outsig) == 1
+        self._align = make_input_alignment_functor(self._insig, tmp)
+        return self
+
+
+    # --------------------------------------------------------------------------
+    # Internal functions to get the output
+    # --------------------------------------------------------------------------
+    def _all(self):
+        cache = set()
+        for input in self._query():
+            output = self._align(input)
+            if self._unwrap: output = output[0]
+            if self._unique:
+                if output not in cache:
+                    cache.add(output)
+                    yield output
+            else:
+                yield output
+
+    #--------------------------------------------------------------------------
+    # Functions to get the output - only one of these functions can be called
+    # for a QueryOutput instance.
+    # --------------------------------------------------------------------------
+    def all(self):
+        if self._executed:
+            raise RuntimeError("The query instance has already been executed")
+        self._executed = True
+        return self._all()
+
+    def singleton(self):
+        if self._executed:
+            raise RuntimeError("The query instance has already been executed")
+        self._executed = True
+
+        found = None
+        for out in self._all():
+            if found: raise ValueError("Query result is not a single item")
+            found = out
+        return found
+
+    def count(self):
+        if self._executed:
+            raise RuntimeError("The query instance has already been executed")
+        self._executed = True
+        return len(list(self._all()))
+
+    def first(self):
+        if self._executed:
+            raise RuntimeError("The query instance has already been executed")
+        self._executed = True
+        return next(iter(self._all()))
+
+    def __iter__(self):
+        return self.all()
+
+#------------------------------------------------------------------------------
+# The new (v2) Select class
+#------------------------------------------------------------------------------
+
+class SelectNew(Select):
+
+    def __init__(self, roots, predicate_to_factset, hpath_to_factindex):
+
+        self._roots = tuple(validate_root_paths(roots))
+        self._where = None
+        self._joins = None
+        self._orderbys = None
+        self._factsets = predicate_to_factset
+        self._factindexes = hpath_to_factindex
+
+        self._indexes = hpath_to_factindex.keys()
+        self._queryplan = make_query_plan(simple_query_join_order,
+                                          self._indexes, self._roots,
+                                          [], None, None)
+
+        print("\n\nGOT HERE\n\n")
+
+    def join(self, *expressions):
+        if self._where:
+            raise TypeError(("The 'join' condition must come before the "
+                             "'where' condition"))
+        if self._orderbys:
+            raise TypeError(("The 'join' condition must come before the "
+                             "'order_by' condition"))
+        if self._joins:
+            raise TypeError("Cannot specify 'join' multiple times")
+        if not expressions:
+            raise TypeError("Empty 'join' expression")
+        self._joins = process_join(expressions, self._roots)
+
+        # Make a query plan in case there is no other inputs
+        self._queryplan = make_query_plan(simple_query_join_order,
+                                          self._indexes, self._roots,
+                                          self._joins, None, None)
+
+    def where(self, *expressions):
+        if self._orderbys:
+            raise TypeError(("The 'where' condition must come before the "
+                             "'order_by' condition"))
+        if self._where:
+            raise TypeError("Cannot specify 'where' multiple times")
+        if not expressions:
+            raise TypeError("Empty 'where' expression")
+        elif len(expressions) == 1:
+            self._where = process_which(expressions[0],self._roots)
+        else:
+            self._where = process_which(and_(*expressions),self._roots)
+
+        # Make a query plan in case there is no other inputs
+        self._queryplan = make_query_plan(simple_query_join_order,
+                                          self._indexes, self._roots,
+                                          self._joins, self._which, None)
+
+    def order_by(self, *expressions):
+        if self._orderbys:
+            raise TypeError("cannot specify 'order_by' multiple times")
+        if not expressions:
+            raise TypeError("empty 'order_by' expression")
+        self._orderbys = process_orderby(expressions,self._roots)
+
+        # Make a query plan in case there is no other inputs
+        self._queryplan = make_query_plan(simple_query_join_order,
+                                          self._indexes, self._roots,
+                                          self._joins, self._which,
+                                          self._orderbys)
+    @property
+    def has_where(self):
+        return bool(self._where)
+
+    def get(self, *args, **kwargs):
+        gqplan = self._queryplan.ground(*args,**kwargs)
+        query = gqplan(self._queryplan, self._factsets, self._factindexes)
+
+        qo = QueryOutput(query, gqplan.output_signature, self._roots)
+        return list(qo.all())
+
+    def get_unique(self, *args, **kwargs):
+        gqplan = self._queryplan.ground(*args,**kwargs)
+        query = gqplan(self._queryplan, self._factsets, self._factindexes)
+
+        qo = QueryOutput(query, gqplan.output_signature, self._roots)
+        return qo.singleton()
+
+    def count(self, *args, **kwargs):
+        gqplan = self._queryplan.ground(*args,**kwargs)
+        query = gqplan(self._queryplan, self._factsets, self._factindexes)
+
+        qo = QueryOutput(query, gqplan.output_signature, self._roots)
+        return qo.count()
+
 
 #------------------------------------------------------------------------------
 # main

@@ -42,6 +42,9 @@ __all__ = [
 # Defining and manipulating conditional elements
 #------------------------------------------------------------------------------
 
+
+
+
 #------------------------------------------------------------------------------
 # Placeholder allows for variable substituion of a query. Placeholder is
 # an abstract class that exposes no API other than its existence.
@@ -217,7 +220,7 @@ class Comparator(abc.ABC):
     def dealias(self): pass
 
     @abc.abstractmethod
-    def make_callable(self, predicate_signature): pass
+    def make_callable(self, root_signature): pass
 
     @property
     @abc.abstractmethod
@@ -242,6 +245,17 @@ class Comparator(abc.ABC):
 
 
 # ------------------------------------------------------------------------------
+# Support function returns True if all the elements of the list are root paths
+# ------------------------------------------------------------------------------
+
+def is_root_paths(paths):
+    for raw in paths:
+        p = path(raw)
+        if not p.meta.is_root: return False
+    return True
+
+
+# ------------------------------------------------------------------------------
 # support function - give an iterable that may include a predicatepath return a
 # list copy where any predicatepaths are replaced with hashable paths. Without
 # this comparison operators will fail.
@@ -262,23 +276,23 @@ class StandardComparator(Comparator):
         MEDIUM= 1
         HIGH=2
 
-    OpSpec = collections.namedtuple('OpSpec','pref join which negop swapop')
+    OpSpec = collections.namedtuple('OpSpec','pref join where negop swapop')
     operators = {
-        operator.eq : OpSpec(pref=Preference.HIGH, join=True, which=True,
+        operator.eq : OpSpec(pref=Preference.HIGH, join=True, where=True,
                              negop=operator.ne, swapop=operator.eq),
-        operator.ne : OpSpec(pref=Preference.LOW, join=True, which=True,
+        operator.ne : OpSpec(pref=Preference.LOW, join=True, where=True,
                              negop=operator.eq, swapop=operator.ne),
-        operator.lt : OpSpec(pref=Preference.MEDIUM, join=True, which=True,
+        operator.lt : OpSpec(pref=Preference.MEDIUM, join=True, where=True,
                              negop=operator.ge, swapop=operator.gt),
-        operator.le : OpSpec(pref=Preference.MEDIUM, join=True, which=True,
+        operator.le : OpSpec(pref=Preference.MEDIUM, join=True, where=True,
                              negop=operator.gt, swapop=operator.ge),
-        operator.gt : OpSpec(pref=Preference.MEDIUM, join=True, which=True,
+        operator.gt : OpSpec(pref=Preference.MEDIUM, join=True, where=True,
                              negop=operator.le, swapop=operator.lt),
-        operator.ge : OpSpec(pref=Preference.MEDIUM, join=True, which=True,
+        operator.ge : OpSpec(pref=Preference.MEDIUM, join=True, where=True,
                              negop=operator.lt, swapop=operator.le),
-        trueall     : OpSpec(pref=Preference.LOW, join=True, which=False,
+        trueall     : OpSpec(pref=Preference.LOW, join=True, where=False,
                              negop=falseall, swapop=trueall),
-        falseall    : OpSpec(pref=Preference.HIGH, join=True, which=False,
+        falseall    : OpSpec(pref=Preference.HIGH, join=True, where=False,
                              negop=trueall, swapop=falseall)}
 
 
@@ -309,7 +323,7 @@ class StandardComparator(Comparator):
     # -------------------------------------------------------------------------
 
     @classmethod
-    def from_which_qcondition(cls,qcond):
+    def from_where_qcondition(cls,qcond):
         def normalise_arg(arg):
             p=path(arg,exception=False)
             if p is None: return arg
@@ -335,8 +349,8 @@ class StandardComparator(Comparator):
         if spec is None:
             raise TypeError(("Internal bug: cannot create StandardComparator() with "
                              "non-comparison operator '{}' ").format(qcond.operator))
-        if not spec.which and spec.join:
-            raise ValueError(("Invalid which comparison operator '{}' is only "
+        if not spec.where and spec.join:
+            raise ValueError(("Invalid where comparison operator '{}' is only "
                               "valid for a join specification").format(qcond.operator))
         return cls(qcond.operator,newargs)
 
@@ -432,12 +446,12 @@ class StandardComparator(Comparator):
     def roots(self):
         return self._roots
 
-    def make_callable(self, predicate_signature):
+    def make_callable(self, root_signature):
         for arg in self._args:
             if isinstance(arg,Placeholder):
                 raise TypeError(("Internal bug: cannot make a non-ground "
                                  "comparator callable: {}").format(self))
-        sig = make_query_alignment_functor(predicate_signature, self._args)
+        sig = make_input_alignment_functor(root_signature, self._args)
         return ComparisonCallable(self._operator,sig)
 
     def __eq__(self,other):
@@ -602,7 +616,7 @@ class FunctionComparator(Comparator):
         return FunctionComparator(self._func,self._pathsig,
                                           self._negative,kwargs)
 
-    def make_callable(self, predicate_signature):
+    def make_callable(self, root_signature):
         if self._assignment is None:
             raise RuntimeError(("Internal bug: make_callable called on a "
                                 "ungrounded object: {}").format(self))
@@ -611,7 +625,7 @@ class FunctionComparator(Comparator):
         # generate the fixed values for the non-path items
         funcsigparam = [ self._assignment[k] for k,_ in self._funcsig.items() ]
         outputsig = tuple(list(self._pathsig) + funcsigparam)
-        alignfunc = make_query_alignment_functor(predicate_signature,
+        alignfunc = make_input_alignment_functor(root_signature,
                                                  outputsig)
         op = self._func if not self._negative else lambda *args : not self._func(*args)
         return ComparisonCallable(op,alignfunc)
@@ -656,26 +670,26 @@ class FunctionComparator(Comparator):
 # With this complication we need a way to remap a search input fact-tuple into
 # the expected form for each query condition component.
 #
-# make_query_alignment_functor() returns a function that takes a tuple
+# make_input_alignment_functor() returns a function that takes a tuple
 # of facts as given by the input signature and returns a tuple of values as
 # given by the output signature.
 # ------------------------------------------------------------------------------
-def make_query_alignment_functor(input_predicate_signature, output_signature):
+def make_input_alignment_functor(input_root_signature, output_signature):
 
     # Input signature are paths that must correspond to predicate types
     def validate_input_signature():
-        if not input_predicate_signature:
+        if not input_root_signature:
             raise TypeError("Empty input predicate path signature")
         inputs=[]
         try:
-            for p in input_predicate_signature:
+            for p in input_root_signature:
                 pp = path(p)
                 if not pp.meta.is_root:
                     raise ValueError("path '{}' is not a predicate root".format(pp))
                 inputs.append(pp)
         except Exception as e:
             raise TypeError(("Invalid input predicate path signature {}: "
-                              "{}").format(input_predicate_signature,e)) from None
+                              "{}").format(input_root_signature,e)) from None
         return inputs
 
     # Output signature are field paths or statics (but not placeholders)
@@ -704,7 +718,7 @@ def make_query_alignment_functor(input_predicate_signature, output_signature):
             if idx is None:
                 raise TypeError(("Invalid signature match between {} and {}: "
                                  "missing input predicate path for "
-                                 "{}").format(input_predicate_signature,
+                                 "{}").format(input_root_signature,
                                               output_signature,out))
             getters.append(lambda facts, p=out, idx=idx: p(facts[idx]))
         else:
@@ -772,12 +786,12 @@ def is_comparison_qcondition(cond):
 # Also simplifies any static conditions (conditions that can be evaluated
 # without a fact) which are replaced with their a boolean evaluation.
 #
-# The which expression is validated with respect to a sequence of predicate root
+# The where expression is validated with respect to a sequence of predicate root
 # paths that indicate the valid predicates (and aliases) that are being
 # reference in the query.
 # ------------------------------------------------------------------------------
 
-def validate_which_expression(qcond, roots=[]):
+def validate_where_expression(qcond, roots=[]):
 
     # Make sure we have a set of hashable paths
     try:
@@ -793,7 +807,7 @@ def validate_which_expression(qcond, roots=[]):
     # Check that the path is a sub-path of one of the roots
     def check_path(path):
         if hashable_path(path.meta.root) not in roots:
-            raise ValueError(("Invalid which expression '{}' contains a path "
+            raise ValueError(("Invalid where expression '{}' contains a path "
                               "'{}' that is not a sub-path of one of the "
                               "roots '{}'").format(qcond, path, roots))
 
@@ -841,7 +855,7 @@ def validate_which_expression(qcond, roots=[]):
     def validate_comp_condition(ccond):
         for a in ccond.args:
             if isinstance(a,PredicatePath): check_path(a)
-        return StandardComparator.from_which_qcondition(ccond)
+        return StandardComparator.from_where_qcondition(ccond)
 
     # Validate a condition
     def validate_condition(cond):
@@ -860,8 +874,8 @@ def validate_which_expression(qcond, roots=[]):
         elif is_comparison_qcondition(cond): return validate_comp_condition(cond)
         else: return bool(cond)
 
-#    which = validate_condition(qcond)
-#    hroots = set([ hashable_path(r) for r in which.roots])
+#    where = validate_condition(qcond)
+#    hroots = set([ hashable_path(r) for r in where.roots])
     return  validate_condition(qcond)
 
 # ------------------------------------------------------------------------------
@@ -869,7 +883,7 @@ def validate_which_expression(qcond, roots=[]):
 # input must have already been validated. Because we can negate all comparison
 # conditions we therefore end up with no explicitly negated boolean conditions.
 # ------------------------------------------------------------------------------
-def negate_which_expression(qcond):
+def negate_where_expression(qcond):
 
     # Note: for the not operator negate twice to force negation inward
     def negate_bool_condition(bcond):
@@ -895,21 +909,21 @@ def negate_which_expression(qcond):
     return negate_condition(qcond)
 
 # ------------------------------------------------------------------------------
-# Convert the which expression to negation normal form by pushing any negations
+# Convert the where expression to negation normal form by pushing any negations
 # inwards. Because we can negate all comparators we therefore end up with no
 # explicit negated boolean conditions. Note: input must have been validated
 # ------------------------------------------------------------------------------
-def which_expression_to_nnf(which):
-    # Because negate_which_expression pushes negation inward, so negating twice
+def where_expression_to_nnf(where):
+    # Because negate_where_expression pushes negation inward, so negating twice
     # produces a formula in NNF
-    return negate_which_expression(negate_which_expression(which))
+    return negate_where_expression(negate_where_expression(where))
 
 # ------------------------------------------------------------------------------
 # Convert the query condition to conjunctive normal form. Because we can negate
 # all comparison conditions we therefore end up with no explicit negated boolean
 # conditions.  Note: input must have been validated
 # ------------------------------------------------------------------------------
-def which_expression_to_cnf(qcond):
+def where_expression_to_cnf(qcond):
 
     def dist_if_or_over_and(bcond):
         if bcond.operator != operator.or_: return bcond
@@ -941,9 +955,9 @@ def which_expression_to_cnf(qcond):
         if isinstance(cond, Comparator): return cond
         if not is_boolean_qcondition(cond):
             raise TypeError(("Internal bug: unexpected non-boolean condition '{}' "
-                             "in 'which' expression '{}'").format(cond, qcond))
+                             "in 'where' expression '{}'").format(cond, qcond))
         if cond.operator == operator.not_:
-            cond = which_expression_to_nnf(cond)
+            cond = where_expression_to_nnf(cond)
         return bool_condition_to_cnf(cond)
     return condition_to_cnf(qcond)
 
@@ -971,8 +985,8 @@ class Clause(object):
         self._roots=tuple([path(hp) for hp in tmproots])
 
 
-    def make_callable(self, predicate_signature):
-        callables = [ c.make_callable(predicate_signature) for c in self._comparators]
+    def make_callable(self, root_signature):
+        callables = [ c.make_callable(root_signature) for c in self._comparators]
         callables = tuple(callables)
         def comparison_callable(facts):
             for c in callables:
@@ -1038,16 +1052,14 @@ class Clause(object):
 # is that the query will consists of multiple queries for each predicate/alias
 # type. Then the joins are performed and finally the joined tuples are filtered
 # by the multi-root clause block.
-#
-# Note: an empty clause block is treated as trivially true
 # ------------------------------------------------------------------------------
 
 class ClauseBlock(object):
 
     def __init__(self, clauses=[]):
         self._clauses = tuple(clauses)
-#        if not clauses:
-#            raise ValueError("Internal error: mpty list of clauses")
+        if not clauses:
+            raise ValueError("Empty list of clauses")
 
         tmppaths = set([])
         tmproots = set([])
@@ -1088,8 +1100,8 @@ class ClauseBlock(object):
         if newclauses == self._clauses: return self
         return ClauseBlock(newclauses)
 
-    def make_callable(self, predicate_signature):
-        callables = [ c.make_callable(predicate_signature) for c in self._clauses]
+    def make_callable(self, root_signature):
+        callables = [ c.make_callable(root_signature) for c in self._clauses]
         callables = tuple(callables)
         def comparison_callable(facts):
             for c in callables:
@@ -1136,7 +1148,7 @@ class ClauseBlock(object):
 # Normalise takes a formula and turns it into a clausal CNF (a list of
 # disjunctive clauses). Note: input must have been validated.
 # ------------------------------------------------------------------------------
-def normalise_which_expression(qcond):
+def normalise_where_expression(qcond):
     NEWCL = "new_clause"
     stack=[NEWCL]
 
@@ -1165,20 +1177,20 @@ def normalise_which_expression(qcond):
         return clauses
 
     stack.append(NEWCL)
-    stack_add(which_expression_to_cnf(qcond))
+    stack_add(where_expression_to_cnf(qcond))
     return (ClauseBlock(build_clauses()))
 
 
 # ------------------------------------------------------------------------------
-#  process_which takes a which expression from the user select statement as well
-#  as a list of roots; validates the which statement (ensuring that it only
+#  process_where takes a where expression from the user select statement as well
+#  as a list of roots; validates the where statement (ensuring that it only
 #  refers to paths derived from one of the roots) and turns it into CNF in the
 #  form of a clauseblock.
 #  ------------------------------------------------------------------------------
 
-def process_which(which_expression, roots=[]):
-    which = validate_which_expression(which_expression,roots)
-    return normalise_which_expression(which)
+def process_where(where_expression, roots=[]):
+    where = validate_where_expression(where_expression,roots)
+    return normalise_where_expression(where)
 
 # ------------------------------------------------------------------------------
 # Given a list of clauses breaks the clauses up into two pairs. The first
@@ -1306,6 +1318,158 @@ def process_join(join_expression, roots=[]):
     return validate_join_expression(join_expression,roots)
 
 
+#------------------------------------------------------------------------------
+# Specification of an ordering over a field of a predicate/complex-term
+#------------------------------------------------------------------------------
+class OrderBy(object):
+    def __init__(self, path, asc):
+        self._path = path
+        self._asc = asc
+
+    def compare(self, a,b):
+        va = self._path(a)
+        vb = self._path(b)
+        if  va == vb: return 0
+        if self._asc and va < vb: return -1
+        if not self._asc and va > vb: return -1
+        return 1
+
+    def make_cmp(self, root_signature):
+        alignfunc = make_input_alignment_functor(root_signature, (self._path,))
+        def cmp(tupa,tupb):
+            va = alignfunc(tupa)
+            vb = alignfunc(tupb)
+            if va == vb: return 0
+            if self._asc and va < vb: return -1
+            if not self._asc and va > vb: return -1
+            return 1
+        return cmp
+
+    @property
+    def path(self):
+        return self._path
+
+    @property
+    def asc(self):
+        return self._asc
+
+    def __eq__(self, other):
+        if not isinstance(other, self.__class__): return NotImplemented
+        if hashable_path(self._path) != hashable_path(other._path): return False
+        return self._asc == other._asc
+
+    def __ne__(self, other):
+        result = self.__eq__(other)
+        if result is NotImplemented: return NotImplemented
+        return not result
+
+    def __hash__(self):
+        return hash((hashable_path(self._path),self._asc))
+
+    def __str__(self):
+        if self._asc: return "asc({})".format(self._path)
+        else: return "desc({})".format(self._path)
+
+    def __repr__(self):
+        return self.__str__()
+
+#------------------------------------------------------------------------------
+# Helper functions to return a OrderBy in descending and ascending order. Input
+# is a PredicatePath. The ascending order function is provided for completeness
+# since the order_by parameter will treat a path as ascending order by default.
+# ------------------------------------------------------------------------------
+def desc(path):
+    return OrderBy(path,asc=False)
+def asc(path):
+    return OrderBy(path,asc=True)
+
+# ------------------------------------------------------------------------------
+# OrderByBlock groups together an ordering of OrderBy statements
+# ------------------------------------------------------------------------------
+
+class OrderByBlock(object):
+    def __init__(self,orderbys=[]):
+        self._orderbys = tuple(orderbys)
+        self._paths = tuple([path(ob.path) for ob in self._orderbys])
+        if not orderbys:
+            raise ValueError("Empty list of order_by statements")
+
+    def make_cmp(self, root_signature):
+        cmpfuncs = tuple([ob.make_cmp(root_signature) for ob in self._orderbys])
+        def cmp(tupa, tupb):
+            for cmp in cmpfuncs:
+                value = cmp(tupa,tupb)
+                if value == 0: continue
+                return value
+            return 0
+        return cmp
+
+    @property
+    def paths(self):
+        return self._paths
+
+    @property
+    def roots(self):
+        return set([hashable_path(p.meta.root) for p in self._paths])
+
+    def __eq__(self, other):
+        if not isinstance(other, self.__class__): return NotImplemented
+        return self._orderbys == other._orderbys
+
+    def __ne__(self, other):
+        result = self.__eq__(other)
+        if result is NotImplemented: return NotImplemented
+        return not result
+
+    def __len__(self):
+        return len(self._orderbys)
+
+    def __getitem__(self, idx):
+        return self._orderbys[idx]
+
+    def __iter__(self):
+        return iter(self._orderbys)
+
+    def __hash__(self):
+        return hash(self._orderbys)
+
+    def __str__(self):
+        return "[{}]".format(",".join([str(ob) for ob in self._orderbys]))
+
+    def __repr__(self):
+        return self.__str__()
+
+# ------------------------------------------------------------------------------
+# Validate the order_by expression - returns an OrderByBlock
+# ------------------------------------------------------------------------------
+
+def validate_orderby_expression(orderby_expressions, roots=[]):
+    if not is_root_paths(roots):
+        raise ValueError("roots='{}' must contain only root paths".format(roots))
+    hroots = set([hashable_path(rp) for rp in roots])
+
+    path_ordering = []
+    # If only a PredicatePath is specified assume ascending order
+    for exp in orderby_expressions:
+        if isinstance(exp, OrderBy): path_ordering.append(exp)
+        elif isinstance(exp, PredicatePath):
+            path_ordering.append(asc(exp))
+        else: raise TypeError("Invalid 'order_by' expression: {}".format(exp))
+    obb = OrderByBlock(path_ordering)
+
+    if  not obb.roots.issubset(hroots):
+        raise ValueError(("Order By expression '{}' refers to root paths that "
+                    "are not in '{}'").format(obb, hroots))
+    return obb
+
+# ------------------------------------------------------------------------------
+# Return an OrderByBlock corresponding to the validated order by expression
+# ------------------------------------------------------------------------------
+
+def process_orderby(orderby_expressions, roots=[]):
+    return validate_orderby_expression(orderby_expressions,roots)
+
+
 # ------------------------------------------------------------------------------
 # make_prejoin_pair(indexed_paths, clauses)
 # - indexed_paths - a list of paths for which there is a factindex
@@ -1408,13 +1572,16 @@ class JoinQueryPlan(object):
        - a prejoin clauseblock (or None),
        - a join standard comparator (or None),
        - a join clauseblock (or None)
+       - a join orderbyblock (or None)
     '''
-    def __init__(self,input_signature, root, prejoinsc, prejoincb, joinsc, joincb):
+    def __init__(self,input_signature, root, prejoinsc, prejoincb,
+                 joinsc, joincb, joinobb):
         self._insig = tuple([path(r) for r in input_signature])
         self._root = path(root)
         self._predicate = self._root.meta.predicate
         self._joinsc = _align_sc_path(self._root, joinsc)
         self._joincb = joincb
+        self._joinobb = joinobb
         self._prejoinsc = _align_sc_path(self._root.meta.dealiased, prejoinsc)
         self._prejoincb = prejoincb
 
@@ -1434,7 +1601,7 @@ class JoinQueryPlan(object):
             raise ValueError(("Pre-join clause block '{}' refers to non '{}' "
                               "paths").format(prejoincb,self._root))
 
-        # The joinsc and joincb must refer only to the insig + root
+        # The joinsc, joincb, and joinobb must refer only to the insig + root
         allroots = list(self._insig) + [self._root]
         if not _check_roots(allroots, joinsc):
             raise ValueError(("Join comparator '{}' refers to non '{}' "
@@ -1442,6 +1609,10 @@ class JoinQueryPlan(object):
         if not _check_roots(allroots, joincb):
             raise ValueError(("Join clause block '{}' refers to non '{}' "
                               "paths").format(joincb,allroots))
+
+        if not _check_roots(allroots, joinobb):
+            raise ValueError(("Join order by block '{}' refers to non '{}' "
+                              "paths").format(joinobb,allroots))
 
         self._placeholders = _extract_placeholders(
             [self._joinsc, self._joincb, self._prejoinsc, self._prejoincb])
@@ -1452,7 +1623,7 @@ class JoinQueryPlan(object):
     # -------------------------------------------------------------------------
     @classmethod
     def from_specification(cls, indexed_paths, input_signature,
-                           root, joins=[], clauses=[]):
+                           root, joins=[], clauses=[], orderbys=[]):
         rootcbses, catchall = partition_clauses(clauses)
         if not rootcbses:
             (prejoinsc,prejoincb) = (None,None)
@@ -1466,7 +1637,10 @@ class JoinQueryPlan(object):
                               "clauses for root {}").format(rootcbses,root))
 
         (joinsc,joincb) = make_join_pair(joins, catchall)
-        return cls(input_signature,root,prejoinsc, prejoincb,joinsc,joincb)
+
+        joinobb = OrderByBlock(orderbys) if orderbys else None
+
+        return cls(input_signature,root,prejoinsc, prejoincb,joinsc,joincb,joinobb)
 
 
     # -------------------------------------------------------------------------
@@ -1491,6 +1665,9 @@ class JoinQueryPlan(object):
     def join_clauses(self): return self._joincb
 
     @property
+    def join_orderbys(self): return self._joinobb
+
+    @property
     def placeholders(self):
         return self._placeholders
 
@@ -1503,7 +1680,7 @@ class JoinQueryPlan(object):
         if gprejoinsc == self._prejoinsc and gprejoincb == self._prejoincb and \
            gjoinsc == self._joinsc and gjoincb == self._joincb: return self
         return JoinQueryPlan(self._insig,self._root,
-                             gprejoinsc,gprejoincb,gjoinsc,gjoincb)
+                             gprejoinsc,gprejoincb,gjoinsc,gjoincb,self._joinobb)
 
     def print(self,file=sys.stdout,pre=""):
         print("{}JoinQueryPlan:".format(pre), file=file)
@@ -1513,6 +1690,7 @@ class JoinQueryPlan(object):
         print("{}\tPrejoin clauses: {}".format(pre,self._prejoincb), file=file)
         print("{}\tJoin key: {}".format(pre,self._joinsc), file=file)
         print("{}\tJoin clauses: {}".format(pre,self._joincb), file=file)
+        print("{}\tJoin order_by: {}".format(pre,self._joinobb), file=file)
 
     def __eq__(self, other):
         if not isinstance(other, self.__class__): return NotImplemented
@@ -1614,10 +1792,11 @@ class QueryPlan(object):
 # ------------------------------------------------------------------------------
 
 def make_query_plan_preordered_roots(indexed_paths, root_join_order,
-                                     joins=[], whereclauses=[]):
+                                     joins=[], whereclauses=[],orderbys=[]):
     joinset=set(joins)
     clauseset=set(whereclauses)
     visited=set({})
+    orderbys=list(orderbys)
 
     if not root_join_order:
         raise ValueError("Cannot make query plan with empty root join order")
@@ -1633,6 +1812,21 @@ def make_query_plan_preordered_roots(indexed_paths, root_join_order,
         for comp in outlist: inset.remove(comp)
         return outlist
 
+    # For a list of orderby statements return the largest pure segment that only
+    # refers to the visited root nodes
+    def visitedorderbys(visited, obs):
+        out = []
+        count = 0
+        for ob in obs:
+            if hashable_path(ob.path.meta.root) in visited:
+                count += 1
+                out.append(ob)
+            else: break
+        while count > 0:
+            obs.pop(0)
+            count -= 1
+        return out
+
     # Generate a list of JoinQueryPlan consisting of a root path and join
     # comparator and clauses that only reference previous plans in the list.
     output=[]
@@ -1640,9 +1834,11 @@ def make_query_plan_preordered_roots(indexed_paths, root_join_order,
         visited.add(hashable_path(root))
         rpjoins = visitedsubset(visited, joinset)
         rpclauses = visitedsubset(visited, clauseset)
+        rorderbys = visitedorderbys(visited, orderbys)
         output.append(JoinQueryPlan.from_specification(indexed_paths,
                                                        root_join_order[:idx],
-                                                       root,rpjoins,rpclauses))
+                                                       root,rpjoins,rpclauses,
+                                                       rorderbys))
     return QueryPlan(output)
 
 # ------------------------------------------------------------------------------
@@ -1674,15 +1870,11 @@ def simple_query_join_order(indexed_paths, joins,roots):
 # ------------------------------------------------------------------------------
 
 def make_query_plan(join_order_heuristic, indexed_paths,
-                    roots, joins, whereclauses):
+                    roots, joins, whereclauses, orderbys):
     root_join_order=join_order_heuristic(indexed_paths, joins, roots)
     return make_query_plan_preordered_roots(indexed_paths, root_join_order,
-                                            joins,whereclauses)
+                                            joins,whereclauses, orderbys)
 
-
-# ------------------------------------------------------------------------------
-#
-# ------------------------------------------------------------------------------
 
 
 
@@ -2079,41 +2271,6 @@ class Delete(abc.ABC):
     def execute(self, *args, **kwargs):
         """Function to execute the delete query"""
         pass
-
-#------------------------------------------------------------------------------
-# Specification of an ordering over a field of a predicate/complex-term
-#------------------------------------------------------------------------------
-class OrderBy(object):
-    def __init__(self, path, asc):
-        self._path = path
-        self.asc = asc
-    def compare(self, a,b):
-        va = self._path(a)
-        vb = self._path(b)
-        if  va == vb: return 0
-        if self.asc and va < vb: return -1
-        if not self.asc and va > vb: return -1
-        return 1
-
-    @property
-    def path(self):
-        return self._path
-
-    def __str__(self):
-        return "OrderBy(path={},asc={})".format(self._path, self.asc)
-
-    def __repr__(self):
-        return self.__str__()
-
-#------------------------------------------------------------------------------
-# Helper functions to return a OrderBy in descending and ascending order. Input
-# is a PredicatePath. The ascending order function is provided for completeness
-# since the order_by parameter will treat a path as ascending order by default.
-# ------------------------------------------------------------------------------
-def desc(path):
-    return OrderBy(path,asc=False)
-def asc(path):
-    return OrderBy(path,asc=True)
 
 
 # ------------------------------------------------------------------------------

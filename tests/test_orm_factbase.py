@@ -24,14 +24,14 @@ from clorm.orm import FactBase, desc, asc, not_, and_, or_, \
 
 # Implementation imports
 from clorm.orm.factbase import _FactIndex, _FactMap, _FactSet, \
-    make_first_join_query, make_chained_join_query
+    make_first_join_query, make_chained_join_query, make_query, QueryOutput
 
 from clorm.orm.queryplan import PositionalPlaceholder, NamedPlaceholder, \
     check_query_condition, simplify_query_condition, \
     instantiate_query_condition, evaluate_query_condition
 
-from clorm.orm.queryplan import process_which, process_join, make_query_plan, \
-    simple_query_join_order, make_query_alignment_functor
+from clorm.orm.queryplan import process_where, process_join, process_orderby, \
+    make_query_plan, simple_query_join_order, make_input_alignment_functor
 
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
@@ -810,9 +810,20 @@ class FactBaseTestCase(unittest.TestCase):
 
 
 #------------------------------------------------------------------------------
-# Test functions that manipulate query conditional and evaluate the conditional
-# w.r.t a fact.
+# QueryTest. Test functions for the underlying query mechanism
 # ------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+# support function to take a list of fact tuples transforms the order of facts
+# based on the signature transform
+# ------------------------------------------------------------------------------
+
+def align_facts(insig, outsig, it):
+    insig = tuple([path(a) for a in insig])
+    outsig = tuple([path(a) for a in outsig])
+    f = make_input_alignment_functor(insig,outsig)
+    return [ f(t) for t in it ]
+
 
 class QueryTestCase(unittest.TestCase):
     def setUp(self):
@@ -845,19 +856,23 @@ class QueryTestCase(unittest.TestCase):
         self.indexes[hashable_path(F.anum)] = factindex
         self.factsets[F] = factset
 
-
+    #--------------------------------------------------------------------------
+    # Test initialising a placeholder (named and positional)
+    #--------------------------------------------------------------------------
     def test_make_first_join_query(self):
         def strip(it): return [f for f, in it]
 
         G = self.G
-        pw = process_which
+        pw = process_where
+        pob = process_orderby
 
         indexes = self.indexes
         factsets = self.factsets
 
         which1 = pw((G.anum > 4) & (G.astr == "foo"),[G])
+        orderbys = pob([G.anum,desc(G.astr)],[G])
         qp1 = make_query_plan(simple_query_join_order,[G.astr],
-                              [G],[],which1)
+                              [G],[],which1,orderbys)
 
         query1 = make_first_join_query(qp1[0], factsets, indexes)
         self.assertEqual(set(strip(query1())), set([G(5,"foo")]))
@@ -865,82 +880,156 @@ class QueryTestCase(unittest.TestCase):
 
         which2 = pw((G.anum > 4) | (G.astr == "foo"),[G])
         qp2 = make_query_plan(simple_query_join_order,[G.astr],
-                              [G],[],which2)
+                              [G],[],which2,orderbys)
 
         query2 = make_first_join_query(qp2[0], factsets, indexes)
-        self.assertEqual(set(strip(query2())),
-                         set([G(1,"foo"), G(5,"a"), G(5,"foo")]))
+        self.assertEqual(list(strip(query2())),
+                         [G(1,"foo"), G(5,"foo"), G(5,"a")])
 
 
+    #--------------------------------------------------------------------------
+    # Test initialising a placeholder (named and positional)
+    #--------------------------------------------------------------------------
     def test_make_chained_join_query(self):
-        def align_facts(insig, outsig, it):
-            f = make_query_alignment_functor(insig,outsig)
-            return [ f(t) for t in it ]
-
-        Fp = path(self.F)
-        Gp = path(self.G)
         F = self.F
         G = self.G
-        pw = process_which
+        pw = process_where
+        pob = process_orderby
 
         indexes = self.indexes
         factsets = self.factsets
 
         which1 = pw((G.anum > 4) & (G.astr == "foo") & (F.anum == 1),[G,F])
-        qp1 = make_query_plan(simple_query_join_order,[G.astr,F.anum],
-                              [G,F],[],which1)
+        orderbys1 = pob([desc(F.astr)],[G,F])
+        qp1 = make_query_plan(simple_query_join_order,indexes.keys(),
+                              [G,F],[],which1,orderbys1)
         #        print("\nQP:\n{}".format(qp1))
         query1 = make_first_join_query(qp1[0], factsets, indexes)
         query2 = make_chained_join_query(qp1[1], query1, factsets, indexes)
-        output = align_facts(qp1.output_signature, (Fp,Gp), query2())
+        output = align_facts(qp1.output_signature, (F,G), query2())
         #        print("RESULT: {}".format(output))
-        self.assertEqual(set(output),
-                         set([(F(1,"a"),G(5,"foo")), (F(1,"foo"),G(5,"foo"))]))
+        self.assertEqual(list(output),
+                         [(F(1,"foo"),G(5,"foo")),(F(1,"a"),G(5,"foo"))])
 
 
         which1 = pw((F.anum > 4) & (F.astr == "foo") & (G.anum == 1),[F,G])
-        qp1 = make_query_plan(simple_query_join_order,[G.astr,F.anum],
-                              [F,G],[],which1)
+        orderbys1 = pob([asc(G.astr)],[G,F])
+        qp1 = make_query_plan(simple_query_join_order,indexes.keys(),
+                              [F,G],[],which1,orderbys1)
         #print("\nQP:\n{}".format(qp1))
         query1 = make_first_join_query(qp1[0], factsets, indexes)
         query2 = make_chained_join_query(qp1[1], query1, factsets, indexes)
-        output = align_facts(qp1.output_signature, (Fp,Gp), query2())
+        output = align_facts(qp1.output_signature, (F,G), query2())
         #print("RESULT: {}".format(output))
-        self.assertEqual(set(query2()),
-                         set([(F(5,"foo"),G(1,"a")), (F(5,"foo"),G(1,"foo"))]))
+        self.assertEqual(list(query2()),
+                         [(F(5,"foo"),G(1,"a")), (F(5,"foo"),G(1,"foo"))])
 
-
-    def test_make_chained_join_query(self):
-        def align_facts(insig, outsig, it):
-            f = make_query_alignment_functor(insig,outsig)
-            return [ f(t) for t in it ]
-
-        Fp = path(self.F)
-        Gp = path(self.G)
+    #--------------------------------------------------------------------------
+    # Test initialising a placeholder (named and positional)
+    #--------------------------------------------------------------------------
+    def test_make_query(self):
         F = self.F
         G = self.G
         indexes = self.indexes
         factsets = self.factsets
-        pw = process_which
+        pw = process_where
         pj = process_join
+        pob = process_orderby
+        roots = [F,G]
 
-        return
-        which2 = pw((G.anum > 4) & (G.astr == "foo"),[G])
-        joins = pj([F.anum == G.anum],[F,G])
-        qp2 = make_query_plan(simple_query_join_order,[G.astr,F.anum],
-                              [G,F],[],which2)
+        joins1 = pj([F.anum == G.anum],roots)
+        which1 = pw((G.anum > 4) | (F.astr == "foo"),roots)
+        orderbys = pob([desc(G.anum),F.astr,desc(G.astr)],roots)
+        qp1 = make_query_plan(simple_query_join_order, indexes.keys(),
+                              roots, joins1, which1, orderbys)
+        q1 = make_query(qp1, factsets, indexes)
+        result = list(q1())
+        expected = [
+            (F(5,"a"),G(5,"foo")),
+            (F(5,"a"),G(5,"a")),
+            (F(5,"foo"),G(5,"foo")),
+            (F(5,"foo"),G(5,"a")),
+            (F(1,"foo"),G(1,"foo")),
+            (F(1,"foo"),G(1,"a")),
+        ]
+        self.assertEqual(expected, result)
 
-        query1 = make_first_join_query(qp2[0], factsets, indexes)
-        query2 = make_c_join_query(qp2[1], factsets, indexes)
+    #--------------------------------------------------------------------------
+    # Test initialising a placeholder (named and positional)
+    #--------------------------------------------------------------------------
+    def test_QueryOutput(self):
+        F = self.F
+        G = self.G
+        indexes = self.indexes
+        factsets = self.factsets
+        pw = process_where
+        pj = process_join
+        pob = process_orderby
+        roots = [F,G]
 
-        print("HERE1: {}".format(list(query1())))
+        joins1 = pj([F.anum == G.anum],roots)
+        which1 = pw((G.anum > 4) | (F.astr == "foo"),roots)
+        orderbys = pob([F.anum,G.anum],roots)
+        qp1 = make_query_plan(simple_query_join_order, indexes.keys(),
+                              roots, joins1, which1,orderbys)
+        q1 = make_query(qp1, factsets, indexes)
 
-        print("HERE2: {}".format(list(query2(query1))))
-        self.assertEqual(set(query2(query1)),
-                         set([(G(5,"foo"),F(1,"a")), (G(5,"foo"),F(1,"foo"))]))
+        # Test output with no options
+        qo = QueryOutput(q1, qp1.output_signature, roots)
+        result = list(qo)
+        expected = set([(F(1,"foo"),G(1,"a")), (F(1,"foo"),G(1,"foo")),
+                        (F(5,"a"),G(5,"a")), (F(5,"a"),G(5,"foo")),
+                        (F(5,"foo"),G(5,"a")), (F(5,"foo"),G(5,"foo"))])
+        self.assertEqual(expected, set(result))
+
+        # Test output with no options - using the explicit all() method
+        qo = QueryOutput(q1, qp1.output_signature, roots)
+        result = list(qo.all())
+        expected = set([(F(1,"foo"),G(1,"a")), (F(1,"foo"),G(1,"foo")),
+                        (F(5,"a"),G(5,"a")), (F(5,"a"),G(5,"foo")),
+                        (F(5,"foo"),G(5,"a")), (F(5,"foo"),G(5,"foo"))])
+        self.assertEqual(expected, set(result))
+
+        # Test output with no options - using the count() method
+        qo = QueryOutput(q1, qp1.output_signature, roots)
+        self.assertEqual(qo.count(),6)
+
+        # Test output with swapped signature
+        qo = QueryOutput(q1, qp1.output_signature, roots)
+        result = list(qo.output(G,F))
+        expected = set([(G(1,"a"),F(1,"foo")), (G(1,"foo"),F(1,"foo")),
+                        (G(5,"a"),F(5,"a")), (G(5,"foo"),F(5,"a")),
+                        (G(5,"a"),F(5,"foo")), (G(5,"foo"),F(5,"foo"))])
+        self.assertEqual(expected, set(result))
+
+        # Test output with filtered signature
+        qo = QueryOutput(q1, qp1.output_signature, roots)
+        result = list(qo.output(G.anum))
+        expected = set([1,5])
+        self.assertEqual(expected, set(result))
+
+        # Test output with filtered signature and uniqueness
+        qo = QueryOutput(q1, qp1.output_signature, roots)
+        result = list(qo.output(G.anum).unique())
+        expected = set([1,5])
+        self.assertTrue(result == [1,5] or result == [5,1])
+
+        # Test output with filtered signature and forced tuple
+        qo = QueryOutput(q1, qp1.output_signature, roots)
+        result = list(qo.output(G.anum).tuple())
+        expected = set([(1,),(5,)])
+        self.assertEqual(expected, set(result))
+
+#------------------------------------------------------------------------------
+# Test the new Select class
+#------------------------------------------------------------------------------
+
+class SelectNTestCase(unittest.TestCase):
+    def setUp(self):
+        pass
 
 
-        FA = alias(F)
+
 
 #------------------------------------------------------------------------------
 # Test the Select class
