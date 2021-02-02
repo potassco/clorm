@@ -1667,8 +1667,8 @@ def _predicate_init_by_raw(self, **kwargs):
         if raw.name != cls.meta.name: raise ValueError()
         if arity != cls.meta.arity: raise ValueError()
         if cls.meta.sign is not None and cls.meta.sign != raw.positive: raise ValueError()
-        self._field_values = tuple([ f.defn.cltopy(raw.arguments[f.index]) \
-                                     for f in self.meta ])
+        self._field_values = tuple( f.defn.cltopy(raw.arguments[f.index]) \
+                                     for f in self.meta )
     except (TypeError,ValueError):
         raise ValueError(("Failed to unify clingo.Symbol object {} with "
                           "Predicate class {}").format(raw, cls.__name__))
@@ -1755,6 +1755,10 @@ def _predicate_constructor(self, *args, **kwargs):
         _predicate_init_by_raw(self, **kwargs)
     else:
         _predicate_init_by_keyword_values(self, **kwargs)
+
+    if self.meta.is_tuple: self._hash = hash(tuple(self._field_values))
+    else: self._hash = hash(self._raw)
+
 
 def _predicate_base_constructor(self, *args, **kwargs):
     raise TypeError(("Predicate/ComplexTerm must be sub-classed"))
@@ -2230,6 +2234,7 @@ class Predicate(object, metaclass=_PredicateMeta):
         return not result
 
     def __hash__(self):
+        return self._hash
         if self.meta.is_tuple:
             return hash(self._field_values)
         else:

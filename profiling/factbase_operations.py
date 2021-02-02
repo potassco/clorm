@@ -7,7 +7,7 @@
 from clorm import Predicate, ComplexTerm, ConstantField, IntegerField, FactBase, ph1_
 from clingo import Function,Number
 
-from clorm import _FactSet
+from clorm.orm.factbase import _FactSet
 
 import time
 import cProfile

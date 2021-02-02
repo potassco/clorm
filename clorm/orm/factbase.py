@@ -1352,8 +1352,8 @@ class SelectImpl(Select):
     #--------------------------------------------------------------------------
     #
     #--------------------------------------------------------------------------
-    @property
-    def queryplan(self,*args,**kwargs):
+    def query_plan(self,*args,**kwargs):
+        if not args and not kwargs: return self._queryplan
         return self._queryplan.ground(*args,**kwargs)
 
     #--------------------------------------------------------------------------
