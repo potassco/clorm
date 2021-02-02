@@ -12,7 +12,7 @@ import inspect
 import unittest
 import datetime
 import operator
-import collections
+import collections.abc as cabc
 from .support import check_errmsg
 
 from clingo import Control, Number, String, Function, SymbolType
@@ -649,7 +649,7 @@ class PredicateTestCase(unittest.TestCase):
         # None is a legit value and can therefore be set as a default value.
         class DumbField(StringField):
             pytocl = lambda d: "silly" if d  is None else "ok"
-            cltopy = lambda s: None if d is "silly" else "ok"
+            cltopy = lambda s: None if d == "silly" else "ok"
         class Q(Predicate):
             first = DumbField(default=None)
 
@@ -1388,7 +1388,7 @@ class PredicateInternalUnifyTestCase(unittest.TestCase):
             a3 = IntegerField
 
         f=Fact(1,2,3)
-        self.assertTrue(isinstance(f,collections.Iterable))
+        self.assertTrue(isinstance(f,cabc.Iterable))
         self.assertEqual(list(f), [1,2,3])
 
 

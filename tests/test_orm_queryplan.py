@@ -37,9 +37,7 @@ from clorm.orm.queryplan import PositionalPlaceholder, NamedPlaceholder, \
     simple_query_join_order, make_query_plan_preordered_roots, \
     validate_orderby_expression, OrderBy, OrderByBlock, process_orderby, \
     make_prejoin_pair, make_join_pair, make_query_plan, \
-    JoinQueryPlan, QueryPlan, \
-    check_query_condition, simplify_query_condition, \
-    instantiate_query_condition, evaluate_query_condition
+    JoinQueryPlan, QueryPlan
 
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
@@ -112,6 +110,41 @@ class PlaceholderTestCase(unittest.TestCase):
         self.assertTrue(ph2 != 1)
         self.assertFalse(ph2 == 'a')
 
+    #--------------------------------------------------------------------------
+    # Test initialising a placeholder (named and positional)
+    #--------------------------------------------------------------------------
+    def test_placeholder_instantiation(self):
+
+        # Named placeholder with and without default
+        p = ph_("test")
+        self.assertEqual(type(p), NamedPlaceholder)
+        self.assertFalse(p.has_default)
+        self.assertEqual(p.default,None)
+        self.assertEqual(str(p), "ph_(\"test\")")
+
+        p = ph_("test",default=0)
+        self.assertEqual(type(p), NamedPlaceholder)
+        self.assertTrue(p.has_default)
+        self.assertEqual(p.default,0)
+        self.assertEqual(str(p), "ph_(\"test\",0)")
+
+        p = ph_("test",default=None)
+        self.assertEqual(type(p), NamedPlaceholder)
+        self.assertTrue(p.has_default)
+        self.assertEqual(p.default,None)
+
+        # Positional placeholder
+        p = ph_(1)
+        self.assertEqual(type(p), PositionalPlaceholder)
+        self.assertEqual(p.posn, 0)
+        self.assertEqual(str(p), "ph1_")
+
+        # Some bad initialisation
+        with self.assertRaises(TypeError) as ctx: ph_(1,2)
+        with self.assertRaises(TypeError) as ctx: ph_("a",2,3)
+        with self.assertRaises(TypeError) as ctx: ph_("a",default=2,arg=3)
+
+
 #------------------------------------------------------------------------------
 # Test functions that manipulate query conditional and evaluate the conditional
 # w.r.t a fact.
@@ -169,149 +202,27 @@ class QQConditionTestCase(unittest.TestCase):
 
         self.assertNotEqual(cn1,cn2)
 
-        # Checking query condition doesn't raise exceptions
-        check_query_condition(cn1)
-        check_query_condition(cn2)
-        check_query_condition(cn3)
-        check_query_condition(cn4)
-        check_query_condition(cn5)
-        check_query_condition(cp1)
-        check_query_condition(cp2)
-        check_query_condition(cp3)
-        check_query_condition(cp4)
-        check_query_condition(cp5)
-
-        # Simplification does nothing
-        self.assertEqual(simplify_query_condition(cn1),cn1)
-        self.assertEqual(simplify_query_condition(cn2),cn2)
-        self.assertEqual(simplify_query_condition(cn3),cn3)
-        self.assertEqual(simplify_query_condition(cn4),cn4)
-        self.assertEqual(simplify_query_condition(cn5),cn5)
-
-        # Instantiating the query conditions
-        self.assertEqual(instantiate_query_condition(cn1),cn1)
-        self.assertEqual(instantiate_query_condition(cn2),cn2)
-        self.assertEqual(instantiate_query_condition(cn3),cn3)
-        self.assertNotEqual(instantiate_query_condition(cn4,2),cn4)
-        self.assertNotEqual(instantiate_query_condition(cn5,anum=2),cn4)
-        self.assertEqual(instantiate_query_condition(cn4,2),cn1)
-        self.assertEqual(instantiate_query_condition(cn5,anum=2),cn1)
-
         # Evaluating condition against some facts
         af1 = F(2,"bbb",(2,"bbb"))
         af2 = F(1,"aaa",(3,"bbb"))
 
-        self.assertTrue(evaluate_query_condition(cn1,af1))
-        self.assertTrue(evaluate_query_condition(cn2,af1))
-        self.assertTrue(evaluate_query_condition(cn3,af1))
-
-        c1=instantiate_query_condition(cn4,2)
-        c2=instantiate_query_condition(cn5,anum=2)
-        self.assertEqual(c1,cn1)
-        self.assertEqual(c2,cn1)
-        self.assertTrue(evaluate_query_condition(c1,af1))
-        self.assertTrue(evaluate_query_condition(c2,af1))
-
-        self.assertFalse(evaluate_query_condition(cn1,af2))
-        self.assertFalse(evaluate_query_condition(cn2,af2))
-        self.assertFalse(evaluate_query_condition(cn3,af2))
-        self.assertFalse(evaluate_query_condition(c1,af2))
-        self.assertFalse(evaluate_query_condition(c2,af2))
-
         # Some other query conditions that can't be defined with the nice syntax
         c1 = QCondition(operator.eq, 2, F.anum)
-        check_query_condition(c1)
         self.assertEqual(str(c1), "2 == F.anum")
-        self.assertEqual(simplify_query_condition(c1),c1)
-        self.assertTrue(evaluate_query_condition(c1,af1))
 
         c1 = QCondition(operator.eq,2,2)
-        check_query_condition(c1)
         self.assertEqual(str(c1), "2 == 2")
-        c1 = simplify_query_condition(c1)
-        self.assertEqual(c1,True)
-        self.assertTrue(evaluate_query_condition(c1,af1))
 
         c1 = F.anum == F.anum
-        check_query_condition(c1)
         self.assertEqual(str(c1), "F.anum == F.anum")
-        c1 = simplify_query_condition(c1)
-        self.assertEqual(c1,True)
-        self.assertTrue(evaluate_query_condition(c1,af1))
 
         c1 = QCondition(operator.eq,2,1)
-        check_query_condition(c1)
         self.assertEqual(str(c1), "2 == 1")
-        c1 = simplify_query_condition(c1)
-        self.assertEqual(c1,False)
-        self.assertFalse(evaluate_query_condition(c1,af1))
 
         f = lambda x : x.anum == 2
-        check_query_condition(f)
-        self.assertEqual(simplify_query_condition(f),f)
-        f2 = instantiate_query_condition(f)
-        self.assertNotEqual(f,f2)
-        f3 = instantiate_query_condition(f,1,anum=2)
-        self.assertNotEqual(f,f3)
-        self.assertTrue(evaluate_query_condition(f2,af1))
-        self.assertFalse(evaluate_query_condition(f2,af2))
 
         # Test evaluating against a tuple
         c3 = F.atuple == ph1_
-        c4 = simplify_query_condition(c3)
-        c5 = instantiate_query_condition(c4,(3,"bbb"))
-        self.assertEqual(c3,c4)
-        self.assertNotEqual(c4,c5)
-        self.assertEqual(c5, F.atuple == (3,"bbb"))
-        self.assertTrue(evaluate_query_condition(c5,af2))
-        self.assertFalse(evaluate_query_condition(c5,af1))
-
-        # Test some invalid query conditions and evaluations
-
-        with self.assertRaises(ValueError) as ctx:
-            check_query_condition(F.anum)
-        check_errmsg("Invalid condition \'F.anum\'", ctx)
-
-        with self.assertRaises(ValueError) as ctx:
-            check_query_condition(ph1_)
-        check_errmsg("Invalid condition \'ph1_\'", ctx)
-
-        with self.assertRaises(ValueError) as ctx:
-            f = lambda x: x*2
-            check_query_condition(F.anum == f)
-        check_errmsg("Invalid functor", ctx)
-
-        with self.assertRaises(ValueError) as ctx:
-            f = lambda x: x*2
-            check_query_condition(QCondition(operator.eq, F.anum, f))
-        check_errmsg("Invalid functor", ctx)
-
-        with self.assertRaises(ValueError) as ctx:
-            instantiate_query_condition(cp4)
-        check_errmsg("Missing positional placeholder argument 'ph1_'", ctx)
-
-        with self.assertRaises(ValueError) as ctx:
-            instantiate_query_condition(F.anum == ph_("blah"), anum=3)
-        check_errmsg("Missing named placeholder argument 'ph_(\"blah\")'", ctx)
-
-        with self.assertRaises(ValueError) as ctx:
-            instantiate_query_condition(cp4,ph1_)
-        check_errmsg("Invalid Placeholder argument 'ph1_'", ctx)
-
-        with self.assertRaises(ValueError) as ctx:
-            instantiate_query_condition(cp4,F.anum)
-        check_errmsg("Invalid PredicatePath argument 'F.anum'", ctx)
-
-        with self.assertRaises(ValueError) as ctx:
-            evaluate_query_condition(cn4,af1)
-        check_errmsg("Unresolved Placeholder", ctx)
-
-        # Test evaluation against the wrong type of fact
-        G=self.G
-        with self.assertRaises(TypeError) as ctx:
-            evaluate_query_condition(cn1,G(anum=1,astr="b"))
-        check_errmsg("g(1,\"b\") is not of type ", ctx)
-
 
     def test_complex_comparison_conditional(self):
         F=self.F
@@ -320,31 +231,14 @@ class QQConditionTestCase(unittest.TestCase):
         c1 = and_(F.anum == 1, F.astr == ph1_)
         c2 = and_(F.anum == 1, F.astr == ph1_, True)
         c3 = and_(F.anum == 1, F.anum == F.anum, F.astr == ph1_)
-        c4 = simplify_query_condition(c2)
-        c5 = simplify_query_condition(c3)
-        check_query_condition(c1)
-        check_query_condition(c2)
-        check_query_condition(c3)
-        self.assertEqual(c1,c4)
-        self.assertEqual(c1,c5)
 
         c1 = ((F.anum == 1) & (F.astr == ph1_)) | ~(F.atuple == ph2_)
-        check_query_condition(c1)
-        c2 = instantiate_query_condition(c1,"bbb",(1,"ccc"))
-
-        self.assertTrue(evaluate_query_condition(c2,F(1,"bbb",(1,"bbb"))))
-        self.assertTrue(evaluate_query_condition(c2,F(1,"ccc",(1,"bbb"))))
-        self.assertFalse(evaluate_query_condition(c2,F(1,"ccc",(1,"ccc"))))
 
         # TEst simplifying works for a complex disjunction
         c1 = or_(F.anum == 1, F.anum == F.anum, F.astr == ph1_)
-        c2 = simplify_query_condition(c1)
-        self.assertEqual(c2,True)
 
         c1 = or_(F.anum == 1, F.anum != F.anum, F.astr == ph1_)
         c2 = or_(F.anum == 1, F.astr == ph1_)
-        c3 = simplify_query_condition(c1)
-        self.assertEqual(c2,c3)
 
     #-------------------------------------------------------------------------
     # Since we want to use the condition to model joins (such as using __mult__
@@ -447,6 +341,22 @@ class ComparatorTestCase(unittest.TestCase):
             getter((f1,2))
         check_errmsg("Invalid input to getter function: 2 is not", ctx)
 
+    #------------------------------------------------------------------------------
+    #
+    #------------------------------------------------------------------------------
+    def test_nonapi_make_input_alignment_functor_complex(self):
+        class F(Predicate):
+            anum = IntegerField
+            acomplex = (IntegerField,IntegerField)
+        f1 = F(1,(1,2))
+        f2 = F(2,(3,4))
+
+        # FIXUP
+        getter = make_input_alignment_functor([F], [F.acomplex])
+        result = getter((f1,))
+        tmp=((1,2),)
+        self.assertEqual(result, tmp)
+
     # ------------------------------------------------------------------------------
     # ------------------------------------------------------------------------------
     def test_nonapi_StandardComparator(self):
@@ -539,6 +449,27 @@ class ComparatorTestCase(unittest.TestCase):
         with self.assertRaises(TypeError) as ctx:
             SC(operator.eq,[G.anum,ph1_]).make_callable([F,G])
 
+
+    # ------------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------
+    def test_nonapi_StandardComparator_make_callable_with_tuples(self):
+        SC=StandardComparator
+        class F(Predicate):
+            anum = IntegerField
+            acomplex = (IntegerField,IntegerField)
+        f1 = F(1,(1,2))
+        f2 = F(1,(1,3))
+
+        getter = make_input_alignment_functor([F], [F.acomplex])
+        result = getter((f1,))
+        self.assertEqual(result, ((1,2),))
+
+        sc = SC(operator.eq,[F.acomplex,(1,2)])
+        cmp = sc.make_callable([F])
+        self.assertTrue(cmp((f1,)))
+        self.assertFalse(cmp((f2,)))
+
+
     #------------------------------------------------------------------------------
     # Test the wrapping of comparison functors in FunctionComparator
     #------------------------------------------------------------------------------
@@ -597,7 +528,7 @@ class ComparatorTestCase(unittest.TestCase):
             bf1.make_callable([F])
         check_errmsg("Internal bug: make_callable", ctx)
 
-        with self.assertRaises(TypeError) as ctx:
+        with self.assertRaises(ValueError) as ctx:
             bf = FunctionComparator(func1,[])
         check_errmsg("Invalid empty path signature", ctx)
 
@@ -613,6 +544,7 @@ class ComparatorTestCase(unittest.TestCase):
         func1 = lambda x, y : x.anum >= y
         func2 = lambda x, y=10 : x.anum >= y
 
+        # grounding with named placeholders
         bf1 = FunctionComparator(func1,[F.anum,F.astr])
         self.assertEqual(bf1.ground().placeholders, set())
         bf1 = FunctionComparator(func1,[F.anum])
@@ -629,20 +561,34 @@ class ComparatorTestCase(unittest.TestCase):
         gbf1 = FunctionComparator(func1,[path(F)],False,assignment)
         self.assertEqual(gbf1,bf1.ground(**assignment))
 
+        # grounding with positional placeholders
+        fc = FunctionComparator(func1,[path(F)])
+        gfc_args = fc.ground(1)
+        gfc_kwargs = fc.ground(y=1)
+        self.assertEqual(len(fc.placeholders), 1)
+        self.assertEqual(len(gfc_args.placeholders), 0)
+        self.assertEqual(gfc_args, gfc_kwargs)
+
         # Partial grounding will fail
         with self.assertRaises(ValueError) as ctx:
             bf1.ground()
         check_errmsg("Even after the named placeholders", ctx)
 
         # Too many paths
-        with self.assertRaises(TypeError) as ctx:
+        with self.assertRaises(ValueError) as ctx:
             bf1 = FunctionComparator(func1,[F.anum,F.astr,F.atuple])
         check_errmsg("More paths specified", ctx)
 
         # Bad assignment parameter value
-        with self.assertRaises(TypeError) as ctx:
+        with self.assertRaises(ValueError) as ctx:
             bf1 = FunctionComparator(func1,[F.anum],assignment={'k': 5})
         check_errmsg("FunctionComparator is being given an assignment", ctx)
+
+        # Conflicting grounding with positional and keyword arguments
+        with self.assertRaises(ValueError) as ctx:
+            fc = FunctionComparator(func1,[F.anum])
+            gfc = fc.ground(1,y=1)
+        check_errmsg("Both positional and keyword", ctx)
 
 
         bf1 = FunctionComparator(lambda x,y : x < y,[F.anum,F.atuple[0]])
@@ -1046,6 +992,13 @@ class WhereExpressionTestCase(unittest.TestCase):
                    Clause([wsc(X.astr == "a")])]
         self.assertEqual(norm,ClauseBlock(clauses))
 
+
+        # Normalise a negated expression where the negation is next to comparator
+        f = vwe(~(F.anum == 4), [F])
+        norm = tonorm(f)
+        self.assertEqual(norm, ClauseBlock([Clause([wsc(F.anum != 4)])]))
+
+
     # ------------------------------------------------------------------------------
     # ------------------------------------------------------------------------------
     def test_nonapi_partition_clauses(self):
@@ -1280,7 +1233,7 @@ class OrderByTestCase(unittest.TestCase):
         # Missing some roots
         with self.assertRaises(ValueError) as ctx:
             vobe([F.anum,G.anum,desc(FA.anum)],[F,G])
-        check_errmsg("Order By", ctx)
+        check_errmsg("Invalid 'order_by'", ctx)
 
 
 #------------------------------------------------------------------------------

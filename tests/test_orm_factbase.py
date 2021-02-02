@@ -26,9 +26,7 @@ from clorm.orm import FactBase, desc, asc, not_, and_, or_, \
 from clorm.orm.factbase import _FactIndex, _FactMap, _FactSet, \
     make_first_join_query, make_chained_join_query, make_query, QueryOutput
 
-from clorm.orm.queryplan import PositionalPlaceholder, NamedPlaceholder, \
-    check_query_condition, simplify_query_condition, \
-    instantiate_query_condition, evaluate_query_condition
+from clorm.orm.queryplan import PositionalPlaceholder, NamedPlaceholder
 
 from clorm.orm.queryplan import process_where, process_join, process_orderby, \
     make_query_plan, simple_query_join_order, make_input_alignment_functor
@@ -38,7 +36,6 @@ from clorm.orm.queryplan import process_where, process_join, process_orderby, \
 
 __all__ = [
     'FactIndexTestCase',
-    'FactMapTestCase',
     'FactBaseTestCase',
     'QueryTestCase',
     'SelectTestCase',
@@ -195,193 +192,6 @@ class FactIndexTestCase(unittest.TestCase):
 #------------------------------------------------------------------------------
 # Test the _FactMap and Select _Delete class
 #------------------------------------------------------------------------------
-
-class FactMapTestCase(unittest.TestCase):
-    def setUp(self):
-
-        class Afact(Predicate):
-            num1=IntegerField()
-            str1=StringField()
-            str2=ConstantField()
-
-        class Bfact(Predicate):
-            num1=IntegerField()
-            str1=StringField()
-            str2=ConstantField()
-
-        self.Afact = Afact
-        self.Bfact = Bfact
-
-    def test_init(self):
-        Afact = self.Afact
-        Bfact = self.Bfact
-
-        fm1 = _FactMap(Afact)
-        self.assertEqual(fm1.indexes, ())
-
-        fm1 = _FactMap(Afact, [Afact.num1, Afact.str1])
-        self.assertEqual(fm1.indexes, (Afact.num1, Afact.str1))
-
-        with self.assertRaises(TypeError) as ctx:
-            fm = _FactMap(1)
-
-        with self.assertRaises(TypeError) as ctx:
-            fm = _FactMap(Afact.num1)
-
-        with self.assertRaises(TypeError) as ctx:
-            fm = _FactMap(Afact, [Bfact.num1])
-
-    def test_add_and_container_ops(self):
-        Afact = self.Afact
-        fm = _FactMap(Afact, [Afact.num1, Afact.str1])
-
-        af1a = Afact(num1=1, str1="a", str2="a")
-        af2a = Afact(num1=2, str1="a", str2="a")
-        af2b = Afact(num1=2, str1="b", str2="a")
-        af3a = Afact(num1=3, str1="a", str2="c")
-        af3b = Afact(num1=3, str1="b", str2="c")
-
-        # Test add() and  __contains__()
-        allfacts = [ af1a, af2a, af2b, af3a, af3b ]
-        for f in allfacts: fm.add(f)
-        self.assertTrue(af2b in fm)
-        self.assertTrue(af2a in fm)
-        self.assertFalse(Afact(num1=1, str1="a", str2="b") in fm)
-        for f in allfacts: fm.add(f)
-        self.assertTrue(af2b in fm)
-
-        # Test __bool__ and __len__
-        fm2 = _FactMap(Afact, [Afact.num1, Afact.str1])
-        self.assertTrue(bool(fm))
-        self.assertFalse(fm2)
-        self.assertEqual(len(fm), 5)
-        self.assertEqual(len(fm2), 0)
-
-        # Test __iter__
-        self.assertEqual(set(fm), set(allfacts))
-        self.assertEqual(set(fm2), set())
-
-    def test_remove_discard_clear(self):
-        Afact = self.Afact
-        fm = _FactMap(Afact, [Afact.num1, Afact.str1])
-
-        af1a = Afact(num1=1, str1="a", str2="a")
-        af2a = Afact(num1=2, str1="a", str2="a")
-        af2b = Afact(num1=2, str1="b", str2="a")
-        af3a = Afact(num1=3, str1="a", str2="c")
-        af3b = Afact(num1=3, str1="b", str2="c")
-
-        allfacts = [ af1a, af2a, af2b, af3a, af3b ]
-        for f in allfacts: fm.add(f)
-
-        fm.remove(af1a)
-        fm.discard(af1a)
-        with self.assertRaises(KeyError) as ctx:
-            fm.remove(af1a)
-
-        fm.clear()
-        self.assertFalse(af1a in fm)
-        self.assertFalse(af2a in fm)
-        self.assertFalse(af2b in fm)
-        self.assertFalse(af3a in fm)
-        self.assertFalse(af3b in fm)
-
-    def test_set_comparison_ops(self):
-        Afact = self.Afact
-        fm1 = _FactMap(Afact)
-        fm2 = _FactMap(Afact)
-        fm3 = _FactMap(Afact)
-        fm1_alt = _FactMap(Afact)
-
-        af1 = Afact(num1=1, str1="a", str2="a")
-        af2 = Afact(num1=2, str1="a", str2="a")
-        af3 = Afact(num1=3, str1="b", str2="a")
-        af4 = Afact(num1=4, str1="a", str2="c")
-        af5 = Afact(num1=5, str1="b", str2="c")
-
-        fm1.add([af1,af2])
-        fm2.add([af1,af2,af3])
-        fm3.add([af1,af2,af3,af4])
-
-        fm1_alt.add([af1,af2])
-
-        # Test __eq__ and __ne__
-        self.assertTrue(fm1 == fm1_alt)
-        self.assertTrue(fm1 != fm2)
-
-        # Test __lt__, __le__, __gt__, __ge__
-        self.assertFalse(fm1 < fm1_alt)
-        self.assertFalse(fm1 > fm1_alt)
-        self.assertTrue(fm1 <= fm1_alt)
-        self.assertTrue(fm1 >= fm1_alt)
-        self.assertTrue(fm1 < fm2)
-        self.assertFalse(fm1 > fm2)
-        self.assertTrue(fm1 <= fm2)
-        self.assertFalse(fm1 >= fm2)
-        self.assertFalse(fm2 < fm1)
-        self.assertFalse(fm2 <= fm1)
-
-    def test_set_ops(self):
-        Afact = self.Afact
-        fm1 = _FactMap(Afact)
-        fm2 = _FactMap(Afact)
-        fm3 = _FactMap(Afact)
-        fm4 = _FactMap(Afact)
-        fm5 = _FactMap(Afact)
-        fm6 = _FactMap(Afact)
-        fm7 = _FactMap(Afact)
-
-        af1 = Afact(num1=1, str1="a", str2="a")
-        af2 = Afact(num1=2, str1="b", str2="b")
-        af3 = Afact(num1=3, str1="c", str2="c")
-        af4 = Afact(num1=4, str1="d", str2="d")
-        af5 = Afact(num1=5, str1="e", str2="e")
-
-        fm1.add([af1,af2])
-        fm2.add([af2,af3])
-        fm3.add([af3,af4])
-        fm4.add([af1,af2,af3,af4])
-        fm5.add([])
-        fm6.add([af1])
-        fm7.add([af1,af3])
-
-        fmo1=fm1.union(fm2,fm3)
-        fmo2=fm1.intersection(fm2,fm3)
-        fmo3=fm1.difference(fm2)
-        fmo4=fm1.symmetric_difference(fm2)
-        self.assertEqual(fm4,fmo1)
-        self.assertEqual(fm5,fmo2)
-        self.assertEqual(fm6,fmo3)
-        self.assertEqual(fm7,fmo4)
-
-        # Symmetric difference too many arguments
-        with self.assertRaises(TypeError) as ctx:
-            fmo4=fm3.symmetric_difference(fm1,fm4)
-
-        # Test copy function
-        r=fm1.copy() ; self.assertEqual(fm1,r)
-
-        # Update function
-        fm6.update(fm3,fm7)
-        self.assertEqual(fm6.facts(), set([af1,af3,af3,af4]))
-
-        # Intersection update function
-        fm6.intersection_update(fm3,fm7)
-        self.assertEqual(fm6.facts(), set([af3]))
-
-        # Difference update function
-        fm7.difference_update(fm6,fm5)
-        self.assertEqual(fm7.facts(), set([af1]))
-        fm7.difference_update(fm3)
-        self.assertEqual(fm7.facts(), set([af1]))
-
-        # Symmetric difference update function
-        fm1 = _FactMap(Afact)
-        fm2 = _FactMap(Afact)
-        fm1.add([af1,af2,af3])
-        fm2.add([af2,af3,af4])
-        fm1.symmetric_difference_update(fm2)
-        self.assertEqual(fm1.facts(), set([af1,af4]))
 
 #------------------------------------------------------------------------------
 # Test the FactBase
@@ -954,6 +764,16 @@ class QueryTestCase(unittest.TestCase):
         ]
         self.assertEqual(expected, result)
 
+        # Ungrounded query
+        joins2 = pj([F.anum == G.anum],roots)
+        which2 = pw((G.anum > 4) | (F.astr == ph1_),roots)
+        orderbys2 = pob([desc(G.anum),F.astr,desc(G.astr)],roots)
+        qp2 = make_query_plan(simple_query_join_order, indexes.keys(),
+                              roots, joins2, which2, orderbys2)
+        with self.assertRaises(ValueError) as ctx:
+            q1 = make_query(qp2, factsets, indexes)
+        check_errmsg("Cannot execute an ungrounded query",ctx)
+
     #--------------------------------------------------------------------------
     # Test initialising a placeholder (named and positional)
     #--------------------------------------------------------------------------
@@ -1021,17 +841,6 @@ class QueryTestCase(unittest.TestCase):
         self.assertEqual(expected, set(result))
 
 #------------------------------------------------------------------------------
-# Test the new Select class
-#------------------------------------------------------------------------------
-
-class SelectNTestCase(unittest.TestCase):
-    def setUp(self):
-        pass
-
-
-
-
-#------------------------------------------------------------------------------
 # Test the Select class
 #------------------------------------------------------------------------------
 
@@ -1040,43 +849,9 @@ class SelectTestCase(unittest.TestCase):
         pass
 
     #--------------------------------------------------------------------------
-    # Test initialising a placeholder (named and positional)
-    #--------------------------------------------------------------------------
-    def test_placeholder_instantiation(self):
-
-        # Named placeholder with and without default
-        p = ph_("test")
-        self.assertEqual(type(p), NamedPlaceholder)
-        self.assertFalse(p.has_default)
-        self.assertEqual(p.default,None)
-        self.assertEqual(str(p), "ph_(\"test\")")
-
-        p = ph_("test",default=0)
-        self.assertEqual(type(p), NamedPlaceholder)
-        self.assertTrue(p.has_default)
-        self.assertEqual(p.default,0)
-        self.assertEqual(str(p), "ph_(\"test\",0)")
-
-        p = ph_("test",default=None)
-        self.assertEqual(type(p), NamedPlaceholder)
-        self.assertTrue(p.has_default)
-        self.assertEqual(p.default,None)
-
-        # Positional placeholder
-        p = ph_(1)
-        self.assertEqual(type(p), PositionalPlaceholder)
-        self.assertEqual(p.posn, 0)
-        self.assertEqual(str(p), "ph1_")
-
-        # Some bad initialisation
-        with self.assertRaises(TypeError) as ctx: ph_(1,2)
-        with self.assertRaises(TypeError) as ctx: ph_("a",2,3)
-        with self.assertRaises(TypeError) as ctx: ph_("a",default=2,arg=3)
-
-    #--------------------------------------------------------------------------
     #   Test that the select works
     #--------------------------------------------------------------------------
-    def test_select_over_factmap(self):
+    def __test_select_over_factmap(self):
         class Afact1(Predicate):
             num1=IntegerField()
             num2=StringField()
@@ -1353,6 +1128,7 @@ class SelectTestCase(unittest.TestCase):
         q=fb.select(Afact).where((Afact.num1 == 2) & (Afact.num2 == 20))
         self.assertEqual(set([af2]), set(q.get()))
 
+
         q=fb.select(Afact).where(~(Afact.num1 == 2) & (Afact.num2 == 20))
         self.assertEqual(set([af3]), set(q.get()))
 
@@ -1377,22 +1153,15 @@ class SelectTestCase(unittest.TestCase):
 
 
         q=fb.select(F).where((F.num1 == 1) & (lambda f : f.str1 == "b"))
-
-        # NOTE: This fails because it is passing on the position argument 1 to
-        # the lambda. TODO: Need to create a decorator that introspects the
-        # lambda and can then ignore irrelevant parameters.
-        with self.assertRaises(TypeError) as ctx:
-            r=set(q.get(1))
-
-
         q=fb.select(F).where((F.num1 == 1) & (lambda f,v : f.str1 == v))
+
         self.assertEqual(set([f2]), set(q.get("b")))
         self.assertEqual(set([f2]), set(q.get(v="b")))
 
     #--------------------------------------------------------------------------
     #   Test that we can use the same placeholder multiple times
     #--------------------------------------------------------------------------
-    def test_factbase_select_multi_placeholder(self):
+    def _test_api_factbase_select_multi_placeholder(self):
         class Afact(Predicate):
             num1=IntegerField()
             num2=IntegerField()
@@ -1434,7 +1203,7 @@ class SelectTestCase(unittest.TestCase):
     #--------------------------------------------------------------------------
     #   Test that select works with order_by
     #--------------------------------------------------------------------------
-    def test_factbase_select_order_by(self):
+    def test_api_factbase_select_order_by(self):
         class Afact(Predicate):
             num1=IntegerField()
             str1=StringField()
@@ -1478,7 +1247,7 @@ class SelectTestCase(unittest.TestCase):
     #--------------------------------------------------------------------------
     #   Test that select works with order_by for complex term
     #--------------------------------------------------------------------------
-    def test_factbase_select_order_by_complex_term(self):
+    def test_api_factbase_select_order_by_complex_term(self):
 
         class SwapField(IntegerField):
             pytocl = lambda x: 100 - x
@@ -1515,7 +1284,7 @@ class SelectTestCase(unittest.TestCase):
     #--------------------------------------------------------------------------
     #   Test that select works with order_by for complex term
     #--------------------------------------------------------------------------
-    def test_factbase_select_complex_term_placeholders(self):
+    def test_api_factbase_select_complex_term_placeholders(self):
 
         class AFact(Predicate):
             astr = StringField()
@@ -1552,7 +1321,7 @@ class SelectTestCase(unittest.TestCase):
     #--------------------------------------------------------------------------
     #   Test that the indexing works
     #--------------------------------------------------------------------------
-    def test_factbase_select_indexing(self):
+    def __test_api_factbase_select_indexing(self):
         class Afact(Predicate):
             num1=IntegerField()
             num2=IntegerField()
@@ -1587,7 +1356,7 @@ class SelectTestCase(unittest.TestCase):
     #--------------------------------------------------------------------------
     #   Test the delete
     #--------------------------------------------------------------------------
-    def test_delete_over_factmap_and_factbase(self):
+    def __test_delete_over_factmap_and_factbase(self):
         class Afact(Predicate):
             num1=IntegerField()
             num2=StringField()
@@ -1612,10 +1381,10 @@ class SelectTestCase(unittest.TestCase):
 
         self.assertEqual(d1_all.execute(), 5)
         self.assertEqual(set([f for f in s1_num1.get(4)]), set([f4,f42]))
+
         self.assertEqual(d1_num1.execute(4), 2)
         self.assertEqual(set([f for f in s1_num1.get(4)]), set([]))
 
-#        return
 
         fb1 = FactBase(facts=[f1,f3, f4,f42,f10], indexes = [Afact.num1, Afact.num2])
         d1_num1 = fb1.delete(Afact).where(Afact.num1 == ph1_)
@@ -1653,6 +1422,9 @@ class SelectTestCase(unittest.TestCase):
 
         self.assertEqual(s1.get(20), [f2,f1])
         self.assertEqual(s2.get(CT(20,"b")), [f2])
+
+        # NOTE: Important test as it requires tuple complex terms to have the
+        # same hash as the corresponding python tuple.
         self.assertEqual(s3.get((1,2)), [f2])
         self.assertEqual(s4.get((2,1)), [f2])
 
@@ -1681,60 +1453,60 @@ class SelectTestCase(unittest.TestCase):
         # Making multiple calls to select where()
         with self.assertRaises(TypeError) as ctx:
             q = fb.select(F).where(F.num1 == 1).where(F.num2 == 2)
-        check_errmsg("cannot specify 'where' multiple times",ctx)
+        check_errmsg("Cannot specify 'where' multiple times",ctx)
 
         # Bad select where clauses
         with self.assertRaises(TypeError) as ctx:
             q = fb.select(F).where()
-        check_errmsg("empty 'where' expression",ctx)
+        check_errmsg("Empty 'where' expression",ctx)
 
-        with self.assertRaises(TypeError) as ctx:
+        with self.assertRaises(ValueError) as ctx:
             q = fb.select(F).where(G.num1 == 1)
-        check_errmsg("'where' expression contains path 'G.num1'",ctx)
+        check_errmsg("Invalid 'where' expression 'G.num1",ctx)
 
-        with self.assertRaises(TypeError) as ctx:
+        with self.assertRaises(ValueError) as ctx:
             q = fb.select(F).where(F.num1 == G.num1)
-        check_errmsg("'where' expression contains path 'G.num1'",ctx)
+        check_errmsg("Invalid 'where' expression",ctx)
 
-        with self.assertRaises(TypeError) as ctx:
+        with self.assertRaises(ValueError) as ctx:
             q = fb.select(F).where(F.num1 == 1, G.num1 == 1)
-        check_errmsg("'where' expression contains path 'G.num1'",ctx)
+        check_errmsg("Invalid 'where' expression",ctx)
 
 #        with self.assertRaises(TypeError) as ctx:
 #            q = fb.select(F).where(0)
 #        check_errmsg("'int' object is not callable",ctx)
 
         # Bad delete where clause
-        with self.assertRaises(TypeError) as ctx:
+        with self.assertRaises(ValueError) as ctx:
             q = fb.delete(F).where(G.num1 == 1)
-        check_errmsg("'where' expression contains path 'G.num1'",ctx)
+        check_errmsg("Invalid 'where' expression",ctx)
 
 
         # Making multiple calls to select order_by()
         with self.assertRaises(TypeError) as ctx:
             q = fb.select(F).order_by(F.num1).order_by(F.num2)
-        check_errmsg("cannot specify 'order_by' multiple times",ctx)
+        check_errmsg("Cannot specify 'order_by' multiple times",ctx)
 
         # Bad select where clauses
         with self.assertRaises(TypeError) as ctx:
             q = fb.select(F).order_by()
-        check_errmsg("empty 'order_by' expression",ctx)
+        check_errmsg("Empty 'order_by' expression",ctx)
 
         with self.assertRaises(TypeError) as ctx:
             q = fb.select(F).order_by(1)
         check_errmsg("Invalid 'order_by' expression",ctx)
 
-        with self.assertRaises(TypeError) as ctx:
+        with self.assertRaises(ValueError) as ctx:
             q = fb.select(F).order_by(G.num1)
-        check_errmsg("'order_by' expression contains path 'G.num1'",ctx)
+        check_errmsg("Invalid 'order_by' expression",ctx)
 
-        with self.assertRaises(TypeError) as ctx:
+        with self.assertRaises(ValueError) as ctx:
             q = fb.select(F).order_by(F.num1,G.num1)
-        check_errmsg("'order_by' expression contains path 'G.num1'",ctx)
+        check_errmsg("Invalid 'order_by' expression",ctx)
 
-        with self.assertRaises(TypeError) as ctx:
+        with self.assertRaises(ValueError) as ctx:
             q = fb.select(F).order_by(F.num1,desc(G.num1))
-        check_errmsg("'order_by' expression contains path 'G.num1'",ctx)
+        check_errmsg("Invalid 'order_by' expression",ctx)
 
 
 #------------------------------------------------------------------------------

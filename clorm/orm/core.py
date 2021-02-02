@@ -15,8 +15,9 @@ import contextlib
 import inspect
 import operator
 import collections
+import collections.abc as cabc
 import bisect
-import abc
+import enum
 import functools
 import itertools
 import clingo
@@ -111,29 +112,47 @@ def _wsce(a):
     if isinstance(a,str): return "'{}'".format(a)
     return "{}".format(a)
 def _wqc(a):
-    return "({})".format(a) if isinstance(a,QCondition) else str(_wsce(a))
+    try:
+        form = a.form
+        if form == QCondition.Form.INFIX: return "({})".format(a)
+        else: return "{}".format(a)
+    except:
+        return str(_wsce(a))
 
 
 class QCondition(object):
+    class Form(enum.Enum):
+        UNIT=0
+        INFIX=1
+        FUNCTIONAL=2
 
-
-    OpSig = collections.namedtuple('OpSig','arity tostr')
+    OpSig = collections.namedtuple('OpSig','arity form tostr')
     operators = {
         # Boolean operators
-        operator.and_ : OpSig(2, lambda x,y: "{} & {}".format(_wqc(x),_wqc(y))),
-        operator.or_ : OpSig(2, lambda x,y: "{} | {}".format(_wqc(x),_wqc(y))),
-        operator.not_ : OpSig(1, lambda x: "~{}".format(_wqc(x))),
+        operator.and_ : OpSig(2, Form.INFIX,
+                              lambda x,y: "{} & {}".format(_wqc(x),_wqc(y))),
+        operator.or_ : OpSig(2, Form.INFIX,
+                             lambda x,y: "{} | {}".format(_wqc(x),_wqc(y))),
+        operator.not_ : OpSig(1, Form.UNIT,
+                              lambda x: "~{}".format(_wqc(x))),
 
         # Basic comparison operators
-        operator.eq : OpSig(2, lambda x,y: "{} == {}".format(_wsce(x),_wsce(y))),
-        operator.ne : OpSig(2, lambda x,y: "{} != {}".format(_wsce(x),_wsce(y))),
-        operator.lt : OpSig(2, lambda x,y: "{} < {}".format(_wsce(x),_wsce(y))),
-        operator.le : OpSig(2, lambda x,y: "{} <= {}".format(_wsce(x),_wsce(y))),
-        operator.gt : OpSig(2, lambda x,y: "{} > {}".format(_wsce(x),_wsce(y))),
-        operator.ge : OpSig(2, lambda x,y: "{} >= {}".format(_wsce(x),_wsce(y))),
+        operator.eq : OpSig(2, Form.INFIX,
+                            lambda x,y: "{} == {}".format(_wsce(x),_wsce(y))),
+        operator.ne : OpSig(2, Form.INFIX,
+                            lambda x,y: "{} != {}".format(_wsce(x),_wsce(y))),
+        operator.lt : OpSig(2, Form.INFIX,
+                            lambda x,y: "{} < {}".format(_wsce(x),_wsce(y))),
+        operator.le : OpSig(2, Form.INFIX,
+                            lambda x,y: "{} <= {}".format(_wsce(x),_wsce(y))),
+        operator.gt : OpSig(2, Form.INFIX,
+                            lambda x,y: "{} > {}".format(_wsce(x),_wsce(y))),
+        operator.ge : OpSig(2, Form.INFIX,
+                            lambda x,y: "{} >= {}".format(_wsce(x),_wsce(y))),
 
         # A cross-product join operator
-        trueall : OpSig(2, lambda x,y: "joinall_({},{})".format(path(x),path(y)))
+        trueall : OpSig(2, Form.FUNCTIONAL,
+                        lambda x,y: "joinall_({},{})".format(path(x),path(y)))
     }
 
     def __init__(self, operator, *args):
@@ -146,6 +165,10 @@ class QCondition(object):
 
         self._operator = operator
         self._args = tuple(args)
+
+    @property
+    def form(self):
+        return QCondition.operators[self._operator].form
 
     @property
     def operator(self):
@@ -1270,7 +1293,7 @@ def define_nested_list_field(*args):
         raise TypeError("'{}' is not a RawField or a sub-class".format(efield))
 
     def _pytocl(v):
-        if isinstance(v,str) or not isinstance(v,collections.Iterable):
+        if isinstance(v,str) or not isinstance(v,cabc.Iterable):
             raise TypeError("'{}' is not a collection (list/seq/etc)".format(v))
         nested=clingo.Function("",[])
         for ev in reversed(v):
@@ -1644,7 +1667,8 @@ def _predicate_init_by_raw(self, **kwargs):
         if raw.name != cls.meta.name: raise ValueError()
         if arity != cls.meta.arity: raise ValueError()
         if cls.meta.sign is not None and cls.meta.sign != raw.positive: raise ValueError()
-        self._field_values = [ f.defn.cltopy(raw.arguments[f.index]) for f in self.meta ]
+        self._field_values = tuple([ f.defn.cltopy(raw.arguments[f.index]) \
+                                     for f in self.meta ])
     except (TypeError,ValueError):
         raise ValueError(("Failed to unify clingo.Symbol object {} with "
                           "Predicate class {}").format(raw, cls.__name__))
@@ -1669,6 +1693,9 @@ def _predicate_init_by_keyword_values(self, **kwargs):
         # Set the value for the field
         self._field_values.append(v)
         clingoargs.append(f.defn.pytocl(v))
+
+    # Turn it into a tuple
+    self._field_values = tuple(self._field_values)
 
     # Calculate the sign of the literal and check that it matches the allowed values
     if "sign" in kwargs:
@@ -1703,6 +1730,9 @@ def _predicate_init_by_positional_values(self, *args, **kwargs):
         v = _preprocess_field_value(f.defn, args[f.index])
         self._field_values.append(v)
         clingoargs.append(f.defn.pytocl(v))
+
+    # Turn it into a tuple
+    self._field_values = tuple(self._field_values)
 
     # Calculate the sign of the literal and check that it matches the allowed values
     sign = bool(kwargs["sign"]) if "sign" in kwargs else True
@@ -2125,8 +2155,11 @@ class Predicate(object, metaclass=_PredicateMeta):
     #--------------------------------------------------------------------------
     def __eq__(self, other):
         """Overloaded boolean operator."""
-        if not isinstance(other, Predicate): return NotImplemented
         if isinstance(other, self.__class__): return self.raw == other.raw
+        if self.meta.is_tuple:
+            return self._field_values == other
+        elif not isinstance(other, Predicate):
+            return NotImplemented
         return False
 
     def __ne__(self, other):
@@ -2197,7 +2230,10 @@ class Predicate(object, metaclass=_PredicateMeta):
         return not result
 
     def __hash__(self):
-        return self.raw.__hash__()
+        if self.meta.is_tuple:
+            return hash(self._field_values)
+        else:
+            return hash(self._raw)
 
     def __str__(self):
         """Returns the Predicate as the string representation of the raw

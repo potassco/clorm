@@ -7,6 +7,7 @@ import io
 import operator
 import collections
 import bisect
+import inspect
 import abc
 import functools
 import itertools
@@ -15,12 +16,11 @@ from .core import *
 from .core import get_field_definition, PredicatePath, kwargs_check_keys
 
 from .queryplan import *
-from .queryplan import Placeholder, check_query_condition, simplify_query_condition, \
-    instantiate_query_condition, evaluate_query_condition, SelectImpl, DeleteImpl
 
-from .queryplan import Select, Delete, OrderBy, desc, asc
+from .queryplan import Placeholder, OrderBy, desc, asc
 
 from .queryplan import JoinQueryPlan, QueryPlan, \
+    process_where, process_join, process_orderby, \
     make_input_alignment_functor, simple_query_join_order, make_query_plan
 
 # ------------------------------------------------------------------------------
@@ -53,7 +53,9 @@ from ..util import OrderedSet as _FactSet
 # ------------------------------------------------------------------------------
 
 __all__ = [
-    'FactBase'
+    'FactBase',
+    'Select',
+    'Delete',
     ]
 
 #------------------------------------------------------------------------------
@@ -263,12 +265,6 @@ class _FactMap(object):
         self._allfacts.clear()
         if self._findexes:
             for f, findex in self._findexes.items(): findex.clear()
-
-    def select(self):
-        return SelectImpl(self)
-
-    def delete(self):
-        return DeleteImpl(self)
 
     def asp_str(self):
         out = io.StringIO()
@@ -545,20 +541,31 @@ class FactBase(object):
             self._factmaps[ptype] = _FactMap(ptype)
 
         fm =  self._factmaps[ptype]
-        return fm.select()
-
-#        pred2factset = { hashable_path(ptype) : fm._allfacts }
-#        path2factindexes = fm._findexes if fm._findexes else {}
-
-#        print("HERE: {} ||  {} ||  {}".format([hashable_path(ptype)], pred2factset,path2factindexes))
-#        return SelectNew([ptype], pred2factset,path2factindexes)
 #        return fm.select()
+
+        pred2factset = { ptype : fm._allfacts }
+        path2factindexes = fm._findexes if fm._findexes else {}
+
+        return SelectImpl([ptype], pred2factset,path2factindexes)
+        return fm.select()
 
 
     def delete(self, ptype):
         """Create a Select query for a predicate type."""
 
         self._check_init()  # Check for delayed init
+
+        if ptype not in self._factmaps:
+            self._factmaps[ptype] = _FactMap(ptype)
+        fm =  self._factmaps[ptype]
+
+
+        pred2factset = { ptype : fm._allfacts }
+        path2factindexes = fm._findexes if fm._findexes else {}
+
+        return DeleteImpl([ptype], pred2factset,path2factindexes)
+
+
         if ptype not in self._factmaps:
             self._factmaps[ptype] = _FactMap(ptype)
         return self._factmaps[ptype].delete()
@@ -895,7 +902,6 @@ class FactBase(object):
 # ------------------------------------------------------------------------------
 
 def make_prejoin_query(jqp, predicate_to_factset, hpath_to_factindex):
-
     factset = predicate_to_factset.get(jqp.root.meta.predicate, _FactSet())
     prejsc = jqp.prejoin_key
     prejcb = jqp.prejoin_clauses
@@ -1013,6 +1019,10 @@ def make_chained_join_query(jqp, inquery,
 # ------------------------------------------------------------------------------
 
 def make_query(qp, predicate_to_factset, hpath_to_factindex):
+    if qp.placeholders:
+        raise ValueError(("Cannot execute an ungrounded query. Missing values "
+                          "for placeholders: "
+                          "{}").format(", ".join([str(p) for p in qp.placeholders])))
     query = None
     for idx,jqp in enumerate(qp):
         if not query:
@@ -1089,7 +1099,7 @@ class QueryOutput(object):
 
 
     # --------------------------------------------------------------------------
-    # Internal functions to get the output
+    # Internal function generator for the query results
     # --------------------------------------------------------------------------
     def _all(self):
         cache = set()
@@ -1139,11 +1149,125 @@ class QueryOutput(object):
     def __iter__(self):
         return self.all()
 
+
+#------------------------------------------------------------------------------
+# Select is an interface query over a FactBase.
+# ------------------------------------------------------------------------------
+
+class Select(abc.ABC):
+    """An abstract class that defines the interface to a query object.
+
+    ``Select`` query object cannot be constructed directly.
+
+    Instead a ``Select`` object is returned as part of a specfication return
+    thed ``FactBase.select()`` function. Given a ``FactBase`` object ``fb``, a
+    specification is of the form:
+
+          ``query = fb.select(<predicate>).where(<expression>).order_by(<ordering>)``
+
+    where ``<predicate>`` specifies the predicate type to search
+    for,``<expression>`` specifies the search criteria and ``<ordering>``
+    specifies a sort order when returning the results. The ``where()`` clause and
+    ``order_by()`` clause can be omitted.
+
+    """
+
+    @abc.abstractmethod
+    def where(self, *expressions):
+        """Set the select statement's where clause.
+
+        The where clause consists of a set of boolean and comparison
+        expressions. This expression specifies a search criteria for matching
+        facts within the corresponding ``FactBase``.
+
+        Boolean expression are built from other boolean expression or a
+        comparison expression. Comparison expressions are of the form:
+
+               ``<PredicatePath> <compop>  <value>``
+
+       where ``<compop>`` is a comparison operator such as ``==``, ``!=``, or
+       ``<=`` and ``<value>`` is either a Python value or another predicate path
+       object refering to a field of the same predicate or a placeholder.
+
+        A placeholder is a special value that issubstituted when the query is
+        actually executed. These placeholders are named ``ph1_``, ``ph2_``,
+        ``ph3_``, and ``ph4_`` and correspond to the 1st to 4th arguments of the
+        ``get``, ``get_unique`` or ``count`` function call.
+
+        Args:
+          expressions: one or more comparison expressions.
+
+        Returns:
+          Returns a reference to itself.
+
+        """
+        pass
+
+    @abc.abstractmethod
+    def order_by(self, *fieldorder):
+        """Provide an ordering over the results.
+
+        Args:
+          fieldorder: an ordering over fields
+        Returns:
+          Returns a reference to itself.
+        """
+        pass
+
+    @abc.abstractmethod
+    def get(self, *args, **kwargs):
+        """Return all matching entries."""
+        pass
+
+    @abc.abstractmethod
+    def get_unique(self, *args, **kwargs):
+        """Return the single matching entry. Raises ValueError otherwise."""
+        pass
+
+    @abc.abstractmethod
+    def count(self, *args, **kwargs):
+        """Return the number of matching entries."""
+        pass
+
+#------------------------------------------------------------------------------
+# Delete is an interface to perform a query delete from a FactBase.
+# ------------------------------------------------------------------------------
+
+class Delete(abc.ABC):
+    """An abstract class that defines the interface to a delete query object.
+
+    ``Delete`` query object cannot be constructed directly.
+
+    Instead a ``Delete`` object is returned as part of a specfication return
+    thed ``FactBase.delete()`` function. Given a ``FactBase`` object ``fb``, a
+    specification is of the form:
+
+          ``query = fb.delete(<predicate>).where(<expression>)``
+
+    where ``<predicate>`` specifies the predicate type to search
+    for,``<expression>`` specifies the search criteria. The ``where()`` clause
+    can be omitted in which case all predicates of that type will be deleted.
+
+    """
+
+    @abc.abstractmethod
+    def where(self, *expressions):
+        """Set the select statement's where clause.
+
+        See the documentation for ``Select.where()`` for further details.
+        """
+        pass
+
+    @abc.abstractmethod
+    def execute(self, *args, **kwargs):
+        """Function to execute the delete query"""
+        pass
+
 #------------------------------------------------------------------------------
 # The new (v2) Select class
 #------------------------------------------------------------------------------
 
-class SelectNew(Select):
+class SelectImpl(Select):
 
     def __init__(self, roots, predicate_to_factset, hpath_to_factindex):
 
@@ -1157,10 +1281,12 @@ class SelectNew(Select):
         self._indexes = hpath_to_factindex.keys()
         self._queryplan = make_query_plan(simple_query_join_order,
                                           self._indexes, self._roots,
-                                          [], None, None)
+                                          [], [], [])
 
-        print("\n\nGOT HERE\n\n")
 
+    #--------------------------------------------------------------------------
+    # Add a join expression
+    #--------------------------------------------------------------------------
     def join(self, *expressions):
         if self._where:
             raise TypeError(("The 'join' condition must come before the "
@@ -1177,8 +1303,12 @@ class SelectNew(Select):
         # Make a query plan in case there is no other inputs
         self._queryplan = make_query_plan(simple_query_join_order,
                                           self._indexes, self._roots,
-                                          self._joins, None, None)
+                                          self._joins, [], [])
+        return self
 
+    #--------------------------------------------------------------------------
+    # Add an order_by expression
+    #--------------------------------------------------------------------------
     def where(self, *expressions):
         if self._orderbys:
             raise TypeError(("The 'where' condition must come before the "
@@ -1188,53 +1318,167 @@ class SelectNew(Select):
         if not expressions:
             raise TypeError("Empty 'where' expression")
         elif len(expressions) == 1:
-            self._where = process_which(expressions[0],self._roots)
+            self._where = process_where(expressions[0],self._roots)
         else:
-            self._where = process_which(and_(*expressions),self._roots)
+            self._where = process_where(and_(*expressions),self._roots)
 
         # Make a query plan in case there is no other inputs
+        joins = self._joins if self._joins else []
+        where = self._where if self._where else []
         self._queryplan = make_query_plan(simple_query_join_order,
                                           self._indexes, self._roots,
-                                          self._joins, self._which, None)
+                                          joins, where, [])
+        return self
 
+    #--------------------------------------------------------------------------
+    # Add an order_by expression
+    #--------------------------------------------------------------------------
     def order_by(self, *expressions):
         if self._orderbys:
-            raise TypeError("cannot specify 'order_by' multiple times")
+            raise TypeError("Cannot specify 'order_by' multiple times")
         if not expressions:
-            raise TypeError("empty 'order_by' expression")
+            raise TypeError("Empty 'order_by' expression")
         self._orderbys = process_orderby(expressions,self._roots)
 
         # Make a query plan in case there is no other inputs
+        joins = self._joins if self._joins else []
+        where = self._where if self._where else []
         self._queryplan = make_query_plan(simple_query_join_order,
                                           self._indexes, self._roots,
-                                          self._joins, self._which,
+                                          joins, where,
                                           self._orderbys)
+        return self
+
+    #--------------------------------------------------------------------------
+    #
+    #--------------------------------------------------------------------------
     @property
-    def has_where(self):
-        return bool(self._where)
+    def queryplan(self,*args,**kwargs):
+        return self._queryplan.ground(*args,**kwargs)
+
+    #--------------------------------------------------------------------------
+    # Functions currently mirroring the old interface
+    # --------------------------------------------------------------------------
 
     def get(self, *args, **kwargs):
         gqplan = self._queryplan.ground(*args,**kwargs)
-        query = gqplan(self._queryplan, self._factsets, self._factindexes)
+        query = make_query(gqplan, self._factsets, self._factindexes)
 
         qo = QueryOutput(query, gqplan.output_signature, self._roots)
         return list(qo.all())
 
     def get_unique(self, *args, **kwargs):
         gqplan = self._queryplan.ground(*args,**kwargs)
-        query = gqplan(self._queryplan, self._factsets, self._factindexes)
+        query = make_query(gqplan, self._factsets, self._factindexes)
 
         qo = QueryOutput(query, gqplan.output_signature, self._roots)
         return qo.singleton()
 
     def count(self, *args, **kwargs):
         gqplan = self._queryplan.ground(*args,**kwargs)
-        query = gqplan(self._queryplan, self._factsets, self._factindexes)
+        query = make_query(gqplan, self._factsets, self._factindexes)
 
         qo = QueryOutput(query, gqplan.output_signature, self._roots)
         return qo.count()
 
 
+
+#------------------------------------------------------------------------------
+# The new (v2) Delete class
+#------------------------------------------------------------------------------
+
+class DeleteImpl(Delete):
+
+    def __init__(self, predicates, predicate_to_factset, hpath_to_factindex):
+        def _check_predicate(ptype):
+            if not inspect.isclass(ptype) or not issubclass(ptype, Predicate):
+                raise TypeError(("Object '{}' is not a Predicate "
+                                 "sub-class").format(ptype))
+            return ptype
+        self._predicates = tuple([_check_predicate(ptype) for ptype in predicates])
+
+        self._roots = self._predicates
+        self._where = None
+        self._joins = None
+        self._factsets = predicate_to_factset
+        self._factindexes = hpath_to_factindex
+
+        self._indexes = hpath_to_factindex.keys()
+        self._queryplan = make_query_plan(simple_query_join_order,
+                                          self._indexes, self._roots,
+                                          [], [], [])
+
+    #--------------------------------------------------------------------------
+    # Add a join expression
+    #--------------------------------------------------------------------------
+    def join(self, *expressions):
+        if self._where:
+            raise TypeError(("The 'join' condition must come before the "
+                             "'where' condition"))
+        if self._joins:
+            raise TypeError("Cannot specify 'join' multiple times")
+        if not expressions:
+            raise TypeError("Empty 'join' expression")
+        self._joins = process_join(expressions, self._roots)
+
+        # Make a query plan in case there is no other inputs
+        self._queryplan = make_query_plan(simple_query_join_order,
+                                          self._indexes, self._roots,
+                                          self._joins, [], [])
+        return self
+
+    #--------------------------------------------------------------------------
+    # Add an order_by expression
+    #--------------------------------------------------------------------------
+    def where(self, *expressions):
+        if self._where:
+            raise TypeError("Cannot specify 'where' multiple times")
+        if not expressions:
+            raise TypeError("Empty 'where' expression")
+        elif len(expressions) == 1:
+            self._where = process_where(expressions[0],self._roots)
+        else:
+            self._where = process_where(and_(*expressions),self._roots)
+
+        # Make a query plan in case there is no other inputs
+        joins = self._joins if self._joins else []
+        where = self._where if self._where else []
+        self._queryplan = make_query_plan(simple_query_join_order,
+                                          self._indexes, self._roots,
+                                          joins, where, [])
+        return self
+
+    #--------------------------------------------------------------------------
+    # Functions currently mirroring the old interface
+    # --------------------------------------------------------------------------
+
+    def execute(self, *args, **kwargs):
+        gqplan = self._queryplan.ground(*args,**kwargs)
+        query = make_query(gqplan, self._factsets, self._factindexes)
+
+        # Build sets of facts to delete associated by ptype
+        to_delete = tuple([ set() for ptype in self._roots ])
+        for ftuple in query():
+            for idx, f in enumerate(ftuple):
+                to_delete[idx].add(f)
+
+        # Build a list of factindexes associated by predicate type
+        ptype2factindex = {}
+        for pth,fi in self._factindexes.items():
+            filist = ptype2factindex.setdefault(path(pth).meta.predicate,[])
+            filist.append(fi)
+
+        # Delete the facts
+        count=0
+        for ptype in self._roots:
+            factset = self._factsets[ptype]
+            for f in to_delete[idx]:
+                count+= 1
+                factset.discard(f)
+                filist = ptype2factindex.get(ptype,[])
+                for fi in filist:
+                    fi.discard(f)
+        return count
 #------------------------------------------------------------------------------
 # main
 #------------------------------------------------------------------------------

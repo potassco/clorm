@@ -9,9 +9,8 @@ import io
 import contextlib
 import inspect
 import operator
-import collections
+import collections.abc as cabc
 import bisect
-import abc
 import functools
 import itertools
 import clingo
@@ -42,7 +41,7 @@ __all__ = [
 # ------------------------------------------------------------------------------
 
 class TypeCastSignature(object):
-    """Defines a signature for converting to/from Clingo data types.
+    r"""Defines a signature for converting to/from Clingo data types.
 
     Args:
       sigs(\*sigs): A list of signature elements.
@@ -81,14 +80,14 @@ class TypeCastSignature(object):
 
     @staticmethod
     def _is_input_element(se):
-        '''An input element must be a subclass of RawField (or an instance of a
-           subclass) or a tuple corresponding to a subclass of RawField'''
+        """An input element must be a subclass of RawField (or an instance of a
+           subclass) or a tuple corresponding to a subclass of RawField"""
         return inspect.isclass(se) and issubclass(se, RawField)
 
     @staticmethod
     def is_return_element(se):
-        '''An output element must be a subclass of RawField or a singleton containing'''
-        if isinstance(se, collections.Iterable):
+        """An output element must be a subclass of RawField or a singleton containing"""
+        if isinstance(se, cabc.Iterable):
             if len(se) != 1: return False
             return TypeCastSignature._is_input_element(se[0])
         return TypeCastSignature._is_input_element(se)
@@ -106,7 +105,7 @@ class TypeCastSignature(object):
         # A tuple is a special case that we want to convert into a complex field
         if isinstance(self._outsig, tuple):
             self._outsig = type(get_field_definition(self._outsig))
-        elif isinstance(self._outsig, collections.Iterable):
+        elif isinstance(self._outsig, cabc.Iterable):
             if len(self._outsig) != 1:
                 raise TypeError("Return value list signature not a singleton")
             if isinstance(self._outsig[0], tuple):
@@ -114,7 +113,7 @@ class TypeCastSignature(object):
 
         # Validate the signature
         for s in self._insigs: _validate_basic_sig(s)
-        if isinstance(self._outsig, collections.Iterable):
+        if isinstance(self._outsig, cabc.Iterable):
             _validate_basic_sig(self._outsig[0])
         else:
             _validate_basic_sig(self._outsig)
@@ -131,7 +130,7 @@ class TypeCastSignature(object):
             return sig.pytocl(arg)
 
         # Deal with a list
-        if isinstance(sig, collections.Iterable) and isinstance(arg, collections.Iterable):
+        if isinstance(sig, cabc.Iterable) and isinstance(arg, cabc.Iterable):
             return [ self._output(sig[0], v) for v in arg ]
         raise ValueError("Value {} does not match signature {}".format(arg, sig))
 
@@ -211,7 +210,7 @@ def _get_annotations(fn, ignore_first=False):
 #------------------------------------------------------------------------------
 
 def make_function_asp_callable(*args):
-    '''A decorator for making a function callable from within an ASP program.
+    r"""A decorator for making a function callable from within an ASP program.
 
     Can be called in a number of ways. Can be called as a decorator with or
     without arguments. If called with arguments then the arguments must
@@ -244,7 +243,7 @@ def make_function_asp_callable(*args):
     the function to be wrapped and the previous elements conform to the
     signature profile.
 
-    '''
+    """
     if len(args) == 0: raise ValueError("Invalid call to decorator")
     fn = None ; sigs = None
 
@@ -277,13 +276,13 @@ def make_function_asp_callable(*args):
 #------------------------------------------------------------------------------
 
 def make_method_asp_callable(*args):
-    '''A decorator for making a member function callable from within an ASP program.
+    """A decorator for making a member function callable from within an ASP program.
 
     See ``make_function_asp_callable`` for details. The only difference is that
     the first element of the function is ignore as it is assumed to be the
     ``self`` or ``cls`` parameter.
 
-    '''
+    """
     if len(args) == 0: raise ValueError("Invalid call to decorator")
     fn = None ; sigs = None
 
@@ -411,7 +410,7 @@ class ContextBuilder(object):
         return _decorator
 
     def register(self, *args):
-        '''Register a function with the context builder.
+        """Register a function with the context builder.
 
     Args:
 
@@ -420,7 +419,7 @@ class ContextBuilder(object):
         conversion signature. If there are no earlier arguments then the
         signature is extracted from the function annotations.
 
-        '''
+        """
 
         # Called as a decorator with no signature arguments so decorator needs
         # to use function annotations
@@ -439,7 +438,7 @@ class ContextBuilder(object):
         return self._make_decorator(None,*sigargs)(args[-1])
 
     def register_name(self, func_name, *args):
-        '''Register a function with assigning it a new name witin the context.
+        """Register a function with assigning it a new name witin the context.
 
     Args:
 
@@ -449,7 +448,7 @@ class ContextBuilder(object):
         is more than one argument then the earlier arguments define the data
         conversion signature. If there are no earlier arguments then the
         signature is extracted from the function annotations.
-        '''
+        """
 
         if not func_name: raise ValueError("Specified an empty function name")
 
@@ -470,7 +469,7 @@ class ContextBuilder(object):
         return self._make_decorator(func_name,*sigargs)(args[-1])
 
     def make_context(self, cls_name="Context"):
-        '''Return a context object that encapsulates the registered functions'''
+        """Return a context object that encapsulates the registered functions"""
 
         tmp = { n : fn for n,fn in self._funcs.items() }
         return type(cls_name, (object,), tmp)()
