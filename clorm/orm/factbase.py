@@ -63,10 +63,10 @@ __all__ = [
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-# _FactIndex indexes facts by a given field
+# FactIndex indexes facts by a given field
 #------------------------------------------------------------------------------
 
-class _FactIndex(object):
+class FactIndex(object):
     def __init__(self, path):
         try:
             self._path = path
@@ -212,174 +212,127 @@ def _is_set_equal(s1,s2):
 # index matters as it determines the priority of the index.
 # ------------------------------------------------------------------------------
 
-class _FactMap(object):
+class FactMap(object):
     def __init__(self, ptype, indexes=[]):
         self._ptype = ptype
-        self._allfacts = _FactSet()
+        self._factset = _FactSet()
+        self._path2factindex = {}
+        self._factindexes = []
 
-        self._findexes = None
-        self._indexes = ()
-        if not issubclass(ptype, Predicate):
-            raise TypeError("{} is not a subclass of Predicate".format(ptype))
-        if indexes:
-            self._indexes = tuple(indexes)
-            self._findexes = collections.OrderedDict(
-                (p.meta.hashable, _FactIndex(p)) for p in self._indexes )
-            preds = set([p.meta.predicate for p in self._indexes])
-            if len(preds) != 1 or preds != set([ptype]):
-                raise TypeError("Fields in {} do not belong to {}".format(indexes,preds))
+        # Validate the paths to be indexed
+        allindexes = set([hashable_path(p) for p in indexes])
+        for pth in allindexes:
+            tmppath=path(pth)
+            if hashable_path(tmppath.meta.dealiased) != hashable_path(tmppath):
+                raise ValueError(("Cannot create an index for an alias path "
+                                  "'{}'").format(tmppath))
+            if tmppath.meta.predicate != ptype:
+                raise ValueError(("Index path '{}' isn't a sub-path of Predicate "
+                                  "'{}'").format(tmppath, path(ptype)))
+            tmpfi = FactIndex(tmppath)
+            self._path2factindex[hashable_path(tmppath)] = tmpfi
+            self._factindexes.append(tmpfi)
+        self._factindexes = tuple(self._factindexes)
 
-    def _add_fact(self,fact):
-        self._allfacts.add(fact)
-        if self._findexes:
-            for findex in self._findexes.values(): findex.add(fact)
+    def add_facts(self, facts):
+        for f in facts:
+            self._factset.add(f)
+            for fi in self._factindexes: fi.add(f)
 
-    def add(self, arg):
-        if isinstance(arg, Predicate): return self._add_fact(arg)
-        for f in arg: self._add_fact(f)
+    def add_fact(self, fact):
+        self._factset.add(fact)
+        for fi in self._factindexes: fi.add(fact)
 
-    def discard(self, fact):
-        self.remove(fact, False)
+    def discard(self,fact):
+        self.remove(fact,False)
 
-    def remove(self, fact, raise_on_missing=True):
-        if raise_on_missing: self._allfacts.remove(fact)
-        else: self._allfacts.discard(fact)
-        if self._findexes:
-            for findex in self._findexes.values(): findex.remove(fact,raise_on_missing)
+    def remove(self,fact, raise_on_missing=True):
+        if raise_on_missing: self._factset.remove(fact)
+        else: self._factset.discard(fact)
+        for fi in self._factindexes:
+            fi.remove(fact,raise_on_missing)
+
+    def pop(self):
+        if not self._factset: raise KeyError("Cannot pop() an empty set of facts")
+        fact = next(iter(self._factset))
+        self.remove(fact)
+        return fact
+
+    def clear(self):
+        self._factset.clear()
+        for fi in self._factindexes: fi.clear()
 
     @property
     def predicate(self):
         return self._ptype
 
     @property
-    def indexes(self):
-        return self._indexes
+    def factset(self):
+        return self._factset
 
-    def get_factindex(self, path):
-        return self._findexes[path.meta.hashable]
-
-    def facts(self):
-        return self._allfacts
-
-    def clear(self):
-        self._allfacts.clear()
-        if self._findexes:
-            for f, findex in self._findexes.items(): findex.clear()
-
-    def asp_str(self):
-        out = io.StringIO()
-        for f in self._allfacts:
-            print("{}.".format(f), file=out)
-        data = out.getvalue()
-        out.close()
-        return data
-
-    def pop(self):
-        if not self._allfacts: raise KeyError("Cannot pop() an empty _FactMap")
-        fact = next(iter(self._allfacts))
-        self.remove(fact)
-        return fact
-
-    def __str__(self):
-        return self.asp_str()
-
-    def __repr__(self):
-        return self.__str__()
-
-    #--------------------------------------------------------------------------
-    # Special functions to support container operations
-    #--------------------------------------------------------------------------
-
-    def __contains__(self, fact):
-        if not isinstance(fact, self._ptype): return False
-        return fact in self._allfacts
+    @property
+    def path2factindex(self):
+        return self._path2factindex
 
     def __bool__(self):
-        return bool(self._allfacts)
-
-    def __len__(self):
-        return len(self._allfacts)
-
-    def __iter__(self):
-        return iter(self._allfacts)
-
-    def __eq__(self,other):
-        return _is_set_equal(self._allfacts,other._allfacts)
-
-    def __ne__(self,other):
-        return not _is_set_equal(self._allfacts,other._allfacts)
-
-    def __lt__(self,other):
-        return self._allfacts < other._allfacts
-
-    def __le__(self,other):
-        return self._allfacts <= other._allfacts
-
-    def __gt__(self,other):
-        return self._allfacts > other._allfacts
-
-    def __ge__(self,other):
-        return self._allfacts >= other._allfacts
-
+        return bool(self._factset)
 
     #--------------------------------------------------------------------------
     # Set functions
     #--------------------------------------------------------------------------
     def union(self,*others):
-        nfm = _FactMap(self.predicate, self.indexes)
-        tmpothers = [o.facts() for o in others]
-        tmp = self.facts().union(*tmpothers)
-        nfm.add(tmp)
+        nfm = FactMap(self.predicate, self._path2factindex.keys())
+        tmpothers = [o.factset for o in others]
+        tmp = self.factset.union(*tmpothers)
+        nfm.add_facts(tmp)
         return nfm
 
     def intersection(self,*others):
-        nfm = _FactMap(self.predicate, self.indexes)
-        tmpothers = [o.facts() for o in others]
-        tmp = self.facts().intersection(*tmpothers)
-        nfm.add(tmp)
+        nfm = FactMap(self.predicate, self._path2factindex.keys())
+        tmpothers = [o.factset for o in others]
+        tmp = self.factset.intersection(*tmpothers)
+        nfm.add_facts(tmp)
         return nfm
 
     def difference(self,*others):
-        nfm = _FactMap(self.predicate, self.indexes)
-        tmpothers = [o.facts() for o in others]
-        tmp = self.facts().difference(*tmpothers)
-        nfm.add(tmp)
+        nfm = FactMap(self.predicate, self._path2factindex.keys())
+        tmpothers = [o.factset for o in others]
+        tmp = self.factset.difference(*tmpothers)
+        nfm.add_facts(tmp)
         return nfm
 
     def symmetric_difference(self,other):
-        nfm = _FactMap(self.predicate, self.indexes)
-        tmp = self.facts().symmetric_difference(other)
-        nfm.add(tmp)
+        nfm = FactMap(self.predicate, self._path2factindex.keys())
+        tmp = self.factset.symmetric_difference(other.factset)
+        nfm.add_facts(tmp)
         return nfm
 
     def update(self,*others):
-        for f in itertools.chain(*[o.facts() for o in others]):
-            self._add_fact(f)
+        self.add_facts(itertools.chain(*[o.factset for o in others]))
 
     def intersection_update(self,*others):
-        for f in set(self.facts()):
+        for f in set(self.factset):
             for o in others:
-                if f not in o: self.discard(f)
+                if f not in o.factset: self.discard(f)
 
     def difference_update(self,*others):
-        for f in itertools.chain(*[o.facts() for o in others]):
+        for f in itertools.chain(*[o.factset for o in others]):
             self.discard(f)
 
     def symmetric_difference_update(self, other):
         to_remove=set()
         to_add=set()
-        for f in self._allfacts:
-            if f in other._allfacts: to_remove.add(f)
-        for f in other._allfacts:
-            if f not in self._allfacts: to_add.add(f)
+        for f in self._factset:
+            if f in other._factset: to_remove.add(f)
+        for f in other._factset:
+            if f not in self._factset: to_add.add(f)
         for f in to_remove: self.discard(f)
-        for f in to_add: self._add_fact(f)
+        self.add_facts(to_add)
 
     def copy(self):
-        nfm = _FactMap(self.predicate, self.indexes)
-        nfm.add(self.facts())
+        nfm = FactMap(self.predicate, self._path2factindex.keys())
+        nfm.add_facts(self.factset)
         return nfm
-
 
 #------------------------------------------------------------------------------
 # Support function for printing ASP facts
@@ -448,14 +401,14 @@ class FactBase(object):
             indexes = facts.indexes
         if indexes is None: indexes=[]
 
-        # Create _FactMaps for the predicate types with indexed fields
+        # Create FactMaps for the predicate types with indexed fields
         grouped = {}
 
         self._indexes = tuple(indexes)
         for path in self._indexes:
             if path.meta.predicate not in grouped: grouped[path.meta.predicate] = []
             grouped[path.meta.predicate].append(path)
-        self._factmaps = { pt : _FactMap(pt, idxs) for pt, idxs in grouped.items() }
+        self._factmaps = { pt : FactMap(pt, idxs) for pt, idxs in grouped.items() }
 
         if facts is None: return
         self._add(facts)
@@ -469,18 +422,24 @@ class FactBase(object):
     #--------------------------------------------------------------------------
 
     def _add(self, arg):
-        if isinstance(arg, Predicate): return self._add_fact(arg)
-        for f in arg: self._add_fact(f)
+        if isinstance(arg, Predicate): return self._add_fact(type(arg),arg)
+        facts = sorted(arg, key=lambda x : type(x).__name__)
+        for ptype, g in itertools.groupby(facts, lambda x: type(x)):
+            self._add_facts(ptype, g)
 
-    # Helper for _add
-    def _add_fact(self, fact):
-        ptype = type(fact)
+    def _add_fact(self, ptype, fact):
         if not issubclass(ptype,Predicate):
             raise TypeError(("type of object {} is not a Predicate "
                              "(or sub-class)").format(fact))
-        if ptype not in self._factmaps:
-            self._factmaps[ptype] = _FactMap(ptype)
-        self._factmaps[ptype].add(fact)
+        fm = self._factmaps.setdefault(ptype, FactMap(ptype))
+        fm.add_fact(fact)
+
+    def _add_facts(self, ptype, facts):
+        if not issubclass(ptype,Predicate):
+            raise TypeError(("type of object {} is not a Predicate "
+                             "(or sub-class)").format(fact))
+        fm = self._factmaps.setdefault(ptype, FactMap(ptype))
+        fm.add_facts(facts)
 
     def _remove(self, fact, raise_on_missing):
         ptype = type(fact)
@@ -537,17 +496,11 @@ class FactBase(object):
 
         self._check_init()  # Check for delayed init
 
-        if ptype not in self._factmaps:
-            self._factmaps[ptype] = _FactMap(ptype)
+        fm = self._factmaps.setdefault(ptype, FactMap(ptype))
+        pred2factset = { ptype : fm.factset }
+        path2factindex = fm.path2factindex if fm.path2factindex else {}
 
-        fm =  self._factmaps[ptype]
-#        return fm.select()
-
-        pred2factset = { ptype : fm._allfacts }
-        path2factindexes = fm._findexes if fm._findexes else {}
-
-        return SelectImpl([ptype], pred2factset,path2factindexes)
-        return fm.select()
+        return SelectImpl([ptype], pred2factset,path2factindex)
 
 
     def delete(self, ptype):
@@ -555,20 +508,11 @@ class FactBase(object):
 
         self._check_init()  # Check for delayed init
 
-        if ptype not in self._factmaps:
-            self._factmaps[ptype] = _FactMap(ptype)
-        fm =  self._factmaps[ptype]
+        fm = self._factmaps.setdefault(ptype, FactMap(ptype))
+        pred2factset = { ptype : fm.factset }
+        path2factindex = fm.path2factindex if fm.path2factindex else {}
 
-
-        pred2factset = { ptype : fm._allfacts }
-        path2factindexes = fm._findexes if fm._findexes else {}
-
-        return DeleteImpl([ptype], pred2factset,path2factindexes)
-
-
-        if ptype not in self._factmaps:
-            self._factmaps[ptype] = _FactMap(ptype)
-        return self._factmaps[ptype].delete()
+        return DeleteImpl([ptype], pred2factset,path2factindex)
 
     @property
     def predicates(self):
@@ -586,7 +530,7 @@ class FactBase(object):
         """Return all facts."""
 
         self._check_init()  # Check for delayed init
-        tmp = [ fm.facts() for fm in self._factmaps.values() if fm]
+        tmp = [ fm.factset for fm in self._factmaps.values() if fm]
         return list(itertools.chain(*tmp))
 
     def asp_str(self,width=0,commented=False):
@@ -606,7 +550,7 @@ class FactBase(object):
                 else: print("",file=out)
                 pm=fm.predicate.meta
                 print("% FactBase predicate: {}/{}".format(pm.name,pm.arity),file=out)
-                _format_asp_facts(fm,out,width)
+                _format_asp_facts(fm.factset,out,width)
 
         data = out.getvalue()
         out.close()
@@ -634,7 +578,7 @@ class FactBase(object):
         if not isinstance(fact,Predicate): return False
         ptype = type(fact)
         if ptype not in self._factmaps: return False
-        return fact in self._factmaps[ptype].facts()
+        return fact in self._factmaps[ptype].factset
 
     def __bool__(self):
         """Implemement set bool operator."""
@@ -647,13 +591,13 @@ class FactBase(object):
 
     def __len__(self):
         self._check_init() # Check for delayed init
-        return sum([len(fm) for fm in self._factmaps.values()])
+        return sum([len(fm.factset) for fm in self._factmaps.values()])
 
     def __iter__(self):
         self._check_init() # Check for delayed init
 
         for fm in self._factmaps.values():
-            for f in fm: yield f
+            for f in fm.factset: yield f
 
     def __eq__(self, other):
         """Overloaded boolean operator."""
@@ -668,7 +612,7 @@ class FactBase(object):
 
         for p, fm1 in self_fms.items():
             fm2 = other_fms[p]
-            if not _is_set_equal(fm1.facts(),fm2.facts()): return False
+            if not _is_set_equal(fm1.factset,fm2.factset): return False
 
         return True
 
@@ -693,8 +637,8 @@ class FactBase(object):
         for p, spfm in self_fms.items():
             if p not in other_fms: return False
             opfm = other_fms[p]
-            if spfm < opfm: known_ne=True
-            elif spfm > opfm: return False
+            if spfm.factset < opfm.factset: known_ne=True
+            elif spfm.factset > opfm.factset: return False
 
         if known_ne: return True
         return False
@@ -712,7 +656,7 @@ class FactBase(object):
         for p, spfm in self_fms.items():
             if p not in other_fms: return False
             opfm = other_fms[p]
-            if spfm > opfm: return False
+            if spfm.factset > opfm.factset: return False
         return True
 
     def __gt__(self,other):
@@ -780,7 +724,7 @@ class FactBase(object):
             if p in self._factmaps:
                 fb._factmaps[p] = self._factmaps[p].union(*pothers)
             else:
-                fb._factmaps[p] = _FactMap(p).union(*pothers)
+                fb._factmaps[p] = FactMap(p).union(*pothers)
         return fb
 
     def intersection(self,*others):
@@ -963,7 +907,7 @@ def make_chained_join_query(jqp, inquery,
     jcb = jqp.join_clauses
 
     if jsc:
-        source = _FactIndex(jsc.args[0])
+        source = FactIndex(jsc.args[0])
         operator = jsc.operator
         align_query_input = make_input_alignment_functor(
             jqp.input_signature,(jsc.args[1],))
@@ -1001,9 +945,9 @@ def make_chained_join_query(jqp, inquery,
 
 
     if jcb and isinstance(source,_FactSet): outquery=query_factset_with_jcb
-    elif jcb and isinstance(source,_FactIndex): outquery=query_factindex_with_jcb
+    elif jcb and isinstance(source,FactIndex): outquery=query_factindex_with_jcb
     elif not jcb and isinstance(source,_FactSet): outquery=query_factset_without_jcb
-    elif not jcb and isinstance(source,_FactIndex): outquery=query_factindex_without_jcb
+    elif not jcb and isinstance(source,FactIndex): outquery=query_factindex_without_jcb
 
     def sorted_outquery():
         tmp = list(jqp.input_signature) + [jqp.root]

@@ -23,7 +23,7 @@ from clorm.orm import FactBase, desc, asc, not_, and_, or_, \
     ph_, ph1_, ph2_
 
 # Implementation imports
-from clorm.orm.factbase import _FactIndex, _FactMap, _FactSet, \
+from clorm.orm.factbase import FactIndex, FactMap, _FactSet, \
     make_first_join_query, make_chained_join_query, make_query, QueryOutput
 
 from clorm.orm.queryplan import PositionalPlaceholder, NamedPlaceholder
@@ -46,7 +46,7 @@ __all__ = [
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-# Test the _FactIndex class
+# Test the FactIndex class
 #------------------------------------------------------------------------------
 
 class FactIndexTestCase(unittest.TestCase):
@@ -64,20 +64,20 @@ class FactIndexTestCase(unittest.TestCase):
 
     def test_create(self):
         Afact = self.Afact
-        fi1 = _FactIndex(Afact.num1)
+        fi1 = FactIndex(Afact.num1)
         self.assertTrue(fi1)
 
         # Should only accept fields
         with self.assertRaises(TypeError) as ctx:
-            f2 = _FactIndex(1)
+            f2 = FactIndex(1)
         with self.assertRaises(TypeError) as ctx:
-            f2 = _FactIndex(Afact)
+            f2 = FactIndex(Afact)
 
     def test_add(self):
         Afact = self.Afact
         Bfact = self.Bfact
-        fi1 = _FactIndex(Afact.num1)
-        fi2 = _FactIndex(Afact.str1)
+        fi1 = FactIndex(Afact.num1)
+        fi2 = FactIndex(Afact.str1)
         self.assertEqual(fi1.keys, [])
 
         fi1.add(Afact(num1=1, str1="c"))
@@ -104,7 +104,7 @@ class FactIndexTestCase(unittest.TestCase):
         af3a = Afact(num1=3, str1="a")
         af3b = Afact(num1=3, str1="b")
 
-        fi = _FactIndex(Afact.num1)
+        fi = FactIndex(Afact.num1)
         for f in [ af1a, af2a, af2b, af3a, af3b ]: fi.add(f)
         self.assertEqual(fi.keys, [1,2,3])
 
@@ -136,7 +136,7 @@ class FactIndexTestCase(unittest.TestCase):
         af3a = Afact(num1=3, str1="a")
         af3b = Afact(num1=3, str1="b")
 
-        fi = _FactIndex(Afact.num1)
+        fi = FactIndex(Afact.num1)
         allfacts = [ af1a, af2a, af2b, af3a, af3b ]
         for f in allfacts: fi.add(f)
 
@@ -153,7 +153,7 @@ class FactIndexTestCase(unittest.TestCase):
 
     def test_clear(self):
         Afact = self.Afact
-        fi = _FactIndex(Afact.num1)
+        fi = FactIndex(Afact.num1)
         fi.add(Afact(num1=1, str1="a"))
         fi.clear()
         self.assertEqual(fi.keys,[])
@@ -170,9 +170,9 @@ class FactIndexTestCase(unittest.TestCase):
             ct1=CT.Field()
             ct2=(IntegerField(),IntegerField())
 
-        fi1 = _FactIndex(Fact.ct1.num1)
-        fi2 = _FactIndex(Fact.ct2[1])
-        fi3 = _FactIndex(Fact.ct1)
+        fi1 = FactIndex(Fact.ct1.num1)
+        fi2 = FactIndex(Fact.ct2[1])
+        fi3 = FactIndex(Fact.ct1)
 
         f1=Fact(CT(10,"a"),(1,4))
         f2=Fact(CT(20,"b"),(2,3))
@@ -651,7 +651,7 @@ class QueryTestCase(unittest.TestCase):
         self.indexes = {}
 
         factset = _FactSet()
-        factindex = _FactIndex(G.astr)
+        factindex = FactIndex(G.astr)
         for f in [G(1,"a"),G(1,"foo"),G(5,"a"),G(5,"foo")]:
             factset.add(f)
             factindex.add(f)
@@ -659,7 +659,7 @@ class QueryTestCase(unittest.TestCase):
         self.factsets[G] = factset
 
         factset = _FactSet()
-        factindex = _FactIndex(F.anum)
+        factindex = FactIndex(F.anum)
         for f in [F(1,"a"),F(1,"foo"),F(5,"a"),F(5,"foo")]:
             factset.add(f)
             factindex.add(f)
