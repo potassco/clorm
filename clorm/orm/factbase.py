@@ -462,6 +462,13 @@ class FactBase(object):
 
 
     #--------------------------------------------------------------------------
+    # An internal API for the query mechanism. Not to be called by users.
+    #--------------------------------------------------------------------------
+    @property
+    def factmaps(self):
+        return self._factmaps
+
+    #--------------------------------------------------------------------------
     # Set member functions
     #--------------------------------------------------------------------------
     def add(self, arg):
@@ -491,28 +498,52 @@ class FactBase(object):
     #--------------------------------------------------------------------------
     # Special FactBase member functions
     #--------------------------------------------------------------------------
-    def select(self, ptype):
+    def select(self, *roots):
+        """Create a Select query for a predicate type."""
+        self._check_init()  # Check for delayed init
+
+        # Make sure there are factmaps for each referenced predicate type
+        ptypes = set([r.meta.predicate for r in validate_root_paths(roots)])
+        for ptype in ptypes: self._factmaps.setdefault(ptype, FactMap(ptype))
+        return SelectImpl(self, roots)
+
+
+    def delete(self, *ptypes):
         """Create a Select query for a predicate type."""
 
         self._check_init()  # Check for delayed init
 
-        fm = self._factmaps.setdefault(ptype, FactMap(ptype))
-        pred2factset = { ptype : fm.factset }
-        path2factindex = fm.path2factindex if fm.path2factindex else {}
+        # Make sure there are factmaps for each referenced predicate type
+        ptypes = [p.meta.predicate for p in validate_root_paths(ptypes)]
+        for ptype in ptypes: self._factmaps.setdefault(ptype, FactMap(ptype))
+        return DeleteImpl(self, [path(pt) for pt in ptypes], ptypes)
 
-        return SelectImpl([ptype], pred2factset,path2factindex)
 
+    def dfrom(self, *roots):
 
-    def delete(self, ptype):
+        """Create a complex delete query."""
+        self._check_init()  # Check for delayed init
+
+        # Make sure there are factmaps for each referenced predicate type
+        roots = [r in validate_root_paths(roots)]
+        ptypes = set([r.meta.predicate for r in roots])
+        for ptype in ptypes: self._factmaps.setdefault(ptype, FactMap(ptype))
+
+        class DeleteFrom(object):
+            def __init__(self, factbase,roots): self._input=(factbase,roots)
+            def delete(self, *ptypes): return DeleteImpl(*self._input, roots, ptypes)
+        return DeleteFrom()
+
+    def delete_from(self, ptypes, roots):
         """Create a Select query for a predicate type."""
 
         self._check_init()  # Check for delayed init
 
-        fm = self._factmaps.setdefault(ptype, FactMap(ptype))
-        pred2factset = { ptype : fm.factset }
-        path2factindex = fm.path2factindex if fm.path2factindex else {}
+        # Make sure there are factmaps for each referenced predicate type
+        ptypes = [p.meta.predicate for p in validate_root_paths(roots)]
+        for ptype in ptypes: self._factmaps.setdefault(ptype, FactMap(ptype))
 
-        return DeleteImpl([ptype], pred2factset,path2factindex)
+        return DeleteImpl(self, ptypes, roots)
 
     @property
     def predicates(self):
@@ -1213,19 +1244,25 @@ class Delete(abc.ABC):
 
 class SelectImpl(Select):
 
-    def __init__(self, roots, predicate_to_factset, hpath_to_factindex):
-
+    def __init__(self, factbase, roots):
         self._roots = tuple(validate_root_paths(roots))
+        ptypes = set([ root.meta.predicate for root in self._roots])
+
         self._where = None
         self._joins = None
         self._orderbys = None
-        self._factsets = predicate_to_factset
-        self._factindexes = hpath_to_factindex
+        self._pred2factset = {}
+        self._path2factindex = {}
 
-        self._indexes = hpath_to_factindex.keys()
+        for ptype in ptypes:
+            fm =factbase.factmaps[ptype]
+            self._pred2factset[ptype] = fm.factset
+            for hpth, fi in fm.path2factindex.items():
+                self._path2factindex[hpth] = fi
+
         self._queryplan = make_query_plan(simple_query_join_order,
-                                          self._indexes, self._roots,
-                                          [], [], [])
+                                          self._path2factindex.keys(),
+                                          self._roots, [], [], [])
 
 
     #--------------------------------------------------------------------------
@@ -1246,8 +1283,8 @@ class SelectImpl(Select):
 
         # Make a query plan in case there is no other inputs
         self._queryplan = make_query_plan(simple_query_join_order,
-                                          self._indexes, self._roots,
-                                          self._joins, [], [])
+                                          self._path2factindex.keys(),
+                                          self._roots, self._joins, [], [])
         return self
 
     #--------------------------------------------------------------------------
@@ -1270,8 +1307,8 @@ class SelectImpl(Select):
         joins = self._joins if self._joins else []
         where = self._where if self._where else []
         self._queryplan = make_query_plan(simple_query_join_order,
-                                          self._indexes, self._roots,
-                                          joins, where, [])
+                                          self._path2factindex.keys(),
+                                          self._roots, joins, where, [])
         return self
 
     #--------------------------------------------------------------------------
@@ -1288,9 +1325,9 @@ class SelectImpl(Select):
         joins = self._joins if self._joins else []
         where = self._where if self._where else []
         self._queryplan = make_query_plan(simple_query_join_order,
-                                          self._indexes, self._roots,
-                                          joins, where,
-                                          self._orderbys)
+                                          self._path2factindex.keys(),
+                                          self._roots, joins,
+                                          where, self._orderbys)
         return self
 
     #--------------------------------------------------------------------------
@@ -1306,21 +1343,21 @@ class SelectImpl(Select):
 
     def get(self, *args, **kwargs):
         gqplan = self._queryplan.ground(*args,**kwargs)
-        query = make_query(gqplan, self._factsets, self._factindexes)
+        query = make_query(gqplan, self._pred2factset, self._path2factindex)
 
         qo = QueryOutput(query, gqplan.output_signature, self._roots)
         return list(qo.all())
 
     def get_unique(self, *args, **kwargs):
         gqplan = self._queryplan.ground(*args,**kwargs)
-        query = make_query(gqplan, self._factsets, self._factindexes)
+        query = make_query(gqplan, self._pred2factset, self._path2factindex)
 
         qo = QueryOutput(query, gqplan.output_signature, self._roots)
         return qo.singleton()
 
     def count(self, *args, **kwargs):
         gqplan = self._queryplan.ground(*args,**kwargs)
-        query = make_query(gqplan, self._factsets, self._factindexes)
+        query = make_query(gqplan, self._pred2factset, self._path2factindex)
 
         qo = QueryOutput(query, gqplan.output_signature, self._roots)
         return qo.count()
@@ -1333,24 +1370,41 @@ class SelectImpl(Select):
 
 class DeleteImpl(Delete):
 
-    def __init__(self, predicates, predicate_to_factset, hpath_to_factindex):
-        def _check_predicate(ptype):
-            if not inspect.isclass(ptype) or not issubclass(ptype, Predicate):
-                raise TypeError(("Object '{}' is not a Predicate "
-                                 "sub-class").format(ptype))
-            return ptype
-        self._predicates = tuple([_check_predicate(ptype) for ptype in predicates])
+    def __init__(self, factbase, roots, todelete):
+        def _setof(paths): return set([hashable_path(p) for p in paths])
 
-        self._roots = self._predicates
+        self._factbase = factbase
+
+        if not roots: raise ValueError("Empty list of root paths")
+        if not todelete: raise ValueError("Empty predicate delete list")
+
+        # Allow flexiblity in case the predicate types to delete are passed as
+        # paths - but cannot pass an alias.
+        self._todelete = tuple(validate_root_paths(todelete))
+        for ppath in self._todelete:
+            if hashable_path(ppath.meta.dealiased) != hashable_path(ppath):
+                raise ValueError(("Cannot delete aliased facts '{}'").format(ppath))
+
+        # todelete must be a subset of roots
+        self._roots = tuple(validate_root_paths(roots))
+        if not _setof(self._todelete).issubset(_setof(self._roots)):
+                raise ValueError(("The predicates to delete '{}' must "
+                                  "be a subset of the selected roots "
+                                  "'{}'").format(self._todelete, self._roots))
         self._where = None
         self._joins = None
-        self._factsets = predicate_to_factset
-        self._factindexes = hpath_to_factindex
+        self._pred2factset = {}
+        self._path2factindex = {}
 
-        self._indexes = hpath_to_factindex.keys()
+        for ptype in [r.meta.predicate for r in self._roots]:
+            fm =factbase.factmaps[ptype]
+            self._pred2factset[ptype] = fm.factset
+            for hpth, fi in fm.path2factindex.items():
+                self._path2factindex[hpth] = fi
+
         self._queryplan = make_query_plan(simple_query_join_order,
-                                          self._indexes, self._roots,
-                                          [], [], [])
+                                          self._path2factindex.keys(),
+                                          self._roots, [], [], [])
 
     #--------------------------------------------------------------------------
     # Add a join expression
@@ -1367,8 +1421,8 @@ class DeleteImpl(Delete):
 
         # Make a query plan in case there is no other inputs
         self._queryplan = make_query_plan(simple_query_join_order,
-                                          self._indexes, self._roots,
-                                          self._joins, [], [])
+                                          self._path2factindex.keys(),
+                                          self._roots, self._joins, [], [])
         return self
 
     #--------------------------------------------------------------------------
@@ -1388,8 +1442,8 @@ class DeleteImpl(Delete):
         joins = self._joins if self._joins else []
         where = self._where if self._where else []
         self._queryplan = make_query_plan(simple_query_join_order,
-                                          self._indexes, self._roots,
-                                          joins, where, [])
+                                          self._path2factindex.keys(),
+                                          self._roots, joins, where, [])
         return self
 
     #--------------------------------------------------------------------------
@@ -1398,30 +1452,24 @@ class DeleteImpl(Delete):
 
     def execute(self, *args, **kwargs):
         gqplan = self._queryplan.ground(*args,**kwargs)
-        query = make_query(gqplan, self._factsets, self._factindexes)
+        query = make_query(gqplan, self._pred2factset, self._path2factindex)
+
+        # Make an alignment of the roots to the todelete
+        align_qin = make_input_alignment_functor(self._roots, self._todelete)
 
         # Build sets of facts to delete associated by ptype
-        to_delete = tuple([ set() for ptype in self._roots ])
-        for ftuple in query():
-            for idx, f in enumerate(ftuple):
+        to_delete = tuple([ set() for ptype in self._todelete ])
+        for intuple in query():
+            for idx, f in enumerate(align_qin(intuple)):
                 to_delete[idx].add(f)
-
-        # Build a list of factindexes associated by predicate type
-        ptype2factindex = {}
-        for pth,fi in self._factindexes.items():
-            filist = ptype2factindex.setdefault(path(pth).meta.predicate,[])
-            filist.append(fi)
 
         # Delete the facts
         count=0
-        for ptype in self._roots:
-            factset = self._factsets[ptype]
+        for ppath in self._todelete:
+            factmap = self._factbase.factmaps[ppath.meta.predicate]
             for f in to_delete[idx]:
                 count+= 1
-                factset.discard(f)
-                filist = ptype2factindex.get(ptype,[])
-                for fi in filist:
-                    fi.discard(f)
+                factmap.discard(f)
         return count
 #------------------------------------------------------------------------------
 # main

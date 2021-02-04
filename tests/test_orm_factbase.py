@@ -20,7 +20,7 @@ from clorm.orm import RawField, IntegerField, StringField, ConstantField, \
 
 # Official Clorm API imports for the fact base components
 from clorm.orm import FactBase, desc, asc, not_, and_, or_, \
-    ph_, ph1_, ph2_
+    ph_, ph1_, ph2_, func_
 
 # Implementation imports
 from clorm.orm.factbase import FactIndex, FactMap, _FactSet, \
@@ -851,70 +851,47 @@ class SelectTestCase(unittest.TestCase):
     #--------------------------------------------------------------------------
     #   Test that the select works
     #--------------------------------------------------------------------------
-    def __test_select_over_factmap(self):
+    def test_api_select_factbase2(self):
         class Afact1(Predicate):
             num1=IntegerField()
             num2=StringField()
             str1=StringField()
             class Meta: name = "afact"
 
-        fm1 = _FactMap(Afact1, [Afact1.num1,Afact1.str1])
-        fm2 = _FactMap(Afact1)
         f1 = Afact1(1,1,"1")
         f3 = Afact1(3,3,"3")
         f4 = Afact1(4,4,"4")
         f42 = Afact1(4,42,"42")
         f10 = Afact1(10,10,"10")
-        fm1.add(f1)
-        fm1.add(f3)
-        fm1.add(f4)
-        fm1.add(f42)
-        fm1.add(f10)
-        fm2.add(f1)
-        fm2.add(f3)
-        fm2.add(f4)
-        fm2.add(f42)
-        fm2.add(f10)
+        fb1 = FactBase([f1,f3,f4,f42,f10], [Afact1.num1,Afact1.str1])
+        fb2 = FactBase([f1,f3,f4,f42,f10])
 
-        s1_all = fm1.select()
-        s1_num1_eq_4 = fm1.select().where(Afact1.num1 == 4)
-        s1_num1_ne_4 = fm1.select().where(Afact1.num1 != 4)
-        s1_num1_lt_4 = fm1.select().where(Afact1.num1 < 4)
-        s1_num1_le_4 = fm1.select().where(Afact1.num1 <= 4)
-        s1_num1_gt_4 = fm1.select().where(Afact1.num1 > 4)
-        s1_num1_ge_4 = fm1.select().where(Afact1.num1 >= 4)
-        s1_str1_eq_4 = fm1.select().where(Afact1.str1 == "4")
-        s1_num2_eq_4 = fm1.select().where(Afact1.num2 == 4)
+        s1_all = fb1.select(Afact1)
+        s1_num1_eq_4 = fb1.select(Afact1).where(Afact1.num1 == 4)
+        s1_num1_ne_4 = fb1.select(Afact1).where(Afact1.num1 != 4)
+        s1_num1_lt_4 = fb1.select(Afact1).where(Afact1.num1 < 4)
+        s1_num1_le_4 = fb1.select(Afact1).where(Afact1.num1 <= 4)
+        s1_num1_gt_4 = fb1.select(Afact1).where(Afact1.num1 > 4)
+        s1_num1_ge_4 = fb1.select(Afact1).where(Afact1.num1 >= 4)
+        s1_str1_eq_4 = fb1.select(Afact1).where(Afact1.str1 == "4")
+        s1_num2_eq_4 = fb1.select(Afact1).where(Afact1.num2 == 4)
 
-        s2_all = fm1.select()
-        s2_num1_eq_4 = fm2.select().where(Afact1.num1 == 4)
-        s2_num1_ne_4 = fm2.select().where(Afact1.num1 != 4)
-        s2_num1_lt_4 = fm2.select().where(Afact1.num1 < 4)
-        s2_num1_le_4 = fm2.select().where(Afact1.num1 <= 4)
-        s2_num1_gt_4 = fm2.select().where(Afact1.num1 > 4)
-        s2_num1_ge_4 = fm2.select().where(Afact1.num1 >= 4)
-        s2_str1_eq_4 = fm2.select().where(Afact1.str1 == "4")
-        s2_num2_eq_4 = fm2.select().where(Afact1.num2 == 4)
+        s2_all = fb1.select(Afact1)
+        s2_num1_eq_4 = fb2.select(Afact1).where(Afact1.num1 == 4)
+        s2_num1_ne_4 = fb2.select(Afact1).where(Afact1.num1 != 4)
+        s2_num1_lt_4 = fb2.select(Afact1).where(Afact1.num1 < 4)
+        s2_num1_le_4 = fb2.select(Afact1).where(Afact1.num1 <= 4)
+        s2_num1_gt_4 = fb2.select(Afact1).where(Afact1.num1 > 4)
+        s2_num1_ge_4 = fb2.select(Afact1).where(Afact1.num1 >= 4)
+        s2_str1_eq_4 = fb2.select(Afact1).where(Afact1.str1 == "4")
+        s2_num2_eq_4 = fb2.select(Afact1).where(Afact1.num2 == 4)
 
-        self.assertFalse(s1_all._debug())
-        self.assertEqual(s1_num1_eq_4._debug()[0], Afact1.num1)
-        self.assertTrue(s1_num1_ne_4._debug())
-        self.assertTrue(s1_num1_lt_4._debug())
-        self.assertTrue(s1_num1_le_4._debug())
-        self.assertTrue(s1_num1_gt_4._debug())
-        self.assertTrue(s1_num1_ge_4._debug())
-        self.assertEqual(s1_str1_eq_4._debug()[0], Afact1.str1)
-        self.assertFalse(s1_num2_eq_4._debug())
-
-        self.assertFalse(s2_all._debug())
-        self.assertFalse(s2_num1_eq_4._debug())
-        self.assertFalse(s2_num1_ne_4._debug())
-        self.assertFalse(s2_num1_lt_4._debug())
-        self.assertFalse(s2_num1_le_4._debug())
-        self.assertFalse(s2_num1_gt_4._debug())
-        self.assertFalse(s2_num1_ge_4._debug())
-        self.assertFalse(s2_str1_eq_4._debug())
-        self.assertFalse(s2_num2_eq_4._debug())
+        self.assertEqual(s1_all.query_plan()[0].prejoin_key,None)
+        self.assertEqual(str(s1_num1_eq_4.query_plan()[0].prejoin_key), "Afact1.num1 == 4")
+        self.assertEqual(str(s1_str1_eq_4.query_plan()[0].prejoin_key), "Afact1.str1 == '4'")
+        self.assertEqual(s2_all.query_plan()[0].prejoin_key,None)
+        self.assertEqual(s2_num1_eq_4.query_plan()[0].prejoin_key, None)
+        self.assertEqual(s2_str1_eq_4.query_plan()[0].prejoin_key, None)
 
         self.assertEqual(set(list(s1_all.get())), set([f1,f3,f4,f42,f10]))
         self.assertEqual(set(list(s1_num1_eq_4.get())), set([f4,f42]))
@@ -938,22 +915,19 @@ class SelectTestCase(unittest.TestCase):
 
 
         # Test simple conjunction select
-        s1_conj1 = fm1.select().where(Afact1.str1 == "42", Afact1.num1 == 4)
-        s1_conj2 = fm1.select().where(Afact1.num1 == 4, Afact1.str1 == "42")
-        s1_conj3 = fm1.select().where(lambda x: x.str1 == "42", Afact1.num1 == 4)
+        s1_conj1 = fb1.select(Afact1).where(Afact1.str1 == "42", Afact1.num1 == 4)
+        s1_conj2 = fb1.select(Afact1).where(Afact1.num1 == 4, Afact1.str1 == "42")
+        s1_conj3 = fb1.select(Afact1).where(lambda x: x.str1 == "42", Afact1.num1 == 4)
 
-        self.assertEqual(s1_conj1._debug()[0], Afact1.num1)
-        self.assertEqual(s1_conj2._debug()[0], Afact1.num1)
-        self.assertEqual(s1_conj3._debug()[0], Afact1.num1)
-
+        self.assertNotEqual(s1_conj1.query_plan()[0].prejoin_key, None)
         self.assertEqual(s1_conj1.get_unique(), f42)
         self.assertEqual(s1_conj2.get_unique(), f42)
         self.assertEqual(s1_conj3.get_unique(), f42)
 
         # Test select with placeholders
-        s1_ph1 = fm1.select().where(Afact1.num1 == ph_("num1"))
-        s1_ph2 = fm1.select().where(Afact1.str1 == ph_("str1","42"),
-                                    Afact1.num1 == ph_("num1"))
+        s1_ph1 = fb1.select(Afact1).where(Afact1.num1 == ph_("num1"))
+        s1_ph2 = fb1.select(Afact1).where(Afact1.str1 == ph_("str1","42"),
+                                          Afact1.num1 == ph_("num1"))
         self.assertEqual(set(s1_ph1.get(num1=4)), set([f4,f42]))
         self.assertEqual(set(list(s1_ph1.get(num1=3))), set([f3]))
         self.assertEqual(set(list(s1_ph1.get(num1=2))), set([]))
@@ -1161,42 +1135,40 @@ class SelectTestCase(unittest.TestCase):
     #--------------------------------------------------------------------------
     #   Test that we can use the same placeholder multiple times
     #--------------------------------------------------------------------------
-    def _test_api_factbase_select_multi_placeholder(self):
+    def test_api_factbase_select_multi_placeholder(self):
         class Afact(Predicate):
             num1=IntegerField()
             num2=IntegerField()
 
-        fm1 = _FactMap(Afact, [Afact.num1])
         f1 = Afact(1,1)
         f2 = Afact(1,2)
         f3 = Afact(1,3)
         f4 = Afact(2,1)
         f5 = Afact(2,2)
+        fb1 = FactBase([f1,f2,f3,f4,f5], [Afact.num1])
 
-        fm1.add(f1) ; fm1.add(f2) ; fm1.add(f3) ; fm1.add(f4) ; fm1.add(f5)
-
-        s1 = fm1.select().where(Afact.num1 == ph1_, Afact.num2 == ph1_)
+        s1 = fb1.select(Afact).where(Afact.num1 == ph1_, Afact.num2 == ph1_)
         self.assertTrue(set([f for f in s1.get(1)]), set([f1]))
         self.assertTrue(set([f for f in s1.get(2)]), set([f5]))
 
-        s2 = fm1.select().where(Afact.num1 == ph_("a",1), Afact.num2 == ph_("a",2))
+        s2 = fb1.select(Afact).where(Afact.num1 == ph_("a",1), Afact.num2 == ph_("a",2))
         self.assertTrue(set([f for f in s2.get(a=1)]), set([f1]))
         self.assertTrue(set([f for f in s2.get(a=2)]), set([f5]))
         self.assertTrue(set([f for f in s2.get()]), set([f2]))
 
         # test that we can do different parameters with normal functions
         def tmp(f,a,b=2):
-            return f.num1 == a and f.num2 == 2
+            return f.num1 == a and f.num2 == b
 
-        s3 = fm1.select().where(tmp)
-        with self.assertRaises(TypeError) as ctx:
+        s3 = fb1.select(Afact).where(tmp)
+        with self.assertRaises(ValueError) as ctx:
             r=[f for f in s3.get()]
 
         self.assertTrue(set([f for f in s3.get(a=1)]), set([f2]))
         self.assertTrue(set([f for f in s3.get(a=1,b=3)]), set([f3]))
 
         # Test manually created positional placeholders
-        s1 = fm1.select().where(Afact.num1 == ph1_, Afact.num2 == ph_(1))
+        s1 = fb1.select(Afact).where(Afact.num1 == ph1_, Afact.num2 == ph_(1))
         self.assertTrue(set([f for f in s1.get(1)]), set([f1]))
         self.assertTrue(set([f for f in s1.get(2)]), set([f5]))
 
@@ -1321,20 +1293,18 @@ class SelectTestCase(unittest.TestCase):
     #--------------------------------------------------------------------------
     #   Test that the indexing works
     #--------------------------------------------------------------------------
-    def __test_api_factbase_select_indexing(self):
+    def test_api_factbase_select_indexing(self):
         class Afact(Predicate):
             num1=IntegerField()
             num2=IntegerField()
 
-        fm1 = _FactMap(Afact, [Afact.num1])
         f1 = Afact(1,1)
         f2 = Afact(1,2)
         f3 = Afact(1,3)
         f4 = Afact(2,1)
         f5 = Afact(2,2)
         f6 = Afact(3,1)
-
-        fm1.add(f1); fm1.add(f2); fm1.add(f3); fm1.add(f4); fm1.add(f5); fm1.add(f6)
+        fb1 = FactBase([f1,f2,f3,f4,f5,f6], indexes=[Afact.num1])
 
         # Use a function to track the facts that are visited. This will show
         # that the first operator selects only the appropriate terms.
@@ -1344,8 +1314,8 @@ class SelectTestCase(unittest.TestCase):
             facts.add(f)
             return f.num2 == b
 
-        s1 = fm1.select().where(Afact.num1 == ph1_, track)
-        s2 = fm1.select().where(Afact.num1 < ph1_, track)
+        s1 = fb1.select(Afact).where(Afact.num1 == ph1_, track)
+        s2 = fb1.select(Afact).where(Afact.num1 < ph1_, track)
 
         self.assertTrue(set([f for f in s1.get(2,1)]), set([f4]))
         self.assertTrue(facts, set([f4,f5]))
@@ -1356,35 +1326,17 @@ class SelectTestCase(unittest.TestCase):
     #--------------------------------------------------------------------------
     #   Test the delete
     #--------------------------------------------------------------------------
-    def __test_delete_over_factmap_and_factbase(self):
+    def test_factbase_delete(self):
         class Afact(Predicate):
             num1=IntegerField()
             num2=StringField()
             str1=StringField()
 
-        fm1 = _FactMap(Afact, [Afact.num1,Afact.str1])
-        fm2 = _FactMap(Afact)
         f1 = Afact(1,1,"1")
         f3 = Afact(3,3,"3")
         f4 = Afact(4,4,"4")
         f42 = Afact(4,42,"42")
         f10 = Afact(10,10,"10")
-        fm1.add(f1) ; fm2.add(f1)
-        fm1.add(f3) ; fm2.add(f3)
-        fm1.add(f4) ; fm2.add(f4)
-        fm1.add(f42) ; fm2.add(f42)
-        fm1.add(f10) ; fm2.add(f10)
-
-        d1_all = fm1.delete()
-        d1_num1 = fm2.delete().where(Afact.num1 == ph1_)
-        s1_num1 = fm2.select().where(Afact.num1 == ph1_)
-
-        self.assertEqual(d1_all.execute(), 5)
-        self.assertEqual(set([f for f in s1_num1.get(4)]), set([f4,f42]))
-
-        self.assertEqual(d1_num1.execute(4), 2)
-        self.assertEqual(set([f for f in s1_num1.get(4)]), set([]))
-
 
         fb1 = FactBase(facts=[f1,f3, f4,f42,f10], indexes = [Afact.num1, Afact.num2])
         d1_num1 = fb1.delete(Afact).where(Afact.num1 == ph1_)

@@ -296,6 +296,10 @@ class ComparatorTestCase(unittest.TestCase):
         getter = make_input_alignment_functor([F,G], [F.atuple[0],[1,2]])
         self.assertEqual(getter((f1,g1)), (2,[1,2]))
 
+        # Test static values are passed through correctly
+        getter = make_input_alignment_functor([F], [1,2,3])
+        self.assertEqual(getter((f1,)), (1,2,3))
+
         # Make sure it can also deal with predicate aliases
         X = alias(F)
         getter = make_input_alignment_functor(
@@ -572,7 +576,7 @@ class ComparatorTestCase(unittest.TestCase):
         # Partial grounding will fail
         with self.assertRaises(ValueError) as ctx:
             bf1.ground()
-        check_errmsg("Even after the named placeholders", ctx)
+        check_errmsg("Missing named placeholder", ctx)
 
         # Too many paths
         with self.assertRaises(ValueError) as ctx:

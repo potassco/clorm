@@ -585,9 +585,7 @@ class FunctionComparator(Comparator):
                 self._assignment[name] = default
 
         if tmp:
-            raise ValueError(("Even after the named placeholders have been "
-                              "assigned there are missing functor parameters "
-                              "for '{}'").format(tmp))
+            raise ValueError(("Missing functor parameters for '{}'").format(tmp))
 
     @classmethod
     def from_specification(cls,paths,func):
@@ -629,7 +627,8 @@ class FunctionComparator(Comparator):
         if self._assignment is not None: return self
         assignment = {}
         # Assign any positional arguments first then add the keyword arguments
-        # and make sure there is no repeats. Note: funcsig is an orderedDict
+        # and make sure there is no repeats. Finally, assign any placeholders
+        # with defaults. Note: funcsig is an orderedDict
         for idx,(k,_) in enumerate(self._funcsig.items()):
             if idx >= len(args): break
             assignment[k] = args[idx]
@@ -638,20 +637,28 @@ class FunctionComparator(Comparator):
                 raise ValueError(("Both positional and keyword values given "
                                   "for the argument '{}'").format(k))
             assignment[k] = v
+        for ph in self._placeholders:
+            if isinstance(ph, NamedPlaceholder) and ph.name not in assignment:
+                if ph.has_default:
+                    assignment[ph.name] = ph.default
+                else:
+                    raise ValueError(("Missing named placeholder argument '{}' "
+                                      "when grounding '{}' with arguments: "
+                                      "{}").format(ph.name,self,kwargs))
+
         return FunctionComparator(self._func,self._pathsig,
-                                          self._negative,assignment)
+                                  self._negative,assignment)
 
     def make_callable(self, root_signature):
         if self._assignment is None:
             raise RuntimeError(("Internal bug: make_callable called on a "
                                 "ungrounded object: {}").format(self))
 
-        # from the function signature generate and the assignment
-        # generate the fixed values for the non-path items
+        # from the function signature and the assignment generate the fixed
+        # values for the non-path items
         funcsigparam = [ self._assignment[k] for k,_ in self._funcsig.items() ]
         outputsig = tuple(list(self._pathsig) + funcsigparam)
-        alignfunc = make_input_alignment_functor(root_signature,
-                                                 outputsig)
+        alignfunc = make_input_alignment_functor(root_signature,outputsig)
         op = self._func if not self._negative else lambda *args : not self._func(*args)
         return ComparisonCallable(op,alignfunc)
 
@@ -747,7 +754,7 @@ def make_input_alignment_functor(input_root_signature, output_signature):
                                               output_signature,out))
             getters.append(lambda facts, p=out, idx=idx: p(facts[idx]))
         else:
-            getters.append(lambda facts : out)
+            getters.append(lambda facts, out=out: out)
 
     getters = tuple(getters)
 
