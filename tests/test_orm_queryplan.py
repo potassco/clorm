@@ -37,7 +37,7 @@ from clorm.orm.queryplan import PositionalPlaceholder, NamedPlaceholder, \
     simple_query_join_order, make_query_plan_preordered_roots, \
     validate_orderby_expression, OrderBy, OrderByBlock, process_orderby, \
     make_prejoin_pair, make_join_pair, make_query_plan, \
-    JoinQueryPlan, QueryPlan
+    JoinQueryPlan, QueryPlan, QuerySpec
 
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
@@ -1578,8 +1578,8 @@ class QueryPlanTestCase(unittest.TestCase):
         joins = pj([G.anum == F.anum, F.anum < GA.anum, joinall_(G,FA)],[F,G,FA,GA])
         where = pw((F.anum == 4) & (FA.anum < 2),[F,FA])
         orderbys = pob([FA.anum, G.anum],[FA,G])
-        qp1 = make_query_plan(simple_query_join_order,[F.anum],
-                              [F,G,FA,GA],joins,where, orderbys)
+        qspec=QuerySpec([F,G,FA,GA],joins,where,orderbys)
+        qp1 = make_query_plan(simple_query_join_order,[F.anum],qspec)
         self.assertEqual(len(qp1), 4)
 #        print("\nQUERYPLAN\n{}\n".format(qp1))
 

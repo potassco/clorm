@@ -25,9 +25,9 @@ from clorm.orm import FactBase, desc, asc, not_, and_, or_, \
 # Implementation imports
 from clorm.orm.factbase import FactIndex, FactMap, _FactSet, \
     make_first_join_query, make_chained_join_query, make_query, \
-    QuerySpec, QueryOutput
+    QueryOutput
 
-from clorm.orm.queryplan import PositionalPlaceholder, NamedPlaceholder
+from clorm.orm.queryplan import PositionalPlaceholder, NamedPlaceholder, QuerySpec
 
 from clorm.orm.queryplan import process_where, process_join, process_orderby, \
     make_query_plan, simple_query_join_order, make_input_alignment_functor
@@ -676,16 +676,16 @@ class QueryTestCase(unittest.TestCase):
 
         which1 = pw((G.anum > 4) & (G.astr == "foo"),[G])
         orderbys = pob([G.anum,desc(G.astr)],[G])
-        qp1 = make_query_plan(simple_query_join_order,[G.astr],
-                              [G],[],which1,orderbys)
+        qspec = QuerySpec([G],[],which1,orderbys)
+        qp1 = make_query_plan(simple_query_join_order,[G.astr],qspec)
 
         query1 = make_first_join_query(qp1[0], factsets, indexes)
         self.assertEqual(set(strip(query1())), set([G(5,"foo")]))
 
 
         which2 = pw((G.anum > 4) | (G.astr == "foo"),[G])
-        qp2 = make_query_plan(simple_query_join_order,[G.astr],
-                              [G],[],which2,orderbys)
+        qspec = QuerySpec([G],[],which2,orderbys)
+        qp2 = make_query_plan(simple_query_join_order,[G.astr], qspec)
 
         query2 = make_first_join_query(qp2[0], factsets, indexes)
         self.assertEqual(list(strip(query2())),
@@ -706,9 +706,9 @@ class QueryTestCase(unittest.TestCase):
 
         which1 = pw((G.anum > 4) & (G.astr == "foo") & (F.anum == 1),[G,F])
         orderbys1 = pob([desc(F.astr)],[G,F])
-        qp1 = make_query_plan(simple_query_join_order,indexes.keys(),
-                              [G,F],[],which1,orderbys1)
-        #        print("\nQP:\n{}".format(qp1))
+        qspec = QuerySpec([G,F],[],which1,orderbys1)
+        qp1 = make_query_plan(simple_query_join_order,indexes.keys(), qspec)
+
         query1 = make_first_join_query(qp1[0], factsets, indexes)
         query2 = make_chained_join_query(qp1[1], query1, factsets, indexes)
         output = align_facts(qp1.output_signature, (F,G), query2())
@@ -719,8 +719,9 @@ class QueryTestCase(unittest.TestCase):
 
         which1 = pw((F.anum > 4) & (F.astr == "foo") & (G.anum == 1),[F,G])
         orderbys1 = pob([asc(G.astr)],[G,F])
-        qp1 = make_query_plan(simple_query_join_order,indexes.keys(),
-                              [F,G],[],which1,orderbys1)
+        qspec = QuerySpec([F,G],[],which1,orderbys1)
+        qp1 = make_query_plan(simple_query_join_order,indexes.keys(), qspec)
+
         #print("\nQP:\n{}".format(qp1))
         query1 = make_first_join_query(qp1[0], factsets, indexes)
         query2 = make_chained_join_query(qp1[1], query1, factsets, indexes)
@@ -745,8 +746,8 @@ class QueryTestCase(unittest.TestCase):
         joins1 = pj([F.anum == G.anum],roots)
         which1 = pw((G.anum > 4) | (F.astr == "foo"),roots)
         orderbys = pob([desc(G.anum),F.astr,desc(G.astr)],roots)
-        qp1 = make_query_plan(simple_query_join_order, indexes.keys(),
-                              roots, joins1, which1, orderbys)
+        qspec = QuerySpec(roots,joins1,which1,orderbys)
+        qp1 = make_query_plan(simple_query_join_order, indexes.keys(), qspec)
         q1 = make_query(qp1, factsets, indexes)
         result = list(q1())
         expected = [
@@ -763,8 +764,8 @@ class QueryTestCase(unittest.TestCase):
         joins2 = pj([F.anum == G.anum],roots)
         which2 = pw((G.anum > 4) | (F.astr == ph1_),roots)
         orderbys2 = pob([desc(G.anum),F.astr,desc(G.astr)],roots)
-        qp2 = make_query_plan(simple_query_join_order, indexes.keys(),
-                              roots, joins2, which2, orderbys2)
+        qspec = QuerySpec(roots,joins2,which2,orderbys2)
+        qp2 = make_query_plan(simple_query_join_order, indexes.keys(),qspec)
         with self.assertRaises(ValueError) as ctx:
             q1 = make_query(qp2, factsets, indexes)
         check_errmsg("Cannot execute an ungrounded query",ctx)
@@ -812,8 +813,7 @@ class QueryOutputTestCase(unittest.TestCase):
         where1 = pw((G.anum > 4) | (F.astr == "foo"),roots)
         orderbys = pob([F.anum,G.anum],roots)
         qspec = QuerySpec(roots, joins1, where1, orderbys)
-        qp1 = make_query_plan(simple_query_join_order, indexes.keys(),
-                              roots, joins1, where1,orderbys)
+        qp1 = make_query_plan(simple_query_join_order, indexes.keys(),qspec)
         q1 = make_query(qp1, factsets, indexes)
 
         # Test output with no options

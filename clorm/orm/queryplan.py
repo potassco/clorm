@@ -1909,16 +1909,32 @@ def simple_query_join_order(indexed_paths, joins,roots):
     return [path(hrp) for hrp in sorted(root2val.keys(), key = lambda k : root2val[k])]
 
 
+#------------------------------------------------------------------------------
+# QuerySpec stores all the information about a query in one data-structure
+#------------------------------------------------------------------------------
+
+QuerySpec = collections.namedtuple('QuerySpec', 'roots join where order_by')
+
+def modify_query_spec(inspec,join=None,where=None,order_by=None):
+    if join is None: join = inspec.join
+    if where is None: where = inspec.where
+    if order_by is None: order_by = inspec.order_by
+    return QuerySpec(roots=inspec.roots, join=join,
+                     where=where, order_by=order_by)
+
 # ------------------------------------------------------------------------------
 # Take a join order heuristic, a list of joins, and a list of clause blocks and
 # and generates a query.
 # ------------------------------------------------------------------------------
 
-def make_query_plan(join_order_heuristic, indexed_paths,
-                    roots, joins, whereclauses, orderbys):
-    root_join_order=join_order_heuristic(indexed_paths, joins, roots)
+def make_query_plan(join_order_heuristic, indexed_paths, query_spec):
+    join=query_spec.join if query_spec.join else []
+    where=query_spec.where if query_spec.where else []
+    order_by=query_spec.order_by if query_spec.order_by else []
+
+    root_join_order=join_order_heuristic(indexed_paths,join, query_spec.roots)
     return make_query_plan_preordered_roots(indexed_paths, root_join_order,
-                                            joins,whereclauses, orderbys)
+                                            join, where, order_by)
 
 
 

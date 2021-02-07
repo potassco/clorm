@@ -22,7 +22,7 @@ from .queryplan import Placeholder, OrderBy, desc, asc
 from .queryplan import JoinQueryPlan, QueryPlan, \
     process_where, process_join, process_orderby, \
     make_input_alignment_functor, simple_query_join_order, make_query_plan,\
-    FuncInputSpec, FunctionComparator
+    FuncInputSpec, FunctionComparator, QuerySpec, modify_query_spec
 
 # ------------------------------------------------------------------------------
 # In order to implement FactBase I originally used the built in 'set'
@@ -334,19 +334,6 @@ class FactMap(object):
         nfm = FactMap(self.predicate, self._path2factindex.keys())
         nfm.add_facts(self.factset)
         return nfm
-
-#------------------------------------------------------------------------------
-# QuerySpec collects the information about a query
-#------------------------------------------------------------------------------
-
-QuerySpec = collections.namedtuple('QuerySpec', 'roots join where order_by')
-
-def modify_query_spec(inspec,join=None,where=None,order_by=None):
-    if join is None: join = inspec.join
-    if where is None: where = inspec.where
-    if order_by is None: order_by = inspec.order_by
-    return QuerySpec(roots=inspec.roots, join=join,
-                     where=where, order_by=order_by)
 
 #------------------------------------------------------------------------------
 # Support function for printing ASP facts
@@ -1393,9 +1380,9 @@ class SelectImpl(Select):
             for hpth, fi in fm.path2factindex.items():
                 self._path2factindex[hpth] = fi
 
+        qspec = QuerySpec(self._roots,[],[],[])
         self._queryplan = make_query_plan(simple_query_join_order,
-                                          self._path2factindex.keys(),
-                                          self._roots, [], [], [])
+                                          self._path2factindex.keys(), qspec)
 
 
     #--------------------------------------------------------------------------
@@ -1415,9 +1402,9 @@ class SelectImpl(Select):
         self._joins = process_join(expressions, self._roots)
 
         # Make a query plan in case there is no other inputs
+        qspec = QuerySpec(self._roots,self._joins,[],[])
         self._queryplan = make_query_plan(simple_query_join_order,
-                                          self._path2factindex.keys(),
-                                          self._roots, self._joins, [], [])
+                                          self._path2factindex.keys(), spec)
         return self
 
     #--------------------------------------------------------------------------
@@ -1439,9 +1426,9 @@ class SelectImpl(Select):
         # Make a query plan in case there is no other inputs
         joins = self._joins if self._joins else []
         where = self._where if self._where else []
+        qspec = QuerySpec(self._roots,joins,where,[])
         self._queryplan = make_query_plan(simple_query_join_order,
-                                          self._path2factindex.keys(),
-                                          self._roots, joins, where, [])
+                                          self._path2factindex.keys(), qspec)
         return self
 
     #--------------------------------------------------------------------------
@@ -1457,10 +1444,9 @@ class SelectImpl(Select):
         # Make a query plan in case there is no other inputs
         joins = self._joins if self._joins else []
         where = self._where if self._where else []
+        qspec = QuerySpec(self._roots,joins,where,self._orderbys)
         self._queryplan = make_query_plan(simple_query_join_order,
-                                          self._path2factindex.keys(),
-                                          self._roots, joins,
-                                          where, self._orderbys)
+                                          self._path2factindex.keys(), qspec)
         return self
 
     #--------------------------------------------------------------------------
@@ -1575,15 +1561,9 @@ class Select2Impl(object):
     #--------------------------------------------------------------------------
     def query_plan(self,*args,**kwargs):
         if not self._qplan:
-            join = self._qspec.join
-            where = self._qspec.where
-            order_by = self._qspec.order_by
             self._qplan = make_query_plan(simple_query_join_order,
                                           self._path2factindex.keys(),
-                                          self._qspec.roots,
-                                          join if join else [],
-                                          where if where else [],
-                                          order_by if order_by else [])
+                                          self._qspec)
 
         if not args and not kwargs: return self._qplan
         return self._qplan.ground(*args,**kwargs)
@@ -1643,9 +1623,9 @@ class DeleteImpl(Delete):
             for hpth, fi in fm.path2factindex.items():
                 self._path2factindex[hpth] = fi
 
+        qspec = QuerySpec(self._roots,[],[],[])
         self._queryplan = make_query_plan(simple_query_join_order,
-                                          self._path2factindex.keys(),
-                                          self._roots, [], [], [])
+                                          self._path2factindex.keys(),qspec)
 
     #--------------------------------------------------------------------------
     # Add a join expression
@@ -1661,9 +1641,9 @@ class DeleteImpl(Delete):
         self._joins = process_join(expressions, self._roots)
 
         # Make a query plan in case there is no other inputs
+        qspec = QuerySpec(self._roots,self._joins,[],[])
         self._queryplan = make_query_plan(simple_query_join_order,
-                                          self._path2factindex.keys(),
-                                          self._roots, self._joins, [], [])
+                                          self._path2factindex.keys(),qspec)
         return self
 
     #--------------------------------------------------------------------------
@@ -1682,9 +1662,9 @@ class DeleteImpl(Delete):
         # Make a query plan in case there is no other inputs
         joins = self._joins if self._joins else []
         where = self._where if self._where else []
+        qspec = QuerySpec(self._roots,joins,where,[])
         self._queryplan = make_query_plan(simple_query_join_order,
-                                          self._path2factindex.keys(),
-                                          self._roots, joins, where, [])
+                                          self._path2factindex.keys(),qspec)
         return self
 
     #--------------------------------------------------------------------------
