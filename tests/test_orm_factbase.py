@@ -20,11 +20,12 @@ from clorm.orm import RawField, IntegerField, StringField, ConstantField, \
 
 # Official Clorm API imports for the fact base components
 from clorm.orm import FactBase, desc, asc, not_, and_, or_, \
-    ph_, ph1_, ph2_, func_
+    ph_, ph1_, ph2_, func_, alias
 
 # Implementation imports
 from clorm.orm.factbase import FactIndex, FactMap, _FactSet, \
-    make_first_join_query, make_chained_join_query, make_query, QueryOutput
+    make_first_join_query, make_chained_join_query, make_query, \
+    QuerySpec, QueryOutput
 
 from clorm.orm.queryplan import PositionalPlaceholder, NamedPlaceholder
 
@@ -38,7 +39,9 @@ __all__ = [
     'FactIndexTestCase',
     'FactBaseTestCase',
     'QueryTestCase',
+    'QueryOutputTestCase',
     'SelectTestCase',
+    'Select2TestCase',
     ]
 
 #------------------------------------------------------------------------------
@@ -611,14 +614,6 @@ class FactBaseTestCase(unittest.TestCase):
         matchstr = afactspre+afactsstr + "\n" + bfactspre+bfactsstr
         self.assertEqual(aspstr,matchstr)
 
-
-
-
-
-
-
-
-
 #------------------------------------------------------------------------------
 # QueryTest. Test functions for the underlying query mechanism
 # ------------------------------------------------------------------------------
@@ -774,28 +769,55 @@ class QueryTestCase(unittest.TestCase):
             q1 = make_query(qp2, factsets, indexes)
         check_errmsg("Cannot execute an ungrounded query",ctx)
 
+#------------------------------------------------------------------------------
+# QueryOutputTest. Test functions for the post-processing the query
+# ------------------------------------------------------------------------------
+
+def factbase_to_factsets(fb):
+    return { ptype : fm.factset for ptype,fm in fb.factmaps.items() }
+
+
+class QueryOutputTestCase(unittest.TestCase):
+    def setUp(self):
+        class F(Predicate):
+            anum=IntegerField
+            astr=StringField
+        self.F = F
+
+        class G(Predicate):
+            anum=IntegerField
+            astr=StringField
+        self.G = G
+
+        factbase = FactBase([
+            G(1,"a"),G(1,"foo"),G(5,"a"),G(5,"foo"),
+            F(1,"a"),F(1,"foo"),F(5,"a"),F(5,"foo")])
+        self.factbase = factbase
+
     #--------------------------------------------------------------------------
     # Test initialising a placeholder (named and positional)
     #--------------------------------------------------------------------------
     def test_QueryOutput(self):
         F = self.F
         G = self.G
-        indexes = self.indexes
-        factsets = self.factsets
+        factbase=self.factbase
+        indexes = {}
+        factsets = factbase_to_factsets(factbase)
         pw = process_where
         pj = process_join
         pob = process_orderby
         roots = [F,G]
 
         joins1 = pj([F.anum == G.anum],roots)
-        which1 = pw((G.anum > 4) | (F.astr == "foo"),roots)
+        where1 = pw((G.anum > 4) | (F.astr == "foo"),roots)
         orderbys = pob([F.anum,G.anum],roots)
+        qspec = QuerySpec(roots, joins1, where1, orderbys)
         qp1 = make_query_plan(simple_query_join_order, indexes.keys(),
-                              roots, joins1, which1,orderbys)
+                              roots, joins1, where1,orderbys)
         q1 = make_query(qp1, factsets, indexes)
 
         # Test output with no options
-        qo = QueryOutput(q1, qp1.output_signature, roots)
+        qo = QueryOutput(factbase, qspec, qp1, q1)
         result = list(qo)
         expected = set([(F(1,"foo"),G(1,"a")), (F(1,"foo"),G(1,"foo")),
                         (F(5,"a"),G(5,"a")), (F(5,"a"),G(5,"foo")),
@@ -803,7 +825,7 @@ class QueryTestCase(unittest.TestCase):
         self.assertEqual(expected, set(result))
 
         # Test output with no options - using the explicit all() method
-        qo = QueryOutput(q1, qp1.output_signature, roots)
+        qo = QueryOutput(factbase, qspec, qp1, q1)
         result = list(qo.all())
         expected = set([(F(1,"foo"),G(1,"a")), (F(1,"foo"),G(1,"foo")),
                         (F(5,"a"),G(5,"a")), (F(5,"a"),G(5,"foo")),
@@ -811,11 +833,11 @@ class QueryTestCase(unittest.TestCase):
         self.assertEqual(expected, set(result))
 
         # Test output with no options - using the count() method
-        qo = QueryOutput(q1, qp1.output_signature, roots)
+        qo = QueryOutput(factbase, qspec, qp1, q1)
         self.assertEqual(qo.count(),6)
 
-        # Test output with swapped signature
-        qo = QueryOutput(q1, qp1.output_signature, roots)
+        # Test output with a simple swapped signature
+        qo = QueryOutput(factbase, qspec, qp1, q1)
         result = list(qo.output(G,F))
         expected = set([(G(1,"a"),F(1,"foo")), (G(1,"foo"),F(1,"foo")),
                         (G(5,"a"),F(5,"a")), (G(5,"foo"),F(5,"a")),
@@ -823,22 +845,37 @@ class QueryTestCase(unittest.TestCase):
         self.assertEqual(expected, set(result))
 
         # Test output with filtered signature
-        qo = QueryOutput(q1, qp1.output_signature, roots)
+        qo = QueryOutput(factbase, qspec, qp1, q1)
         result = list(qo.output(G.anum))
         expected = set([1,5])
         self.assertEqual(expected, set(result))
 
+        # Test output with an complex implicit function signature
+        qo = QueryOutput(factbase, qspec, qp1, q1)
+        result = list(qo.output(G.anum,
+                                lambda f,g: "X{}".format(f.astr)))
+        expected = set([(1,"Xfoo"),(5,"Xa"),(5,"Xfoo")])
+        self.assertEqual(expected, set(result))
+
+        # Test output with an complex explicit function signature
+        qo = QueryOutput(factbase, qspec, qp1, q1)
+        result = list(qo.output(G.anum,
+                                func_([F.astr], lambda v: "X{}".format(v))))
+        expected = set([(1,"Xfoo"),(5,"Xa"),(5,"Xfoo")])
+        self.assertEqual(expected, set(result))
+
         # Test output with filtered signature and uniqueness
-        qo = QueryOutput(q1, qp1.output_signature, roots)
+        qo = QueryOutput(factbase, qspec, qp1, q1)
         result = list(qo.output(G.anum).unique())
         expected = set([1,5])
         self.assertTrue(result == [1,5] or result == [5,1])
 
         # Test output with filtered signature and forced tuple
-        qo = QueryOutput(q1, qp1.output_signature, roots)
+        qo = QueryOutput(factbase, qspec, qp1, q1)
         result = list(qo.output(G.anum).tuple())
         expected = set([(1,),(5,)])
         self.assertEqual(expected, set(result))
+
 
 #------------------------------------------------------------------------------
 # Test the Select class
@@ -1460,6 +1497,65 @@ class SelectTestCase(unittest.TestCase):
             q = fb.select(F).order_by(F.num1,desc(G.num1))
         check_errmsg("Invalid 'order_by' expression",ctx)
 
+
+#------------------------------------------------------------------------------
+# Tests for additional V2 select and delete statements
+#------------------------------------------------------------------------------
+
+class Select2TestCase(unittest.TestCase):
+    def setUp(self):
+        pass
+
+    #--------------------------------------------------------------------------
+    #   Test that the select works
+    #--------------------------------------------------------------------------
+    def test_api_select_self_join(self):
+        class P(Predicate):
+            pid = ConstantField
+            name = StringField
+            postcode = IntegerField
+
+        class F(Predicate):
+            src = ConstantField
+            dst = ConstantField
+
+
+        jill = P("jill", "Jill J", 2001)
+        jane = P("jane", "Jane J", 2002)
+        bob  = P("bob",  "Bob B",  2003)
+        bill = P("bill", "Bill B", 2004)
+        sal  = P("sal",  "Sal S",  2004)
+        dave = P("dave", "Dave D", 2004)
+
+        people = [jill,jane,bob,bill,sal,dave]
+        friends = [F(jill.pid,dave.pid),
+                   F(dave.pid,bill.pid),
+                   F(jane.pid,sal.pid)]
+
+        fb1 = FactBase(people+friends)
+        fb2 = FactBase(people+friends,indexes=[P.pid,F.src,F.dst])
+
+        s1_people = fb2.select2(P).order_by(P.pid)
+        self.assertEqual(list(s1_people.run()),[bill,bob,dave,jane,jill,sal])
+
+        PA=alias(P)
+        s1_friend_dist = fb2.select2(P,PA,F)\
+            .join(P.pid == F.src,PA.pid == F.dst)\
+            .where(func_([P.postcode,PA.postcode], lambda p,pa : abs(p-pa) < 3))\
+            .order_by(P.pid)
+
+        print("\nQP:{}".format(s1_friend_dist.query_plan()))
+
+        result = s1_friend_dist.run().output(P.name,P.postcode,PA.name,PA.postcode)
+#        result = s1_friend_dist.run().output(P.name,
+#                                             lambda p,pa,f:abs(p.postcode-pa.postcode),
+#                                             PA.name)
+        print("\nRESULT :{}".format(list(result)))
+
+
+        # Would be nice to do some calculation on the output (eg the distance between postcodes
+        #                                     func_([P.postcode,PA.postcode], lambda x,y: abs(x-y)))
+#        print("\nRESULT :{}".format(list(result)))
 
 #------------------------------------------------------------------------------
 # main

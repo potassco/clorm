@@ -21,7 +21,8 @@ from .queryplan import Placeholder, OrderBy, desc, asc
 
 from .queryplan import JoinQueryPlan, QueryPlan, \
     process_where, process_join, process_orderby, \
-    make_input_alignment_functor, simple_query_join_order, make_query_plan
+    make_input_alignment_functor, simple_query_join_order, make_query_plan,\
+    FuncInputSpec, FunctionComparator
 
 # ------------------------------------------------------------------------------
 # In order to implement FactBase I originally used the built in 'set'
@@ -335,6 +336,19 @@ class FactMap(object):
         return nfm
 
 #------------------------------------------------------------------------------
+# QuerySpec collects the information about a query
+#------------------------------------------------------------------------------
+
+QuerySpec = collections.namedtuple('QuerySpec', 'roots join where order_by')
+
+def modify_query_spec(inspec,join=None,where=None,order_by=None):
+    if join is None: join = inspec.join
+    if where is None: where = inspec.where
+    if order_by is None: order_by = inspec.order_by
+    return QuerySpec(roots=inspec.roots, join=join,
+                     where=where, order_by=order_by)
+
+#------------------------------------------------------------------------------
 # Support function for printing ASP facts
 #------------------------------------------------------------------------------
 
@@ -505,7 +519,19 @@ class FactBase(object):
         # Make sure there are factmaps for each referenced predicate type
         ptypes = set([r.meta.predicate for r in validate_root_paths(roots)])
         for ptype in ptypes: self._factmaps.setdefault(ptype, FactMap(ptype))
+
         return SelectImpl(self, roots)
+
+    def select2(self, *roots):
+        """Create a Select query for a predicate type."""
+        self._check_init()  # Check for delayed init
+
+        # Make sure there are factmaps for each referenced predicate type
+        ptypes = set([r.meta.predicate for r in validate_root_paths(roots)])
+        for ptype in ptypes: self._factmaps.setdefault(ptype, FactMap(ptype))
+
+        return Select2Impl(self, QuerySpec(tuple(validate_root_paths(roots)),
+                                           None,None,None))
 
 
     def delete(self, *ptypes):
@@ -1009,14 +1035,11 @@ def make_query(qp, predicate_to_factset, hpath_to_factindex):
     return query
 
 
-#------------------------------------------------------------------------------
-# QueryOutput allows you to output the results of a Select query it different
-# ways.
-# ------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-# Check if all the paths in a collection are root paths
-#------------------------------------------------------------------------------
+# Helper function to check if all the paths in a collection are root paths and
+# return path objects.
+# ------------------------------------------------------------------------------
 def validate_root_paths(paths):
     def checkroot(p):
         p = path(p)
@@ -1025,19 +1048,76 @@ def validate_root_paths(paths):
         return p
     return list(map(checkroot,paths))
 
+
+#------------------------------------------------------------------------------
+# QueryOutput allows you to output the results of a Select query it different
+# ways.
+# ------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+# Given an input tuple of facts generate the appropriate output. Depending on
+# the output signature what we want to generate this can be a simple of a
+# complex operation. If it is just predicate paths or static values then a
+# simple outputter is ok, but if it has a function then a complex one is needed.
+# ------------------------------------------------------------------------------
+
+def make_outputter(insig,outsig):
+
+    def make_simple_outputter():
+        af=make_input_alignment_functor(insig, outsig)
+        return lambda intuple, af=af: af(intuple)
+
+    def make_complex_outputter():
+        metasig = []
+        for out in outsig:
+            if isinstance(out,PredicatePath) or \
+                 (inspect.isclass(out) and issubclass(out,Predicate)):
+                tmp = make_input_alignment_functor(insig, (path(out),))
+                metasig.append(lambda x,af=tmp: af(x)[0])
+            elif isinstance(out,FuncInputSpec):
+                tmp=make_input_alignment_functor(insig, out.paths)
+                metasig.append(lambda x,af=tmp,f=out.functor: f(*af(x)))
+            elif callable(out):
+                metasig.append(lambda x,f=out: f(*x))
+            else:
+                metasign.append(lambda x, out=out: out)
+
+        maf=tuple(metasig)
+        return lambda intuple, maf=maf: tuple(af(intuple) for af in maf)
+
+    needcomplex=False
+    for out in outsig:
+        if isinstance(out,PredicatePath) or \
+           (inspect.isclass(out) and issubclass(out,Predicate)):
+            continue
+        elif isinstance(out,FuncInputSpec) or callable(out):
+            needcomplex=True
+            break
+
+    if needcomplex: return make_complex_outputter()
+    else: return make_simple_outputter()
+
 class QueryOutput(object):
-    def __init__(self, query, insig, outsig):
+
+    #--------------------------------------------------------------------------
+    # factbase - the underlying factbase. Needed for the delete() function
+    # query - the results generator function
+    #--------------------------------------------------------------------------
+    def __init__(self, factbase, query_spec, query_plan, query):
+        self._factbase = factbase
+        self._qspec = query_spec
+        self._qplan = query_plan
         self._query = query
-        self._insig = tuple(validate_root_paths(insig))
-        self._outsig = tuple(validate_root_paths(outsig))
         self._unique = False
         self._sigoverride = False
         self._tuple_called = False
-        self._unwrap = len(outsig) == 1
+        self._unwrap = len(self._qplan.output_signature) == 1
 
-        tmp = tuple(validate_root_paths(outsig))
-        self._align = make_input_alignment_functor(self._insig, tmp)
+        self._outputter = make_outputter(self._qplan.output_signature,
+                                         self._qspec.roots)
         self._executed = False
+
+
 
     #--------------------------------------------------------------------------
     # Functions to modify the output
@@ -1063,15 +1143,19 @@ class QueryOutput(object):
     def output(self, *outsig):
         if self._executed:
             raise RuntimeError("The query instance has already been executed")
+        if not outsig:
+            raise ValueError("Empty output signature")
         if self._sigoverride:
             raise ValueError("output() can only be specified once")
         self._sigoverride = True
-        tmp = tuple(outsig)
+
         if not self._tuple_called:
             self._unwrap = len(outsig) == 1
-        self._align = make_input_alignment_functor(self._insig, tmp)
-        return self
 
+        tmp = tuple(outsig)
+
+        self._outputter = make_outputter(self._qplan.output_signature,tmp)
+        return self
 
     # --------------------------------------------------------------------------
     # Internal function generator for the query results
@@ -1079,7 +1163,7 @@ class QueryOutput(object):
     def _all(self):
         cache = set()
         for input in self._query():
-            output = self._align(input)
+            output = self._outputter(input)
             if self._unwrap: output = output[0]
             if self._unique:
                 if output not in cache:
@@ -1092,6 +1176,7 @@ class QueryOutput(object):
     # Functions to get the output - only one of these functions can be called
     # for a QueryOutput instance.
     # --------------------------------------------------------------------------
+
     def all(self):
         if self._executed:
             raise RuntimeError("The query instance has already been executed")
@@ -1121,6 +1206,53 @@ class QueryOutput(object):
         self._executed = True
         return next(iter(self._all()))
 
+
+    # --------------------------------------------------------------------------
+    # Delete some selection of facts. Maintains a set for each predicate type
+    # and adds the selected fact to that set. The delete the facts in each set.
+    # --------------------------------------------------------------------------
+
+    def delete(self,*subroots):
+        if self._executed:
+            raise RuntimeError("The query instance has already been executed")
+        self._executed = True
+
+        roots = set([hashable_path(p) for p in self._qspec.roots])
+        subroots = set([hashable_path(p) for p in validate_root_paths(subroots)])
+
+        if not subroots.issubset(roots):
+            raise ValueError(("The roots to delete '{}' must be a subset of "
+                              "the query roots '{}").format(subroots,roots))
+        if not subroots: subroots = roots
+
+        # Find the roots to delete and generate a set of actions that are
+        # executed to add to a delete set
+        deletesets = {}
+        for r in subroots:
+            pr = path(r)
+            deletesets[pr.meta.predicate] = set()
+
+        actions = []
+        for out in self._qplan.output_signature:
+            hout = hashable_path(out)
+            if hout in subroots:
+                ds = deletesets[out.meta.predicate]
+                actions.append(lambda x, ds=ds: x.add(ds))
+            else:
+                actions.append(lambda x : None)
+
+        for input in self._query():
+            for fact, action in zip(input,actions):
+                action(fact)
+
+        for pt,ds in deletesets.items():
+            fm = self._factbase.factmaps[pt]
+            for f in ds: fm.discard(f)
+
+
+    # --------------------------------------------------------------------------
+    # Overload to make an iterator
+    # --------------------------------------------------------------------------
     def __iter__(self):
         return self.all()
 
@@ -1239,12 +1371,13 @@ class Delete(abc.ABC):
         pass
 
 #------------------------------------------------------------------------------
-# The new (v2) Select class
+# Select V2 query engine with V1 API
 #------------------------------------------------------------------------------
 
 class SelectImpl(Select):
 
     def __init__(self, factbase, roots):
+        self._factbase = factbase
         self._roots = tuple(validate_root_paths(roots))
         ptypes = set([ root.meta.predicate for root in self._roots])
 
@@ -1345,23 +1478,131 @@ class SelectImpl(Select):
         gqplan = self._queryplan.ground(*args,**kwargs)
         query = make_query(gqplan, self._pred2factset, self._path2factindex)
 
-        qo = QueryOutput(query, gqplan.output_signature, self._roots)
+        qspec = QuerySpec(self._roots, self._joins, self._where, self._orderbys)
+        qo = QueryOutput(self._factbase,qspec,gqplan,query)
         return list(qo.all())
 
     def get_unique(self, *args, **kwargs):
         gqplan = self._queryplan.ground(*args,**kwargs)
         query = make_query(gqplan, self._pred2factset, self._path2factindex)
 
-        qo = QueryOutput(query, gqplan.output_signature, self._roots)
+        qspec = QuerySpec(self._roots, self._joins, self._where, self._orderbys)
+        qo = QueryOutput(self._factbase,qspec,gqplan,query)
         return qo.singleton()
 
     def count(self, *args, **kwargs):
         gqplan = self._queryplan.ground(*args,**kwargs)
         query = make_query(gqplan, self._pred2factset, self._path2factindex)
 
-        qo = QueryOutput(query, gqplan.output_signature, self._roots)
+        qspec = QuerySpec(self._roots, self._joins, self._where, self._orderbys)
+        qo = QueryOutput(self._factbase,qspec,gqplan,query)
         return qo.count()
 
+#------------------------------------------------------------------------------
+# Select V2 API
+#------------------------------------------------------------------------------
+class Select2Impl(object):
+
+    def __init__(self,factbase, queryspec):
+        self._factbase = factbase
+        self._qspec = queryspec
+        self._qplan = None
+
+        self._pred2factset = {}
+        self._path2factindex = {}
+
+        ptypes = set([ root.meta.predicate for root in self._qspec.roots])
+        for ptype in ptypes:
+            fm =factbase.factmaps[ptype]
+            self._pred2factset[ptype] = fm.factset
+            for hpth, fi in fm.path2factindex.items():
+                self._path2factindex[hpth] = fi
+
+
+    #--------------------------------------------------------------------------
+    # Add a join expression
+    #--------------------------------------------------------------------------
+    def join(self, *expressions):
+        if self._qspec.where:
+            raise TypeError(("The 'join' condition must come before the "
+                             "'where' condition"))
+        if self._qspec.order_by:
+            raise TypeError(("The 'join' condition must come before the "
+                             "'order_by' condition"))
+        if self._qspec.join:
+            raise TypeError("Cannot specify 'join' multiple times")
+        if not expressions:
+            raise TypeError("Empty 'join' expression")
+
+        join=process_join(expressions, self._qspec.roots)
+        return Select2Impl(self._factbase,
+                           modify_query_spec(self._qspec, join=join))
+
+    #--------------------------------------------------------------------------
+    # Add an order_by expression
+    #--------------------------------------------------------------------------
+    def where(self, *expressions):
+        if self._qspec.order_by:
+            raise TypeError(("The 'where' condition must come before the "
+                             "'order_by' condition"))
+        if self._qspec.where:
+            raise TypeError("Cannot specify 'where' multiple times")
+        if not expressions:
+            raise TypeError("Empty 'where' expression")
+        elif len(expressions) == 1:
+            where = process_where(expressions[0],self._qspec.roots)
+        else:
+            where = process_where(and_(*expressions),self._qspec.roots)
+
+        return Select2Impl(self._factbase,
+                           modify_query_spec(self._qspec, where=where))
+
+    #--------------------------------------------------------------------------
+    # Add an order_by expression
+    #--------------------------------------------------------------------------
+    def order_by(self, *expressions):
+        if self._qspec.order_by:
+            raise TypeError("Cannot specify 'order_by' multiple times")
+        if not expressions:
+            raise TypeError("Empty 'order_by' expression")
+        order_by = process_orderby(expressions,self._qspec.roots)
+
+        return Select2Impl(self._factbase,
+                           modify_query_spec(self._qspec, order_by=order_by))
+
+    #--------------------------------------------------------------------------
+    #
+    #--------------------------------------------------------------------------
+    def query_plan(self,*args,**kwargs):
+        if not self._qplan:
+            join = self._qspec.join
+            where = self._qspec.where
+            order_by = self._qspec.order_by
+            self._qplan = make_query_plan(simple_query_join_order,
+                                          self._path2factindex.keys(),
+                                          self._qspec.roots,
+                                          join if join else [],
+                                          where if where else [],
+                                          order_by if order_by else [])
+
+        if not args and not kwargs: return self._qplan
+        return self._qplan.ground(*args,**kwargs)
+
+    #--------------------------------------------------------------------------
+    # Functions currently mirroring the old interface
+    # --------------------------------------------------------------------------
+
+    def run(self, *args, **kwargs):
+
+        # NOTE: a limitation of the current implementation of FunctionComparator
+        # means that I have to call ground() to make the assignment valid. Need
+        # to look at this.
+
+        qplan = self.query_plan()
+        gqplan = qplan.ground(*args,**kwargs)
+        query = make_query(gqplan, self._pred2factset, self._path2factindex)
+
+        return QueryOutput(self._factbase,self._qspec,gqplan,query)
 
 
 #------------------------------------------------------------------------------

@@ -516,12 +516,13 @@ class ComparatorTestCase(unittest.TestCase):
         func3 = lambda x,y,z : x==y+z
         X=alias(F)
         bf = func_([F.anum,X.anum,G.anum], func3)
+        bf = FunctionComparator.from_specification(bf.paths,bf.functor)
         self.assertEqual(hps(bf.paths),hps([F.anum,X.anum,G.anum]))
         self.assertEqual(hps(bf.roots),hps([F,X,G]))
 
         func4 = lambda x : x > 5
-        bf1 = func_([F.anum], func4)
-        bf2 = func_([X.anum], func4)
+        bf1 = FunctionComparator.from_specification([F.anum],func4)
+        bf2 = FunctionComparator.from_specification([X.anum],func4)
         self.assertNotEqual(bf1,bf2)
         self.assertNotEqual(hps(bf1.roots),hps(bf2.roots))
         self.assertEqual(bf1,bf2.dealias())
@@ -615,6 +616,7 @@ class ComparatorTestCase(unittest.TestCase):
 
         wrap1 = FunctionComparator(func1,[F,G])
         wrap2 = func_([F,G],func1)
+        wrap2 = FunctionComparator.from_specification(wrap2.paths,wrap2.functor)
         self.assertEqual(wrap1,wrap2)
         sat1 = wrap1.ground().make_callable([F,G])
         sat2 = wrap2.ground().make_callable([F,G])
@@ -637,7 +639,7 @@ class ComparatorTestCase(unittest.TestCase):
         G = self.G
         func1 = lambda x, y : x == y
 
-        wrap2 = func_([F.anum,G.anum],func1)
+        wrap2 = FunctionComparator.from_specification([F.anum,G.anum],func1)
         sat1 = wrap2.ground().make_callable([G,F])
         sat2 = StandardComparator.from_where_qcondition(F.anum == G.anum).make_callable([G,F])
 
@@ -818,7 +820,7 @@ class WhereExpressionTestCase(unittest.TestCase):
         self.assertEqual(c2.ground(4),c1)
         self.assertEqual(hps(c1.roots),hps([F]))
 
-        f = func_([F.anum], lambda x : x == 2)
+        f = FunctionComparator.from_specification([F.anum],lambda x : x == 2)
         c1 = Clause([f])
 
         self.assertEqual(hps(c1.paths), hps([F.anum]))
@@ -842,9 +844,9 @@ class WhereExpressionTestCase(unittest.TestCase):
 
         # Test placeholders
         self.assertEqual(cx3.placeholders,set([ph1_]))
-        fy = func_([F.anum], lambda x, y : x == y)
+        fy = FunctionComparator.from_specification([F.anum],lambda x, y : x == y)
         self.assertEqual(Clause([fy]).placeholders,set([ph_("y")]))
-        fy = func_([F.anum], lambda x, y=10 : x == y)
+        fy = FunctionComparator.from_specification([F.anum],lambda x, y=10 : x == y)
         self.assertEqual(Clause([fy]).placeholders,set([ph_("y",10)]))
 
         # Iterate over the conditions within a clause
@@ -970,7 +972,7 @@ class WhereExpressionTestCase(unittest.TestCase):
 #        self.assertEqual(tonorm(f), [ClauseBlock([Clause([f])])])
         self.assertEqual(tonorm(f), ClauseBlock([Clause([f])]))
 
-        f = func_([F.anum], lambda x : x == 2)
+        f = FunctionComparator.from_specification([F.anum],lambda x : x == 2)
 #        self.assertEqual(tonorm(f), [ClauseBlock([Clause([f])])])
         self.assertEqual(tonorm(f), ClauseBlock([Clause([f])]))
 
@@ -1468,7 +1470,8 @@ class QueryPlanTestCase(unittest.TestCase):
         joins = pj([G.anum == F.anum, F.anum < GA.anum, joinall_(G,FA)],[F,G,FA,GA])
         where = pw((F.anum == 4) & (FA.anum < 2),[F,FA])
         orderbys = pob([GA.anum, FA.anum, F.anum, G.anum],[F,G,FA,GA])
-        qp1 = make_query_plan_preordered_roots([F.anum],[FA,GA,G,F],joins,where,orderbys)
+        qp1 = make_query_plan_preordered_roots([F.anum],[FA,GA,G,F],
+                                               joins,where,orderbys)
 #        print("PRINT: QP\n:{}".format(qp1))
 
         self.assertEqual(len(qp1),4)

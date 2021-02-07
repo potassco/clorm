@@ -179,11 +179,13 @@ ph4_ = PositionalPlaceholder(posn=3)
 
 # ------------------------------------------------------------------------------
 # API function to build a functor wrapper object as part of a specifying a where
-# clause.
+# clause or an output statement.
 # ------------------------------------------------------------------------------
 
+FuncInputSpec = collections.namedtuple('FuncInputSpec', 'paths functor')
 def func_(paths, func):
     '''Wrap a boolean functor with predicate paths for use as a query condition'''
+    return FuncInputSpec(paths,func)
     return FunctionComparator.from_specification(paths,func)
 
 # ------------------------------------------------------------------------------
@@ -498,6 +500,11 @@ class StandardComparator(Comparator):
 # ------------------------------------------------------------------------------
 # Comparator for arbitrary functions. From the API generated with func_()
 # The constructor takes a reference to the function and a path signature.
+#
+# FIXUP NOTE: a limitation of the current implementation of FunctionComparator
+# means that ground() has to be called to make the assignment valid. Need to
+# look at this.
+#
 # ------------------------------------------------------------------------------
 
 class FunctionComparator(Comparator):
@@ -801,7 +808,8 @@ g_bool_operators = {
     operator.and_ : True, operator.or_ : True, operator.not_ : True }
 
 def is_boolean_qcondition(cond):
-    if isinstance(cond, FunctionComparator): return False
+#    if isinstance(cond, FunctionComparator): return False
+    if isinstance(cond, FuncInputSpec): return False
     elif not isinstance(cond, QCondition): return False
     v = g_bool_operators.get(cond.operator,False)
     return v
@@ -814,9 +822,10 @@ def is_comparison_qcondition(cond):
 
 # ------------------------------------------------------------------------------
 # Validates and turns non-boolean QCondition objects into the appropriate
-# comparator (functors are wrapped in a FunctionComparator object).
-# Also simplifies any static conditions (conditions that can be evaluated
-# without a fact) which are replaced with their a boolean evaluation.
+# comparator (functors are wrapped in a FunctionComparator object - and
+# FuncInputSpec are also turned into FunctionComparator objects).  Also
+# simplifies any static conditions (conditions that can be evaluated without a
+# fact) which are replaced with their a boolean evaluation.
 #
 # The where expression is validated with respect to a sequence of predicate root
 # paths that indicate the valid predicates (and aliases) that are being
@@ -901,6 +910,8 @@ def validate_where_expression(qcond, roots=[]):
                               "a comparison condition").format(cond, qcond))
 
         if callable(cond): return validate_callable(cond)
+        elif isinstance(cond,FuncInputSpec):
+            return FunctionComparator.from_specification(cond.paths,cond.functor)
         elif isinstance(cond,Comparator): return cond
         elif is_boolean_qcondition(cond): return validate_bool_condition(cond)
         elif is_comparison_qcondition(cond): return validate_comp_condition(cond)
