@@ -56,7 +56,6 @@ from ..util import OrderedSet as _FactSet
 __all__ = [
     'FactBase',
     'Select',
-    'Delete',
     ]
 
 #------------------------------------------------------------------------------
@@ -499,7 +498,7 @@ class FactBase(object):
     #--------------------------------------------------------------------------
     # Special FactBase member functions
     #--------------------------------------------------------------------------
-    def select(self, *roots):
+    def select1(self, *roots):
         """Create a Select query for a predicate type."""
         self._check_init()  # Check for delayed init
 
@@ -509,7 +508,7 @@ class FactBase(object):
 
         return SelectImpl(self, roots)
 
-    def select2(self, *roots):
+    def select(self, *roots):
         """Create a Select query for a predicate type."""
         self._check_init()  # Check for delayed init
 
@@ -519,44 +518,6 @@ class FactBase(object):
 
         return Select2Impl(self, QuerySpec(tuple(validate_root_paths(roots)),
                                            None,None,None))
-
-
-    def delete(self, *ptypes):
-        """Create a Select query for a predicate type."""
-
-        self._check_init()  # Check for delayed init
-
-        # Make sure there are factmaps for each referenced predicate type
-        ptypes = [p.meta.predicate for p in validate_root_paths(ptypes)]
-        for ptype in ptypes: self._factmaps.setdefault(ptype, FactMap(ptype))
-        return DeleteImpl(self, [path(pt) for pt in ptypes], ptypes)
-
-
-    def dfrom(self, *roots):
-
-        """Create a complex delete query."""
-        self._check_init()  # Check for delayed init
-
-        # Make sure there are factmaps for each referenced predicate type
-        roots = [r in validate_root_paths(roots)]
-        ptypes = set([r.meta.predicate for r in roots])
-        for ptype in ptypes: self._factmaps.setdefault(ptype, FactMap(ptype))
-
-        class DeleteFrom(object):
-            def __init__(self, factbase,roots): self._input=(factbase,roots)
-            def delete(self, *ptypes): return DeleteImpl(*self._input, roots, ptypes)
-        return DeleteFrom()
-
-    def delete_from(self, ptypes, roots):
-        """Create a Select query for a predicate type."""
-
-        self._check_init()  # Check for delayed init
-
-        # Make sure there are factmaps for each referenced predicate type
-        ptypes = [p.meta.predicate for p in validate_root_paths(roots)]
-        for ptype in ptypes: self._factmaps.setdefault(ptype, FactMap(ptype))
-
-        return DeleteImpl(self, ptypes, roots)
 
     @property
     def predicates(self):
@@ -1290,14 +1251,18 @@ class QueryOutput(object):
             else:
                 actions.append(lambda x : None)
 
+        # Running the query adds the facts to the appropriate delete set
         for input in self._query():
             for fact, action in zip(input,actions):
                 action(fact)
 
+        # Delete the facts
+        count = 0
         for pt,ds in deletesets.items():
+            count += len(ds)
             fm = self._factbase.factmaps[pt]
-            for f in ds: fm.discard(f)
-
+            for f in ds: fm.remove(f)
+        return count
 
     # --------------------------------------------------------------------------
     # Overload to make an iterator
@@ -1327,6 +1292,16 @@ class Select(abc.ABC):
     ``order_by()`` clause can be omitted.
 
     """
+    @abc.abstractmethod
+    def join(self, *expressions):
+        """Set the select statement's join conditions.
+
+        The join statement consists of a list of comparison expressions, where
+        each comparison expression specifies the join between two predicate
+        types.
+
+        """
+        pass
 
     @abc.abstractmethod
     def where(self, *expressions):
@@ -1371,19 +1346,10 @@ class Select(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def get(self, *args, **kwargs):
+    def run(self, *args, **kwargs):
         """Return all matching entries."""
         pass
 
-    @abc.abstractmethod
-    def get_unique(self, *args, **kwargs):
-        """Return the single matching entry. Raises ValueError otherwise."""
-        pass
-
-    @abc.abstractmethod
-    def count(self, *args, **kwargs):
-        """Return the number of matching entries."""
-        pass
 
 #------------------------------------------------------------------------------
 # Delete is an interface to perform a query delete from a FactBase.
@@ -1423,7 +1389,7 @@ class Delete(abc.ABC):
 # Select V2 query engine with V1 API
 #------------------------------------------------------------------------------
 
-class SelectImpl(Select):
+class SelectImpl(object):
 
     def __init__(self, factbase, roots):
         self._factbase = factbase
@@ -1657,7 +1623,7 @@ class DeleteImpl(Delete):
 #------------------------------------------------------------------------------
 # Select V2 API
 #------------------------------------------------------------------------------
-class Select2Impl(object):
+class Select2Impl(Select):
 
     def __init__(self,factbase, queryspec,join_order_heuristic=None):
         self._factbase = factbase

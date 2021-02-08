@@ -29,6 +29,8 @@ __all__ = [
     'ph3_',
     'ph4_',
     'func_',
+    'fixed_join_order_heuristic',
+    'basic_join_order_heuristic',
     ]
 
 #------------------------------------------------------------------------------

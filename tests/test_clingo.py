@@ -188,14 +188,14 @@ class ClingoTestCase(unittest.TestCase):
 
         safact1 = fb2.select(Afact).where(Afact.num1 == ph1_)
         safact2 = fb2.select(Afact).where(Afact.num1 < ph1_)
-        self.assertEqual(safact1.get_unique(1), af1)
-        self.assertEqual(safact1.get_unique(2), af2)
-        self.assertEqual(safact1.get_unique(3), af3)
-        self.assertEqual(set(list(safact2.get(1))), set([]))
-        self.assertEqual(set(list(safact2.get(2))), set([af1]))
-        self.assertEqual(set(list(safact2.get(3))), set([af1,af2]))
-        self.assertEqual(fb2.select(Bfact).where(Bfact.str1 == "aaa").get_unique(), bf1)
-        self.assertEqual(fb2.select(Bfact).where(Bfact.str1 == "bbb").get_unique(), bf2)
+        self.assertEqual(safact1.run(1).singleton(), af1)
+        self.assertEqual(safact1.run(2).singleton(), af2)
+        self.assertEqual(safact1.run(3).singleton(), af3)
+        self.assertEqual(set(list(safact2.run(1))), set([]))
+        self.assertEqual(set(list(safact2.run(2))), set([af1]))
+        self.assertEqual(set(list(safact2.run(3))), set([af1,af2]))
+        self.assertEqual(fb2.select(Bfact).where(Bfact.str1 == "aaa").run().singleton(), bf1)
+        self.assertEqual(fb2.select(Bfact).where(Bfact.str1 == "bbb").run().singleton(), bf2)
 
         # Now test a select
 

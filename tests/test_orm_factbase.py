@@ -20,7 +20,7 @@ from clorm.orm import RawField, IntegerField, StringField, ConstantField, \
 
 # Official Clorm API imports for the fact base components
 from clorm.orm import FactBase, desc, asc, not_, and_, or_, \
-    ph_, ph1_, ph2_, func_, alias
+    ph_, ph1_, ph2_, func_, alias, basic_join_order_heuristic 
 
 # Implementation imports
 from clorm.orm.factbase import FactIndex, FactMap, _FactSet, \
@@ -30,7 +30,7 @@ from clorm.orm.factbase import FactIndex, FactMap, _FactSet, \
 from clorm.orm.queryplan import PositionalPlaceholder, NamedPlaceholder, QuerySpec
 
 from clorm.orm.queryplan import process_where, process_join, process_orderby, \
-    make_query_plan, basic_join_order_heuristic, make_input_alignment_functor
+    make_query_plan, make_input_alignment_functor
 
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
@@ -40,7 +40,7 @@ __all__ = [
     'FactBaseTestCase',
     'QueryTestCase',
     'QueryOutputTestCase',
-    'SelectTestCase',
+    'SelectNoJoinTestCase',
     'Select2TestCase',
     ]
 
@@ -1085,7 +1085,7 @@ class QueryOutputTestCase(unittest.TestCase):
 # Test the Select class
 #------------------------------------------------------------------------------
 
-class SelectTestCase(unittest.TestCase):
+class SelectNoJoinTestCase(unittest.TestCase):
     def setUp(self):
         pass
 
@@ -1134,25 +1134,25 @@ class SelectTestCase(unittest.TestCase):
         self.assertEqual(s2_num1_eq_4.query_plan()[0].prejoin_key, None)
         self.assertEqual(s2_str1_eq_4.query_plan()[0].prejoin_key, None)
 
-        self.assertEqual(set(list(s1_all.get())), set([f1,f3,f4,f42,f10]))
-        self.assertEqual(set(list(s1_num1_eq_4.get())), set([f4,f42]))
-        self.assertEqual(set(list(s1_num1_ne_4.get())), set([f1,f3,f10]))
-        self.assertEqual(set(list(s1_num1_lt_4.get())), set([f1,f3]))
-        self.assertEqual(set(list(s1_num1_le_4.get())), set([f1,f3,f4,f42]))
-        self.assertEqual(set(list(s1_num1_gt_4.get())), set([f10]))
-        self.assertEqual(set(list(s1_num1_ge_4.get())), set([f4,f42,f10]))
-        self.assertEqual(s1_str1_eq_4.get_unique(), f4)
-        self.assertEqual(s1_num2_eq_4.get_unique(), f4)
+        self.assertEqual(set(list(s1_all.run())), set([f1,f3,f4,f42,f10]))
+        self.assertEqual(set(list(s1_num1_eq_4.run())), set([f4,f42]))
+        self.assertEqual(set(list(s1_num1_ne_4.run())), set([f1,f3,f10]))
+        self.assertEqual(set(list(s1_num1_lt_4.run())), set([f1,f3]))
+        self.assertEqual(set(list(s1_num1_le_4.run())), set([f1,f3,f4,f42]))
+        self.assertEqual(set(list(s1_num1_gt_4.run())), set([f10]))
+        self.assertEqual(set(list(s1_num1_ge_4.run())), set([f4,f42,f10]))
+        self.assertEqual(s1_str1_eq_4.run().singleton(), f4)
+        self.assertEqual(s1_num2_eq_4.run().singleton(), f4)
 
-        self.assertEqual(set(list(s2_all.get())), set([f1,f3,f4,f42,f10]))
-        self.assertEqual(set(list(s2_num1_eq_4.get())), set([f4,f42]))
-        self.assertEqual(set(list(s2_num1_ne_4.get())), set([f1,f3,f10]))
-        self.assertEqual(set(list(s2_num1_lt_4.get())), set([f1,f3]))
-        self.assertEqual(set(list(s2_num1_le_4.get())), set([f1,f3,f4,f42]))
-        self.assertEqual(set(list(s2_num1_gt_4.get())), set([f10]))
-        self.assertEqual(set(list(s2_num1_ge_4.get())), set([f4,f42,f10]))
-        self.assertEqual(s2_str1_eq_4.get_unique(), f4)
-        self.assertEqual(s2_num2_eq_4.get_unique(), f4)
+        self.assertEqual(set(list(s2_all.run())), set([f1,f3,f4,f42,f10]))
+        self.assertEqual(set(list(s2_num1_eq_4.run())), set([f4,f42]))
+        self.assertEqual(set(list(s2_num1_ne_4.run())), set([f1,f3,f10]))
+        self.assertEqual(set(list(s2_num1_lt_4.run())), set([f1,f3]))
+        self.assertEqual(set(list(s2_num1_le_4.run())), set([f1,f3,f4,f42]))
+        self.assertEqual(set(list(s2_num1_gt_4.run())), set([f10]))
+        self.assertEqual(set(list(s2_num1_ge_4.run())), set([f4,f42,f10]))
+        self.assertEqual(s2_str1_eq_4.run().singleton(), f4)
+        self.assertEqual(s2_num2_eq_4.run().singleton(), f4)
 
 
         # Test simple conjunction select
@@ -1161,26 +1161,26 @@ class SelectTestCase(unittest.TestCase):
         s1_conj3 = fb1.select(Afact1).where(lambda x: x.str1 == "42", Afact1.num1 == 4)
 
         self.assertNotEqual(s1_conj1.query_plan()[0].prejoin_key, None)
-        self.assertEqual(s1_conj1.get_unique(), f42)
-        self.assertEqual(s1_conj2.get_unique(), f42)
-        self.assertEqual(s1_conj3.get_unique(), f42)
+        self.assertEqual(s1_conj1.run().singleton(), f42)
+        self.assertEqual(s1_conj2.run().singleton(), f42)
+        self.assertEqual(s1_conj3.run().singleton(), f42)
 
         # Test select with placeholders
         s1_ph1 = fb1.select(Afact1).where(Afact1.num1 == ph_("num1"))
         s1_ph2 = fb1.select(Afact1).where(Afact1.str1 == ph_("str1","42"),
                                           Afact1.num1 == ph_("num1"))
-        self.assertEqual(set(s1_ph1.get(num1=4)), set([f4,f42]))
-        self.assertEqual(set(list(s1_ph1.get(num1=3))), set([f3]))
-        self.assertEqual(set(list(s1_ph1.get(num1=2))), set([]))
-        self.assertEqual(s1_ph2.get_unique(num1=4), f42)
-        self.assertEqual(s1_ph2.get_unique(str1="42",num1=4), f42)
+        self.assertEqual(set(s1_ph1.run(num1=4)), set([f4,f42]))
+        self.assertEqual(set(list(s1_ph1.run(num1=3))), set([f3]))
+        self.assertEqual(set(list(s1_ph1.run(num1=2))), set([]))
+        self.assertEqual(s1_ph2.run(num1=4).singleton(), f42)
+        self.assertEqual(s1_ph2.run(str1="42",num1=4).singleton(), f42)
 
         with self.assertRaises(ValueError) as ctx:
-            tmp = list(s1_ph1.get_unique(num1=4))  # fails because of multiple values
+            tmp = list(s1_ph1.run(num1=4).singleton())  # fails because of multiple values
         with self.assertRaises(ValueError) as ctx:
-            tmp = list(s1_ph2.get(num2=5))         # fails because of no values
+            tmp = list(s1_ph2.run(num2=5))         # fails because of no values
         with self.assertRaises(ValueError) as ctx:
-            tmp = list(s1_ph2.get(str1="42"))
+            tmp = list(s1_ph2.run(str1="42"))
 
 
     #--------------------------------------------------------------------------
@@ -1217,14 +1217,14 @@ class SelectTestCase(unittest.TestCase):
         self.assertEqual(len(fb1), len(facts))
 
         s1 = fb1.select(Fact).where(fpb == ph1_)
-        self.assertEqual(s1.get(f1), [f1])
+        self.assertEqual(list(s1.run(f1)), [f1])
         s1 = fb2.select(Fact).where(fpb == ph1_)
-        self.assertEqual(s1.get(f1), [f1])
+        self.assertEqual(list(s1.run(f1)), [f1])
 
         s2 = fb1.select(Fact).where(fpb <= ph1_).order_by(fpb)
-        self.assertEqual(s2.get(f2b), [f1,f2,f2b])
+        self.assertEqual(list(s2.run(f2b)), [f1,f2,f2b])
         s2 = fb2.select(Fact).where(fpb <= ph1_).order_by(fpb)
-        self.assertEqual(s2.get(f2b), [f1,f2,f2b])
+        self.assertEqual(list(s2.run(f2b)), [f1,f2,f2b])
 
     #--------------------------------------------------------------------------
     # Test basic insert and selection of facts in a factbase
@@ -1266,30 +1266,30 @@ class SelectTestCase(unittest.TestCase):
         s_bf_str1_eq_ccc = fb.select(Bfact).where(Bfact.str1 == "ccc")
         s_cf_num1_eq_1 = fb.select(Cfact).where(Cfact.num1 == 1)
 
-        self.assertEqual(set(s_af_all.get()), set([af1,af2,af3]))
-        self.assertEqual(s_af_all.count(), 3)
-        self.assertEqual(set(s_af_num1_eq_1.get()), set([af1]))
-        self.assertEqual(set(s_af_num1_le_2.get()), set([af1,af2]))
-        self.assertEqual(set(s_af_num2_eq_20.get()), set([af2, af3]))
-        self.assertEqual(set(s_bf_str1_eq_aaa.get()), set([bf1]))
-        self.assertEqual(set(s_bf_str1_eq_ccc.get()), set([]))
-        self.assertEqual(set(s_cf_num1_eq_1.get()), set([cf1]))
+        self.assertEqual(set(s_af_all.run()), set([af1,af2,af3]))
+        self.assertEqual(s_af_all.run().count(), 3)
+        self.assertEqual(set(s_af_num1_eq_1.run()), set([af1]))
+        self.assertEqual(set(s_af_num1_le_2.run()), set([af1,af2]))
+        self.assertEqual(set(s_af_num2_eq_20.run()), set([af2, af3]))
+        self.assertEqual(set(s_bf_str1_eq_aaa.run()), set([bf1]))
+        self.assertEqual(set(s_bf_str1_eq_ccc.run()), set([]))
+        self.assertEqual(set(s_cf_num1_eq_1.run()), set([cf1]))
 
         fb.clear()
-        self.assertEqual(set(s_af_all.get()), set())
-        self.assertEqual(set(s_af_num1_eq_1.get()), set())
-        self.assertEqual(set(s_af_num1_le_2.get()), set())
-        self.assertEqual(set(s_af_num2_eq_20.get()), set())
-        self.assertEqual(set(s_bf_str1_eq_aaa.get()), set())
-        self.assertEqual(set(s_bf_str1_eq_ccc.get()), set())
-        self.assertEqual(set(s_cf_num1_eq_1.get()), set())
+        self.assertEqual(set(s_af_all.run()), set())
+        self.assertEqual(set(s_af_num1_eq_1.run()), set())
+        self.assertEqual(set(s_af_num1_le_2.run()), set())
+        self.assertEqual(set(s_af_num2_eq_20.run()), set())
+        self.assertEqual(set(s_bf_str1_eq_aaa.run()), set())
+        self.assertEqual(set(s_bf_str1_eq_ccc.run()), set())
+        self.assertEqual(set(s_cf_num1_eq_1.run()), set())
 
         # Test that the select can work with an initially empty factbase
         fb2 = FactBase()
         s2 = fb2.select(Afact).where(Afact.num1 == 1)
-        self.assertEqual(set(s2.get()), set())
+        self.assertEqual(set(s2.run()), set())
         fb2.add([af1,af2])
-        self.assertEqual(set(s2.get()), set([af1]))
+        self.assertEqual(set(s2.run()), set([af1]))
 
         # Test select with placeholders
 #        fb3 = FactBase([Afact.num1])
@@ -1297,23 +1297,23 @@ class SelectTestCase(unittest.TestCase):
         fb3.add([af1,af2,af3])
 ####        self.assertEqual(fb3.add([af1,af2,af3]),3)
         s3 = fb3.select(Afact).where(Afact.num1 == ph_("num1"))
-        self.assertEqual(s3.get_unique(num1=1), af1)
-        self.assertEqual(s3.get_unique(num1=2), af2)
-        self.assertEqual(s3.get_unique(num1=3), af3)
+        self.assertEqual(s3.run(num1=1).singleton(), af1)
+        self.assertEqual(s3.run(num1=2).singleton(), af2)
+        self.assertEqual(s3.run(num1=3).singleton(), af3)
 
 
         # Test placeholders with positional arguments
         s4 = fb3.select(Afact).where(Afact.num1 < ph1_)
-        self.assertEqual(set(list(s4.get(1))), set([]))
-        self.assertEqual(set(list(s4.get(2))), set([af1]))
-        self.assertEqual(set(list(s4.get(3))), set([af1,af2]))
+        self.assertEqual(set(list(s4.run(1))), set([]))
+        self.assertEqual(set(list(s4.run(2))), set([af1]))
+        self.assertEqual(set(list(s4.run(3))), set([af1,af2]))
 
         s5 = fb3.select(Afact).where(Afact.num1 <= ph1_, Afact.num2 == ph2_)
-        self.assertEqual(set(s5.get(3,10)), set([af1]))
+        self.assertEqual(set(s5.run(3,10)), set([af1]))
 
         # Missing positional argument
         with self.assertRaises(ValueError) as ctx:
-            tmp = list(s5.get(1))
+            tmp = list(s5.run(1))
 
         # Test that the fact base index
         fb = FactBase(indexes=[Afact.num2, Bfact.str1])
@@ -1338,17 +1338,17 @@ class SelectTestCase(unittest.TestCase):
         fb = FactBase([af1,af2,af3])
 
         q=fb.select(Afact).where((Afact.num1 == 2) | (Afact.num2 == 10))
-        self.assertEqual(set([af1,af2]), set(q.get()))
+        self.assertEqual(set([af1,af2]), set(q.run()))
 
         q=fb.select(Afact).where((Afact.num1 == 2) & (Afact.num2 == 20))
-        self.assertEqual(set([af2]), set(q.get()))
+        self.assertEqual(set([af2]), set(q.run()))
 
 
         q=fb.select(Afact).where(~(Afact.num1 == 2) & (Afact.num2 == 20))
-        self.assertEqual(set([af3]), set(q.get()))
+        self.assertEqual(set([af3]), set(q.run()))
 
         q=fb.select(Afact).where(~((Afact.num1 == 2) & (Afact.num2 == 20)))
-        self.assertEqual(set([af1,af3]), set(q.get()))
+        self.assertEqual(set([af1,af3]), set(q.run()))
 
 
     #--------------------------------------------------------------------------
@@ -1370,8 +1370,8 @@ class SelectTestCase(unittest.TestCase):
         q=fb.select(F).where((F.num1 == 1) & (lambda f : f.str1 == "b"))
         q=fb.select(F).where((F.num1 == 1) & (lambda f,v : f.str1 == v))
 
-        self.assertEqual(set([f2]), set(q.get("b")))
-        self.assertEqual(set([f2]), set(q.get(v="b")))
+        self.assertEqual(set([f2]), set(q.run("b")))
+        self.assertEqual(set([f2]), set(q.run(v="b")))
 
     #--------------------------------------------------------------------------
     #   Test that we can use the same placeholder multiple times
@@ -1389,13 +1389,13 @@ class SelectTestCase(unittest.TestCase):
         fb1 = FactBase([f1,f2,f3,f4,f5], [Afact.num1])
 
         s1 = fb1.select(Afact).where(Afact.num1 == ph1_, Afact.num2 == ph1_)
-        self.assertTrue(set([f for f in s1.get(1)]), set([f1]))
-        self.assertTrue(set([f for f in s1.get(2)]), set([f5]))
+        self.assertTrue(set([f for f in s1.run(1)]), set([f1]))
+        self.assertTrue(set([f for f in s1.run(2)]), set([f5]))
 
         s2 = fb1.select(Afact).where(Afact.num1 == ph_("a",1), Afact.num2 == ph_("a",2))
-        self.assertTrue(set([f for f in s2.get(a=1)]), set([f1]))
-        self.assertTrue(set([f for f in s2.get(a=2)]), set([f5]))
-        self.assertTrue(set([f for f in s2.get()]), set([f2]))
+        self.assertTrue(set([f for f in s2.run(a=1)]), set([f1]))
+        self.assertTrue(set([f for f in s2.run(a=2)]), set([f5]))
+        self.assertTrue(set([f for f in s2.run()]), set([f2]))
 
         # test that we can do different parameters with normal functions
         def tmp(f,a,b=2):
@@ -1403,15 +1403,15 @@ class SelectTestCase(unittest.TestCase):
 
         s3 = fb1.select(Afact).where(tmp)
         with self.assertRaises(ValueError) as ctx:
-            r=[f for f in s3.get()]
+            r=[f for f in s3.run()]
 
-        self.assertTrue(set([f for f in s3.get(a=1)]), set([f2]))
-        self.assertTrue(set([f for f in s3.get(a=1,b=3)]), set([f3]))
+        self.assertTrue(set([f for f in s3.run(a=1)]), set([f2]))
+        self.assertTrue(set([f for f in s3.run(a=1,b=3)]), set([f3]))
 
         # Test manually created positional placeholders
         s1 = fb1.select(Afact).where(Afact.num1 == ph1_, Afact.num2 == ph_(1))
-        self.assertTrue(set([f for f in s1.get(1)]), set([f1]))
-        self.assertTrue(set([f for f in s1.get(2)]), set([f5]))
+        self.assertTrue(set([f for f in s1.run(1)]), set([f1]))
+        self.assertTrue(set([f for f in s1.run(2)]), set([f5]))
 
     #--------------------------------------------------------------------------
     #   Test that select works with order_by
@@ -1430,31 +1430,31 @@ class SelectTestCase(unittest.TestCase):
         fb = FactBase(facts=[f1,f2,f3,f4,f5])
 
         q = fb.select(Afact).order_by(Afact.num1)
-        self.assertEqual([f1,f2,f3,f4,f5], q.get())
+        self.assertEqual([f1,f2,f3,f4,f5], list(q.run()))
 
         q = fb.select(Afact).order_by(asc(Afact.num1))
-        self.assertEqual([f1,f2,f3,f4,f5], q.get())
+        self.assertEqual([f1,f2,f3,f4,f5], list(q.run()))
 
         q = fb.select(Afact).order_by(desc(Afact.num1))
-        self.assertEqual([f5,f4,f3,f2,f1], q.get())
+        self.assertEqual([f5,f4,f3,f2,f1], list(q.run()))
 
         q = fb.select(Afact).order_by(Afact.str2)
-        self.assertEqual([f5,f4,f3,f2,f1], q.get())
+        self.assertEqual([f5,f4,f3,f2,f1], list(q.run()))
 
         q = fb.select(Afact).order_by(desc(Afact.str2))
-        self.assertEqual([f1,f2,f3,f4,f5], q.get())
+        self.assertEqual([f1,f2,f3,f4,f5], list(q.run()))
 
         q = fb.select(Afact).order_by(desc(Afact.str1), Afact.num1)
-        self.assertEqual([f3,f2,f4,f1,f5], q.get())
+        self.assertEqual([f3,f2,f4,f1,f5], list(q.run()))
 
         q = fb.select(Afact).order_by(desc(Afact.str1), Afact.num1)
-        self.assertEqual([f3,f2,f4,f1,f5], q.get())
+        self.assertEqual([f3,f2,f4,f1,f5], list(q.run()))
 
         # Adding a duplicate object to a factbase shouldn't do anything
         f6 = Afact(num1=5,str1="1",str2="1")
         fb.add(f6)
         q = fb.select(Afact).order_by(desc(Afact.str1), Afact.num1)
-        self.assertEqual([f3,f2,f4,f1,f5], q.get())
+        self.assertEqual([f3,f2,f4,f1,f5], list(q.run()))
 
 
     #--------------------------------------------------------------------------
@@ -1486,13 +1486,13 @@ class SelectTestCase(unittest.TestCase):
         fb = FactBase(facts=[f1,f2,f3,f4], indexes = [AFact.astr, AFact.cmplx])
 
         q = fb.select(AFact).order_by(AFact.astr)
-        self.assertEqual([f1,f2,f3,f4], q.get())
+        self.assertEqual([f1,f2,f3,f4], list(q.run()))
 
         q = fb.select(AFact).order_by(AFact.cmplx, AFact.astr)
-        self.assertEqual([f3,f4,f2,f1], q.get())
+        self.assertEqual([f3,f4,f2,f1], list(q.run()))
 
         q = fb.select(AFact).where(AFact.cmplx <= ph1_).order_by(AFact.cmplx, AFact.astr)
-        self.assertEqual([f3,f4,f2], q.get(cmplx2))
+        self.assertEqual([f3,f4,f2], list(q.run(cmplx2)))
 
     #--------------------------------------------------------------------------
     #   Test that select works with order_by for complex term
@@ -1512,24 +1512,24 @@ class SelectTestCase(unittest.TestCase):
         fb = FactBase(facts=[f1,f2,f3,f4])
 
         q = fb.select(AFact).where(AFact.cmplx1 == (1,2))
-        self.assertEqual([f1,f2], q.get())
+        self.assertEqual([f1,f2], list(q.run()))
 
         q = fb.select(AFact).where(AFact.cmplx1 == ph1_)
-        self.assertEqual([f1,f2], q.get((1,2)))
+        self.assertEqual([f1,f2], list(q.run((1,2))))
 
         q = fb.select(AFact).where(AFact.cmplx1 == AFact.cmplx2)
-        self.assertEqual([f1,f3], q.get())
+        self.assertEqual([f1,f3], list(q.run()))
 
         # Some type mismatch failures
 #        with self.assertRaises(TypeError) as ctx:
-#            fb.select(AFact).where(AFact.cmplx1 == 1).get()
+#            fb.select(AFact).where(AFact.cmplx1 == 1).run()
 
         # Fail because of type mismatch
 #        with self.assertRaises(TypeError) as ctx:
-#            q = fb.select(AFact).where(AFact.cmplx1 == (1,2,3)).get()
+#            q = fb.select(AFact).where(AFact.cmplx1 == (1,2,3)).run()
 
 #        with self.assertRaises(TypeError) as ctx:
-#            q = fb.select(AFact).where(AFact.cmplx1 == ph1_).get((1,2,3))
+#            q = fb.select(AFact).where(AFact.cmplx1 == ph1_).run((1,2,3))
 
     #--------------------------------------------------------------------------
     #   Test that the indexing works
@@ -1558,10 +1558,10 @@ class SelectTestCase(unittest.TestCase):
         s1 = fb1.select(Afact).where(Afact.num1 == ph1_, track)
         s2 = fb1.select(Afact).where(Afact.num1 < ph1_, track)
 
-        self.assertTrue(set([f for f in s1.get(2,1)]), set([f4]))
+        self.assertTrue(set([f for f in s1.run(2,1)]), set([f4]))
         self.assertTrue(facts, set([f4,f5]))
 
-        self.assertTrue(set([f for f in s2.get(2,2)]), set([f2]))
+        self.assertTrue(set([f for f in s2.run(2,2)]), set([f2]))
         self.assertTrue(facts, set([f1,f2,f3]))
 
     #--------------------------------------------------------------------------
@@ -1580,11 +1580,11 @@ class SelectTestCase(unittest.TestCase):
         f10 = Afact(10,10,"10")
 
         fb1 = FactBase(facts=[f1,f3, f4,f42,f10], indexes = [Afact.num1, Afact.num2])
-        d1_num1 = fb1.delete(Afact).where(Afact.num1 == ph1_)
+        d1_num1 = fb1.select(Afact).where(Afact.num1 == ph1_)
         s1_num1 = fb1.select(Afact).where(Afact.num1 == ph1_)
-        self.assertEqual(set([f for f in s1_num1.get(4)]), set([f4,f42]))
-        self.assertEqual(d1_num1.execute(4), 2)
-        self.assertEqual(set([f for f in s1_num1.get(4)]), set([]))
+        self.assertEqual(set([f for f in s1_num1.run(4)]), set([f4,f42]))
+        self.assertEqual(d1_num1.run(4).delete(), 2)
+        self.assertEqual(set([f for f in s1_num1.run(4)]), set([]))
 
     #--------------------------------------------------------------------------
     # Test the support for indexes of subfields
@@ -1613,17 +1613,17 @@ class SelectTestCase(unittest.TestCase):
         s3 = fb.select(Fact).where(Fact.ct2 == ph1_)
         s4 = fb.select(Fact).where(Fact.ct3 == ph1_)
 
-        self.assertEqual(s1.get(20), [f2,f1])
-        self.assertEqual(s2.get(CT(20,"b")), [f2])
+        self.assertEqual(list(s1.run(20)), [f2,f1])
+        self.assertEqual(list(s2.run(CT(20,"b"))), [f2])
 
         # NOTE: Important test as it requires tuple complex terms to have the
         # same hash as the corresponding python tuple.
-        self.assertEqual(s3.get((1,2)), [f2])
-        self.assertEqual(s4.get((2,1)), [f2])
+        self.assertEqual(list(s3.run((1,2))), [f2])
+        self.assertEqual(list(s4.run((2,1))), [f2])
 
         # One query doesn't use the index
         s4 = fb.select(Fact).where(Fact.ct1.str1 == ph1_)
-        self.assertEqual(s4.get("c"), [f3])
+        self.assertEqual(list(s4.run("c")), [f3])
 
     #--------------------------------------------------------------------------
     #   Test badly formed select/delete statements where the where clause (or
@@ -1671,7 +1671,7 @@ class SelectTestCase(unittest.TestCase):
 
         # Bad delete where clause
         with self.assertRaises(ValueError) as ctx:
-            q = fb.delete(F).where(G.num1 == 1)
+            q = fb.select(F).where(G.num1 == 1).run().delete()
         check_errmsg("Invalid 'where' expression",ctx)
 
 
@@ -1738,11 +1738,11 @@ class Select2TestCase(unittest.TestCase):
 
         fb2 = FactBase(people+friends,indexes=[P.pid,F.src,F.dst])
 
-        s1_people = fb2.select2(P).order_by(P.pid)
+        s1_people = fb2.select(P).order_by(P.pid)
         self.assertEqual(list(s1_people.run()),[bill,bob,dave,jane,jill,sal])
 
         PA=alias(P)
-        all_friends = fb2.select2(P,PA,F)\
+        all_friends = fb2.select(P,PA,F)\
             .join(P.pid == F.src,PA.pid == F.dst)
         close_friends = all_friends\
             .where(P.name < PA.name,
