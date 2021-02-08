@@ -796,9 +796,9 @@ class QueryOutputTestCase(unittest.TestCase):
         self.factbase = factbase
 
     #--------------------------------------------------------------------------
-    # Test initialising a placeholder (named and positional)
+    # Test some basic configurations
     #--------------------------------------------------------------------------
-    def test_QueryOutput(self):
+    def test_api_QueryOutput(self):
         F = self.F
         G = self.G
         factbase=self.factbase
@@ -875,6 +875,208 @@ class QueryOutputTestCase(unittest.TestCase):
         result = list(qo.output(G.anum).tuple())
         expected = set([(1,),(5,)])
         self.assertEqual(expected, set(result))
+
+    #--------------------------------------------------------------------------
+    # Test singleton, count, first
+    #--------------------------------------------------------------------------
+    def test_api_QueryOutput_singleton_count_first(self):
+        F = self.F
+        G = self.G
+        factbase=self.factbase
+
+        def qsetup(where):
+            indexes = {}
+            factsets = factbase_to_factsets(factbase)
+            pw = process_where
+            pj = process_join
+            pob = process_orderby
+            roots = [F,G]
+
+            join = pj([F.anum == G.anum],roots)
+            where = pw(where,roots)
+            orderby = pob([F.astr],roots)
+            qspec = QuerySpec(roots, join, where, orderby)
+            qplan = make_query_plan(simple_query_join_order, indexes.keys(),qspec)
+            query = make_query(qplan, factsets, indexes)
+            return QueryOutput(factbase, qspec, qplan, query)
+
+        # Test getting the first element
+        qo = qsetup((G.anum == 5) & (G.astr == "foo"))
+        self.assertEqual(qo.first(),(F(5,"a"),G(5,"foo")))
+
+        # Test getting the first element with filtered output
+        qo = qsetup((G.anum == 5) & (G.astr == "foo"))
+        qo.output(F)
+        self.assertEqual(qo.first(),F(5,"a"))
+
+        # Test the count
+        qo = qsetup((G.anum == 5) & (G.astr == "foo"))
+        qo.output(F)
+        self.assertEqual(qo.count(),2)
+
+        # Test count with filtered output and uniqueness
+        qo = qsetup((G.anum == 5) & (G.astr == "foo"))
+        qo.output(F.anum).unique()
+        self.assertEqual(qo.count(),1)
+
+        # Test singleton with filtered output and uniqueness
+        qo = qsetup((G.anum == 5) & (G.astr == "foo"))
+        qo.output(F.anum).unique()
+        self.assertEqual(qo.singleton(),5)
+
+        # Test singleton failure
+        qo = qsetup((G.anum == 5) & (G.astr == "foo"))
+        with self.assertRaises(ValueError) as ctx:
+            qo.singleton()
+        check_errmsg("Query returned more",ctx)
+
+    #--------------------------------------------------------------------------
+    # Test delete
+    #--------------------------------------------------------------------------
+    def test_api_QueryOutput_delete(self):
+        F = self.F
+        G = self.G
+
+        def delsetup():
+            factbase=FactBase(self.factbase)
+            indexes = {}
+            factsets = factbase_to_factsets(factbase)
+            pw = process_where
+            pj = process_join
+            pob = process_orderby
+            roots = [F,G]
+
+            join = pj([F.anum == G.anum],roots)
+            where = pw(G.anum > 4,roots)
+            orderby = pob([F.anum,G.anum],roots)
+            qspec = QuerySpec(roots, join, where, orderby)
+            qplan = make_query_plan(simple_query_join_order, indexes.keys(),qspec)
+            query = make_query(qplan, factsets, indexes)
+            return (factbase,QueryOutput(factbase, qspec, qplan, query))
+
+        # Test deleting all selected elements
+        fb,qo = delsetup()
+        qo.delete()
+
+        self.assertEqual(len(fb),4)
+        self.assertFalse(F(5,"a") in fb)
+        self.assertFalse(F(5,"foo") in fb)
+        self.assertFalse(G(5,"a") in fb)
+        self.assertFalse(G(5,"foo") in fb)
+
+        # Test deleting all selected elements chosen explicitly
+        fb,qo = delsetup()
+        qo.delete(F,G)
+
+        self.assertEqual(len(fb),4)
+        self.assertFalse(F(5,"a") in fb)
+        self.assertFalse(F(5,"foo") in fb)
+        self.assertFalse(G(5,"a") in fb)
+        self.assertFalse(G(5,"foo") in fb)
+
+        # Test deleting only the F instances
+        fb,qo = delsetup()
+        qo.delete(F)
+
+        self.assertEqual(len(fb),6)
+        self.assertFalse(F(5,"a") in fb)
+        self.assertFalse(F(5,"foo") in fb)
+
+        # Test deleting only the G instances using a path object
+        fb,qo = delsetup()
+        qo.delete(path(G))
+
+        self.assertEqual(len(fb),6)
+        self.assertFalse(G(5,"a") in fb)
+        self.assertFalse(G(5,"foo") in fb)
+
+        # Bad delete - deleting an alias path that is not in the original
+        fb,qo = delsetup()
+        FA = alias(self.F)
+        with self.assertRaises(ValueError) as ctx:
+            qo.delete(FA)
+        check_errmsg("The roots to delete",ctx)
+
+        # Bad deletes -  deleting all plus an extra
+        fb,qo = delsetup()
+        FA = alias(self.F)
+        with self.assertRaises(ValueError) as ctx:
+            qo.delete(F,G,FA)
+        check_errmsg("The roots to delete",ctx)
+
+    #--------------------------------------------------------------------------
+    # Test group_by
+    #--------------------------------------------------------------------------
+    def test_api_QueryOutput_group_by(self):
+        F = self.F
+        G = self.G
+        factbase=self.factbase
+
+        def qsetup(ordering, where):
+            indexes = {}
+            factsets = factbase_to_factsets(factbase)
+            pw = process_where
+            pj = process_join
+            pob = process_orderby
+            roots = [F,G]
+
+            join = pj([F.anum == G.anum],roots)
+            where = pw(where,roots) if where else None
+            orderby = pob(ordering,roots) if ordering else None
+            qspec = QuerySpec(roots, join, where, orderby)
+            qplan = make_query_plan(simple_query_join_order, indexes.keys(),qspec)
+            query = make_query(qplan, factsets, indexes)
+            return QueryOutput(factbase, qspec, qplan, query)
+
+        # Test some bad group_by setups
+        qo = qsetup([], (G.anum == 5) & (G.astr == "foo"))
+        with self.assertRaises(ValueError) as ctx:
+            qo.group_by()
+        check_errmsg("group_by() can only",ctx)
+
+        qo = qsetup([F.anum], (G.anum == 5) & (G.astr == "foo"))
+        with self.assertRaises(ValueError) as ctx:
+            qo.group_by(0)
+        check_errmsg("The grouping must be a positive integer",ctx)
+
+        qo = qsetup([F.anum], (G.anum == 5) & (G.astr == "foo"))
+        with self.assertRaises(ValueError) as ctx:
+            qo.group_by(2)
+        check_errmsg("The grouping size",ctx)
+
+        qo = qsetup([F.anum], (G.anum == 5) & (G.astr == "foo"))
+        with self.assertRaises(ValueError) as ctx:
+            qo.group_by(1).group_by()
+        check_errmsg("group_by() can only be specified once",ctx)
+
+        # Test output with various options
+
+        # Default grouping by first item (removes tuple)
+        qo = qsetup([F.anum,F.astr], None)
+        self.assertEqual([k for k,_ in list(qo.group_by())], [1,5])
+
+        # Default grouping by first item but different order (removes tuple)
+        qo = qsetup([desc(F.anum),F.astr], None)
+        self.assertEqual([k for k,_ in list(qo.group_by())], [5,1])
+
+        # Default grouping by first item with tuple not removed
+        qo = qsetup([F.anum,F.astr], None).tuple()
+        self.assertEqual([k for k,_ in list(qo.group_by())], [(1,),(5,)])
+
+        # Default grouping by first item - check number of items
+        qo = qsetup([F.anum,F.astr], None)
+        for k,g in qo.group_by():
+            self.assertEqual(len(list(g)),4)
+
+        # Group by both items - check keys
+        qo = qsetup([F.anum,F.astr], None)
+        self.assertEqual([k for k,_ in list(qo.group_by(2).output(G))],
+                         [(1,'a'),(1,'foo'),(5,'a'),(5,'foo')])
+
+        # Group by both items with unique - single output for each group
+        qo = qsetup([F.anum,F.astr], None)
+        for k,g in qo.group_by(2).output(G.anum).unique():
+            self.assertEqual(len(list(g)),1)
 
 
 #------------------------------------------------------------------------------

@@ -1098,6 +1098,7 @@ class QueryOutput(object):
         self._unique = False
         self._sigoverride = False
         self._tuple_called = False
+        self._grouping = None
         self._unwrap = len(self._qplan.output_signature) == 1
 
         self._outputter = make_outputter(self._qplan.output_signature,
@@ -1144,6 +1145,25 @@ class QueryOutput(object):
         self._outputter = make_outputter(self._qplan.output_signature,tmp)
         return self
 
+    def group_by(self,grouping=1):
+        if self._executed:
+            raise RuntimeError("The query instance has already been executed")
+        if self._grouping:
+            raise ValueError("group_by() can only be specified once")
+
+        if not self._qspec.order_by:
+            raise ValueError(("group_by() can only be specified in conjunction "
+                              "with order_by() in the query"))
+        if grouping <= 0:
+            raise ValueError("The grouping must be a positive integer")
+        if grouping > len(self._qspec.order_by):
+            raise ValueError(("The grouping size {} cannot be larger than the "
+                              "order_by() specification "
+                              "'{}'").format(grouping,self._qspec.order_by))
+
+        self._grouping = [ob.path for ob in self._qspec.order_by[:grouping]]
+        return self
+
     # --------------------------------------------------------------------------
     # Internal function generator for the query results
     # --------------------------------------------------------------------------
@@ -1159,6 +1179,28 @@ class QueryOutput(object):
             else:
                 yield output
 
+    def _group_by_all(self):
+        def groupiter(group):
+            cache = set()
+            for input in group:
+                output = self._outputter(input)
+                if self._unwrap: output = output[0]
+                if self._unique:
+                    if output not in cache:
+                        cache.add(output)
+                        yield output
+                else:
+                    yield output
+
+        unwrapkey = len(self._grouping) == 1 and not self._tuple_called
+
+        group_by_keyfunc = make_input_alignment_functor(
+            self._qplan.output_signature, self._grouping)
+        for k,g in itertools.groupby(self._query(), group_by_keyfunc):
+            if unwrapkey: yield k[0], groupiter(g)
+            else: yield k, groupiter(g)
+
+
     #--------------------------------------------------------------------------
     # Functions to get the output - only one of these functions can be called
     # for a QueryOutput instance.
@@ -1168,40 +1210,52 @@ class QueryOutput(object):
         if self._executed:
             raise RuntimeError("The query instance has already been executed")
         self._executed = True
-        return self._all()
+        if self._grouping: return self._group_by_all()
+        else: return self._all()
 
     def singleton(self):
         if self._executed:
             raise RuntimeError("The query instance has already been executed")
+        if self._grouping:
+            raise RuntimeError(("Returning a singleton() cannot be used in "
+                                "conjunction with group_by()"))
         self._executed = True
 
         found = None
         for out in self._all():
-            if found: raise ValueError("Query result is not a single item")
+            if found: raise ValueError("Query returned more than a single element")
             found = out
         return found
 
     def count(self):
         if self._executed:
             raise RuntimeError("The query instance has already been executed")
+        if self._grouping:
+            raise RuntimeError(("Returning count() cannot be used in "
+                                "conjunction with group_by()"))
         self._executed = True
         return len(list(self._all()))
 
     def first(self):
         if self._executed:
             raise RuntimeError("The query instance has already been executed")
+        if self._grouping:
+            raise RuntimeError(("Returning first() cannot be used in "
+                                "conjunction with group_by()"))
         self._executed = True
         return next(iter(self._all()))
 
-
     # --------------------------------------------------------------------------
-    # Delete some selection of facts. Maintains a set for each predicate type
+    # Delete a selection of facts. Maintains a set for each predicate type
     # and adds the selected fact to that set. The delete the facts in each set.
     # --------------------------------------------------------------------------
 
     def delete(self,*subroots):
         if self._executed:
             raise RuntimeError("The query instance has already been executed")
+        if self._grouping:
+            raise RuntimeError(("delete() cannot be used in "
+                                "conjunction with group_by()"))
         self._executed = True
 
         roots = set([hashable_path(p) for p in self._qspec.roots])
@@ -1224,7 +1278,7 @@ class QueryOutput(object):
             hout = hashable_path(out)
             if hout in subroots:
                 ds = deletesets[out.meta.predicate]
-                actions.append(lambda x, ds=ds: x.add(ds))
+                actions.append(lambda x, ds=ds: ds.add(x))
             else:
                 actions.append(lambda x : None)
 
@@ -1485,108 +1539,7 @@ class SelectImpl(Select):
         return qo.count()
 
 #------------------------------------------------------------------------------
-# Select V2 API
-#------------------------------------------------------------------------------
-class Select2Impl(object):
-
-    def __init__(self,factbase, queryspec):
-        self._factbase = factbase
-        self._qspec = queryspec
-        self._qplan = None
-
-        self._pred2factset = {}
-        self._path2factindex = {}
-
-        ptypes = set([ root.meta.predicate for root in self._qspec.roots])
-        for ptype in ptypes:
-            fm =factbase.factmaps[ptype]
-            self._pred2factset[ptype] = fm.factset
-            for hpth, fi in fm.path2factindex.items():
-                self._path2factindex[hpth] = fi
-
-
-    #--------------------------------------------------------------------------
-    # Add a join expression
-    #--------------------------------------------------------------------------
-    def join(self, *expressions):
-        if self._qspec.where:
-            raise TypeError(("The 'join' condition must come before the "
-                             "'where' condition"))
-        if self._qspec.order_by:
-            raise TypeError(("The 'join' condition must come before the "
-                             "'order_by' condition"))
-        if self._qspec.join:
-            raise TypeError("Cannot specify 'join' multiple times")
-        if not expressions:
-            raise TypeError("Empty 'join' expression")
-
-        join=process_join(expressions, self._qspec.roots)
-        return Select2Impl(self._factbase,
-                           modify_query_spec(self._qspec, join=join))
-
-    #--------------------------------------------------------------------------
-    # Add an order_by expression
-    #--------------------------------------------------------------------------
-    def where(self, *expressions):
-        if self._qspec.order_by:
-            raise TypeError(("The 'where' condition must come before the "
-                             "'order_by' condition"))
-        if self._qspec.where:
-            raise TypeError("Cannot specify 'where' multiple times")
-        if not expressions:
-            raise TypeError("Empty 'where' expression")
-        elif len(expressions) == 1:
-            where = process_where(expressions[0],self._qspec.roots)
-        else:
-            where = process_where(and_(*expressions),self._qspec.roots)
-
-        return Select2Impl(self._factbase,
-                           modify_query_spec(self._qspec, where=where))
-
-    #--------------------------------------------------------------------------
-    # Add an order_by expression
-    #--------------------------------------------------------------------------
-    def order_by(self, *expressions):
-        if self._qspec.order_by:
-            raise TypeError("Cannot specify 'order_by' multiple times")
-        if not expressions:
-            raise TypeError("Empty 'order_by' expression")
-        order_by = process_orderby(expressions,self._qspec.roots)
-
-        return Select2Impl(self._factbase,
-                           modify_query_spec(self._qspec, order_by=order_by))
-
-    #--------------------------------------------------------------------------
-    #
-    #--------------------------------------------------------------------------
-    def query_plan(self,*args,**kwargs):
-        if not self._qplan:
-            self._qplan = make_query_plan(simple_query_join_order,
-                                          self._path2factindex.keys(),
-                                          self._qspec)
-
-        if not args and not kwargs: return self._qplan
-        return self._qplan.ground(*args,**kwargs)
-
-    #--------------------------------------------------------------------------
-    # Functions currently mirroring the old interface
-    # --------------------------------------------------------------------------
-
-    def run(self, *args, **kwargs):
-
-        # NOTE: a limitation of the current implementation of FunctionComparator
-        # means that I have to call ground() to make the assignment valid. Need
-        # to look at this.
-
-        qplan = self.query_plan()
-        gqplan = qplan.ground(*args,**kwargs)
-        query = make_query(gqplan, self._pred2factset, self._path2factindex)
-
-        return QueryOutput(self._factbase,self._qspec,gqplan,query)
-
-
-#------------------------------------------------------------------------------
-# The new (v2) Delete class
+# The Delete class
 #------------------------------------------------------------------------------
 
 class DeleteImpl(Delete):
@@ -1692,6 +1645,108 @@ class DeleteImpl(Delete):
                 count+= 1
                 factmap.discard(f)
         return count
+
+#------------------------------------------------------------------------------
+# Select V2 API
+#------------------------------------------------------------------------------
+class Select2Impl(object):
+
+    def __init__(self,factbase, queryspec):
+        self._factbase = factbase
+        self._qspec = queryspec
+        self._qplan = None
+
+        self._pred2factset = {}
+        self._path2factindex = {}
+
+        ptypes = set([ root.meta.predicate for root in self._qspec.roots])
+        for ptype in ptypes:
+            fm =factbase.factmaps[ptype]
+            self._pred2factset[ptype] = fm.factset
+            for hpth, fi in fm.path2factindex.items():
+                self._path2factindex[hpth] = fi
+
+
+    #--------------------------------------------------------------------------
+    # Add a join expression
+    #--------------------------------------------------------------------------
+    def join(self, *expressions):
+        if self._qspec.where:
+            raise TypeError(("The 'join' condition must come before the "
+                             "'where' condition"))
+        if self._qspec.order_by:
+            raise TypeError(("The 'join' condition must come before the "
+                             "'order_by' condition"))
+        if self._qspec.join:
+            raise TypeError("Cannot specify 'join' multiple times")
+        if not expressions:
+            raise TypeError("Empty 'join' expression")
+
+        join=process_join(expressions, self._qspec.roots)
+        return Select2Impl(self._factbase,
+                           modify_query_spec(self._qspec, join=join))
+
+    #--------------------------------------------------------------------------
+    # Add an order_by expression
+    #--------------------------------------------------------------------------
+    def where(self, *expressions):
+        if self._qspec.order_by:
+            raise TypeError(("The 'where' condition must come before the "
+                             "'order_by' condition"))
+        if self._qspec.where:
+            raise TypeError("Cannot specify 'where' multiple times")
+        if not expressions:
+            raise TypeError("Empty 'where' expression")
+        elif len(expressions) == 1:
+            where = process_where(expressions[0],self._qspec.roots)
+        else:
+            where = process_where(and_(*expressions),self._qspec.roots)
+
+        return Select2Impl(self._factbase,
+                           modify_query_spec(self._qspec, where=where))
+
+    #--------------------------------------------------------------------------
+    # Add an order_by expression
+    #--------------------------------------------------------------------------
+    def order_by(self, *expressions):
+        if self._qspec.order_by:
+            raise TypeError("Cannot specify 'order_by' multiple times")
+        if not expressions:
+            raise TypeError("Empty 'order_by' expression")
+        order_by = process_orderby(expressions,self._qspec.roots)
+
+        return Select2Impl(self._factbase,
+                           modify_query_spec(self._qspec, order_by=order_by))
+
+    #--------------------------------------------------------------------------
+    #
+    #--------------------------------------------------------------------------
+    def query_plan(self,*args,**kwargs):
+        if not self._qplan:
+            self._qplan = make_query_plan(simple_query_join_order,
+                                          self._path2factindex.keys(),
+                                          self._qspec)
+
+        if not args and not kwargs: return self._qplan
+        return self._qplan.ground(*args,**kwargs)
+
+    #--------------------------------------------------------------------------
+    # Functions currently mirroring the old interface
+    # --------------------------------------------------------------------------
+
+    def run(self, *args, **kwargs):
+
+        # NOTE: a limitation of the current implementation of FunctionComparator
+        # means that I have to call ground() to make the assignment valid. Need
+        # to look at this.
+
+        qplan = self.query_plan()
+        gqplan = qplan.ground(*args,**kwargs)
+        query = make_query(gqplan, self._pred2factset, self._path2factindex)
+
+        return QueryOutput(self._factbase,self._qspec,gqplan,query)
+
+
 #------------------------------------------------------------------------------
 # main
 #------------------------------------------------------------------------------
