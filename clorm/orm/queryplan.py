@@ -1398,6 +1398,11 @@ class OrderBy(object):
     def asc(self):
         return self._asc
 
+    def dealias(self):
+        dealiased = path(self._path).meta.dealiased
+        if hashable_path(self._path) == hashable_path(dealiased): return self
+        return OrderBy(dealiased,self._asc)
+
     def __eq__(self, other):
         if not isinstance(other, self.__class__): return NotImplemented
         if hashable_path(self._path) != hashable_path(other._path): return False
@@ -1456,6 +1461,11 @@ class OrderByBlock(object):
     @property
     def roots(self):
         return set([hashable_path(p.meta.root) for p in self._paths])
+
+    def dealias(self):
+        neworderbys = tuple([ob.dealias() for ob in self._orderbys])
+        if self._orderbys == neworderbys: return self
+        return OrderByBlock(neworderbys)
 
     def __eq__(self, other):
         if not isinstance(other, self.__class__): return NotImplemented
@@ -1674,7 +1684,8 @@ class JoinQueryPlan(object):
     # -------------------------------------------------------------------------
     @classmethod
     def from_specification(cls, indexed_paths, input_signature,
-                           root, joins=[], clauses=[], orderbys=[]):
+                           root, joins=[], clauses=[],
+                           prejoinorderby=False,orderbys=[]):
         rootcbses, catchall = partition_clauses(clauses)
         if not rootcbses:
             (prejoinsc,prejoincb) = (None,None)
@@ -1689,10 +1700,14 @@ class JoinQueryPlan(object):
 
         (joinsc,joincb) = make_join_pair(joins, catchall)
 
-        joinobb = OrderByBlock(orderbys) if orderbys else None
+        prejoinobb = None
+        joinobb = None
+        if orderbys:
+            if prejoinorderby: prejoinobb = OrderByBlock(orderbys).dealias()
+            else: joinobb = OrderByBlock(orderbys)
 
         return cls(input_signature,root,
-                   prejoinsc,prejoincb,None, ## FIXUP
+                   prejoinsc,prejoincb,prejoinobb,
                    joinsc,joincb,joinobb)
 
 
@@ -1953,13 +1968,22 @@ def make_query_plan_preordered_roots(indexed_paths, root_join_order,
     # Generate a list of JoinQueryPlan consisting of a root path and join
     # comparator and clauses that only reference previous plans in the list.
     output=[]
+    prevsorted = True
     for idx,(root,rorderbys) in enumerate(zip(root_join_order,orderbygroups)):
         visited.add(hashable_path(root))
         rpjoins = visitedsubset(visited, joinset)
         rpclauses = visitedsubset(visited, clauseset)
+        prejoinorderby=False
+        if rorderbys:
+            if prevsorted and len(rorderbys) == 1 and \
+               hashable_path(rorderbys[0].path.meta.root) == hashable_path(root):
+                prejoinorderby=True
+        else:
+            prevsorted=False
         output.append(JoinQueryPlan.from_specification(indexed_paths,
                                                        root_join_order[:idx],
                                                        root,rpjoins,rpclauses,
+                                                       prejoinorderby,
                                                        rorderbys))
     return QueryPlan(output)
 

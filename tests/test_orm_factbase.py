@@ -1748,30 +1748,22 @@ class Select2TestCase(unittest.TestCase):
             .where(P.name < PA.name,
                    func_([P.postcode,PA.postcode], lambda p,pa : abs(p-pa) < 3))\
             .order_by(P.name)
-        print("\nQP\n: {}".format(all_friends.order_by(P.pid,PA.name)\
-                                        .query_plan()))
-        print("FRIENDS: {}".format(list(all_friends.order_by(P.pid,PA.name)\
-                                        .run().output(F))))
+        results = list(all_friends.order_by(P.pid,PA.pid).run().output(F))
+        self.assertEqual([F(bill.pid,dave.pid),
+                          F(dave.pid,bill.pid),F(dave.pid,jill.pid),
+                          F(jane.pid,sal.pid),
+                          F(jill.pid,dave.pid),
+                          F(sal.pid,jane.pid)], results)
 
-        print("\nRESULT:")
-        all_friends = all_friends.order_by(P.name,PA.name)
-        for p,fs in all_friends.run().group_by(1).output(PA.name):
-            print("Person {} => friends {}".format(p,list(fs)))
-
-
-#        result = all_friends.run().output(P.name,P.postcode,PA.name,PA.postcode)
-#        print("\nRESULT :{}".format(list(result)))
-#
-#        result = close_friends.run().output(P.name,P.postcode,PA.name,PA.postcode)
-#        result = s1_friend_dist.run().output(P.name,
-#                                             lambda p,pa,f:abs(p.postcode-pa.postcode),
-#                                             PA.name)
-#        print("\nRESULT :{}".format(list(result)))
-
-
-        # Would be nice to do some calculation on the output (eg the distance between postcodes
-        #                                     func_([P.postcode,PA.postcode], lambda x,y: abs(x-y)))
-#        print("\nRESULT :{}".format(list(result)))
+        all_friends = all_friends.order_by(P.pid,PA.name)
+        tmp = { p : list(fs) for p,fs in all_friends.run()\
+                .group_by(1).output(PA.name) }
+        self.assertEqual(len(tmp), 5)
+        self.assertEqual(len(tmp["bill"]), 1)
+        self.assertEqual(len(tmp["dave"]), 2)
+        self.assertEqual(len(tmp["jane"]), 1)
+        self.assertEqual(len(tmp["jill"]), 1)
+        self.assertEqual(len(tmp["sal"]), 1)
 
 #------------------------------------------------------------------------------
 # main

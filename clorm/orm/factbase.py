@@ -893,6 +893,7 @@ def make_prejoin_query(jqp, predicate_to_factset, hpath_to_factindex):
     factset = predicate_to_factset.get(jqp.root.meta.predicate, _FactSet())
     prejsc = jqp.prejoin_key
     prejcb = jqp.prejoin_clauses
+    prejobs = jqp.prejoin_orderbys
     factindex = None
     if prejsc:
         factindex=hpath_to_factindex.get(hashable_path(prejsc.args[0]),None)
@@ -909,12 +910,19 @@ def make_prejoin_query(jqp, predicate_to_factset, hpath_to_factindex):
         for f in base(): yield (f,)
 
     def query_with_prejcb():
-        cc = prejcb.make_callable([jqp.root])
+        cc = prejcb.make_callable([jqp.root.meta.dealiased])
         for f in base():
             if cc((f,)): yield (f,)
 
-    if prejcb: return query_with_prejcb
-    else: return query_without_prejcb
+    if prejcb: query = query_with_prejcb
+    else: query = query_without_prejcb
+
+    def sorted_query():
+        orderby_cmp = prejobs.make_cmp([jqp.root.meta.dealiased])
+        return sorted(query(),key=functools.cmp_to_key(orderby_cmp))
+
+    if prejobs: return sorted_query
+    else: return query
 
 # ------------------------------------------------------------------------------
 #
