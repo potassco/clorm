@@ -30,7 +30,7 @@ from clorm.orm.factbase import FactIndex, FactMap, _FactSet, \
 from clorm.orm.queryplan import PositionalPlaceholder, NamedPlaceholder, QuerySpec
 
 from clorm.orm.queryplan import process_where, process_join, process_orderby, \
-    make_query_plan, simple_query_join_order, make_input_alignment_functor
+    make_query_plan, basic_join_order_heuristic, make_input_alignment_functor
 
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
@@ -677,7 +677,7 @@ class QueryTestCase(unittest.TestCase):
         which1 = pw((G.anum > 4) & (G.astr == "foo"),[G])
         orderbys = pob([G.anum,desc(G.astr)],[G])
         qspec = QuerySpec([G],[],which1,orderbys)
-        qp1 = make_query_plan(simple_query_join_order,[G.astr],qspec)
+        qp1 = make_query_plan(basic_join_order_heuristic,[G.astr],qspec)
 
         query1 = make_first_join_query(qp1[0], factsets, indexes)
         self.assertEqual(set(strip(query1())), set([G(5,"foo")]))
@@ -685,7 +685,7 @@ class QueryTestCase(unittest.TestCase):
 
         which2 = pw((G.anum > 4) | (G.astr == "foo"),[G])
         qspec = QuerySpec([G],[],which2,orderbys)
-        qp2 = make_query_plan(simple_query_join_order,[G.astr], qspec)
+        qp2 = make_query_plan(basic_join_order_heuristic,[G.astr], qspec)
 
         query2 = make_first_join_query(qp2[0], factsets, indexes)
         self.assertEqual(list(strip(query2())),
@@ -707,12 +707,12 @@ class QueryTestCase(unittest.TestCase):
         which1 = pw((G.anum > 4) & (G.astr == "foo") & (F.anum == 1),[G,F])
         orderbys1 = pob([desc(F.astr)],[G,F])
         qspec = QuerySpec([G,F],[],which1,orderbys1)
-        qp1 = make_query_plan(simple_query_join_order,indexes.keys(), qspec)
+        qp1 = make_query_plan(basic_join_order_heuristic,indexes.keys(), qspec)
 
         query1 = make_first_join_query(qp1[0], factsets, indexes)
         query2 = make_chained_join_query(qp1[1], query1, factsets, indexes)
         output = align_facts(qp1.output_signature, (F,G), query2())
-        #        print("RESULT: {}".format(output))
+
         self.assertEqual(list(output),
                          [(F(1,"foo"),G(5,"foo")),(F(1,"a"),G(5,"foo"))])
 
@@ -720,7 +720,7 @@ class QueryTestCase(unittest.TestCase):
         which1 = pw((F.anum > 4) & (F.astr == "foo") & (G.anum == 1),[F,G])
         orderbys1 = pob([asc(G.astr)],[G,F])
         qspec = QuerySpec([F,G],[],which1,orderbys1)
-        qp1 = make_query_plan(simple_query_join_order,indexes.keys(), qspec)
+        qp1 = make_query_plan(basic_join_order_heuristic,indexes.keys(), qspec)
 
         #print("\nQP:\n{}".format(qp1))
         query1 = make_first_join_query(qp1[0], factsets, indexes)
@@ -747,7 +747,7 @@ class QueryTestCase(unittest.TestCase):
         which1 = pw((G.anum > 4) | (F.astr == "foo"),roots)
         orderbys = pob([desc(G.anum),F.astr,desc(G.astr)],roots)
         qspec = QuerySpec(roots,joins1,which1,orderbys)
-        qp1 = make_query_plan(simple_query_join_order, indexes.keys(), qspec)
+        qp1 = make_query_plan(basic_join_order_heuristic, indexes.keys(), qspec)
         q1 = make_query(qp1, factsets, indexes)
         result = list(q1())
         expected = [
@@ -765,7 +765,7 @@ class QueryTestCase(unittest.TestCase):
         which2 = pw((G.anum > 4) | (F.astr == ph1_),roots)
         orderbys2 = pob([desc(G.anum),F.astr,desc(G.astr)],roots)
         qspec = QuerySpec(roots,joins2,which2,orderbys2)
-        qp2 = make_query_plan(simple_query_join_order, indexes.keys(),qspec)
+        qp2 = make_query_plan(basic_join_order_heuristic, indexes.keys(),qspec)
         with self.assertRaises(ValueError) as ctx:
             q1 = make_query(qp2, factsets, indexes)
         check_errmsg("Cannot execute an ungrounded query",ctx)
@@ -813,7 +813,7 @@ class QueryOutputTestCase(unittest.TestCase):
         where1 = pw((G.anum > 4) | (F.astr == "foo"),roots)
         orderbys = pob([F.anum,G.anum],roots)
         qspec = QuerySpec(roots, joins1, where1, orderbys)
-        qp1 = make_query_plan(simple_query_join_order, indexes.keys(),qspec)
+        qp1 = make_query_plan(basic_join_order_heuristic, indexes.keys(),qspec)
         q1 = make_query(qp1, factsets, indexes)
 
         # Test output with no options
@@ -896,7 +896,7 @@ class QueryOutputTestCase(unittest.TestCase):
             where = pw(where,roots)
             orderby = pob([F.astr],roots)
             qspec = QuerySpec(roots, join, where, orderby)
-            qplan = make_query_plan(simple_query_join_order, indexes.keys(),qspec)
+            qplan = make_query_plan(basic_join_order_heuristic, indexes.keys(),qspec)
             query = make_query(qplan, factsets, indexes)
             return QueryOutput(factbase, qspec, qplan, query)
 
@@ -950,7 +950,7 @@ class QueryOutputTestCase(unittest.TestCase):
             where = pw(G.anum > 4,roots)
             orderby = pob([F.anum,G.anum],roots)
             qspec = QuerySpec(roots, join, where, orderby)
-            qplan = make_query_plan(simple_query_join_order, indexes.keys(),qspec)
+            qplan = make_query_plan(basic_join_order_heuristic, indexes.keys(),qspec)
             query = make_query(qplan, factsets, indexes)
             return (factbase,QueryOutput(factbase, qspec, qplan, query))
 
@@ -1024,7 +1024,7 @@ class QueryOutputTestCase(unittest.TestCase):
             where = pw(where,roots) if where else None
             orderby = pob(ordering,roots) if ordering else None
             qspec = QuerySpec(roots, join, where, orderby)
-            qplan = make_query_plan(simple_query_join_order, indexes.keys(),qspec)
+            qplan = make_query_plan(basic_join_order_heuristic,indexes.keys(),qspec)
             query = make_query(qplan, factsets, indexes)
             return QueryOutput(factbase, qspec, qplan, query)
 
@@ -1053,6 +1053,8 @@ class QueryOutputTestCase(unittest.TestCase):
 
         # Default grouping by first item (removes tuple)
         qo = qsetup([F.anum,F.astr], None)
+#        print("\nTHE SPEC\n{}".format(qo._qspec))
+#        print("\nTHE PLAN\n{}".format(qo._qplan))
         self.assertEqual([k for k,_ in list(qo.group_by())], [1,5])
 
         # Default grouping by first item but different order (removes tuple)
@@ -1730,29 +1732,41 @@ class Select2TestCase(unittest.TestCase):
         dave = P("dave", "Dave D", 2004)
 
         people = [jill,jane,bob,bill,sal,dave]
-        friends = [F(jill.pid,dave.pid),
-                   F(dave.pid,bill.pid),
-                   F(jane.pid,sal.pid)]
+        friends = [F(jill.pid,dave.pid),F(dave.pid,jill.pid),
+                   F(dave.pid,bill.pid),F(bill.pid,dave.pid),
+                   F(jane.pid,sal.pid),F(sal.pid,jane.pid)]
 
-        fb1 = FactBase(people+friends)
         fb2 = FactBase(people+friends,indexes=[P.pid,F.src,F.dst])
 
         s1_people = fb2.select2(P).order_by(P.pid)
         self.assertEqual(list(s1_people.run()),[bill,bob,dave,jane,jill,sal])
 
         PA=alias(P)
-        s1_friend_dist = fb2.select2(P,PA,F)\
-            .join(P.pid == F.src,PA.pid == F.dst)\
-            .where(func_([P.postcode,PA.postcode], lambda p,pa : abs(p-pa) < 3))\
-            .order_by(P.pid)
+        all_friends = fb2.select2(P,PA,F)\
+            .join(P.pid == F.src,PA.pid == F.dst)
+        close_friends = all_friends\
+            .where(P.name < PA.name,
+                   func_([P.postcode,PA.postcode], lambda p,pa : abs(p-pa) < 3))\
+            .order_by(P.name)
+        print("\nQP\n: {}".format(all_friends.order_by(P.pid,PA.name)\
+                                        .query_plan()))
+        print("FRIENDS: {}".format(list(all_friends.order_by(P.pid,PA.name)\
+                                        .run().output(F))))
 
-        print("\nQP:{}".format(s1_friend_dist.query_plan()))
+        print("\nRESULT:")
+        all_friends = all_friends.order_by(P.name,PA.name)
+        for p,fs in all_friends.run().group_by(1).output(PA.name):
+            print("Person {} => friends {}".format(p,list(fs)))
 
-        result = s1_friend_dist.run().output(P.name,P.postcode,PA.name,PA.postcode)
+
+#        result = all_friends.run().output(P.name,P.postcode,PA.name,PA.postcode)
+#        print("\nRESULT :{}".format(list(result)))
+#
+#        result = close_friends.run().output(P.name,P.postcode,PA.name,PA.postcode)
 #        result = s1_friend_dist.run().output(P.name,
 #                                             lambda p,pa,f:abs(p.postcode-pa.postcode),
 #                                             PA.name)
-        print("\nRESULT :{}".format(list(result)))
+#        print("\nRESULT :{}".format(list(result)))
 
 
         # Would be nice to do some calculation on the output (eg the distance between postcodes

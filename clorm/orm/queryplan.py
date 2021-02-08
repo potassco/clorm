@@ -1615,11 +1615,13 @@ class JoinQueryPlan(object):
        - root,
        - a prejoin standard-comparator (or None),
        - a prejoin clauseblock (or None),
+       - a prejoin orderbyblock (or None)
        - a join standard comparator (or None),
        - a join clauseblock (or None)
        - a join orderbyblock (or None)
     '''
-    def __init__(self,input_signature, root, prejoinsc, prejoincb,
+    def __init__(self,input_signature, root,
+                 prejoinsc, prejoincb, prejoinobb,
                  joinsc, joincb, joinobb):
         self._insig = tuple([path(r) for r in input_signature])
         self._root = path(root)
@@ -1629,6 +1631,7 @@ class JoinQueryPlan(object):
         self._joinobb = joinobb
         self._prejoinsc = _align_sc_path(self._root.meta.dealiased, prejoinsc)
         self._prejoincb = prejoincb
+        self._prejoinobb = prejoinobb
 
         # Check that the input signature and root are valid root paths
         if not self._root.meta.is_root:
@@ -1645,6 +1648,9 @@ class JoinQueryPlan(object):
         if not _check_roots([self._root.meta.dealiased], prejoincb):
             raise ValueError(("Pre-join clause block '{}' refers to non '{}' "
                               "paths").format(prejoincb,self._root))
+        if not _check_roots([self._root.meta.dealiased], prejoinobb):
+            raise ValueError(("Pre-join clause block '{}' refers to non '{}' "
+                              "paths").format(prejoinobb,self._root))
 
         # The joinsc, joincb, and joinobb must refer only to the insig + root
         allroots = list(self._insig) + [self._root]
@@ -1685,7 +1691,9 @@ class JoinQueryPlan(object):
 
         joinobb = OrderByBlock(orderbys) if orderbys else None
 
-        return cls(input_signature,root,prejoinsc, prejoincb,joinsc,joincb,joinobb)
+        return cls(input_signature,root,
+                   prejoinsc,prejoincb,None, ## FIXUP
+                   joinsc,joincb,joinobb)
 
 
     # -------------------------------------------------------------------------
@@ -1707,6 +1715,9 @@ class JoinQueryPlan(object):
     def prejoin_clauses(self): return self._prejoincb
 
     @property
+    def prejoin_orderbys(self): return self._prejoinobb
+
+    @property
     def join_clauses(self): return self._joincb
 
     @property
@@ -1725,14 +1736,16 @@ class JoinQueryPlan(object):
         if gprejoinsc == self._prejoinsc and gprejoincb == self._prejoincb and \
            gjoinsc == self._joinsc and gjoincb == self._joincb: return self
         return JoinQueryPlan(self._insig,self._root,
-                             gprejoinsc,gprejoincb,gjoinsc,gjoincb,self._joinobb)
+                             gprejoinsc,gprejoincb,self._prejoinobb,
+                             gjoinsc,gjoincb,self._joinobb)
 
     def print(self,file=sys.stdout,pre=""):
-        print("{}JoinQueryPlan:".format(pre), file=file)
+        print("{}QuerySubPlan:".format(pre), file=file)
         print("{}\tInput Signature: {}".format(pre,self._insig), file=file)
         print("{}\tRoot path: {}".format(pre,self._root), file=file)
         print("{}\tPrejoin key: {}".format(pre,self._prejoinsc), file=file)
         print("{}\tPrejoin clauses: {}".format(pre,self._prejoincb), file=file)
+        print("{}\tPrejoin order_by: {}".format(pre,self._prejoinobb), file=file)
         print("{}\tJoin key: {}".format(pre,self._joinsc), file=file)
         print("{}\tJoin clauses: {}".format(pre,self._joincb), file=file)
         print("{}\tJoin order_by: {}".format(pre,self._joinobb), file=file)
@@ -1743,6 +1756,7 @@ class JoinQueryPlan(object):
         if self._root.meta.hashable != other._root.meta.hashable: return False
         if self._prejoinsc != other._prejoinsc: return False
         if self._prejoincb != other._prejoincb: return False
+        if self._prejoinobb != other._prejoinobb: return False
         if self._joinsc != other._joinsc: return False
         if self._joincb != other._joincb: return False
         return True
@@ -1832,33 +1846,27 @@ class QueryPlan(object):
 
 
 # ------------------------------------------------------------------------------
-# Takes a list of paths that have an index, then based on a
-# list of root paths and a list of joins, builds the queryplan.
+# Sort the orderby statements into groups based on the root_join_order. This is
+# guaranteed to return a list the same size as the root_join_order.  The ideal
+# case is that the orderbys are in the same order as the root_join_order.
 # ------------------------------------------------------------------------------
 
-def make_query_plan_preordered_roots(indexed_paths, root_join_order,
-                                     joins=[], whereclauses=[],orderbys=[]):
-    joinset=set(joins)
-    clauseset=set(whereclauses)
+def group_orderbys(root_join_order, orderbys=[]):
+    if not orderbys: return [[] for r in root_join_order]
+
+    def gap(groups):
+        startgap = -1
+        for idx,obs in enumerate(groups):
+            if obs and startgap == -1: startgap = idx
+            elif obs and startgap != -1 and startgap == idx-1: startgap = idx
+            elif obs and startgap != -1: return (startgap,idx)
+        return (-1,-1)
+
     visited=set({})
     orderbys=list(orderbys)
 
-    if not root_join_order:
-        raise ValueError("Cannot make query plan with empty root join order")
-
-    # For a set of visited root paths and a set of comparator
-    # statements return the subset of join statements that only reference paths
-    # that have been visited.  Removes these joins from the original set.
-    def visitedsubset(visited, inset):
-        outlist=[]
-        for comp in inset:
-            if visited.issuperset([hashable_path(r) for r in comp.roots]):
-                outlist.append(comp)
-        for comp in outlist: inset.remove(comp)
-        return outlist
-
-    # For a list of orderby statements return the largest pure segment that only
-    # refers to the visited root nodes
+    # For a list of orderby statements return the largest pure subsequence that
+    # only refers to the visited root nodes
     def visitedorderbys(visited, obs):
         out = []
         count = 0
@@ -1872,14 +1880,83 @@ def make_query_plan_preordered_roots(indexed_paths, root_join_order,
             count -= 1
         return out
 
+    groups = []
+    for idx,root in enumerate(root_join_order):
+        visited.add(hashable_path(root))
+        groups.append(visitedorderbys(visited, orderbys))
+
+    # Remove any gaps by merging
+    while True:
+        startgap,endgap = gap(groups)
+        if startgap == -1: break
+        groups[endgap-1] = groups[startgap]
+        groups[startgap] = []
+
+    return groups
+
+#------------------------------------------------------------------------------
+# QuerySpec stores all the information about a query in one data-structure
+#------------------------------------------------------------------------------
+
+QuerySpec = collections.namedtuple('QuerySpec', 'roots join where order_by')
+
+def modify_query_spec(inspec,join=None,where=None,order_by=None):
+    if join is None: join = inspec.join
+    if where is None: where = inspec.where
+    if order_by is None: order_by = inspec.order_by
+    return QuerySpec(roots=inspec.roots, join=join,
+                     where=where, order_by=order_by)
+
+# Replace any None with a []
+def fix_query_spec(inspec):
+    join = inspec.join if inspec.join else []
+    where = inspec.where if inspec.where else []
+    order_by = inspec.order_by if inspec.order_by else []
+    return QuerySpec(roots=inspec.roots, join=join,
+                     where=where, order_by=order_by)
+
+# ------------------------------------------------------------------------------
+# Takes a list of paths that have an index, then based on a
+# list of root paths and a list of joins, builds the queryplan.
+# ------------------------------------------------------------------------------
+
+def make_query_plan_preordered_roots(indexed_paths, root_join_order,
+                                     query_spec):
+
+    query_spec = fix_query_spec(query_spec)
+    joins = query_spec.join
+    whereclauses = query_spec.where
+    orderbys = query_spec.order_by
+
+    joinset=set(joins)
+    clauseset=set(whereclauses)
+    visited=set({})
+    orderbys=list(orderbys)
+
+    if not root_join_order:
+        raise ValueError("Cannot make query plan with empty root join order")
+
+    orderbygroups = group_orderbys(root_join_order, orderbys)
+
+    # For a set of visited root paths and a set of comparator
+    # statements return the subset of join statements that only reference paths
+    # that have been visited.  Removes these joins from the original set.
+    def visitedsubset(visited, inset):
+        outlist=[]
+        for comp in inset:
+            if visited.issuperset([hashable_path(r) for r in comp.roots]):
+                outlist.append(comp)
+        for comp in outlist: inset.remove(comp)
+        return outlist
+
+
     # Generate a list of JoinQueryPlan consisting of a root path and join
     # comparator and clauses that only reference previous plans in the list.
     output=[]
-    for idx,root in enumerate(root_join_order):
+    for idx,(root,rorderbys) in enumerate(zip(root_join_order,orderbygroups)):
         visited.add(hashable_path(root))
         rpjoins = visitedsubset(visited, joinset)
         rpclauses = visitedsubset(visited, clauseset)
-        rorderbys = visitedorderbys(visited, orderbys)
         output.append(JoinQueryPlan.from_specification(indexed_paths,
                                                        root_join_order[:idx],
                                                        root,rpjoins,rpclauses,
@@ -1899,7 +1976,16 @@ def make_query_plan_preordered_roots(indexed_paths, root_join_order,
 #
 # ------------------------------------------------------------------------------
 
-def simple_query_join_order(indexed_paths, joins,roots):
+def fixed_join_order_heuristic(indexed_paths, query_spec):
+    qspec = fix_query_spec(query_spec)
+    return [path(r) for r in qspec.roots]
+
+
+def basic_join_order_heuristic(indexed_paths, query_spec):
+    qspec = fix_query_spec(query_spec)
+    roots= qspec.roots
+    joins= qspec.join
+
     root2val = { hashable_path(rp) : 0 for rp in roots }
     for join in joins:
         for rp in join.roots:
@@ -1909,88 +1995,15 @@ def simple_query_join_order(indexed_paths, joins,roots):
     return [path(hrp) for hrp in sorted(root2val.keys(), key = lambda k : root2val[k])]
 
 
-#------------------------------------------------------------------------------
-# QuerySpec stores all the information about a query in one data-structure
-#------------------------------------------------------------------------------
-
-QuerySpec = collections.namedtuple('QuerySpec', 'roots join where order_by')
-
-def modify_query_spec(inspec,join=None,where=None,order_by=None):
-    if join is None: join = inspec.join
-    if where is None: where = inspec.where
-    if order_by is None: order_by = inspec.order_by
-    return QuerySpec(roots=inspec.roots, join=join,
-                     where=where, order_by=order_by)
-
 # ------------------------------------------------------------------------------
 # Take a join order heuristic, a list of joins, and a list of clause blocks and
 # and generates a query.
 # ------------------------------------------------------------------------------
 
 def make_query_plan(join_order_heuristic, indexed_paths, query_spec):
-    join=query_spec.join if query_spec.join else []
-    where=query_spec.where if query_spec.where else []
-    order_by=query_spec.order_by if query_spec.order_by else []
+    root_join_order=join_order_heuristic(indexed_paths, query_spec)
+    return make_query_plan_preordered_roots(indexed_paths, root_join_order, query_spec)
 
-    root_join_order=join_order_heuristic(indexed_paths,join, query_spec.roots)
-    return make_query_plan_preordered_roots(indexed_paths, root_join_order,
-                                            join, where, order_by)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# ------------------------------------------------------------------------------
-# BELOW HERE IS THE OLD QUERY IMPLEMENTATION
-# ------------------------------------------------------------------------------
-
-
-
-
-# ------------------------------------------------------------------------------
-# Some support functions
-# ------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 # main

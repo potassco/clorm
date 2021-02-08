@@ -21,7 +21,7 @@ from .queryplan import Placeholder, OrderBy, desc, asc
 
 from .queryplan import JoinQueryPlan, QueryPlan, \
     process_where, process_join, process_orderby, \
-    make_input_alignment_functor, simple_query_join_order, make_query_plan,\
+    make_input_alignment_functor, basic_join_order_heuristic, make_query_plan,\
     FuncInputSpec, FunctionComparator, QuerySpec, modify_query_spec
 
 # ------------------------------------------------------------------------------
@@ -1435,7 +1435,7 @@ class SelectImpl(Select):
                 self._path2factindex[hpth] = fi
 
         qspec = QuerySpec(self._roots,[],[],[])
-        self._queryplan = make_query_plan(simple_query_join_order,
+        self._queryplan = make_query_plan(basic_join_order_heuristic,
                                           self._path2factindex.keys(), qspec)
 
 
@@ -1457,7 +1457,7 @@ class SelectImpl(Select):
 
         # Make a query plan in case there is no other inputs
         qspec = QuerySpec(self._roots,self._joins,[],[])
-        self._queryplan = make_query_plan(simple_query_join_order,
+        self._queryplan = make_query_plan(basic_join_order_heuristic,
                                           self._path2factindex.keys(), spec)
         return self
 
@@ -1481,7 +1481,7 @@ class SelectImpl(Select):
         joins = self._joins if self._joins else []
         where = self._where if self._where else []
         qspec = QuerySpec(self._roots,joins,where,[])
-        self._queryplan = make_query_plan(simple_query_join_order,
+        self._queryplan = make_query_plan(basic_join_order_heuristic,
                                           self._path2factindex.keys(), qspec)
         return self
 
@@ -1499,7 +1499,7 @@ class SelectImpl(Select):
         joins = self._joins if self._joins else []
         where = self._where if self._where else []
         qspec = QuerySpec(self._roots,joins,where,self._orderbys)
-        self._queryplan = make_query_plan(simple_query_join_order,
+        self._queryplan = make_query_plan(basic_join_order_heuristic,
                                           self._path2factindex.keys(), qspec)
         return self
 
@@ -1577,7 +1577,7 @@ class DeleteImpl(Delete):
                 self._path2factindex[hpth] = fi
 
         qspec = QuerySpec(self._roots,[],[],[])
-        self._queryplan = make_query_plan(simple_query_join_order,
+        self._queryplan = make_query_plan(basic_join_order_heuristic,
                                           self._path2factindex.keys(),qspec)
 
     #--------------------------------------------------------------------------
@@ -1595,7 +1595,7 @@ class DeleteImpl(Delete):
 
         # Make a query plan in case there is no other inputs
         qspec = QuerySpec(self._roots,self._joins,[],[])
-        self._queryplan = make_query_plan(simple_query_join_order,
+        self._queryplan = make_query_plan(basic_join_order_heuristic,
                                           self._path2factindex.keys(),qspec)
         return self
 
@@ -1616,7 +1616,7 @@ class DeleteImpl(Delete):
         joins = self._joins if self._joins else []
         where = self._where if self._where else []
         qspec = QuerySpec(self._roots,joins,where,[])
-        self._queryplan = make_query_plan(simple_query_join_order,
+        self._queryplan = make_query_plan(basic_join_order_heuristic,
                                           self._path2factindex.keys(),qspec)
         return self
 
@@ -1651,9 +1651,10 @@ class DeleteImpl(Delete):
 #------------------------------------------------------------------------------
 class Select2Impl(object):
 
-    def __init__(self,factbase, queryspec):
+    def __init__(self,factbase, queryspec,join_order_heuristic=None):
         self._factbase = factbase
         self._qspec = queryspec
+        self._join_order_heuristic = join_order_heuristic
         self._qplan = None
 
         self._pred2factset = {}
@@ -1665,6 +1666,16 @@ class Select2Impl(object):
             self._pred2factset[ptype] = fm.factset
             for hpth, fi in fm.path2factindex.items():
                 self._path2factindex[hpth] = fi
+
+    #--------------------------------------------------------------------------
+    # Overide the heuristic
+    #--------------------------------------------------------------------------
+    def heuristic(self, join_order):
+        if self._join_order_heuristic:
+            raise TypeError("Cannot specify 'heuristic' multiple times")
+        self._join_order_heuristic = join_order
+        self._qplan = None
+        return Select2Impl(self._factbase, self._qspec, self._join_order_heuristic)
 
 
     #--------------------------------------------------------------------------
@@ -1723,8 +1734,9 @@ class Select2Impl(object):
     #--------------------------------------------------------------------------
     def query_plan(self,*args,**kwargs):
         if not self._qplan:
-            self._qplan = make_query_plan(simple_query_join_order,
-                                          self._path2factindex.keys(),
+            joh = basic_join_order_heuristic
+            if self._join_order_heuristic: joh = self._join_order_heuristic
+            self._qplan = make_query_plan(joh, self._path2factindex.keys(),
                                           self._qspec)
 
         if not args and not kwargs: return self._qplan
