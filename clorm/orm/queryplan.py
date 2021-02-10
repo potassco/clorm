@@ -1431,8 +1431,8 @@ class OrderByBlock(object):
     def __init__(self,orderbys=[]):
         self._orderbys = tuple(orderbys)
         self._paths = tuple([path(ob.path) for ob in self._orderbys])
-        if not orderbys:
-            raise ValueError("Empty list of order_by statements")
+#        if not orderbys:
+#            raise ValueError("Empty list of order_by statements")
 
     @property
     def paths(self):
@@ -1448,8 +1448,13 @@ class OrderByBlock(object):
         return OrderByBlock(neworderbys)
 
     def __eq__(self, other):
-        if not isinstance(other, self.__class__): return NotImplemented
-        return self._orderbys == other._orderbys
+        if isinstance(other, self.__class__):
+            return self._orderbys == other._orderbys
+        if isinstance(other, tuple):
+            return self._orderbys == other
+        if isinstance(other, list):
+            return self._orderbys == tuple(other)
+        return NotImplemented
 
     def __ne__(self, other):
         result = self.__eq__(other)
@@ -1467,6 +1472,9 @@ class OrderByBlock(object):
 
     def __hash__(self):
         return hash(self._orderbys)
+
+    def __bool__(self):
+        return bool(self._orderbys)
 
     def __str__(self):
         return "[{}]".format(",".join([str(ob) for ob in self._orderbys]))
@@ -1679,7 +1687,7 @@ class JoinQueryPlan(object):
     @classmethod
     def from_specification(cls, indexes, input_signature,
                            root, joins=[], clauses=[],
-                           prejoinorderby=False,orderbys=[]):
+                           orderbys=[]):
         def _paths(inputs):
             return [ path(p) for p in inputs]
 
@@ -1704,8 +1712,12 @@ class JoinQueryPlan(object):
         prejoinobb = None
         joinobb = None
         if orderbys:
-            if prejoinorderby: prejoinobb = OrderByBlock(orderbys).dealias()
-            else: joinobb = OrderByBlock(orderbys)
+            orderbys = OrderByBlock(orderbys)
+            hroots = [ hashable_path(r) for r in orderbys.roots ]
+            if len(hroots) > 1 or hroots[0] != hashable_path(root):
+                joinobb = OrderByBlock(orderbys)
+            else:
+                prejoinobb = orderbys.dealias()
 
         return cls(input_signature,root, indexes,
                    prejoincl,prejoincb,prejoinobb,
@@ -1737,10 +1749,10 @@ class JoinQueryPlan(object):
     def prejoin_orderbys(self): return self._prejoinobb
 
     @property
-    def join_clauses(self): return self._joincb
+    def postjoin_clauses(self): return self._joincb
 
     @property
-    def join_orderbys(self): return self._joinobb
+    def postjoin_orderbys(self): return self._joinobb
 
     @property
     def placeholders(self):
@@ -1767,8 +1779,8 @@ class JoinQueryPlan(object):
         print("{}\tPrejoin clauses: {}".format(pre,self._prejoincb), file=file)
         print("{}\tPrejoin order_by: {}".format(pre,self._prejoinobb), file=file)
         print("{}\tJoin key: {}".format(pre,self._joinsc), file=file)
-        print("{}\tJoin clauses: {}".format(pre,self._joincb), file=file)
-        print("{}\tJoin order_by: {}".format(pre,self._joinobb), file=file)
+        print("{}\tPost join clauses: {}".format(pre,self._joincb), file=file)
+        print("{}\tPost join order_by: {}".format(pre,self._joinobb), file=file)
 
     def __eq__(self, other):
         if not isinstance(other, self.__class__): return NotImplemented
@@ -1866,21 +1878,13 @@ class QueryPlan(object):
 
 
 # ------------------------------------------------------------------------------
-# Sort the orderby statements into groups based on the root_join_order. This is
-# guaranteed to return a list the same size as the root_join_order.  The ideal
-# case is that the orderbys are in the same order as the root_join_order.
+# Sort the orderby statements into partitions based on the root_join_order,
+# where an orderby statement cannot appear at an index before its root
+# node. Note: there will be exactly the same number of partitions as the number
+# of roots.
 # ------------------------------------------------------------------------------
-
-def group_orderbys(root_join_order, orderbys=[]):
-    if not orderbys: return [[] for r in root_join_order]
-
-    def gap(groups):
-        startgap = -1
-        for idx,obs in enumerate(groups):
-            if obs and startgap == -1: startgap = idx
-            elif obs and startgap != -1 and startgap == idx-1: startgap = idx
-            elif obs and startgap != -1: return (startgap,idx)
-        return (-1,-1)
+def make_orderby_partitions(root_join_order,orderbys=[]):
+    if not orderbys: return [OrderByBlock([]) for r in root_join_order]
 
     visited=set({})
     orderbys=list(orderbys)
@@ -1900,19 +1904,78 @@ def group_orderbys(root_join_order, orderbys=[]):
             count -= 1
         return out
 
-    groups = []
+    partitions = []
     for idx,root in enumerate(root_join_order):
         visited.add(hashable_path(root))
-        groups.append(visitedorderbys(visited, orderbys))
+        part = visitedorderbys(visited, orderbys)
+        partitions.append(OrderByBlock(part))
+
+    return partitions
+
+
+# ------------------------------------------------------------------------------
+# Remove the gaps between partitions by moving partitions down
+# ------------------------------------------------------------------------------
+def remove_orderby_gaps(partitions):
+    def gap(partitions):
+        startgap = -1
+        for idx,obs in enumerate(partitions):
+            if obs and startgap == -1: startgap = idx
+            elif obs and startgap != -1 and startgap == idx-1: startgap = idx
+            elif obs and startgap != -1: return (startgap,idx)
+        return (-1,-1)
 
     # Remove any gaps by merging
     while True:
-        startgap,endgap = gap(groups)
+        startgap,endgap = gap(partitions)
         if startgap == -1: break
-        groups[endgap-1] = groups[startgap]
-        groups[startgap] = []
+        partitions[endgap-1] = partitions[startgap]
+        partitions[startgap] = OrderByBlock([])
+    return partitions
 
-    return groups
+
+# ------------------------------------------------------------------------------
+# After the first orderby partition all subsequent partitions can only refer to their
+# own root. So start from the back of the list and move up till we find a
+# non-root partition then pull everything else down into this partition.
+# ------------------------------------------------------------------------------
+
+def merge_orderby_partitions(root_join_order, partitions):
+    partitions = list(partitions)
+    root_join_order = [ hashable_path(r) for r in root_join_order ]
+
+    # Find the last (from the end) non-root partition
+    for nridx,part in reversed(list(enumerate(partitions))):
+        if part:
+            hroots = [ hashable_path(r) for r in part.roots ]
+            if len(hroots) > 1 or hroots[0] != root_join_order[nridx]:
+                break
+    if nridx == 0: return partitions
+
+    # Now merge all other partitions from 0 to nridx-1 into nridx
+    bigone = []
+    tozero=[]
+    for idx,part in (enumerate(partitions)):
+        if idx > nridx: break
+        if part:
+            bigone = list(bigone) + list(part)
+            tozero.append(idx)
+            break
+    if not bigone: return partitions
+    for idx in tozero: partitions[idx] = OrderByBlock([])
+    partitions[nridx] = OrderByBlock(bigone + list(partitions[nridx]))
+    return partitions
+
+# ------------------------------------------------------------------------------
+# guaranteed to return a list the same size as the root_join_order.  The ideal
+# case is that the orderbys are in the same order as the root_join_order.
+# ------------------------------------------------------------------------------
+
+def partition_orderbys(root_join_order, orderbys=[]):
+    partitions = make_orderby_partitions(root_join_order,orderbys)
+    partitions = remove_orderby_gaps(partitions)
+    partitions = merge_orderby_partitions(root_join_order,partitions)
+    return partitions
 
 #------------------------------------------------------------------------------
 # QuerySpec stores all the information about a query in one data-structure
@@ -1956,7 +2019,7 @@ def make_query_plan_preordered_roots(indexed_paths, root_join_order,
     if not root_join_order:
         raise ValueError("Cannot make query plan with empty root join order")
 
-    orderbygroups = group_orderbys(root_join_order, orderbys)
+    orderbygroups = partition_orderbys(root_join_order, orderbys)
 
     # For a set of visited root paths and a set of comparator
     # statements return the subset of join statements that only reference paths
@@ -1973,22 +2036,15 @@ def make_query_plan_preordered_roots(indexed_paths, root_join_order,
     # Generate a list of JoinQueryPlan consisting of a root path and join
     # comparator and clauses that only reference previous plans in the list.
     output=[]
-    prevsorted = True
     for idx,(root,rorderbys) in enumerate(zip(root_join_order,orderbygroups)):
         visited.add(hashable_path(root))
         rpjoins = visitedsubset(visited, joinset)
         rpclauses = visitedsubset(visited, clauseset)
-        prejoinorderby=False
-        if rorderbys:
-            if prevsorted and len(rorderbys) == 1 and \
-               hashable_path(rorderbys[0].path.meta.root) == hashable_path(root):
-                prejoinorderby=True
-        else:
-            prevsorted=False
+        if rorderbys: rorderbys = OrderByBlock(rorderbys)
+
         output.append(JoinQueryPlan.from_specification(indexed_paths,
                                                        root_join_order[:idx],
                                                        root,rpjoins,rpclauses,
-                                                       prejoinorderby,
                                                        rorderbys))
     return QueryPlan(output)
 

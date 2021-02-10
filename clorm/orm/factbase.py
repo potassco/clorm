@@ -946,7 +946,7 @@ def make_first_join_query(jqp, factsets, factindexes):
     if jqp.input_signature:
         raise ValueError(("A first JoinQueryPlan must have an empty input "
                           "signature but '{}' found").format(jqp.input_signature))
-    if jqp.prejoin_orderbys and jqp.join_orderbys:
+    if jqp.prejoin_orderbys and jqp.postjoin_orderbys:
         raise ValueError(("Internal error: it doesn't make sense to have both "
                           "a prejoin and join orderby sets for the first sub-query"))
 
@@ -954,8 +954,8 @@ def make_first_join_query(jqp, factsets, factindexes):
     iqs=None
     if jqp.prejoin_orderbys:
         iqs = InQuerySorter(jqp.prejoin_orderbys,(jqp.root,))
-    elif jqp.join_orderbys:
-        iqs = InQuerySorter(jqp.join_orderbys,(jqp.root,))
+    elif jqp.postjoin_orderbys:
+        iqs = InQuerySorter(jqp.postjoin_orderbys,(jqp.root,))
 
     def sorted_query():
         return iqs.sorted(base_query())
@@ -1080,8 +1080,8 @@ def make_chained_join_query(jqp, inquery, factsets, factindexes):
 
     pjob = jqp.prejoin_orderbys
     jk   = jqp.join_key
-    jc   = jqp.join_clauses
-    job  = jqp.join_orderbys
+    jc   = jqp.postjoin_clauses
+    job  = jqp.postjoin_orderbys
     predicate = jqp.root.meta.predicate
 
     pjiqs = None

@@ -36,7 +36,7 @@ from clorm.orm.queryplan import PositionalPlaceholder, NamedPlaceholder, \
     validate_join_expression, process_join, fixed_join_order_heuristic, \
     basic_join_order_heuristic, make_query_plan_preordered_roots, \
     validate_orderby_expression, OrderBy, OrderByBlock, process_orderby, \
-    group_orderbys, make_prejoin_pair, make_join_pair, make_query_plan, \
+    partition_orderbys, make_prejoin_pair, make_join_pair, make_query_plan, \
     JoinQueryPlan, QueryPlan, QuerySpec
 
 #------------------------------------------------------------------------------
@@ -1339,7 +1339,7 @@ class QueryPlanTestCase(unittest.TestCase):
         self.assertEqual(qp2.prejoin_key, Clause([wsc(F.astr == "foo")]))
         self.assertEqual(qp2.prejoin_clauses, ClauseBlock([Clause([wsc(F.anum > 4)])]))
         self.assertEqual(qp2.join_key, jsc(FA.anum == G.anum))
-        self.assertEqual(len(qp2.join_clauses),2)
+        self.assertEqual(len(qp2.postjoin_clauses),2)
         self.assertEqual(qp2.placeholders,set())
 
         clauses = pw( (FA.anum < G.anum) & (FA.astr == ph1_) & (FA.anum > 4),[FA,G])
@@ -1350,20 +1350,16 @@ class QueryPlanTestCase(unittest.TestCase):
 
 
     # ------------------------------------------------------------------------------
-    # Test an example from the profiling
+    # Test an example from with orderby
     # ------------------------------------------------------------------------------
 
-    def test_nonapi_JoinQueryPlan2(self):
+    def test_nonapi_QueryPlan_with_orderby(self):
         def hps(paths): return set([ hashable_path(p) for p in paths])
 
-        class Customer(Predicate):
-            cid=IntegerField
-            name=StringField
-
-        class Sale(Predicate):
-            sid=IntegerField
-            cid=IntegerField
-            item=StringField
+        F = path(self.F)
+        G = path(self.G)
+        FA = alias(F)
+        GA = alias(G)
 
         pw = process_where
         pj = process_join
@@ -1371,13 +1367,14 @@ class QueryPlanTestCase(unittest.TestCase):
         wsc = StandardComparator.from_where_qcondition
         jsc = StandardComparator.from_join_qcondition
         jqp = JoinQueryPlan.from_specification
+        mkq = make_query_plan
+        indexes=[F.anum,G.astr]
+        orderbys = pob([asc(F.astr),desc(G.astr),desc(G.anum)],[F,G])
+        qspec = QuerySpec([F,G],[],[],orderbys)
 
-        indexes=[Customer.cid,Sale.cid]
-
-        join = pj([Customer.cid == Sale.cid],[Customer,Sale])
-        orderby = pob([Sale.sid],[Customer,Sale])
-
-        jqp = jqp(indexes,[Customer],Sale,join,[],True,orderby)
+        qplan = make_query_plan(fixed_join_order_heuristic, indexes, qspec)
+        self.assertEqual(qplan[0].prejoin_orderbys, [asc(F.astr)])
+        self.assertEqual(qplan[1].prejoin_orderbys, [desc(G.astr),desc(G.anum)])
 
     # ------------------------------------------------------------------------------
     # Test the JoinQueryPlan class
@@ -1448,7 +1445,7 @@ class QueryPlanTestCase(unittest.TestCase):
     # Test associating orderby statements with root_join_order blocks
     # ------------------------------------------------------------------------------
 
-    def test_nonapi_group_orderbys(self):
+    def test_nonapi_partition_orderbys(self):
         class P(Predicate):
             anum = IntegerField
             astr = StringField
@@ -1457,62 +1454,70 @@ class QueryPlanTestCase(unittest.TestCase):
             astr = StringField
         PA = alias(P)
         pob = process_orderby
-
+        OBB=OrderByBlock
         orderbys = [asc(P.anum),asc(PA.anum)]
 
-        self.assertEqual(group_orderbys([P,PA,F],orderbys),
+        self.assertEqual(partition_orderbys([P,PA,F],orderbys),
                          [[asc(P.anum)],[asc(PA.anum)],[]])
 
-        self.assertEqual(group_orderbys([P,F,PA],orderbys),
+        self.assertEqual(partition_orderbys([P,F,PA],orderbys),
                          [[],[asc(P.anum)],[asc(PA.anum)]])
 
-        self.assertEqual(group_orderbys([F,P,PA],orderbys),
+        self.assertEqual(partition_orderbys([F,P,PA],orderbys),
                          [[],[asc(P.anum)],[asc(PA.anum)]])
 
-        self.assertEqual(group_orderbys([F,PA,P],orderbys),
+        self.assertEqual(partition_orderbys([F,PA,P],orderbys),
                          [[],[],[asc(P.anum),asc(PA.anum)]])
 
-        self.assertEqual(group_orderbys([PA,P,F],orderbys),
+        self.assertEqual(partition_orderbys([PA,P,F],orderbys),
                          [[],[asc(P.anum),asc(PA.anum)],[]])
 
-        self.assertEqual(group_orderbys([PA,F,P],orderbys),
+        self.assertEqual(partition_orderbys([PA,F,P],orderbys),
                          [[],[],[asc(P.anum),asc(PA.anum)]])
 
         orderbys = [asc(P.anum)]
 
-        self.assertEqual(group_orderbys([P,PA,F],orderbys),
+        self.assertEqual(partition_orderbys([P,PA,F],orderbys),
                          [[asc(P.anum)],[],[]])
 
-        self.assertEqual(group_orderbys([P,F,PA],orderbys),
+        self.assertEqual(partition_orderbys([P,F,PA],orderbys),
                          [[asc(P.anum)],[],[]])
 
-        self.assertEqual(group_orderbys([F,P,PA],orderbys),
+        self.assertEqual(partition_orderbys([F,P,PA],orderbys),
                          [[],[asc(P.anum)],[]])
 
-        self.assertEqual(group_orderbys([F,PA,P],orderbys),
+        self.assertEqual(partition_orderbys([F,PA,P],orderbys),
                          [[],[],[asc(P.anum)]])
 
-        self.assertEqual(group_orderbys([PA,P,F],orderbys),
+        self.assertEqual(partition_orderbys([PA,P,F],orderbys),
                          [[],[asc(P.anum),],[]])
 
-        self.assertEqual(group_orderbys([PA,F,P],orderbys),
+        self.assertEqual(partition_orderbys([PA,F,P],orderbys),
                          [[],[],[asc(P.anum)]])
 
         orderbys = [asc(P.anum),asc(F.anum)]
-        self.assertEqual(group_orderbys([P,F],orderbys),
+        self.assertEqual(partition_orderbys([P,F],orderbys),
                          [[asc(P.anum)],[asc(F.anum)]])
 
-        self.assertEqual(group_orderbys([F,P],orderbys),
+        self.assertEqual(partition_orderbys([F,P],orderbys),
                          [[],[asc(P.anum),asc(F.anum)]])
 
 
         orderbys = [asc(P.anum),asc(P.astr)]
-        self.assertEqual(group_orderbys([P,F],orderbys),
+        self.assertEqual(partition_orderbys([P,F],orderbys),
                          [[asc(P.anum),asc(P.astr)],[]])
 
         orderbys = [asc(P.anum),asc(P.astr)]
-        self.assertEqual(group_orderbys([F,P],orderbys),
+        self.assertEqual(partition_orderbys([F,P],orderbys),
                          [[],[asc(P.anum),asc(P.astr)]])
+
+
+        orderbys = [asc(F.astr),desc(P.astr),asc(P.anum)]
+        self.assertEqual(partition_orderbys([F,P],orderbys),
+                         [[asc(F.astr)],[desc(P.astr),asc(P.anum)]])
+
+        self.assertEqual(partition_orderbys([P,F],orderbys),
+                         [[],[asc(F.astr),desc(P.astr),asc(P.anum)]])
 
 
     # ------------------------------------------------------------------------------
@@ -1562,17 +1567,17 @@ class QueryPlanTestCase(unittest.TestCase):
         self.assertEqual(qp1[2].join_key, None)
         self.assertEqual(qp1[3].join_key, jsc(F.anum == G.anum))
 
-        self.assertEqual(qp1[0].join_clauses, None)
-        self.assertEqual(qp1[1].join_clauses, None)
-        self.assertEqual(qp1[2].join_clauses, None)
-        self.assertEqual(list(qp1[3].join_clauses), [Clause([wsc(F.anum < GA.anum)])])
+        self.assertEqual(qp1[0].postjoin_clauses, None)
+        self.assertEqual(qp1[1].postjoin_clauses, None)
+        self.assertEqual(qp1[2].postjoin_clauses, None)
+        self.assertEqual(list(qp1[3].postjoin_clauses), [Clause([wsc(F.anum < GA.anum)])])
 
-        self.assertEqual(qp1[0].join_orderbys, None)
-        self.assertEqual(qp1[1].join_orderbys, None)
-        self.assertEqual(qp1[2].join_orderbys,
-                         OrderByBlock([asc(GA.anum),asc(FA.anum)]))
-        self.assertEqual(qp1[3].join_orderbys,
-                         OrderByBlock([asc(F.anum),asc(G.anum)]))
+        self.assertEqual(qp1[0].postjoin_orderbys, None)
+        self.assertEqual(qp1[1].postjoin_orderbys, None)
+        self.assertEqual(qp1[2].postjoin_orderbys, None)
+        self.assertEqual(qp1[3].postjoin_orderbys,
+                         OrderByBlock([asc(GA.anum),asc(FA.anum),
+                                       asc(F.anum),asc(G.anum)]))
 
         # Same as qp1 but with placeholder - so equal after grounding
         where2 = pw((F.anum == ph1_) & (FA.anum < ph2_),[F,FA])
@@ -1607,10 +1612,10 @@ class QueryPlanTestCase(unittest.TestCase):
         self.assertEqual(qp3[2].join_key, jsc(F.anum < GA.anum))
         self.assertEqual(qp3[3].join_key, jsc(G.anum == F.anum))
 
-        self.assertEqual(qp3[0].join_clauses, None)
-        self.assertEqual(qp3[1].join_clauses, None)
-        self.assertEqual(qp3[2].join_clauses, None)
-        self.assertEqual(qp3[3].join_clauses, None)
+        self.assertEqual(qp3[0].postjoin_clauses, None)
+        self.assertEqual(qp3[1].postjoin_clauses, None)
+        self.assertEqual(qp3[2].postjoin_clauses, None)
+        self.assertEqual(qp3[3].postjoin_clauses, None)
 
 
     # ------------------------------------------------------------------------------

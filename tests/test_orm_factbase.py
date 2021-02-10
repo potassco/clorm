@@ -909,19 +909,18 @@ class QueryTestCase(unittest.TestCase):
         self.assertEqual(out[1].astr, "foo")
         self.assertEqual(len(out),2)
 
-
-# FIXUP - THE SORT ORDER STUFF IS BROKEN           
         # A prejoin key with no join and a complex order
-#        where = pw(G.astr == "foo",roots)
-#        orderby = pob([F.astr,desc(G.astr),G.anum],roots)
-#        qspec = QuerySpec(roots,[],where,orderby)
-#        qp = make_query_plan(fixed_join_order_heuristic, indexes.keys(), qspec)
-#        out = make_prejoin_query_source(qp[1], factsets, indexes)()
-
-#        print("QP:\n{}\n".format(qp))
-#        return
-         
-
+        where = pw(G.astr == "foo",roots)
+        orderby = pob([F.astr,desc(G.astr),G.anum],roots)
+        qspec = QuerySpec(roots,[],where,orderby)
+        qp = make_query_plan(fixed_join_order_heuristic, indexes.keys(), qspec)
+        out0 = make_prejoin_query_source(qp[0], factsets, indexes)()
+        out1 = make_prejoin_query_source(qp[1], factsets, indexes)()
+        self.assertEqual(out0[0].astr, "a")
+        self.assertEqual(out0[1].astr, "a")
+        self.assertEqual(out0[2].astr, "foo")
+        self.assertEqual(out0[3].astr, "foo")
+        self.assertEqual(out1, [G(1,"foo"),G(5,"foo")])
 
         # A prejoin key with no join and non index matching sort
         where = pw(G.astr == "foo",roots)
@@ -2146,7 +2145,9 @@ class SelectJoinTestCase(unittest.TestCase):
             .where(P.name < PA.name,
                    func_([P.postcode,PA.postcode], lambda p,pa : abs(p-pa) < 3))\
             .order_by(P.name)
-        results = list(all_friends.order_by(P.pid,PA.pid).run().output(F))
+        all_friends_sorted=all_friends.order_by(P.pid,PA.pid)
+
+        results = list(all_friends_sorted.run().output(F))
         self.assertEqual([F(bill.pid,dave.pid),
                           F(dave.pid,bill.pid),F(dave.pid,jill.pid),
                           F(jane.pid,sal.pid),
