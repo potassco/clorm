@@ -1626,12 +1626,12 @@ class JoinQueryPlan(object):
        - a prejoin clauseblock (or None),
        - a prejoin orderbyblock (or None)
        - a join standard comparator (or None),
-       - a join clauseblock (or None)
-       - a join orderbyblock (or None)
+       - a postjoin clauseblock (or None)
+       - a postjoin orderbyblock (or None)
     '''
     def __init__(self,input_signature, root, indexes,
                  prejoincl, prejoincb, prejoinobb,
-                 joinsc, joincb, joinobb):
+                 joinsc, postjoincb, postjoinobb):
         if not indexes: indexes = []
         self._insig = tuple([path(r) for r in input_signature])
         self._root = path(root)
@@ -1639,8 +1639,8 @@ class JoinQueryPlan(object):
         self._indexes = tuple([p for p in indexes \
                                if path(p).meta.predicate == self._predicate])
         self._joinsc = _align_sc_path(self._root, joinsc)
-        self._joincb = joincb
-        self._joinobb = joinobb
+        self._postjoincb = postjoincb
+        self._postjoinobb = postjoinobb
         self._prejoincl = _align_clause_path(self._root.meta.dealiased, prejoincl)
         self._prejoincb = prejoincb
         self._prejoinobb = prejoinobb
@@ -1664,21 +1664,21 @@ class JoinQueryPlan(object):
             raise ValueError(("Pre-join clause block '{}' refers to non '{}' "
                               "paths").format(prejoinobb,self._root))
 
-        # The joinsc, joincb, and joinobb must refer only to the insig + root
+        # The joinsc, postjoincb, and postjoinobb must refer only to the insig + root
         allroots = list(self._insig) + [self._root]
         if not _check_roots(allroots, joinsc):
             raise ValueError(("Join comparator '{}' refers to non '{}' "
                               "paths").format(joinsc,allroots))
-        if not _check_roots(allroots, joincb):
-            raise ValueError(("Join clause block '{}' refers to non '{}' "
-                              "paths").format(joincb,allroots))
+        if not _check_roots(allroots, postjoincb):
+            raise ValueError(("Post-join clause block '{}' refers to non '{}' "
+                              "paths").format(postjoincb,allroots))
 
-        if not _check_roots(allroots, joinobb):
-            raise ValueError(("Join order by block '{}' refers to non '{}' "
-                              "paths").format(joinobb,allroots))
+        if not _check_roots(allroots, postjoinobb):
+            raise ValueError(("Post-join order by block '{}' refers to non '{}' "
+                              "paths").format(postjoinobb,allroots))
 
         self._placeholders = _extract_placeholders(
-            [self._joinsc, self._joincb, self._prejoincl, self._prejoincb])
+            [self._joinsc, self._postjoincb, self._prejoincl, self._prejoincb])
 
 
     # -------------------------------------------------------------------------
@@ -1707,21 +1707,21 @@ class JoinQueryPlan(object):
                               "clauses '{}' when we expected only "
                               "clauses for root {}").format(rootcbses,root))
 
-        (joinsc,joincb) = make_join_pair(joins, catchall)
+        (joinsc,postjoincb) = make_join_pair(joins, catchall)
 
         prejoinobb = None
-        joinobb = None
+        postjoinobb = None
         if orderbys:
             orderbys = OrderByBlock(orderbys)
             hroots = [ hashable_path(r) for r in orderbys.roots ]
             if len(hroots) > 1 or hroots[0] != hashable_path(root):
-                joinobb = OrderByBlock(orderbys)
+                postjoinobb = OrderByBlock(orderbys)
             else:
                 prejoinobb = orderbys.dealias()
 
         return cls(input_signature,root, indexes,
                    prejoincl,prejoincb,prejoinobb,
-                   joinsc,joincb,joinobb)
+                   joinsc,postjoincb,postjoinobb)
 
 
     # -------------------------------------------------------------------------
@@ -1749,10 +1749,10 @@ class JoinQueryPlan(object):
     def prejoin_orderbys(self): return self._prejoinobb
 
     @property
-    def postjoin_clauses(self): return self._joincb
+    def postjoin_clauses(self): return self._postjoincb
 
     @property
-    def postjoin_orderbys(self): return self._joinobb
+    def postjoin_orderbys(self): return self._postjoinobb
 
     @property
     def placeholders(self):
@@ -1762,13 +1762,13 @@ class JoinQueryPlan(object):
         gprejoincl  = self._prejoincl.ground(*args,**kwargs)  if self._prejoincl else None
         gprejoincb  = self._prejoincb.ground(*args,**kwargs)  if self._prejoincb else None
         gjoinsc = self._joinsc.ground(*args,**kwargs) if self._joinsc else None
-        gjoincb = self._joincb.ground(*args,**kwargs) if self._joincb else None
+        gpostjoincb = self._postjoincb.ground(*args,**kwargs) if self._postjoincb else None
 
         if gprejoincl == self._prejoincl and gprejoincb == self._prejoincb and \
-           gjoinsc == self._joinsc and gjoincb == self._joincb: return self
+           gjoinsc == self._joinsc and gpostjoincb == self._postjoincb: return self
         return JoinQueryPlan(self._insig,self._root, self._indexes,
                              gprejoincl,gprejoincb,self._prejoinobb,
-                             gjoinsc,gjoincb,self._joinobb)
+                             gjoinsc,gpostjoincb,self._postjoinobb)
 
     def print(self,file=sys.stdout,pre=""):
         print("{}QuerySubPlan:".format(pre), file=file)
@@ -1779,8 +1779,8 @@ class JoinQueryPlan(object):
         print("{}\tPrejoin clauses: {}".format(pre,self._prejoincb), file=file)
         print("{}\tPrejoin order_by: {}".format(pre,self._prejoinobb), file=file)
         print("{}\tJoin key: {}".format(pre,self._joinsc), file=file)
-        print("{}\tPost join clauses: {}".format(pre,self._joincb), file=file)
-        print("{}\tPost join order_by: {}".format(pre,self._joinobb), file=file)
+        print("{}\tPost join clauses: {}".format(pre,self._postjoincb), file=file)
+        print("{}\tPost join order_by: {}".format(pre,self._postjoinobb), file=file)
 
     def __eq__(self, other):
         if not isinstance(other, self.__class__): return NotImplemented
@@ -1790,7 +1790,7 @@ class JoinQueryPlan(object):
         if self._prejoincb != other._prejoincb: return False
         if self._prejoinobb != other._prejoinobb: return False
         if self._joinsc != other._joinsc: return False
-        if self._joincb != other._joincb: return False
+        if self._postjoincb != other._postjoincb: return False
         return True
 
     def __ne__(self, other):
