@@ -44,7 +44,7 @@ __all__ = [
     'QueryTestCase',
     'QueryOutputTestCase',
     'SelectNoJoinTestCase',
-    'Select2TestCase',
+    'SelectJoinTestCase',
     ]
 
 #------------------------------------------------------------------------------
@@ -894,7 +894,9 @@ class QueryTestCase(unittest.TestCase):
         qp = make_query_plan(fixed_join_order_heuristic, indexes.keys(), qspec)
         out = make_prejoin_query_source(qp[1], factsets, indexes)()
         self.assertTrue(isinstance(out,list))
-        self.assertEqual(out, [G(1,"foo"),G(5,"foo")])
+        self.assertEqual(out[0].astr, "foo")
+        self.assertEqual(out[1].astr, "foo")
+        self.assertEqual(len(out),2)
 
         # A prejoin key with no join and a single desc order matching an index
         where = pw(G.astr == "foo",roots)
@@ -903,7 +905,9 @@ class QueryTestCase(unittest.TestCase):
         qp = make_query_plan(fixed_join_order_heuristic, indexes.keys(), qspec)
         out = make_prejoin_query_source(qp[1], factsets, indexes)()
         self.assertTrue(isinstance(out,list))
-        self.assertEqual(out, [G(1,"foo"),G(5,"foo")])
+        self.assertEqual(out[0].astr, "foo")
+        self.assertEqual(out[1].astr, "foo")
+        self.assertEqual(len(out),2)
 
 
 # FIXUP - THE SORT ORDER STUFF IS BROKEN           
@@ -2100,7 +2104,7 @@ class SelectNoJoinTestCase(unittest.TestCase):
 # Tests for additional V2 select and delete statements
 #------------------------------------------------------------------------------
 
-class Select2TestCase(unittest.TestCase):
+class SelectJoinTestCase(unittest.TestCase):
     def setUp(self):
         pass
 
