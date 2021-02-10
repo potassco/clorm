@@ -1879,7 +1879,11 @@ class PredicatePathTestCase(unittest.TestCase):
         self.assertEqual(path(H)(h2_pos), h2_pos)
         self.assertEqual(H.a(h1_pos), h1_pos.a)
         self.assertEqual(H.b(h1_pos), f1_pos)
+
+
+        self.assertEqual(H.b.a(h1_pos), h1_pos.b.a)
         self.assertEqual(H.b.a(h1_pos), f1_pos.a)
+
         self.assertEqual(H.b.sign(h1_pos), f1_pos.sign)
         self.assertEqual(H.sign(h1_pos), h1_pos.sign)
         self.assertEqual(H.sign(h1_neg), h1_neg.sign)

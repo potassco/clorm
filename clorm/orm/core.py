@@ -395,7 +395,6 @@ class PredicatePath(object, metaclass=_PredicatePathMeta):
     class Meta(object):
         def __init__(self, parent):
             self._parent = parent
-
         #--------------------------------------------------------------------------
         # Properties of the parent PredicatePath instance
         # --------------------------------------------------------------------------
@@ -409,6 +408,13 @@ class PredicatePath(object, metaclass=_PredicatePathMeta):
         @property
         def is_leaf(self):
             return not hasattr(self, '_predicate_class')
+
+        # --------------------------------------------------------------------------
+        # attrgetter
+        # --------------------------------------------------------------------------
+        @property
+        def attrgetter(self):
+            return self._parent._attrgetter
 
         # --------------------------------------------------------------------------
         # Is this a root path (ie. the path corresponds to a predicate definition)
@@ -481,9 +487,7 @@ class PredicatePath(object, metaclass=_PredicatePathMeta):
             pseq = self._parent._pathseq
             if type(fact) != pseq[0].predicate:
                 raise TypeError("{} is not of type {}".format(fact, pseq[0]))
-            value = fact
-            for name in pseq[1:]: value = value.__getattribute__(name)
-            return value
+            return self._parent._attrgetter(fact)
 
     #--------------------------------------------------------------------------
     # Return the underlying meta object with useful functions
@@ -505,6 +509,10 @@ class PredicatePath(object, metaclass=_PredicatePathMeta):
         self._allsubpaths = tuple([])
         self._field = self._get_field()
         self._hashable = PredicatePath.Hashable(self)
+        tmp = pathseq[1:]
+        if not tmp: self._attrgetter = lambda x: x
+        else: self._attrgetter = operator.attrgetter(".".join(tmp))
+
 
         if not pathseq or not isinstance(pathseq[0], PathIdentity) or \
            not inspect.isclass(pathseq[0].predicate) or \
@@ -555,7 +563,10 @@ class PredicatePath(object, metaclass=_PredicatePathMeta):
     # A PredicatePath instance is a functor that resolves a fact wrt the path
     # --------------------------------------------------------------------------
     def __call__(self, fact):
-        return self._meta.resolve(fact)
+        pseq = self._pathseq
+        if type(fact) != pseq[0].predicate:
+            raise TypeError("{} is not of type {}".format(fact, pseq[0]))
+        return self._attrgetter(fact)
 
     #--------------------------------------------------------------------------
     # Get all field path builder corresponding to an index
