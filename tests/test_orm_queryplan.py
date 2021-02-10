@@ -343,7 +343,7 @@ class ComparatorTestCase(unittest.TestCase):
 
         with self.assertRaises(TypeError) as ctx:
             getter((f1,2))
-        check_errmsg("Invalid input to getter function: 2 is not", ctx)
+        check_errmsg("Invalid input to getter function:", ctx)
 
     #------------------------------------------------------------------------------
     #
@@ -663,9 +663,11 @@ class ComparatorTestCase(unittest.TestCase):
             sat1(g1,f1)
         check_errmsg("__call__() takes 2", ctx)
 
-        with self.assertRaises(TypeError) as ctx:
-            sat1((f1,g1))
-        check_errmsg("Invalid input", ctx)
+        # NOTE: Now using the attrgetter which is more liberal and doesn't check
+        # for the correct predicate type. So this error is no longer raised.
+#        with self.assertRaises(TypeError) as ctx:
+#            sat1((f1,g1))
+#        check_errmsg("Invalid input", ctx)
 
         # Bad calls to make_comparison_callable
         with self.assertRaises(TypeError) as ctx:
@@ -1153,39 +1155,6 @@ class OrderByTestCase(unittest.TestCase):
         self.assertNotEqual(ob1,ob3)
         self.assertEqual(hash(ob1), hash(ob1cp))
 
-        cmp1 = ob1.make_cmp([F])
-        cmp2 = ob2.make_cmp([F])
-
-        self.assertTrue(cmp1((f1,),(f2,)) == -1)
-        self.assertTrue(cmp1((f2,),(f1,)) == 1)
-        self.assertTrue(cmp1((f1,),(f1cp,)) == 0)
-
-        self.assertTrue(cmp2((f1,),(f2,)) == 1)
-        self.assertTrue(cmp2((f2,),(f1,)) == -1)
-        self.assertTrue(cmp2((f1,),(f1cp,)) == 0)
-
-    # ------------------------------------------------------------------------------
-    # Test OrderBy
-    # ------------------------------------------------------------------------------
-    def test_nonapi_OrderBy_2d(self):
-        F = self.F
-        FA = alias(F)
-        hp = hashable_path
-
-        f1a = F(1,"a")
-        f1b = F(1,"b")
-        f2a = F(2,"a")
-        f2b = F(2,"b")
-        ob1 = OrderBy(F.anum,True)
-        ob2 = OrderBy(FA.anum,False)
-
-        cmp1 = ob1.make_cmp([F,FA])
-        cmp2 = ob2.make_cmp([F,FA])
-
-        self.assertTrue(cmp1((f1a,f1a),(f1a,f2a)) == 0)
-        self.assertTrue(cmp2((f1a,f1a),(f1a,f2a)) == 1)
-
-
     # ------------------------------------------------------------------------------
     # Test OrderByBlock
     # ------------------------------------------------------------------------------
@@ -1217,10 +1186,6 @@ class OrderByTestCase(unittest.TestCase):
         self.assertEqual(obb[1],ob2)
         self.assertEqual(obb,obbcp)
         self.assertNotEqual(obb,obb2)
-
-        cmp = obb.make_cmp([G,F])
-        self.assertTrue(cmp((g1a,f1a),(g2a,f1b)) == -1)
-        self.assertTrue(cmp((g1a,f2a),(g2a,f1b)) == 1)
 
     # ------------------------------------------------------------------------------
     # Test validating a join expression (a list of join clauses)
@@ -1273,7 +1238,7 @@ class QueryPlanTestCase(unittest.TestCase):
         self.assertEqual(type(prejoincb),ClauseBlock)
         self.assertEqual(len(prejoincb),1)
         self.assertEqual(type(prejoincb[0]),Clause)
-        self.assertEqual(prejoinsc, wsc(F.astr == "foo"))
+        self.assertEqual(prejoinsc, Clause([wsc(F.astr == "foo")]))
         self.assertEqual(prejoincb, pw(F.anum < 4,[F]))
 
 
@@ -1292,11 +1257,11 @@ class QueryPlanTestCase(unittest.TestCase):
         where2 = pw((FA.anum < 4) & (FA.anum == F.astr) &
                     ((FA.anum > 10) | (FA.astr == "bar")),[FA,F])
         (prejoinsc, prejoincb) = make_prejoin_pair([F.anum,F.astr],where)
-        self.assertEqual(prejoinsc, wsc(FA.astr == "foo"))
+        self.assertEqual(prejoinsc, Clause([wsc(FA.astr == "foo")]))
         self.assertEqual(len(prejoincb), len(where2))
 
         (prejoinsc, prejoincb) = make_prejoin_pair([F.anum],where)
-        self.assertEqual(prejoinsc, wsc(FA.anum < 4))
+        self.assertEqual(prejoinsc, Clause([wsc(FA.anum < 4)]))
 
         (prejoinsc, prejoincb) = make_prejoin_pair([],where)
         self.assertEqual(prejoinsc, None)
@@ -1371,7 +1336,7 @@ class QueryPlanTestCase(unittest.TestCase):
         clauses = pw( (FA.anum < G.anum) & (FA.astr == "foo") & (FA.anum > 4),[FA,G])
         qp2 = jqp([F.astr],(F,G,GA),FA, joins, clauses)
 
-        self.assertEqual(qp2.prejoin_key,wsc(F.astr == "foo"))
+        self.assertEqual(qp2.prejoin_key, Clause([wsc(F.astr == "foo")]))
         self.assertEqual(qp2.prejoin_clauses, ClauseBlock([Clause([wsc(F.anum > 4)])]))
         self.assertEqual(qp2.join_key, jsc(FA.anum == G.anum))
         self.assertEqual(len(qp2.join_clauses),2)
@@ -1379,9 +1344,40 @@ class QueryPlanTestCase(unittest.TestCase):
 
         clauses = pw( (FA.anum < G.anum) & (FA.astr == ph1_) & (FA.anum > 4),[FA,G])
         qp3 = jqp([F.astr],(F,G,GA),FA, joins, clauses)
-        self.assertEqual(qp3.prejoin_key,wsc(F.astr == ph1_))
+        self.assertEqual(qp3.prejoin_key,Clause([wsc(F.astr == ph1_)]))
         self.assertEqual(qp3.placeholders,set([ph1_]))
         self.assertEqual(qp3.ground("foo"), qp2)
+
+
+    # ------------------------------------------------------------------------------
+    # Test an example from the profiling
+    # ------------------------------------------------------------------------------
+
+    def test_nonapi_JoinQueryPlan2(self):
+        def hps(paths): return set([ hashable_path(p) for p in paths])
+
+        class Customer(Predicate):
+            cid=IntegerField
+            name=StringField
+
+        class Sale(Predicate):
+            sid=IntegerField
+            cid=IntegerField
+            item=StringField
+
+        pw = process_where
+        pj = process_join
+        pob = process_orderby
+        wsc = StandardComparator.from_where_qcondition
+        jsc = StandardComparator.from_join_qcondition
+        jqp = JoinQueryPlan.from_specification
+
+        indexes=[Customer.cid,Sale.cid]
+
+        join = pj([Customer.cid == Sale.cid],[Customer,Sale])
+        orderby = pob([Sale.sid],[Customer,Sale])
+
+        jqp = jqp(indexes,[Customer],Sale,join,[],True,orderby)
 
     # ------------------------------------------------------------------------------
     # Test the JoinQueryPlan class
@@ -1407,8 +1403,8 @@ class QueryPlanTestCase(unittest.TestCase):
         c1ph = pw(F.anum == ph1_,[F])
         c2 = pw(F.astr == G.astr,[F,G])
 
-        qpj1 = JoinQueryPlan((),F,None,c1,None,None,None,None)
-        qpj1ph = JoinQueryPlan((),F,None,c1ph,None,None,None,None)
+        qpj1 = JoinQueryPlan((),F,[],None,c1,None,None,None,None)
+        qpj1ph = JoinQueryPlan((),F,[],None,c1ph,None,None,None,None)
 
         qp1 = QueryPlan([qpj1])
         qp1ph = QueryPlan([qpj1ph])
@@ -1417,8 +1413,8 @@ class QueryPlanTestCase(unittest.TestCase):
         self.assertNotEqual(qp1,qp1ph)
         self.assertEqual(qp1,qp1ph.ground(5))
 
-        qpj2 = JoinQueryPlan((F,),G,None, None, None,jsc(G.anum == F.anum),c2,None)
-        qpj3 = JoinQueryPlan((F,G),FA,None, None, None,jsc(G.anum == FA.anum),None,None)
+        qpj2 = JoinQueryPlan((F,),G,[],None, None, None,jsc(G.anum == F.anum),c2,None)
+        qpj3 = JoinQueryPlan((F,G),FA,[],None, None, None,jsc(G.anum == FA.anum),None,None)
 
         qp2 = QueryPlan([qpj1,qpj2])
         self.assertEqual(len(qp2),2)
@@ -1518,6 +1514,7 @@ class QueryPlanTestCase(unittest.TestCase):
         self.assertEqual(group_orderbys([F,P],orderbys),
                          [[],[asc(P.anum),asc(P.astr)]])
 
+
     # ------------------------------------------------------------------------------
     # Test geneating the query plan when give the root join order, the joins,
     # and the where clauses.
@@ -1550,10 +1547,10 @@ class QueryPlanTestCase(unittest.TestCase):
         self.assertEqual(hp(qp1[2].root), hp(G))
         self.assertEqual(hp(qp1[3].root), hp(F))
 
-        self.assertEqual(qp1[0].prejoin_key, wsc(F.anum < 2))
+        self.assertEqual(qp1[0].prejoin_key, Clause([wsc(F.anum < 2)]))
         self.assertEqual(qp1[1].prejoin_key, None)
         self.assertEqual(qp1[2].prejoin_key, None)
-        self.assertEqual(qp1[3].prejoin_key, wsc(F.anum == 4))
+        self.assertEqual(qp1[3].prejoin_key, Clause([wsc(F.anum == 4)]))
 
         self.assertEqual(qp1[0].prejoin_clauses, None)
         self.assertEqual(qp1[1].prejoin_clauses, None)
@@ -1583,10 +1580,10 @@ class QueryPlanTestCase(unittest.TestCase):
         qp2 = make_query_plan_preordered_roots([F.anum],[FA,GA,G,F],qspec)
         self.assertEqual(qp2.placeholders, set([ph1_,ph2_]))
 
-        self.assertEqual(qp2[0].prejoin_key, wsc(F.anum < ph2_))
+        self.assertEqual(qp2[0].prejoin_key, Clause([wsc(F.anum < ph2_)]))
         self.assertEqual(qp2[1].prejoin_key, None)
         self.assertEqual(qp2[2].prejoin_key, None)
-        self.assertEqual(qp2[3].prejoin_key, wsc(F.anum == ph1_))
+        self.assertEqual(qp2[3].prejoin_key, Clause([wsc(F.anum == ph1_)]))
         self.assertNotEqual(qp1,qp2)
         self.assertEqual(qp1.ground(4,2),qp1)
         self.assertEqual(qp2.ground(4,2),qp1)
@@ -1600,9 +1597,9 @@ class QueryPlanTestCase(unittest.TestCase):
         self.assertEqual(hp(qp3[2].root), hp(F))
         self.assertEqual(hp(qp3[3].root), hp(G))
 
-        self.assertEqual(qp3[0].prejoin_key, wsc(F.anum < 2))
+        self.assertEqual(qp3[0].prejoin_key, Clause([wsc(F.anum < 2)]))
         self.assertEqual(qp3[1].prejoin_key, None)
-        self.assertEqual(qp3[2].prejoin_key, wsc(F.anum == 4))
+        self.assertEqual(qp3[2].prejoin_key, Clause([wsc(F.anum == 4)]))
         self.assertEqual(qp3[3].prejoin_key, None)
 
         self.assertEqual(qp3[0].join_key, None)

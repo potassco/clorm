@@ -20,12 +20,14 @@ from clorm.orm import RawField, IntegerField, StringField, ConstantField, \
 
 # Official Clorm API imports for the fact base components
 from clorm.orm import FactBase, desc, asc, not_, and_, or_, \
-    ph_, ph1_, ph2_, func_, alias, basic_join_order_heuristic 
+    ph_, ph1_, ph2_, func_, alias, \
+    basic_join_order_heuristic, fixed_join_order_heuristic
 
 # Implementation imports
 from clorm.orm.factbase import FactIndex, FactMap, _FactSet, \
-    make_first_join_query, make_chained_join_query, make_query, \
-    QueryOutput
+    make_first_prejoin_query, make_prejoin_query_source, make_first_join_query, \
+    make_chained_join_query, make_query, \
+    InQuerySorter, QueryOutput
 
 from clorm.orm.queryplan import PositionalPlaceholder, NamedPlaceholder, QuerySpec
 
@@ -38,6 +40,7 @@ from clorm.orm.queryplan import process_where, process_join, process_orderby, \
 __all__ = [
     'FactIndexTestCase',
     'FactBaseTestCase',
+    'InQuerySorterTestCase',
     'QueryTestCase',
     'QueryOutputTestCase',
     'SelectNoJoinTestCase',
@@ -65,6 +68,51 @@ class FactIndexTestCase(unittest.TestCase):
         self.Afact = Afact
         self.Bfact = Bfact
 
+    #--------------------------------------------------------------------------
+    # Alternative for accessing elements - this looks at some performance
+    # differences
+    # --------------------------------------------------------------------------
+
+    def _test_getter_performance(self):
+        import timeit
+
+        testsetup='''
+from clorm import Predicate, IntegerField
+import random
+from operator import attrgetter
+
+class F(Predicate):
+    anum = IntegerField
+randlist=[]
+for i in range(0,10000):
+    randlist.append(F(random.randint(1,100)))
+'''
+        teststmt1='''
+randlist.sort(key=lambda x: x.anum)
+'''
+        teststmt2='''
+randlist.sort(key=F.anum)
+'''
+        teststmt3='''
+randlist.sort(key=F.anum.meta.attrgetter)
+'''
+        teststmt4='''
+randlist.sort(key=attrgetter('anum'))
+'''
+        repeat=1000
+        print("Lambda: {}".format(
+            timeit.timeit(stmt=teststmt1,setup=testsetup,number=repeat)))
+        print("Path: {}".format(
+            timeit.timeit(stmt=teststmt2,setup=testsetup,number=repeat)))
+        print("PathAttrGetter: {}".format(
+            timeit.timeit(stmt=teststmt3,setup=testsetup,number=repeat)))
+        print("RawAttrGetter: {}".format(
+            timeit.timeit(stmt=teststmt4,setup=testsetup,number=repeat)))
+
+
+    #--------------------------------------------------------------------------
+    #
+    #--------------------------------------------------------------------------
     def test_create(self):
         Afact = self.Afact
         fi1 = FactIndex(Afact.num1)
@@ -614,6 +662,138 @@ class FactBaseTestCase(unittest.TestCase):
         matchstr = afactspre+afactsstr + "\n" + bfactspre+bfactsstr
         self.assertEqual(aspstr,matchstr)
 
+
+#------------------------------------------------------------------------------
+# InQuerySorterTest. Test functions for the underlying query mechanism
+# ------------------------------------------------------------------------------
+
+class InQuerySorterTestCase(unittest.TestCase):
+    def setUp(self):
+        class F(Predicate):
+            anum=IntegerField
+            astr=StringField
+        self.F = F
+
+        class G(Predicate):
+            anum=IntegerField
+            astr=StringField
+        self.G = G
+
+        self.factsets = {}
+        self.indexes = {}
+
+        factset = _FactSet()
+        factindex = FactIndex(G.astr)
+        for f in [G(1,"a"),G(1,"foo"),G(5,"a"),G(5,"foo")]:
+            factset.add(f)
+            factindex.add(f)
+        self.indexes[hashable_path(G.astr)] = factindex
+        self.factsets[G] = factset
+
+        factset = _FactSet()
+        factindex = FactIndex(F.anum)
+        for f in [F(1,"a"),F(1,"foo"),F(5,"a"),F(5,"foo")]:
+            factset.add(f)
+            factindex.add(f)
+        self.indexes[hashable_path(F.anum)] = factindex
+        self.factsets[F] = factset
+
+    def test_InQuerySorter_bad(self):
+        F = self.F
+        G = self.G
+        factsetF = self.factsets[F]
+        roots = [F]
+        pob = process_orderby
+
+        with self.assertRaises(ValueError) as ctx:
+            orderby = pob([desc(F.astr),G.anum],[F,G])
+            iqs = InQuerySorter(orderby)
+        check_errmsg("Cannot create an InQuerySorter",ctx)
+
+        with self.assertRaises(AttributeError) as ctx:
+            iqs = InQuerySorter([])
+        check_errmsg("'list' object has no attribute",ctx)
+
+    def test_InQuerySorter_singlefacts(self):
+        F = self.F
+        factsetF = self.factsets[F]
+        roots = [F]
+        pob = process_orderby
+
+        # Ascending order sorting in-place as well as generating a new list
+        orderby = pob([F.astr],roots)
+        iqs = InQuerySorter(orderby)
+        inlistF = list(factsetF)
+        iqs.listsort(inlistF)
+        outlistF = iqs.sorted(inlistF)
+
+        self.assertEqual(len(inlistF),4)
+        self.assertEqual(len(outlistF),4)
+        self.assertEqual(inlistF[0].astr,"a")
+        self.assertEqual(outlistF[0].astr,"a")
+        self.assertEqual(inlistF[1].astr,"a")
+        self.assertEqual(outlistF[1].astr,"a")
+        self.assertEqual(inlistF[2].astr,"foo")
+        self.assertEqual(outlistF[2].astr,"foo")
+        self.assertEqual(inlistF[3].astr,"foo")
+        self.assertEqual(outlistF[3].astr,"foo")
+
+        # Descending order sorting
+        orderby = pob([desc(F.astr)],roots)
+        iqs = InQuerySorter(orderby)
+        iqs.listsort(inlistF)
+        outlistF = iqs.sorted(inlistF)
+
+        self.assertEqual(len(outlistF),4)
+        self.assertEqual(outlistF[0].astr,"foo")
+        self.assertEqual(outlistF[1].astr,"foo")
+        self.assertEqual(outlistF[2].astr,"a")
+        self.assertEqual(outlistF[3].astr,"a")
+
+        # Multiple criteria sort
+        orderby = pob([desc(F.astr),F.anum],roots)
+        iqs = InQuerySorter(orderby)
+        iqs.listsort(inlistF)
+        outlistF = iqs.sorted(inlistF)
+        self.assertEqual(outlistF,
+                         [F(1,"foo"),F(5,"foo"),F(1,"a"),F(5,"a"),])
+
+    def test_InQuerySorter_facttuples(self):
+        F = self.F
+        G = self.G
+        factsetF = self.factsets[F]
+        factsetG = self.factsets[G]
+        roots = [F,G]
+        pob = process_orderby
+        cp = []
+        for f in factsetF:
+            for g in factsetG: cp.append((f,g))
+
+        orderby = pob([desc(F.anum),G.anum,desc(F.astr),desc(G.astr)],roots)
+        iqs = InQuerySorter(orderby,roots)
+        outlistF = iqs.sorted(cp)
+
+        expected = [
+            (F(5,"foo"), G(1,"foo")),
+            (F(5,"foo"), G(1,"a")),
+            (F(5,"a"), G(1,"foo")),
+            (F(5,"a"), G(1,"a")),
+            (F(5,"foo"), G(5,"foo")),
+            (F(5,"foo"), G(5,"a")),
+            (F(5,"a"), G(5,"foo")),
+            (F(5,"a"), G(5,"a")),
+            (F(1,"foo"), G(1,"foo")),
+            (F(1,"foo"), G(1,"a")),
+            (F(1,"a"), G(1,"foo")),
+            (F(1,"a"), G(1,"a")),
+            (F(1,"foo"), G(5,"foo")),
+            (F(1,"foo"), G(5,"a")),
+            (F(1,"a"), G(5,"foo")),
+            (F(1,"a"), G(5,"a")),
+        ]
+        self.assertEqual(outlistF,expected)
+
+
 #------------------------------------------------------------------------------
 # QueryTest. Test functions for the underlying query mechanism
 # ------------------------------------------------------------------------------
@@ -661,6 +841,256 @@ class QueryTestCase(unittest.TestCase):
         self.indexes[hashable_path(F.anum)] = factindex
         self.factsets[F] = factset
 
+
+
+    # ------------------------------------------------------------------------------
+    # Test generating the prejoin query source function
+    # ------------------------------------------------------------------------------
+
+    def test_nonapi_make_prejoin_query_source(self):
+        F = self.F
+        G = self.G
+        indexes = self.indexes
+        factsets = self.factsets
+        pw = process_where
+        pj = process_join
+        pob = process_orderby
+        roots = [F,G]
+
+        # Simplest case. Nothing specified so pass through the factset
+        qspec = QuerySpec(roots,[],[],[])
+        qp = make_query_plan(fixed_join_order_heuristic, indexes.keys(), qspec)
+        out = make_prejoin_query_source(qp[1], factsets, indexes)()
+        self.assertTrue(out is factsets[G])
+
+        # A prejoin key but nothing else
+        where = pw(G.astr == "foo",roots)
+        qspec = QuerySpec(roots,[],where,[])
+        qp = make_query_plan(fixed_join_order_heuristic, indexes.keys(), qspec)
+        out = make_prejoin_query_source(qp[1], factsets, indexes)()
+        self.assertTrue(isinstance(out,list))
+        self.assertEqual(set(out), set([G(1,"foo"),G(5,"foo")]))
+
+        # A prejoin clause but nothing else
+        where = pw(G.anum == 1,roots)
+        qspec = QuerySpec(roots,[],where,[])
+        qp = make_query_plan(fixed_join_order_heuristic, indexes.keys(), qspec)
+        out = make_prejoin_query_source(qp[1], factsets, indexes)()
+        self.assertTrue(isinstance(out,list))
+        self.assertEqual(set(out), set([G(1,"a"),G(1,"foo")]))
+
+        # Both a prejoin key and a prejoin clause
+        where = pw((G.anum == 1) & (G.astr == "foo"),roots)
+        qspec = QuerySpec(roots,[],where,[])
+        qp = make_query_plan(fixed_join_order_heuristic, indexes.keys(), qspec)
+        out = make_prejoin_query_source(qp[1], factsets, indexes)()
+        self.assertTrue(isinstance(out,list))
+        self.assertEqual(set(out), set([G(1,"foo")]))
+
+        # A prejoin key with no join and a single ascending order matching an index
+        where = pw(G.astr == "foo",roots)
+        orderby = pob([F.astr,asc(G.astr)],roots)
+        qspec = QuerySpec(roots,[],where,orderby)
+        qp = make_query_plan(fixed_join_order_heuristic, indexes.keys(), qspec)
+        out = make_prejoin_query_source(qp[1], factsets, indexes)()
+        self.assertTrue(isinstance(out,list))
+        self.assertEqual(out, [G(1,"foo"),G(5,"foo")])
+
+        # A prejoin key with no join and a single desc order matching an index
+        where = pw(G.astr == "foo",roots)
+        orderby = pob([F.astr,desc(G.astr)],roots)
+        qspec = QuerySpec(roots,[],where,orderby)
+        qp = make_query_plan(fixed_join_order_heuristic, indexes.keys(), qspec)
+        out = make_prejoin_query_source(qp[1], factsets, indexes)()
+        self.assertTrue(isinstance(out,list))
+        self.assertEqual(out, [G(1,"foo"),G(5,"foo")])
+
+
+# FIXUP - THE SORT ORDER STUFF IS BROKEN           
+        # A prejoin key with no join and a complex order
+#        where = pw(G.astr == "foo",roots)
+#        orderby = pob([F.astr,desc(G.astr),G.anum],roots)
+#        qspec = QuerySpec(roots,[],where,orderby)
+#        qp = make_query_plan(fixed_join_order_heuristic, indexes.keys(), qspec)
+#        out = make_prejoin_query_source(qp[1], factsets, indexes)()
+
+#        print("QP:\n{}\n".format(qp))
+#        return
+         
+
+
+        # A prejoin key with no join and non index matching sort
+        where = pw(G.astr == "foo",roots)
+        orderby = pob([F.astr,desc(G.anum)],roots)
+        qspec = QuerySpec(roots,[],where,orderby)
+        qp = make_query_plan(fixed_join_order_heuristic, indexes.keys(), qspec)
+        out = make_prejoin_query_source(qp[1], factsets, indexes)()
+        self.assertTrue(isinstance(out,list))
+        self.assertEqual(out, [G(5,"foo"),G(1,"foo")])
+
+        # A join key that matches an existing index but nothing else
+        join = pj([F.astr == G.astr],roots)
+        qspec = QuerySpec(roots,join,[],[])
+        qp = make_query_plan(fixed_join_order_heuristic, indexes.keys(), qspec)
+        out = make_prejoin_query_source(qp[1], factsets, indexes)()
+        self.assertTrue(out is indexes[hashable_path(G.astr)])
+
+        # A join key that doesn't match an existing index - and nothing else
+        join = pj([F.anum == G.anum],roots)
+        qspec = QuerySpec(roots,join,[],[])
+        qp = make_query_plan(fixed_join_order_heuristic, indexes.keys(), qspec)
+        out = make_prejoin_query_source(qp[1], factsets, indexes)()
+        self.assertTrue(isinstance(out,FactIndex))
+        self.assertEqual(hashable_path(out.path), hashable_path(G.anum))
+        self.assertEqual(set(out), set(factsets[G]))
+
+        # A join key and a prejoin key
+        join = pj([F.astr == G.astr],roots)
+        where = pw(G.astr == "foo",roots)
+        qspec = QuerySpec(roots,join,where,[])
+        qp = make_query_plan(fixed_join_order_heuristic, indexes.keys(), qspec)
+        out = make_prejoin_query_source(qp[1], factsets, indexes)()
+        self.assertTrue(isinstance(out,FactIndex))
+        self.assertEqual(hashable_path(out.path), hashable_path(G.astr))
+        self.assertEqual(set(out), set([G(1,"foo"),G(5,"foo")]))
+
+        # A join key and a prejoin clause
+        join = pj([F.astr == G.astr],roots)
+        where = pw(G.anum == 1,roots)
+        qspec = QuerySpec(roots,join,where,[])
+        qp = make_query_plan(fixed_join_order_heuristic, indexes.keys(), qspec)
+        out = make_prejoin_query_source(qp[1], factsets, indexes)()
+        self.assertTrue(isinstance(out,FactIndex))
+        self.assertEqual(hashable_path(out.path), hashable_path(G.astr))
+        self.assertEqual(set(out), set([G(1,"a"),G(1,"foo")]))
+
+    # ------------------------------------------------------------------------------
+    # Test generating the prejoin query source function
+    # ------------------------------------------------------------------------------
+
+    def test_nonapi_make_chained_join_query(self):
+        F = self.F
+        G = self.G
+        indexes = self.indexes
+        factsets = self.factsets
+        pw = process_where
+        pj = process_join
+        pob = process_orderby
+        roots = [F,G]
+
+#        orderby = pob([F.astr,desc(G.anum)],roots)
+
+        # Simplest case. No join or no G-where clauses.
+        # (Note: the where clause for F is to simplify to only one join).
+        where = pw((F.anum == 1) & (F.astr == "foo"),roots)
+        qspec = QuerySpec(roots,[],where,[])
+        qp = make_query_plan(fixed_join_order_heuristic, indexes.keys(), qspec)
+        inquery=make_first_join_query(qp[0], factsets, indexes)
+        query = make_chained_join_query(qp[1], inquery, factsets, indexes)()
+        self.assertEqual(set(query),
+                         set([(F(1,"foo"), G(1,"a")),
+                              (F(1,"foo"), G(1,"foo")),
+                              (F(1,"foo"), G(5,"a")),
+                              (F(1,"foo"), G(5,"foo"))]))
+
+        # No join but a prejoin where clause
+        where = pw(((F.anum == 1) & (F.astr == "foo")) & (G.anum == 1), roots)
+        qspec = QuerySpec(roots,[],where,[])
+        qp = make_query_plan(fixed_join_order_heuristic, indexes.keys(), qspec)
+        inquery=make_first_join_query(qp[0], factsets, indexes)
+        query = make_chained_join_query(qp[1], inquery, factsets, indexes)()
+        self.assertEqual(set(query),
+                         set([(F(1,"foo"), G(1,"a")),
+                              (F(1,"foo"), G(1,"foo"))]))
+
+        # No join but a post-join where clause - by adding useless extra F
+        where = pw(((F.anum == 1) & (F.astr == "foo")) &
+                   ((G.anum == 1) | (F.anum == 5)), roots)
+        qspec = QuerySpec(roots,[],where,[])
+        qp = make_query_plan(fixed_join_order_heuristic, indexes.keys(), qspec)
+        inquery=make_first_join_query(qp[0], factsets, indexes)
+        query = make_chained_join_query(qp[1], inquery, factsets, indexes)()
+        self.assertEqual(set(query),
+                         set([(F(1,"foo"), G(1,"a")),
+                              (F(1,"foo"), G(1,"foo"))]))
+
+        # A join key but nothing else
+        join = pj([F.astr == G.astr],roots)
+        where = pw((F.anum == 1) & (F.astr == "foo"),roots)
+        qspec = QuerySpec(roots,join,where,[])
+        qp = make_query_plan(fixed_join_order_heuristic, indexes.keys(), qspec)
+        inquery=make_first_join_query(qp[0], factsets, indexes)
+        query = make_chained_join_query(qp[1], inquery, factsets, indexes)()
+        self.assertEqual(set(query),
+                         set([(F(1,"foo"), G(1,"foo")),
+                              (F(1,"foo"), G(5,"foo"))]))
+
+        # A join key and a prejoin-sort
+        join = pj([F.astr == G.astr],roots)
+        where = pw((F.anum == 1) & (F.astr == "foo"),roots)
+        orderby = pob([F.astr,desc(G.anum)],roots)
+        qspec = QuerySpec(roots,join,where,orderby)
+        qp = make_query_plan(fixed_join_order_heuristic, indexes.keys(), qspec)
+        inquery=make_first_join_query(qp[0], factsets, indexes)
+        query = make_chained_join_query(qp[1], inquery, factsets, indexes)()
+        self.assertEqual(set(query),
+                         set([(F(1,"foo"), G(5,"foo")),
+                              (F(1,"foo"), G(1,"foo"))]))
+
+
+        # A join key and a post join-sort
+        join = pj([F.astr == G.astr],roots)
+        where = pw((F.anum == 1) & (F.astr == "foo"),roots)
+        orderby = pob([desc(G.anum)],roots)
+        qspec = QuerySpec(roots,join,where,orderby)
+        qp = make_query_plan(fixed_join_order_heuristic, indexes.keys(), qspec)
+        inquery=make_first_join_query(qp[0], factsets, indexes)
+        query = make_chained_join_query(qp[1], inquery, factsets, indexes)()
+        self.assertEqual(set(query),
+                         set([(F(1,"foo"), G(5,"foo")),
+                              (F(1,"foo"), G(1,"foo"))]))
+
+        # A join key and a complex post join sort
+        join = pj([F.astr == G.astr],roots)
+        where = pw((F.anum == 1) & (F.astr == "foo"),roots)
+        orderby = pob([desc(G.anum),F.anum,G.astr],roots)
+        qspec = QuerySpec(roots,join,where,orderby)
+        qp = make_query_plan(fixed_join_order_heuristic, indexes.keys(), qspec)
+
+        inquery=make_first_join_query(qp[0], factsets, indexes)
+        query = make_chained_join_query(qp[1], inquery, factsets, indexes)()
+        self.assertEqual(set(query),
+                         set([(F(1,"foo"), G(5,"foo")),
+                              (F(1,"foo"), G(1,"foo"))]))
+
+ 
+    #--------------------------------------------------------------------------
+    # Test initialising a placeholder (named and positional)
+    #--------------------------------------------------------------------------
+    def test_make_first_prejoin_query(self):
+        def strip(it): return [f for f, in it]
+
+        G = self.G
+        pw = process_where
+        pob = process_orderby
+
+        indexes = self.indexes
+        factsets = self.factsets
+
+        which1 = pw((G.astr == "foo"),[G])
+        qspec1 = QuerySpec([G],[],which1,[])
+        qp1 = make_query_plan(basic_join_order_heuristic,[G.astr],qspec1)
+        q1 = make_first_prejoin_query(qp1[0],factsets,indexes)
+        self.assertEqual(set([f for (f,) in q1()]),set([G(1,"foo"),G(5,"foo")]))
+
+        which2 = pw((G.astr == "foo") | (G.astr == "a") ,[G])
+        qspec2 = QuerySpec([G],[],which2,[])
+        qp2 = make_query_plan(basic_join_order_heuristic,[G.astr],qspec2)
+        q2 = make_first_prejoin_query(qp2[0],factsets,indexes)
+        self.assertEqual(set([f for (f,) in q2()]),
+                         set([G(1,"foo"),G(5,"foo"),G(1,"a"),G(5,"a")]))
+
+
     #--------------------------------------------------------------------------
     # Test initialising a placeholder (named and positional)
     #--------------------------------------------------------------------------
@@ -691,44 +1121,6 @@ class QueryTestCase(unittest.TestCase):
         self.assertEqual(list(strip(query2())),
                          [G(1,"foo"), G(5,"foo"), G(5,"a")])
 
-
-    #--------------------------------------------------------------------------
-    # Test initialising a placeholder (named and positional)
-    #--------------------------------------------------------------------------
-    def test_make_chained_join_query(self):
-        F = self.F
-        G = self.G
-        pw = process_where
-        pob = process_orderby
-
-        indexes = self.indexes
-        factsets = self.factsets
-
-        which1 = pw((G.anum > 4) & (G.astr == "foo") & (F.anum == 1),[G,F])
-        orderbys1 = pob([desc(F.astr)],[G,F])
-        qspec = QuerySpec([G,F],[],which1,orderbys1)
-        qp1 = make_query_plan(basic_join_order_heuristic,indexes.keys(), qspec)
-
-        query1 = make_first_join_query(qp1[0], factsets, indexes)
-        query2 = make_chained_join_query(qp1[1], query1, factsets, indexes)
-        output = align_facts(qp1.output_signature, (F,G), query2())
-
-        self.assertEqual(list(output),
-                         [(F(1,"foo"),G(5,"foo")),(F(1,"a"),G(5,"foo"))])
-
-
-        which1 = pw((F.anum > 4) & (F.astr == "foo") & (G.anum == 1),[F,G])
-        orderbys1 = pob([asc(G.astr)],[G,F])
-        qspec = QuerySpec([F,G],[],which1,orderbys1)
-        qp1 = make_query_plan(basic_join_order_heuristic,indexes.keys(), qspec)
-
-        #print("\nQP:\n{}".format(qp1))
-        query1 = make_first_join_query(qp1[0], factsets, indexes)
-        query2 = make_chained_join_query(qp1[1], query1, factsets, indexes)
-        output = align_facts(qp1.output_signature, (F,G), query2())
-        #print("RESULT: {}".format(output))
-        self.assertEqual(list(query2()),
-                         [(F(5,"foo"),G(1,"a")), (F(5,"foo"),G(1,"foo"))])
 
     #--------------------------------------------------------------------------
     # Test initialising a placeholder (named and positional)
@@ -1128,8 +1520,10 @@ class SelectNoJoinTestCase(unittest.TestCase):
         s2_num2_eq_4 = fb2.select(Afact1).where(Afact1.num2 == 4)
 
         self.assertEqual(s1_all.query_plan()[0].prejoin_key,None)
-        self.assertEqual(str(s1_num1_eq_4.query_plan()[0].prejoin_key), "Afact1.num1 == 4")
-        self.assertEqual(str(s1_str1_eq_4.query_plan()[0].prejoin_key), "Afact1.str1 == '4'")
+        self.assertEqual(str(s1_num1_eq_4.query_plan()[0].prejoin_key),
+                         "[ Afact1.num1 == 4 ]")
+        self.assertEqual(str(s1_str1_eq_4.query_plan()[0].prejoin_key),
+                         "[ Afact1.str1 == '4' ]")
         self.assertEqual(s2_all.query_plan()[0].prejoin_key,None)
         self.assertEqual(s2_num1_eq_4.query_plan()[0].prejoin_key, None)
         self.assertEqual(s2_str1_eq_4.query_plan()[0].prejoin_key, None)

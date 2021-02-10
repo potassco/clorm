@@ -260,6 +260,9 @@ def is_root_paths(paths):
         if not p.meta.is_root: return False
     return True
 
+# ------------------------------------------------------------------------------
+# Support function to make sure we have a list of paths
+# ------------------------------------------------------------------------------
 
 # ------------------------------------------------------------------------------
 # support function - give an iterable that may include a predicatepath return a
@@ -761,7 +764,8 @@ def make_input_alignment_functor(input_root_signature, output_signature):
                                  "missing input predicate path for "
                                  "{}").format(input_root_signature,
                                               output_signature,out))
-            getters.append(lambda facts, p=out, idx=idx: p(facts[idx]))
+            ag=out.meta.attrgetter
+            getters.append(lambda facts, ag=ag, idx=idx: ag(facts[idx]))
         else:
             getters.append(lambda facts, out=out: out)
 
@@ -776,6 +780,9 @@ def make_input_alignment_functor(input_root_signature, output_signature):
                              "a tuple with {} elements and got a tuple with "
                              "{}").format(len(insig),len(facts))) from None
         except TypeError as e:
+            raise TypeError(("Invalid input to getter function: "
+                             "{}").format(e)) from None
+        except AttributeError as e:
             raise TypeError(("Invalid input to getter function: "
                              "{}").format(e)) from None
     return func
@@ -1381,17 +1388,6 @@ class OrderBy(object):
         if not self._asc and va > vb: return -1
         return 1
 
-    def make_cmp(self, root_signature):
-        alignfunc = make_input_alignment_functor(root_signature, (self._path,))
-        def cmp(tupa,tupb):
-            va = alignfunc(tupa)
-            vb = alignfunc(tupb)
-            if va == vb: return 0
-            if self._asc and va < vb: return -1
-            if not self._asc and va > vb: return -1
-            return 1
-        return cmp
-
     @property
     def path(self):
         return self._path
@@ -1446,16 +1442,6 @@ class OrderByBlock(object):
         if not orderbys:
             raise ValueError("Empty list of order_by statements")
 
-    def make_cmp(self, root_signature):
-        cmpfuncs = tuple([ob.make_cmp(root_signature) for ob in self._orderbys])
-        def cmp(tupa, tupb):
-            for cmp in cmpfuncs:
-                value = cmp(tupa,tupb)
-                if value == 0: continue
-                return value
-            return 0
-        return cmp
-
     @property
     def paths(self):
         return self._paths
@@ -1496,6 +1482,7 @@ class OrderByBlock(object):
     def __repr__(self):
         return self.__str__()
 
+
 # ------------------------------------------------------------------------------
 # Validate the order_by expression - returns an OrderByBlock
 # ------------------------------------------------------------------------------
@@ -1532,14 +1519,18 @@ def process_orderby(orderby_expressions, roots=[]):
 # - indexed_paths - a list of paths for which there is a factindex
 # - clauses - a clause block that can only refer to a single root
 #
-# Tries to extract a single unit clause that can be used for indexing and
-# returns a pair consisting of the (comparator, remainder)
-# Note: we can't deal with disjunctive clauses (future work)
+# Tries to extract a clause that references a single path that can be used for
+# indexing and returns a pair consisting of the (comparator, remainder) Note: we
+# can't deal with disjunctive clauses (future work)
 # ------------------------------------------------------------------------------
 def make_prejoin_pair(indexed_paths, clauseblock):
+    def preference(cl):
+        c = min(cl, key=lambda c: c.preference)
+        return c.preference
+
     def is_candidate(indexes, cl):
-        if len(cl) != 1: return False
-        if not isinstance(cl[0], StandardComparator): return False
+        for c in cl:
+            if not isinstance(c, StandardComparator): return False
         hpaths = set([hashable_path(p.meta.dealiased) for p in cl.paths])
         if len(hpaths) != 1: return False
         return next(iter(hpaths)) in indexes
@@ -1555,13 +1546,13 @@ def make_prejoin_pair(indexed_paths, clauseblock):
     candidates = []
     rest = []
     for cl in clauseblock:
-        if is_candidate(indexes, cl): candidates.append(cl[0])
+        if is_candidate(indexes, cl): candidates.append(cl)
         else: rest.append(cl)
     if not candidates: return (None, clauseblock)
 
     # order the candidates by their comparator preference and take the first
-    candidates.sort(key=lambda c : c.preference, reverse=True)
-    rest.extend([ Clause([sc]) for sc in candidates[1:] ])
+    candidates.sort(key=lambda cl : preference(cl), reverse=True)
+    rest.extend(candidates[1:])
     cb = ClauseBlock(rest) if rest else None
     return (candidates[0],cb)
 
@@ -1613,6 +1604,11 @@ def _align_sc_path(root, sc):
                           "it doesn't reference the root").format(root,sc))
     return sc
 
+# For a clause consisting of standard comparators align each standard comparator
+def _align_clause_path(root,clause):
+    if not clause: return None
+    return Clause([_align_sc_path(root,sc) for sc in clause])
+
 # Extract the placeholders
 def _extract_placeholders(elements):
     output = set()
@@ -1625,6 +1621,7 @@ class JoinQueryPlan(object):
     '''Input:
        - input_signature tuple,
        - root,
+       - indexes associated with the underlying fact type
        - a prejoin standard-comparator (or None),
        - a prejoin clauseblock (or None),
        - a prejoin orderbyblock (or None)
@@ -1632,16 +1629,19 @@ class JoinQueryPlan(object):
        - a join clauseblock (or None)
        - a join orderbyblock (or None)
     '''
-    def __init__(self,input_signature, root,
-                 prejoinsc, prejoincb, prejoinobb,
+    def __init__(self,input_signature, root, indexes,
+                 prejoincl, prejoincb, prejoinobb,
                  joinsc, joincb, joinobb):
+        if not indexes: indexes = []
         self._insig = tuple([path(r) for r in input_signature])
         self._root = path(root)
         self._predicate = self._root.meta.predicate
+        self._indexes = tuple([p for p in indexes \
+                               if path(p).meta.predicate == self._predicate])
         self._joinsc = _align_sc_path(self._root, joinsc)
         self._joincb = joincb
         self._joinobb = joinobb
-        self._prejoinsc = _align_sc_path(self._root.meta.dealiased, prejoinsc)
+        self._prejoincl = _align_clause_path(self._root.meta.dealiased, prejoincl)
         self._prejoincb = prejoincb
         self._prejoinobb = prejoinobb
 
@@ -1654,9 +1654,9 @@ class JoinQueryPlan(object):
                                   "root path").format(p))
 
         # The prejoin parts must only refer to the dealised root
-        if not _check_roots([self._root.meta.dealiased], prejoinsc):
+        if not _check_roots([self._root.meta.dealiased], prejoincl):
             raise ValueError(("Pre-join comparator '{}' refers to non '{}' "
-                              "paths").format(prejoinsc,self._root))
+                              "paths").format(prejoincl,self._root))
         if not _check_roots([self._root.meta.dealiased], prejoincb):
             raise ValueError(("Pre-join clause block '{}' refers to non '{}' "
                               "paths").format(prejoincb,self._root))
@@ -1678,23 +1678,30 @@ class JoinQueryPlan(object):
                               "paths").format(joinobb,allroots))
 
         self._placeholders = _extract_placeholders(
-            [self._joinsc, self._joincb, self._prejoinsc, self._prejoincb])
+            [self._joinsc, self._joincb, self._prejoincl, self._prejoincb])
 
 
     # -------------------------------------------------------------------------
     #
     # -------------------------------------------------------------------------
     @classmethod
-    def from_specification(cls, indexed_paths, input_signature,
+    def from_specification(cls, indexes, input_signature,
                            root, joins=[], clauses=[],
                            prejoinorderby=False,orderbys=[]):
+        def _paths(inputs):
+            return [ path(p) for p in inputs]
+
+        input_signature = _paths(input_signature)
+        root = path(root)
+
         rootcbses, catchall = partition_clauses(clauses)
         if not rootcbses:
-            (prejoinsc,prejoincb) = (None,None)
+            (prejoincl,prejoincb) = (None,None)
         elif len(rootcbses) == 1:
-            (prejoinsc,prejoincb) = make_prejoin_pair(indexed_paths, rootcbses[0])
-            prejoinsc = prejoinsc.dealias() if prejoinsc else None
+            (prejoincl,prejoincb) = make_prejoin_pair(indexes, rootcbses[0])
+            prejoincl = prejoincl.dealias() if prejoincl else None
             prejoincb = prejoincb.dealias() if prejoincb else None
+
         else:
             raise ValueError(("Internal bug: unexpected multiple single root "
                               "clauses '{}' when we expected only "
@@ -1708,8 +1715,8 @@ class JoinQueryPlan(object):
             if prejoinorderby: prejoinobb = OrderByBlock(orderbys).dealias()
             else: joinobb = OrderByBlock(orderbys)
 
-        return cls(input_signature,root,
-                   prejoinsc,prejoincb,prejoinobb,
+        return cls(input_signature,root, indexes,
+                   prejoincl,prejoincb,prejoinobb,
                    joinsc,joincb,joinobb)
 
 
@@ -1723,7 +1730,10 @@ class JoinQueryPlan(object):
     def root(self): return self._root
 
     @property
-    def prejoin_key(self): return self._prejoinsc
+    def indexes(self): return self._indexes
+ 
+    @property
+    def prejoin_key(self): return self._prejoincl
 
     @property
     def join_key(self): return self._joinsc
@@ -1745,22 +1755,23 @@ class JoinQueryPlan(object):
         return self._placeholders
 
     def ground(self,*args,**kwargs):
-        gprejoinsc  = self._prejoinsc.ground(*args,**kwargs)  if self._prejoinsc else None
+        gprejoincl  = self._prejoincl.ground(*args,**kwargs)  if self._prejoincl else None
         gprejoincb  = self._prejoincb.ground(*args,**kwargs)  if self._prejoincb else None
         gjoinsc = self._joinsc.ground(*args,**kwargs) if self._joinsc else None
         gjoincb = self._joincb.ground(*args,**kwargs) if self._joincb else None
 
-        if gprejoinsc == self._prejoinsc and gprejoincb == self._prejoincb and \
+        if gprejoincl == self._prejoincl and gprejoincb == self._prejoincb and \
            gjoinsc == self._joinsc and gjoincb == self._joincb: return self
-        return JoinQueryPlan(self._insig,self._root,
-                             gprejoinsc,gprejoincb,self._prejoinobb,
+        return JoinQueryPlan(self._insig,self._root, self._indexes,
+                             gprejoincl,gprejoincb,self._prejoinobb,
                              gjoinsc,gjoincb,self._joinobb)
 
     def print(self,file=sys.stdout,pre=""):
         print("{}QuerySubPlan:".format(pre), file=file)
         print("{}\tInput Signature: {}".format(pre,self._insig), file=file)
         print("{}\tRoot path: {}".format(pre,self._root), file=file)
-        print("{}\tPrejoin key: {}".format(pre,self._prejoinsc), file=file)
+        print("{}\tIndexes: {}".format(pre,self._indexes), file=file)
+        print("{}\tPrejoin key: {}".format(pre,self._prejoincl), file=file)
         print("{}\tPrejoin clauses: {}".format(pre,self._prejoincb), file=file)
         print("{}\tPrejoin order_by: {}".format(pre,self._prejoinobb), file=file)
         print("{}\tJoin key: {}".format(pre,self._joinsc), file=file)
@@ -1771,7 +1782,7 @@ class JoinQueryPlan(object):
         if not isinstance(other, self.__class__): return NotImplemented
         if self._insig != other._insig: return False
         if self._root.meta.hashable != other._root.meta.hashable: return False
-        if self._prejoinsc != other._prejoinsc: return False
+        if self._prejoincl != other._prejoincl: return False
         if self._prejoincb != other._prejoincb: return False
         if self._prejoinobb != other._prejoinobb: return False
         if self._joinsc != other._joinsc: return False

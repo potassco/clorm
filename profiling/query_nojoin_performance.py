@@ -68,13 +68,6 @@ class Q(Predicate):
 def create_facts(num):
     return [Q(a,P(a,(a,"blah"))) for a in range(0,num)]
 
-
-def make_fbs(facts):
-    return FactBase(facts)
-
-def make_indexed_fbs(facts):
-    return FactBase(facts,indexes=[Q.anum,Q.ap.atuple[0]])
-
 def run_select(s):
     if clorm.__version__ >= "2.0.0":
         print("{}\n".format(s.query_plan()))
@@ -103,7 +96,7 @@ def run_fact_querying(num):
     pr(msg1, go)
     fb1 = pr("Adding facts to non-indexed FactBase", lambda : FactBase(g_facts))
     fb2 = pr("Adding facts to indexed FactBase",
-             lambda : FactBase(g_facts,indexes=[Q.ap.atuple[0]]))
+             lambda : FactBase(g_facts,indexes=[Q.anum,Q.ap.atuple[0]]))
     c1 = pr("Conjunctive query non-indexed FactBase", lambda : query_conj(fb1))
     c2 = pr("Conjunctive Query indexed FactBase", lambda : query_conj(fb2))
     c1 = pr("Disjunctive query non-indexed FactBase", lambda : query_disj(fb1))
