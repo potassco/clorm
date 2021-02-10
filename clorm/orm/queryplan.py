@@ -1380,14 +1380,6 @@ class OrderBy(object):
         self._path = path
         self._asc = asc
 
-    def compare(self, a,b):
-        va = self._path(a)
-        vb = self._path(b)
-        if  va == vb: return 0
-        if self._asc and va < vb: return -1
-        if not self._asc and va > vb: return -1
-        return 1
-
     @property
     def path(self):
         return self._path
