@@ -22,7 +22,7 @@ from .queryplan import Placeholder, OrderBy, desc, asc
 from .queryplan import JoinQueryPlan, QueryPlan, \
     process_where, process_join, process_orderby, \
     make_input_alignment_functor, basic_join_order_heuristic, make_query_plan,\
-    FuncInputSpec, FunctionComparator, QuerySpec, modify_query_spec
+    FuncInputSpec, FunctionComparator, QuerySpec
 
 # ------------------------------------------------------------------------------
 # In order to implement FactBase I originally used the built in 'set'
@@ -70,6 +70,7 @@ class FactIndex(object):
     def __init__(self, path):
         try:
             self._path = path
+            self._attrgetter = self._path.meta.attrgetter
             self._predicate = self._path.meta.predicate
             self._keylist = []
             self._key2values = {}
@@ -83,7 +84,7 @@ class FactIndex(object):
     def add(self, fact):
         if not isinstance(fact, self._predicate):
             raise TypeError("{} is not a {}".format(fact, self._predicate))
-        key = self._path(fact)
+        key = self._attrgetter(fact)
 
         # Index the fact by the key
         if key not in self._key2values: self._key2values[key] = set()
@@ -100,7 +101,7 @@ class FactIndex(object):
     def remove(self, fact, raise_on_missing=True):
         if not isinstance(fact, self._predicate):
             raise TypeError("{} is not a {}".format(fact, self._predicate))
-        key = self._path(fact)
+        key = self._attrgetter(fact)
 
         # Remove the value
         if key not in self._key2values:
@@ -166,7 +167,7 @@ class FactIndex(object):
     #--------------------------------------------------------------------------
     # Find elements based on boolean match to a key
     #--------------------------------------------------------------------------
-    def find(self, op, key):
+    def find(self, op, key,reverse=False):
         keys = []
         if op == operator.eq: keys = self._keys_eq(key)
         elif op == operator.ne: keys = self._keys_ne(key)
@@ -176,9 +177,12 @@ class FactIndex(object):
         elif op == operator.ge: keys = self._keys_ge(key)
         else: raise ValueError("unsupported operator {}".format(op))
 
-        for k in keys:
-            for fact in self._key2values[k]:
-                yield fact
+        if reverse:
+            for k in reversed(keys):
+                for fact in self._key2values[k]: yield fact
+        else:
+            for k in keys:
+                for fact in self._key2values[k]: yield fact
 
     #--------------------------------------------------------------------------
     # Iterate in descending key order
@@ -195,6 +199,25 @@ class FactIndex(object):
     def __iter__(self):
         for key in self._keylist:
             for f in self._key2values[key]: yield f
+
+    def __bool__(self):
+        for facts in self._key2values.values():
+            if facts: return True
+        return False
+
+    def __len__(self):
+        return sum([len(facts) for facts in self._key2values.values()])
+
+    def __eq__(self, other):
+        if not isinstance(other, self.__class__): return NotImplemented
+        if hashable_path(self._path) != hashable_path(other._path): return False
+        return self._key2values == other.key2values
+
+    def __ne__(self, other):
+        """Overloaded boolean operator."""
+        result = self.__eq__(other)
+        if result is NotImplemented: return NotImplemented
+        return not result
 
     def __str__(self):
         if not self: return "{}"
@@ -478,6 +501,7 @@ class FactBase(object):
     #--------------------------------------------------------------------------
     @property
     def factmaps(self):
+        self._check_init()  # Check for delayed init
         return self._factmaps
 
     #--------------------------------------------------------------------------
@@ -510,7 +534,7 @@ class FactBase(object):
     #--------------------------------------------------------------------------
     # Special FactBase member functions
     #--------------------------------------------------------------------------
-    def select1(self, *roots):
+    def select(self, *roots):
         """Create a Select query for a predicate type."""
         self._check_init()  # Check for delayed init
 
@@ -520,7 +544,7 @@ class FactBase(object):
 
         return SelectImpl(self, roots)
 
-    def select(self, *roots):
+    def select2(self, *roots):
         """Create a Select query for a predicate type."""
         self._check_init()  # Check for delayed init
 
@@ -528,8 +552,7 @@ class FactBase(object):
         ptypes = set([r.meta.predicate for r in validate_root_paths(roots)])
         for ptype in ptypes: self._factmaps.setdefault(ptype, FactMap(ptype))
 
-        return Select2Impl(self, QuerySpec(tuple(validate_root_paths(roots)),
-                                           None,None,None))
+        return Select2Impl(self, QuerySpec(roots=tuple(validate_root_paths(roots))))
 
     @property
     def predicates(self):
@@ -1217,10 +1240,10 @@ class QueryOutput(object):
     # factbase - the underlying factbase. Needed for the delete() function
     # query - the results generator function
     #--------------------------------------------------------------------------
-    def __init__(self, factbase, query_spec, query_plan, query):
-        self._factbase = factbase
-        self._qspec = query_spec
-        self._qplan = query_plan
+    def __init__(self, factmaps, qspec, qplan, query):
+        self._factmaps = factmaps
+        self._qspec = qspec
+        self._qplan = qplan
         self._query = query
         self._unique = False
         self._sigoverride = False
@@ -1418,7 +1441,7 @@ class QueryOutput(object):
         count = 0
         for pt,ds in deletesets.items():
             count += len(ds)
-            fm = self._factbase.factmaps[pt]
+            fm = self._factmaps[pt]
             for f in ds: fm.remove(f)
         return count
 
@@ -1566,9 +1589,8 @@ class SelectImpl(object):
             for hpth, fi in fm.path2factindex.items():
                 self._path2factindex[hpth] = fi
 
-        qspec = QuerySpec(self._roots,[],[],[])
-        self._queryplan = make_query_plan(basic_join_order_heuristic,
-                                          self._path2factindex.keys(), qspec)
+        qspec = QuerySpec(roots=self._roots,join=[],where=[],order_by=[])
+        self._queryplan = make_query_plan(self._path2factindex.keys(), qspec)
 
 
     #--------------------------------------------------------------------------
@@ -1588,9 +1610,8 @@ class SelectImpl(object):
         self._joins = process_join(expressions, self._roots)
 
         # Make a query plan in case there is no other inputs
-        qspec = QuerySpec(self._roots,self._joins,[],[])
-        self._queryplan = make_query_plan(basic_join_order_heuristic,
-                                          self._path2factindex.keys(), spec)
+        qspec = QuerySpec(roots=self._roots,join=self._joins,where=[],order_by=[])
+        self._queryplan = make_query_plan(self._path2factindex.keys(), spec)
         return self
 
     #--------------------------------------------------------------------------
@@ -1612,9 +1633,8 @@ class SelectImpl(object):
         # Make a query plan in case there is no other inputs
         joins = self._joins if self._joins else []
         where = self._where if self._where else []
-        qspec = QuerySpec(self._roots,joins,where,[])
-        self._queryplan = make_query_plan(basic_join_order_heuristic,
-                                          self._path2factindex.keys(), qspec)
+        qspec = QuerySpec(roots=self._roots,join=joins,where=where,order_by=[])
+        self._queryplan = make_query_plan(self._path2factindex.keys(), qspec)
         return self
 
     #--------------------------------------------------------------------------
@@ -1630,9 +1650,9 @@ class SelectImpl(object):
         # Make a query plan in case there is no other inputs
         joins = self._joins if self._joins else []
         where = self._where if self._where else []
-        qspec = QuerySpec(self._roots,joins,where,self._orderbys)
-        self._queryplan = make_query_plan(basic_join_order_heuristic,
-                                          self._path2factindex.keys(), qspec)
+        qspec = QuerySpec(roots=self._roots,join=joins,
+                          where=where,order_by=self._orderbys)
+        self._queryplan = make_query_plan(self._path2factindex.keys(), qspec)
         return self
 
     #--------------------------------------------------------------------------
@@ -1650,24 +1670,27 @@ class SelectImpl(object):
         gqplan = self._queryplan.ground(*args,**kwargs)
         query = make_query(gqplan, self._pred2factset, self._path2factindex)
 
-        qspec = QuerySpec(self._roots, self._joins, self._where, self._orderbys)
-        qo = QueryOutput(self._factbase,qspec,gqplan,query)
+        qspec = QuerySpec(roots=self._roots, join=self._joins,
+                          where=self._where, order_by=self._orderbys)
+        qo = QueryOutput(self._factbase.factmaps,qspec,gqplan,query)
         return list(qo.all())
 
     def get_unique(self, *args, **kwargs):
         gqplan = self._queryplan.ground(*args,**kwargs)
         query = make_query(gqplan, self._pred2factset, self._path2factindex)
 
-        qspec = QuerySpec(self._roots, self._joins, self._where, self._orderbys)
-        qo = QueryOutput(self._factbase,qspec,gqplan,query)
+        qspec = QuerySpec(roots=self._roots, join=self._joins,
+                          where= self._where,order_by= self._orderbys)
+        qo = QueryOutput(self._factbase.factmaps,qspec,gqplan,query)
         return qo.singleton()
 
     def count(self, *args, **kwargs):
         gqplan = self._queryplan.ground(*args,**kwargs)
         query = make_query(gqplan, self._pred2factset, self._path2factindex)
 
-        qspec = QuerySpec(self._roots, self._joins, self._where, self._orderbys)
-        qo = QueryOutput(self._factbase,qspec,gqplan,query)
+        qspec = QuerySpec(roots=self._roots, join=self._joins,
+                          where= self._where,order_by= self._orderbys)
+        qo = QueryOutput(self._factbase.factmaps,qspec,gqplan,query)
         return qo.count()
 
 #------------------------------------------------------------------------------
@@ -1708,9 +1731,8 @@ class DeleteImpl(Delete):
             for hpth, fi in fm.path2factindex.items():
                 self._path2factindex[hpth] = fi
 
-        qspec = QuerySpec(self._roots,[],[],[])
-        self._queryplan = make_query_plan(basic_join_order_heuristic,
-                                          self._path2factindex.keys(),qspec)
+        qspec = QuerySpec(roots=self._roots,join=[],where=[],order_by=[])
+        self._queryplan = make_query_plan(self._path2factindex.keys(),qspec)
 
     #--------------------------------------------------------------------------
     # Add a join expression
@@ -1726,9 +1748,9 @@ class DeleteImpl(Delete):
         self._joins = process_join(expressions, self._roots)
 
         # Make a query plan in case there is no other inputs
-        qspec = QuerySpec(self._roots,self._joins,[],[])
-        self._queryplan = make_query_plan(basic_join_order_heuristic,
-                                          self._path2factindex.keys(),qspec)
+        qspec = QuerySpec(roots=self._roots,join=self._joins,
+                          where=[],order_by=[])
+        self._queryplan = make_query_plan(self._path2factindex.keys(),qspec)
         return self
 
     #--------------------------------------------------------------------------
@@ -1747,9 +1769,8 @@ class DeleteImpl(Delete):
         # Make a query plan in case there is no other inputs
         joins = self._joins if self._joins else []
         where = self._where if self._where else []
-        qspec = QuerySpec(self._roots,joins,where,[])
-        self._queryplan = make_query_plan(basic_join_order_heuristic,
-                                          self._path2factindex.keys(),qspec)
+        qspec = QuerySpec(roots=self._roots,join=joins,where=where,order_by=[])
+        self._queryplan = make_query_plan(self._path2factindex.keys(),qspec)
         return self
 
     #--------------------------------------------------------------------------
@@ -1783,9 +1804,9 @@ class DeleteImpl(Delete):
 #------------------------------------------------------------------------------
 class Select2Impl(Select):
 
-    def __init__(self,factbase, queryspec,join_order_heuristic=None):
+    def __init__(self,factbase, qspec, join_order_heuristic=None):
         self._factbase = factbase
-        self._qspec = queryspec
+        self._qspec = qspec
         self._join_order_heuristic = join_order_heuristic
         self._qplan = None
 
@@ -1814,10 +1835,10 @@ class Select2Impl(Select):
     # Add a join expression
     #--------------------------------------------------------------------------
     def join(self, *expressions):
-        if self._qspec.where:
+        if self._qspec.getp("where"):
             raise TypeError(("The 'join' condition must come before the "
                              "'where' condition"))
-        if self._qspec.order_by:
+        if self._qspec.getp("order_by"):
             raise TypeError(("The 'join' condition must come before the "
                              "'order_by' condition"))
         if self._qspec.join:
@@ -1826,17 +1847,16 @@ class Select2Impl(Select):
             raise TypeError("Empty 'join' expression")
 
         join=process_join(expressions, self._qspec.roots)
-        return Select2Impl(self._factbase,
-                           modify_query_spec(self._qspec, join=join))
+        return Select2Impl(self._factbase, self._qspec.newp(join=join))
 
     #--------------------------------------------------------------------------
     # Add an order_by expression
     #--------------------------------------------------------------------------
     def where(self, *expressions):
-        if self._qspec.order_by:
+        if self._qspec.getp("order_by"):
             raise TypeError(("The 'where' condition must come before the "
                              "'order_by' condition"))
-        if self._qspec.where:
+        if self._qspec.getp("where"):
             raise TypeError("Cannot specify 'where' multiple times")
         if not expressions:
             raise TypeError("Empty 'where' expression")
@@ -1845,8 +1865,7 @@ class Select2Impl(Select):
         else:
             where = process_where(and_(*expressions),self._qspec.roots)
 
-        return Select2Impl(self._factbase,
-                           modify_query_spec(self._qspec, where=where))
+        return Select2Impl(self._factbase, self._qspec.newp(where=where))
 
     #--------------------------------------------------------------------------
     # Add an order_by expression
@@ -1857,18 +1876,14 @@ class Select2Impl(Select):
         if not expressions:
             raise TypeError("Empty 'order_by' expression")
         order_by = process_orderby(expressions,self._qspec.roots)
-
-        return Select2Impl(self._factbase,
-                           modify_query_spec(self._qspec, order_by=order_by))
+        return Select2Impl(self._factbase,self._qspec.newp(order_by=order_by))
 
     #--------------------------------------------------------------------------
     #
     #--------------------------------------------------------------------------
     def query_plan(self,*args,**kwargs):
         if not self._qplan:
-            joh = basic_join_order_heuristic
-            if self._join_order_heuristic: joh = self._join_order_heuristic
-            self._qplan = make_query_plan(joh, self._path2factindex.keys(),
+            self._qplan = make_query_plan(self._path2factindex.keys(),
                                           self._qspec)
 
         if not args and not kwargs: return self._qplan
@@ -1888,8 +1903,401 @@ class Select2Impl(Select):
         gqplan = qplan.ground(*args,**kwargs)
         query = make_query(gqplan, self._pred2factset, self._path2factindex)
 
-        return QueryOutput(self._factbase,self._qspec,gqplan,query)
+        return QueryOutput(self._factbase.factmaps,self._qspec,gqplan,query)
 
+
+
+#------------------------------------------------------------------------------
+# QueryExecutor - actually executes the query and does the appropriate action
+# (eg., displaying to the user or deleting from the factbase)
+# ------------------------------------------------------------------------------
+
+class QueryExecutor(object):
+
+    #--------------------------------------------------------------------------
+    # factmaps - dictionary mapping predicates to FactMap.
+    # roots - the roots
+    # qspec - dictionary containing the specification of the query and output
+    #--------------------------------------------------------------------------
+    def __init__(self, factmaps, qspec):
+        self._factmaps = factmaps
+        self._qspec = qspec.fill_defaults()
+
+
+    #--------------------------------------------------------------------------
+    # Support function
+    #--------------------------------------------------------------------------
+    @classmethod
+    def get_factmap_data(cls, factmaps, qspec):
+        roots = qspec.roots
+        ptypes = set([ path(r).meta.predicate for r in roots])
+        factsets = {}
+        factindexes = {}
+        for ptype in ptypes:
+            fm =factmaps[ptype]
+            factsets[ptype] = fm.factset
+            for hpth, fi in fm.path2factindex.items(): factindexes[hpth] = fi
+        return (factsets,factindexes)
+
+    # --------------------------------------------------------------------------
+    # Internal support function
+    # --------------------------------------------------------------------------
+    def _make_plan_and_query(self):
+        (factsets,factindexes) = \
+            QueryExecutor.get_factmap_data(self._factmaps, self._qspec)
+        qplan = make_query_plan(factindexes.keys(), self._qspec)
+        query = make_query(qplan,factsets,factindexes)
+        return (qplan,query)
+
+
+    # --------------------------------------------------------------------------
+    # Internal function generator for the query results
+    # --------------------------------------------------------------------------
+    def _all(self):
+        cache = set()
+        for input in self._query():
+            output = self._outputter(input)
+            if self._unwrap: output = output[0]
+            if self._unique:
+                if output not in cache:
+                    cache.add(output)
+                    yield output
+            else:
+                yield output
+
+    def _group_by_all(self):
+        def groupiter(group):
+            cache = set()
+            for input in group:
+                output = self._outputter(input)
+                if self._unwrap: output = output[0]
+                if self._unique:
+                    if output not in cache:
+                        cache.add(output)
+                        yield output
+                else:
+                    yield output
+
+        unwrapkey = self._qspec.group_by == 1 and not self._qspec.tuple
+
+        group_by_keyfunc = make_input_alignment_functor(
+            self._qplan.output_signature, self._group_by)
+        for k,g in itertools.groupby(self._query(), group_by_keyfunc):
+            if unwrapkey: yield k[0], groupiter(g)
+            else: yield k, groupiter(g)
+
+
+    #--------------------------------------------------------------------------
+    # Function to return a generator of the query output
+    # --------------------------------------------------------------------------
+
+    def all(self):
+        (qplan,self._query) = self._make_plan_and_query()
+
+        outsig = self._qspec.getp("select", qplan.output_signature)
+        self._outputter = make_outputter(qplan.output_signature, outsig)
+        self._unwrap = not self._qspec.tuple and len(outsig) == 1
+        self._unique = self._qspec.unique
+
+        if self._qspec.group_by > 0: return self._group_by_all()
+        else: return self._all()
+
+    # --------------------------------------------------------------------------
+    # Delete a selection of facts. Maintains a set for each predicate type
+    # and adds the selected fact to that set. The delete the facts in each set.
+    # --------------------------------------------------------------------------
+
+    def delete(self,*subroots):
+        if self._executed:
+            raise RuntimeError("The query instance has already been executed")
+        if self._group_by:
+            raise RuntimeError(("delete() cannot be used in "
+                                "conjunction with group_by()"))
+        self._executed = True
+
+        roots = set([hashable_path(p) for p in self._qspec.roots])
+        subroots = set([hashable_path(p) for p in validate_root_paths(subroots)])
+
+        if not subroots.issubset(roots):
+            raise ValueError(("The roots to delete '{}' must be a subset of "
+                              "the query roots '{}").format(subroots,roots))
+        if not subroots: subroots = roots
+
+        # Find the roots to delete and generate a set of actions that are
+        # executed to add to a delete set
+        deletesets = {}
+        for r in subroots:
+            pr = path(r)
+            deletesets[pr.meta.predicate] = set()
+
+        actions = []
+        for out in self._qplan.output_signature:
+            hout = hashable_path(out)
+            if hout in subroots:
+                ds = deletesets[out.meta.predicate]
+                actions.append(lambda x, ds=ds: ds.add(x))
+            else:
+                actions.append(lambda x : None)
+
+        # Running the query adds the facts to the appropriate delete set
+        for input in self._query():
+            for fact, action in zip(input,actions):
+                action(fact)
+
+        # Delete the facts
+        count = 0
+        for pt,ds in deletesets.items():
+            count += len(ds)
+            fm = self._factmaps[pt]
+            for f in ds: fm.remove(f)
+        return count
+
+#------------------------------------------------------------------------------
+# New Clorm Query API
+#
+# QueryImpl
+# - factmaps             - dictionary mapping predicate types to FactMap objects
+# - qspec                - a dictionary with query parameters
+#------------------------------------------------------------------------------
+class QueryImpl(object):
+
+    def __init__(self, factmaps, roots=None, qspec={}):
+        def root_path(p):
+            p = path(p)
+            if not p.is_root:
+                raise ValueError(("Non-root path '{}' in query roots "
+                                  "specification '{}'").format(p,roots))
+
+        self._factmaps = factmaps
+        if roots is None and qspec:
+            raise ValueError(("Internal error: cannot specify 'roots' and "
+                              "'qspec' together"))
+        if roots is not None:
+            roots = ( root_path(r) for r in roots )
+            self._qspec = { 'roots' : roots }
+        else:
+            self._qspec = dict(qspec)
+
+    #--------------------------------------------------------------------------
+    # Internal function to test whether a function has been called and add it
+    #--------------------------------------------------------------------------
+    def _setp(self, name, value):
+        if value is None:
+            raise ValueError("Cannot specify empty '{}'".format(name))
+        if name in self._qspec:
+            raise ValueError("Cannot specify '{}' multiple times".format(name))
+        nqspec = dict(self._qspec)
+        nqspec[name] = value
+        return nqspec
+
+    def _modp(self, name, value):
+        nqspec = dict(self._qspec)
+        nqspec[name] = value
+        return nqspec
+
+    def _getp(self, name,default=None):
+        return self.qspec.get(name,default)
+
+    def _check_join_first(self, name):
+        if len(self._getp['roots']) == 1: return True
+        if "join" not in nqspec:
+            raise ValueError("'join' must be specified before '{}'".format(name))
+        return True
+
+    #--------------------------------------------------------------------------
+    # Overide the default heuristic
+    #--------------------------------------------------------------------------
+    def heuristic(self, join_order):
+        nqspec = self._setp("heuristic", join_order)
+        return QueryImpl(self._factmaps, nqspec)
+
+    #--------------------------------------------------------------------------
+    # Add a join expression
+    #--------------------------------------------------------------------------
+    def join(self, *expressions):
+        nqspec = self._setp("join",
+                            process_join(expressions, self._getp["roots"]))
+        return QueryImpl(self._factmaps, nqspec)
+
+    #--------------------------------------------------------------------------
+    # Add an order_by expression
+    #--------------------------------------------------------------------------
+    def where(self, *expressions):
+        self._check_join_first("where")
+        roots = self._getp["roots"]
+        if not expressions:
+            self._setp("where", None)
+        if len(expressions) == 1:
+            where = process_where(expressions[0], roots)
+        else:
+            where = process_where(and_(*expressions), roots)
+
+        nqspec = self._setp("where", where)
+        return QueryImpl(self._factmaps, nqspec)
+
+    #--------------------------------------------------------------------------
+    # Add an order_by expression
+    #--------------------------------------------------------------------------
+    def order_by(self, *expressions):
+        self._check_join_first("order_by")
+        if not expressions:
+            nqspec = self._setp("order_by", None)
+        else:
+            nqspec = self._setp("order_by",
+                                process_orderby(expressions,self._getp["roots"]))
+        return QueryImpl(self._factmaps, nqspec)
+
+    #--------------------------------------------------------------------------
+    # Add a group_by expression
+    #--------------------------------------------------------------------------
+    def group_by(self, grouping=1):
+        self._check_join_first("group_by")
+        order_by = self._getp("order_by")
+        if order_by is None:
+            raise ValueError("'order_by' must be set before 'group_by'")
+        if grouping <= 0:
+            raise ValueError("The grouping must be a positive integer")
+        if grouping > len(order_by):
+            raise ValueError(("The grouping size {} cannot be larger than the "
+                              "order_by() specification "
+                              "'{}'").format(grouping,self._qspec.order_by))
+
+        nqspec = self._setp("group_by",
+                            [ob.path for ob in self._getp["order_by"][:grouping]])
+        return QueryImpl(self._factmaps, nqspec)
+
+    #--------------------------------------------------------------------------
+    # The tuple flag
+    #--------------------------------------------------------------------------
+    def tuple(self):
+        self._check_join_first("tuple")
+        nqspec = self._setp("tuple", True)
+        return QueryImpl(self._factmaps, nqspec)
+
+    #--------------------------------------------------------------------------
+    # The unique flag
+    #--------------------------------------------------------------------------
+    def unique(self):
+        self._check_join_first("unique")
+        nqspec = self._setp("unique", True)
+        return QueryImpl(self._factmaps, nqspec)
+
+    #--------------------------------------------------------------------------
+    # Ground
+    #--------------------------------------------------------------------------
+    def ground(self,*args,**kwargs):
+        self._check_join_first("ground")
+
+        nqspec = self._setp("ground", True)
+        where = self._getp("where")
+        if not where:
+            raise ValueError(("Cannot 'ground' a query when no 'where' "
+                              "condition has been set"))
+        nqspec = self._modp("where", where.ground(*args,**kwargs))
+        return QueryImpl(self._factmaps, self._roots, nqspec)
+
+    #--------------------------------------------------------------------------
+    # Support function
+    #--------------------------------------------------------------------------
+    def _get_facts_data(self):
+        ptypes = set([ r.meta.predicate for r in self._roots])
+        factsets = {}
+        indexes = {}
+        for ptype in ptypes:
+            fm =self_.factmaps[ptype]
+            factsets[ptype] = fm.factset
+            for hpth, fi in fm.path2factindex.items(): indexes[hpth] = fi
+        return (factsets,indexes)
+
+    def _get_query_plan_spec(self):
+        join = self._getp("join",[])
+        where = self._getp("where",[])
+        order_by = self._getp("order_by",[])
+        return QuerySpec(roots=self._roots,join=join,where=where,order_by=order_by)
+
+    def _get_query_output(self):
+        qpspec = self._get_query_plan_spec()
+
+    #--------------------------------------------------------------------------
+    # End points
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    # For the user to see what the query plan looks like
+    #--------------------------------------------------------------------------
+    def query_plan():
+        self._check_join_first("query_plan")
+        return QueryExecutor.make_query_plan(self._factmaps, self._qspec)
+
+    #--------------------------------------------------------------------------
+    # Select to display all the output of the query
+    # --------------------------------------------------------------------------
+    def select(self, *outsig):
+        self._check_join_first("select")
+
+        if outsig:
+            qspec = self._setp("outsig", outsig)
+        else:
+            qspec = self._qspec
+
+        qe = QueryExecutor(self._factmaps, qspec)
+        return qe.all()
+
+    #--------------------------------------------------------------------------
+    # Show the single element and throw an exception if there is more than one
+    # --------------------------------------------------------------------------
+    def singleton(self, *outsig):
+        self._check_join_first("singleton")
+
+        if outsig:
+            qspec = self._setp("outsig", outsig)
+        else:
+            qspec = self._qspec
+
+        qe = QueryExecutor(self._factmaps, qspec)
+
+        found = None
+        for out in qe.all():
+            if found: raise ValueError("Query returned more than a single element")
+            found = out
+        return found
+
+    #--------------------------------------------------------------------------
+    # Return the count of elements
+    # --------------------------------------------------------------------------
+    def count(self):
+        self._check_join_first("count")
+        qe = QueryExecutor(self._factmaps, self._qspec)
+        return len(list(qe.all()))
+
+
+    #--------------------------------------------------------------------------
+    # Show the single element and throw an exception if there is more than one
+    # --------------------------------------------------------------------------
+    def first(self, *outsig):
+        self._check_join_first("first")
+
+        if outsig:
+            qspec = self._setp("outsig", tuple(outsig))
+        else:
+            qspec = self._qspec
+
+        qe = QueryExecutor(self._factmaps, qspec)
+        return next(iter(qe.all()))
+
+    #--------------------------------------------------------------------------
+    # Delete a selection of fact
+    #--------------------------------------------------------------------------
+    def delete(self,*subroots):
+        self._check_join_first("delete")
+
+        if subroots:
+            qspec = self._setp("", outsig)
+        else:
+            qspec = self._qspec
+
+        qe = QueryExecutor(self._factmaps, qspec)
+        return qe.delete()
 
 #------------------------------------------------------------------------------
 # main

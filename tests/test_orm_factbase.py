@@ -27,7 +27,7 @@ from clorm.orm import FactBase, desc, asc, not_, and_, or_, \
 from clorm.orm.factbase import FactIndex, FactMap, _FactSet, \
     make_first_prejoin_query, make_prejoin_query_source, make_first_join_query, \
     make_chained_join_query, make_query, \
-    InQuerySorter, QueryOutput
+    InQuerySorter, QueryOutput, QueryExecutor
 
 from clorm.orm.queryplan import PositionalPlaceholder, NamedPlaceholder, QuerySpec
 
@@ -45,6 +45,7 @@ __all__ = [
     'QueryOutputTestCase',
     'SelectNoJoinTestCase',
     'SelectJoinTestCase',
+    'QueryExecutorTestCase',
     ]
 
 #------------------------------------------------------------------------------
@@ -116,7 +117,8 @@ randlist.sort(key=attrgetter('anum'))
     def test_create(self):
         Afact = self.Afact
         fi1 = FactIndex(Afact.num1)
-        self.assertTrue(fi1)
+        self.assertTrue(type(fi1), FactIndex)
+        self.assertFalse(fi1)
 
         # Should only accept fields
         with self.assertRaises(TypeError) as ctx:
@@ -856,33 +858,35 @@ class QueryTestCase(unittest.TestCase):
         pj = process_join
         pob = process_orderby
         roots = [F,G]
-
+        fjoh = fixed_join_order_heuristic
+        bjoh = basic_join_order_heuristic
+    
         # Simplest case. Nothing specified so pass through the factset
-        qspec = QuerySpec(roots,[],[],[])
-        qp = make_query_plan(fixed_join_order_heuristic, indexes.keys(), qspec)
+        qspec = QuerySpec(roots=roots,join=[],where=[],order_by=[],joh=fjoh)
+        qp = make_query_plan(indexes.keys(), qspec)
         out = make_prejoin_query_source(qp[1], factsets, indexes)()
         self.assertTrue(out is factsets[G])
 
         # A prejoin key but nothing else
         where = pw(G.astr == "foo",roots)
-        qspec = QuerySpec(roots,[],where,[])
-        qp = make_query_plan(fixed_join_order_heuristic, indexes.keys(), qspec)
+        qspec = QuerySpec(roots=roots,join=[],where=where,order_by=[],joh=fjoh)
+        qp = make_query_plan(indexes.keys(), qspec)
         out = make_prejoin_query_source(qp[1], factsets, indexes)()
         self.assertTrue(isinstance(out,list))
         self.assertEqual(set(out), set([G(1,"foo"),G(5,"foo")]))
 
         # A prejoin clause but nothing else
         where = pw(G.anum == 1,roots)
-        qspec = QuerySpec(roots,[],where,[])
-        qp = make_query_plan(fixed_join_order_heuristic, indexes.keys(), qspec)
+        qspec = QuerySpec(roots=roots,join=[],where=where,order_by=[],joh=fjoh)
+        qp = make_query_plan(indexes.keys(), qspec)
         out = make_prejoin_query_source(qp[1], factsets, indexes)()
         self.assertTrue(isinstance(out,list))
         self.assertEqual(set(out), set([G(1,"a"),G(1,"foo")]))
 
         # Both a prejoin key and a prejoin clause
         where = pw((G.anum == 1) & (G.astr == "foo"),roots)
-        qspec = QuerySpec(roots,[],where,[])
-        qp = make_query_plan(fixed_join_order_heuristic, indexes.keys(), qspec)
+        qspec = QuerySpec(roots=roots,join=[],where=where,order_by=[],joh=fjoh)
+        qp = make_query_plan(indexes.keys(), qspec)
         out = make_prejoin_query_source(qp[1], factsets, indexes)()
         self.assertTrue(isinstance(out,list))
         self.assertEqual(set(out), set([G(1,"foo")]))
@@ -890,8 +894,8 @@ class QueryTestCase(unittest.TestCase):
         # A prejoin key with no join and a single ascending order matching an index
         where = pw(G.astr == "foo",roots)
         orderby = pob([F.astr,asc(G.astr)],roots)
-        qspec = QuerySpec(roots,[],where,orderby)
-        qp = make_query_plan(fixed_join_order_heuristic, indexes.keys(), qspec)
+        qspec = QuerySpec(roots=roots,join=[],where=where,order_by=orderby,joh=fjoh)
+        qp = make_query_plan(indexes.keys(), qspec)
         out = make_prejoin_query_source(qp[1], factsets, indexes)()
         self.assertTrue(isinstance(out,list))
         self.assertEqual(out[0].astr, "foo")
@@ -901,8 +905,8 @@ class QueryTestCase(unittest.TestCase):
         # A prejoin key with no join and a single desc order matching an index
         where = pw(G.astr == "foo",roots)
         orderby = pob([F.astr,desc(G.astr)],roots)
-        qspec = QuerySpec(roots,[],where,orderby)
-        qp = make_query_plan(fixed_join_order_heuristic, indexes.keys(), qspec)
+        qspec = QuerySpec(roots=roots,join=[],where=where,order_by=orderby,joh=fjoh)
+        qp = make_query_plan(indexes.keys(), qspec)
         out = make_prejoin_query_source(qp[1], factsets, indexes)()
         self.assertTrue(isinstance(out,list))
         self.assertEqual(out[0].astr, "foo")
@@ -912,8 +916,8 @@ class QueryTestCase(unittest.TestCase):
         # A prejoin key with no join and a complex order
         where = pw(G.astr == "foo",roots)
         orderby = pob([F.astr,desc(G.astr),G.anum],roots)
-        qspec = QuerySpec(roots,[],where,orderby)
-        qp = make_query_plan(fixed_join_order_heuristic, indexes.keys(), qspec)
+        qspec = QuerySpec(roots=roots,join=[],where=where,order_by=orderby,joh=fjoh)
+        qp = make_query_plan(indexes.keys(), qspec)
         out0 = make_prejoin_query_source(qp[0], factsets, indexes)()
         out1 = make_prejoin_query_source(qp[1], factsets, indexes)()
         self.assertEqual(out0[0].astr, "a")
@@ -925,23 +929,23 @@ class QueryTestCase(unittest.TestCase):
         # A prejoin key with no join and non index matching sort
         where = pw(G.astr == "foo",roots)
         orderby = pob([F.astr,desc(G.anum)],roots)
-        qspec = QuerySpec(roots,[],where,orderby)
-        qp = make_query_plan(fixed_join_order_heuristic, indexes.keys(), qspec)
+        qspec = QuerySpec(roots=roots,join=[],where=where,order_by=orderby,joh=fjoh)
+        qp = make_query_plan(indexes.keys(), qspec)
         out = make_prejoin_query_source(qp[1], factsets, indexes)()
         self.assertTrue(isinstance(out,list))
         self.assertEqual(out, [G(5,"foo"),G(1,"foo")])
 
         # A join key that matches an existing index but nothing else
         join = pj([F.astr == G.astr],roots)
-        qspec = QuerySpec(roots,join,[],[])
-        qp = make_query_plan(fixed_join_order_heuristic, indexes.keys(), qspec)
+        qspec = QuerySpec(roots=roots,join=join,where=[],order_by=[],joh=fjoh)
+        qp = make_query_plan(indexes.keys(), qspec)
         out = make_prejoin_query_source(qp[1], factsets, indexes)()
         self.assertTrue(out is indexes[hashable_path(G.astr)])
 
         # A join key that doesn't match an existing index - and nothing else
         join = pj([F.anum == G.anum],roots)
-        qspec = QuerySpec(roots,join,[],[])
-        qp = make_query_plan(fixed_join_order_heuristic, indexes.keys(), qspec)
+        qspec = QuerySpec(roots=roots,join=join,where=[],order_by=[],joh=fjoh)
+        qp = make_query_plan(indexes.keys(), qspec)
         out = make_prejoin_query_source(qp[1], factsets, indexes)()
         self.assertTrue(isinstance(out,FactIndex))
         self.assertEqual(hashable_path(out.path), hashable_path(G.anum))
@@ -950,8 +954,8 @@ class QueryTestCase(unittest.TestCase):
         # A join key and a prejoin key
         join = pj([F.astr == G.astr],roots)
         where = pw(G.astr == "foo",roots)
-        qspec = QuerySpec(roots,join,where,[])
-        qp = make_query_plan(fixed_join_order_heuristic, indexes.keys(), qspec)
+        qspec = QuerySpec(roots=roots,join=join,where=where,order_by=[],joh=fjoh)
+        qp = make_query_plan(indexes.keys(), qspec)
         out = make_prejoin_query_source(qp[1], factsets, indexes)()
         self.assertTrue(isinstance(out,FactIndex))
         self.assertEqual(hashable_path(out.path), hashable_path(G.astr))
@@ -960,8 +964,8 @@ class QueryTestCase(unittest.TestCase):
         # A join key and a prejoin clause
         join = pj([F.astr == G.astr],roots)
         where = pw(G.anum == 1,roots)
-        qspec = QuerySpec(roots,join,where,[])
-        qp = make_query_plan(fixed_join_order_heuristic, indexes.keys(), qspec)
+        qspec = QuerySpec(roots=roots,join=join,where=where,order_by=[],joh=fjoh)
+        qp = make_query_plan(indexes.keys(), qspec)
         out = make_prejoin_query_source(qp[1], factsets, indexes)()
         self.assertTrue(isinstance(out,FactIndex))
         self.assertEqual(hashable_path(out.path), hashable_path(G.astr))
@@ -979,6 +983,8 @@ class QueryTestCase(unittest.TestCase):
         pw = process_where
         pj = process_join
         pob = process_orderby
+        fjoh = fixed_join_order_heuristic
+        bjoh = basic_join_order_heuristic
         roots = [F,G]
 
 #        orderby = pob([F.astr,desc(G.anum)],roots)
@@ -986,8 +992,8 @@ class QueryTestCase(unittest.TestCase):
         # Simplest case. No join or no G-where clauses.
         # (Note: the where clause for F is to simplify to only one join).
         where = pw((F.anum == 1) & (F.astr == "foo"),roots)
-        qspec = QuerySpec(roots,[],where,[])
-        qp = make_query_plan(fixed_join_order_heuristic, indexes.keys(), qspec)
+        qspec = QuerySpec(roots=roots,join=[],where=where,order_by=[],joh=fjoh)
+        qp = make_query_plan(indexes.keys(), qspec)
         inquery=make_first_join_query(qp[0], factsets, indexes)
         query = make_chained_join_query(qp[1], inquery, factsets, indexes)()
         self.assertEqual(set(query),
@@ -998,8 +1004,8 @@ class QueryTestCase(unittest.TestCase):
 
         # No join but a prejoin where clause
         where = pw(((F.anum == 1) & (F.astr == "foo")) & (G.anum == 1), roots)
-        qspec = QuerySpec(roots,[],where,[])
-        qp = make_query_plan(fixed_join_order_heuristic, indexes.keys(), qspec)
+        qspec = QuerySpec(roots=roots,join=[],where=where,order_by=[],joh=fjoh)
+        qp = make_query_plan(indexes.keys(), qspec)
         inquery=make_first_join_query(qp[0], factsets, indexes)
         query = make_chained_join_query(qp[1], inquery, factsets, indexes)()
         self.assertEqual(set(query),
@@ -1009,8 +1015,8 @@ class QueryTestCase(unittest.TestCase):
         # No join but a post-join where clause - by adding useless extra F
         where = pw(((F.anum == 1) & (F.astr == "foo")) &
                    ((G.anum == 1) | (F.anum == 5)), roots)
-        qspec = QuerySpec(roots,[],where,[])
-        qp = make_query_plan(fixed_join_order_heuristic, indexes.keys(), qspec)
+        qspec = QuerySpec(roots=roots,join=[],where=where,order_by=[],joh=fjoh)
+        qp = make_query_plan(indexes.keys(), qspec)
         inquery=make_first_join_query(qp[0], factsets, indexes)
         query = make_chained_join_query(qp[1], inquery, factsets, indexes)()
         self.assertEqual(set(query),
@@ -1020,8 +1026,8 @@ class QueryTestCase(unittest.TestCase):
         # A join key but nothing else
         join = pj([F.astr == G.astr],roots)
         where = pw((F.anum == 1) & (F.astr == "foo"),roots)
-        qspec = QuerySpec(roots,join,where,[])
-        qp = make_query_plan(fixed_join_order_heuristic, indexes.keys(), qspec)
+        qspec = QuerySpec(roots=roots,join=join,where=where,order_by=[],joh=fjoh)
+        qp = make_query_plan(indexes.keys(), qspec)
         inquery=make_first_join_query(qp[0], factsets, indexes)
         query = make_chained_join_query(qp[1], inquery, factsets, indexes)()
         self.assertEqual(set(query),
@@ -1032,8 +1038,8 @@ class QueryTestCase(unittest.TestCase):
         join = pj([F.astr == G.astr],roots)
         where = pw((F.anum == 1) & (F.astr == "foo"),roots)
         orderby = pob([F.astr,desc(G.anum)],roots)
-        qspec = QuerySpec(roots,join,where,orderby)
-        qp = make_query_plan(fixed_join_order_heuristic, indexes.keys(), qspec)
+        qspec = QuerySpec(roots=roots,join=join,where=where,order_by=orderby,joh=fjoh)
+        qp = make_query_plan(indexes.keys(), qspec)
         inquery=make_first_join_query(qp[0], factsets, indexes)
         query = make_chained_join_query(qp[1], inquery, factsets, indexes)()
         self.assertEqual(set(query),
@@ -1045,8 +1051,8 @@ class QueryTestCase(unittest.TestCase):
         join = pj([F.astr == G.astr],roots)
         where = pw((F.anum == 1) & (F.astr == "foo"),roots)
         orderby = pob([desc(G.anum)],roots)
-        qspec = QuerySpec(roots,join,where,orderby)
-        qp = make_query_plan(fixed_join_order_heuristic, indexes.keys(), qspec)
+        qspec = QuerySpec(roots=roots,join=join,where=where,order_by=orderby,joh=fjoh)
+        qp = make_query_plan(indexes.keys(), qspec)
         inquery=make_first_join_query(qp[0], factsets, indexes)
         query = make_chained_join_query(qp[1], inquery, factsets, indexes)()
         self.assertEqual(set(query),
@@ -1057,8 +1063,8 @@ class QueryTestCase(unittest.TestCase):
         join = pj([F.astr == G.astr],roots)
         where = pw((F.anum == 1) & (F.astr == "foo"),roots)
         orderby = pob([desc(G.anum),F.anum,G.astr],roots)
-        qspec = QuerySpec(roots,join,where,orderby)
-        qp = make_query_plan(fixed_join_order_heuristic, indexes.keys(), qspec)
+        qspec = QuerySpec(roots=roots,join=join,where=where,order_by=orderby,joh=fjoh)
+        qp = make_query_plan(indexes.keys(), qspec)
 
         inquery=make_first_join_query(qp[0], factsets, indexes)
         query = make_chained_join_query(qp[1], inquery, factsets, indexes)()
@@ -1076,19 +1082,20 @@ class QueryTestCase(unittest.TestCase):
         G = self.G
         pw = process_where
         pob = process_orderby
-
+        fjoh = fixed_join_order_heuristic
+        bjoh = basic_join_order_heuristic
         indexes = self.indexes
         factsets = self.factsets
 
         which1 = pw((G.astr == "foo"),[G])
-        qspec1 = QuerySpec([G],[],which1,[])
-        qp1 = make_query_plan(basic_join_order_heuristic,[G.astr],qspec1)
+        qspec1 = QuerySpec(roots=[G],join=[],where=which1,order_by=[],joh=bjoh)
+        qp1 = make_query_plan([G.astr],qspec1)
         q1 = make_first_prejoin_query(qp1[0],factsets,indexes)
         self.assertEqual(set([f for (f,) in q1()]),set([G(1,"foo"),G(5,"foo")]))
 
         which2 = pw((G.astr == "foo") | (G.astr == "a") ,[G])
-        qspec2 = QuerySpec([G],[],which2,[])
-        qp2 = make_query_plan(basic_join_order_heuristic,[G.astr],qspec2)
+        qspec2 = QuerySpec(roots=[G],join=[],where=which2,order_by=[],joh=bjoh)
+        qp2 = make_query_plan([G.astr],qspec2)
         q2 = make_first_prejoin_query(qp2[0],factsets,indexes)
         self.assertEqual(set([f for (f,) in q2()]),
                          set([G(1,"foo"),G(5,"foo"),G(1,"a"),G(5,"a")]))
@@ -1103,22 +1110,24 @@ class QueryTestCase(unittest.TestCase):
         G = self.G
         pw = process_where
         pob = process_orderby
+        bjoh = basic_join_order_heuristic
+        fjoh = fixed_join_order_heuristic
 
         indexes = self.indexes
         factsets = self.factsets
 
         which1 = pw((G.anum > 4) & (G.astr == "foo"),[G])
         orderbys = pob([G.anum,desc(G.astr)],[G])
-        qspec = QuerySpec([G],[],which1,orderbys)
-        qp1 = make_query_plan(basic_join_order_heuristic,[G.astr],qspec)
+        qspec = QuerySpec(roots=[G],join=[],where=which1,order_by=orderbys,joh=bjoh)
+        qp1 = make_query_plan([G.astr],qspec)
 
         query1 = make_first_join_query(qp1[0], factsets, indexes)
         self.assertEqual(set(strip(query1())), set([G(5,"foo")]))
 
 
         which2 = pw((G.anum > 4) | (G.astr == "foo"),[G])
-        qspec = QuerySpec([G],[],which2,orderbys)
-        qp2 = make_query_plan(basic_join_order_heuristic,[G.astr], qspec)
+        qspec = QuerySpec(roots=[G],join=[],where=which2,order_by=orderbys,joh=bjoh)
+        qp2 = make_query_plan([G.astr], qspec)
 
         query2 = make_first_join_query(qp2[0], factsets, indexes)
         self.assertEqual(list(strip(query2())),
@@ -1136,13 +1145,15 @@ class QueryTestCase(unittest.TestCase):
         pw = process_where
         pj = process_join
         pob = process_orderby
+        bjoh = basic_join_order_heuristic
+        fjoh = fixed_join_order_heuristic
         roots = [F,G]
 
         joins1 = pj([F.anum == G.anum],roots)
         which1 = pw((G.anum > 4) | (F.astr == "foo"),roots)
         orderbys = pob([desc(G.anum),F.astr,desc(G.astr)],roots)
-        qspec = QuerySpec(roots,joins1,which1,orderbys)
-        qp1 = make_query_plan(basic_join_order_heuristic, indexes.keys(), qspec)
+        qspec = QuerySpec(roots=roots,join=joins1,where=which1,order_by=orderbys,joh=bjoh)
+        qp1 = make_query_plan(indexes.keys(), qspec)
         q1 = make_query(qp1, factsets, indexes)
         result = list(q1())
         expected = [
@@ -1159,8 +1170,8 @@ class QueryTestCase(unittest.TestCase):
         joins2 = pj([F.anum == G.anum],roots)
         which2 = pw((G.anum > 4) | (F.astr == ph1_),roots)
         orderbys2 = pob([desc(G.anum),F.astr,desc(G.astr)],roots)
-        qspec = QuerySpec(roots,joins2,which2,orderbys2)
-        qp2 = make_query_plan(basic_join_order_heuristic, indexes.keys(),qspec)
+        qspec = QuerySpec(roots=roots,join=joins2,where=which2,order_by=orderbys2,joh=bjoh)
+        qp2 = make_query_plan(indexes.keys(),qspec)
         with self.assertRaises(ValueError) as ctx:
             q1 = make_query(qp2, factsets, indexes)
         check_errmsg("Cannot execute an ungrounded query",ctx)
@@ -1202,17 +1213,19 @@ class QueryOutputTestCase(unittest.TestCase):
         pw = process_where
         pj = process_join
         pob = process_orderby
+        fjoh = fixed_join_order_heuristic
+        bjoh = basic_join_order_heuristic
         roots = [F,G]
 
         joins1 = pj([F.anum == G.anum],roots)
         where1 = pw((G.anum > 4) | (F.astr == "foo"),roots)
         orderbys = pob([F.anum,G.anum],roots)
-        qspec = QuerySpec(roots, joins1, where1, orderbys)
-        qp1 = make_query_plan(basic_join_order_heuristic, indexes.keys(),qspec)
+        qspec = QuerySpec(roots=roots, join=joins1,where= where1,order_by= orderbys,joh=bjoh)
+        qp1 = make_query_plan(indexes.keys(),qspec)
         q1 = make_query(qp1, factsets, indexes)
 
         # Test output with no options
-        qo = QueryOutput(factbase, qspec, qp1, q1)
+        qo = QueryOutput(factbase.factmaps, qspec, qp1, q1)
         result = list(qo)
         expected = set([(F(1,"foo"),G(1,"a")), (F(1,"foo"),G(1,"foo")),
                         (F(5,"a"),G(5,"a")), (F(5,"a"),G(5,"foo")),
@@ -1220,7 +1233,7 @@ class QueryOutputTestCase(unittest.TestCase):
         self.assertEqual(expected, set(result))
 
         # Test output with no options - using the explicit all() method
-        qo = QueryOutput(factbase, qspec, qp1, q1)
+        qo = QueryOutput(factbase.factmaps, qspec, qp1, q1)
         result = list(qo.all())
         expected = set([(F(1,"foo"),G(1,"a")), (F(1,"foo"),G(1,"foo")),
                         (F(5,"a"),G(5,"a")), (F(5,"a"),G(5,"foo")),
@@ -1228,11 +1241,11 @@ class QueryOutputTestCase(unittest.TestCase):
         self.assertEqual(expected, set(result))
 
         # Test output with no options - using the count() method
-        qo = QueryOutput(factbase, qspec, qp1, q1)
+        qo = QueryOutput(factbase.factmaps, qspec, qp1, q1)
         self.assertEqual(qo.count(),6)
 
         # Test output with a simple swapped signature
-        qo = QueryOutput(factbase, qspec, qp1, q1)
+        qo = QueryOutput(factbase.factmaps, qspec, qp1, q1)
         result = list(qo.output(G,F))
         expected = set([(G(1,"a"),F(1,"foo")), (G(1,"foo"),F(1,"foo")),
                         (G(5,"a"),F(5,"a")), (G(5,"foo"),F(5,"a")),
@@ -1240,33 +1253,33 @@ class QueryOutputTestCase(unittest.TestCase):
         self.assertEqual(expected, set(result))
 
         # Test output with filtered signature
-        qo = QueryOutput(factbase, qspec, qp1, q1)
+        qo = QueryOutput(factbase.factmaps, qspec, qp1, q1)
         result = list(qo.output(G.anum))
         expected = set([1,5])
         self.assertEqual(expected, set(result))
 
         # Test output with an complex implicit function signature
-        qo = QueryOutput(factbase, qspec, qp1, q1)
+        qo = QueryOutput(factbase.factmaps, qspec, qp1, q1)
         result = list(qo.output(G.anum,
                                 lambda f,g: "X{}".format(f.astr)))
         expected = set([(1,"Xfoo"),(5,"Xa"),(5,"Xfoo")])
         self.assertEqual(expected, set(result))
 
         # Test output with an complex explicit function signature
-        qo = QueryOutput(factbase, qspec, qp1, q1)
+        qo = QueryOutput(factbase.factmaps, qspec, qp1, q1)
         result = list(qo.output(G.anum,
                                 func_([F.astr], lambda v: "X{}".format(v))))
         expected = set([(1,"Xfoo"),(5,"Xa"),(5,"Xfoo")])
         self.assertEqual(expected, set(result))
 
         # Test output with filtered signature and uniqueness
-        qo = QueryOutput(factbase, qspec, qp1, q1)
+        qo = QueryOutput(factbase.factmaps, qspec, qp1, q1)
         result = list(qo.output(G.anum).unique())
         expected = set([1,5])
         self.assertTrue(result == [1,5] or result == [5,1])
 
         # Test output with filtered signature and forced tuple
-        qo = QueryOutput(factbase, qspec, qp1, q1)
+        qo = QueryOutput(factbase.factmaps, qspec, qp1, q1)
         result = list(qo.output(G.anum).tuple())
         expected = set([(1,),(5,)])
         self.assertEqual(expected, set(result))
@@ -1277,6 +1290,9 @@ class QueryOutputTestCase(unittest.TestCase):
     def test_api_QueryOutput_singleton_count_first(self):
         F = self.F
         G = self.G
+        fjoh = fixed_join_order_heuristic
+        bjoh = basic_join_order_heuristic
+
         factbase=self.factbase
 
         def qsetup(where):
@@ -1290,10 +1306,10 @@ class QueryOutputTestCase(unittest.TestCase):
             join = pj([F.anum == G.anum],roots)
             where = pw(where,roots)
             orderby = pob([F.astr],roots)
-            qspec = QuerySpec(roots, join, where, orderby)
-            qplan = make_query_plan(basic_join_order_heuristic, indexes.keys(),qspec)
+            qspec = QuerySpec(roots=roots, join=join, where=where, order_by=orderby,joh=bjoh)
+            qplan = make_query_plan(indexes.keys(),qspec)
             query = make_query(qplan, factsets, indexes)
-            return QueryOutput(factbase, qspec, qplan, query)
+            return QueryOutput(factbase.factmaps, qspec, qplan, query)
 
         # Test getting the first element
         qo = qsetup((G.anum == 5) & (G.astr == "foo"))
@@ -1331,6 +1347,8 @@ class QueryOutputTestCase(unittest.TestCase):
     def test_api_QueryOutput_delete(self):
         F = self.F
         G = self.G
+        fjoh = fixed_join_order_heuristic
+        bjoh = basic_join_order_heuristic
 
         def delsetup():
             factbase=FactBase(self.factbase)
@@ -1344,10 +1362,11 @@ class QueryOutputTestCase(unittest.TestCase):
             join = pj([F.anum == G.anum],roots)
             where = pw(G.anum > 4,roots)
             orderby = pob([F.anum,G.anum],roots)
-            qspec = QuerySpec(roots, join, where, orderby)
-            qplan = make_query_plan(basic_join_order_heuristic, indexes.keys(),qspec)
+            qspec = QuerySpec(roots=roots, join=join,where=where,
+                              order_by=orderby,joh=bjoh)
+            qplan = make_query_plan(indexes.keys(),qspec)
             query = make_query(qplan, factsets, indexes)
-            return (factbase,QueryOutput(factbase, qspec, qplan, query))
+            return (factbase,QueryOutput(factbase.factmaps, qspec, qplan, query))
 
         # Test deleting all selected elements
         fb,qo = delsetup()
@@ -1405,6 +1424,9 @@ class QueryOutputTestCase(unittest.TestCase):
     def test_api_QueryOutput_group_by(self):
         F = self.F
         G = self.G
+        fjoh = fixed_join_order_heuristic
+        bjoh = basic_join_order_heuristic
+
         factbase=self.factbase
 
         def qsetup(ordering, where):
@@ -1416,12 +1438,12 @@ class QueryOutputTestCase(unittest.TestCase):
             roots = [F,G]
 
             join = pj([F.anum == G.anum],roots)
-            where = pw(where,roots) if where else None
-            orderby = pob(ordering,roots) if ordering else None
-            qspec = QuerySpec(roots, join, where, orderby)
-            qplan = make_query_plan(basic_join_order_heuristic,indexes.keys(),qspec)
+            where = pw(where,roots) if where else []
+            orderby = pob(ordering,roots) if ordering else []
+            qspec = QuerySpec(roots=roots, join=join,where=where,order_by=orderby,joh=bjoh)
+            qplan = make_query_plan(indexes.keys(),qspec)
             query = make_query(qplan, factsets, indexes)
-            return QueryOutput(factbase, qspec, qplan, query)
+            return QueryOutput(factbase.factmaps, qspec, qplan, query)
 
         # Test some bad group_by setups
         qo = qsetup([], (G.anum == 5) & (G.astr == "foo"))
@@ -1502,25 +1524,25 @@ class SelectNoJoinTestCase(unittest.TestCase):
         fb1 = FactBase([f1,f3,f4,f42,f10], [Afact1.num1,Afact1.str1])
         fb2 = FactBase([f1,f3,f4,f42,f10])
 
-        s1_all = fb1.select(Afact1)
-        s1_num1_eq_4 = fb1.select(Afact1).where(Afact1.num1 == 4)
-        s1_num1_ne_4 = fb1.select(Afact1).where(Afact1.num1 != 4)
-        s1_num1_lt_4 = fb1.select(Afact1).where(Afact1.num1 < 4)
-        s1_num1_le_4 = fb1.select(Afact1).where(Afact1.num1 <= 4)
-        s1_num1_gt_4 = fb1.select(Afact1).where(Afact1.num1 > 4)
-        s1_num1_ge_4 = fb1.select(Afact1).where(Afact1.num1 >= 4)
-        s1_str1_eq_4 = fb1.select(Afact1).where(Afact1.str1 == "4")
-        s1_num2_eq_4 = fb1.select(Afact1).where(Afact1.num2 == 4)
+        s1_all = fb1.select2(Afact1)
+        s1_num1_eq_4 = fb1.select2(Afact1).where(Afact1.num1 == 4)
+        s1_num1_ne_4 = fb1.select2(Afact1).where(Afact1.num1 != 4)
+        s1_num1_lt_4 = fb1.select2(Afact1).where(Afact1.num1 < 4)
+        s1_num1_le_4 = fb1.select2(Afact1).where(Afact1.num1 <= 4)
+        s1_num1_gt_4 = fb1.select2(Afact1).where(Afact1.num1 > 4)
+        s1_num1_ge_4 = fb1.select2(Afact1).where(Afact1.num1 >= 4)
+        s1_str1_eq_4 = fb1.select2(Afact1).where(Afact1.str1 == "4")
+        s1_num2_eq_4 = fb1.select2(Afact1).where(Afact1.num2 == 4)
 
-        s2_all = fb1.select(Afact1)
-        s2_num1_eq_4 = fb2.select(Afact1).where(Afact1.num1 == 4)
-        s2_num1_ne_4 = fb2.select(Afact1).where(Afact1.num1 != 4)
-        s2_num1_lt_4 = fb2.select(Afact1).where(Afact1.num1 < 4)
-        s2_num1_le_4 = fb2.select(Afact1).where(Afact1.num1 <= 4)
-        s2_num1_gt_4 = fb2.select(Afact1).where(Afact1.num1 > 4)
-        s2_num1_ge_4 = fb2.select(Afact1).where(Afact1.num1 >= 4)
-        s2_str1_eq_4 = fb2.select(Afact1).where(Afact1.str1 == "4")
-        s2_num2_eq_4 = fb2.select(Afact1).where(Afact1.num2 == 4)
+        s2_all = fb1.select2(Afact1)
+        s2_num1_eq_4 = fb2.select2(Afact1).where(Afact1.num1 == 4)
+        s2_num1_ne_4 = fb2.select2(Afact1).where(Afact1.num1 != 4)
+        s2_num1_lt_4 = fb2.select2(Afact1).where(Afact1.num1 < 4)
+        s2_num1_le_4 = fb2.select2(Afact1).where(Afact1.num1 <= 4)
+        s2_num1_gt_4 = fb2.select2(Afact1).where(Afact1.num1 > 4)
+        s2_num1_ge_4 = fb2.select2(Afact1).where(Afact1.num1 >= 4)
+        s2_str1_eq_4 = fb2.select2(Afact1).where(Afact1.str1 == "4")
+        s2_num2_eq_4 = fb2.select2(Afact1).where(Afact1.num2 == 4)
 
         self.assertEqual(s1_all.query_plan()[0].prejoin_key,None)
         self.assertEqual(str(s1_num1_eq_4.query_plan()[0].prejoin_key),
@@ -1553,9 +1575,9 @@ class SelectNoJoinTestCase(unittest.TestCase):
 
 
         # Test simple conjunction select
-        s1_conj1 = fb1.select(Afact1).where(Afact1.str1 == "42", Afact1.num1 == 4)
-        s1_conj2 = fb1.select(Afact1).where(Afact1.num1 == 4, Afact1.str1 == "42")
-        s1_conj3 = fb1.select(Afact1).where(lambda x: x.str1 == "42", Afact1.num1 == 4)
+        s1_conj1 = fb1.select2(Afact1).where(Afact1.str1 == "42", Afact1.num1 == 4)
+        s1_conj2 = fb1.select2(Afact1).where(Afact1.num1 == 4, Afact1.str1 == "42")
+        s1_conj3 = fb1.select2(Afact1).where(lambda x: x.str1 == "42", Afact1.num1 == 4)
 
         self.assertNotEqual(s1_conj1.query_plan()[0].prejoin_key, None)
         self.assertEqual(s1_conj1.run().singleton(), f42)
@@ -1563,8 +1585,8 @@ class SelectNoJoinTestCase(unittest.TestCase):
         self.assertEqual(s1_conj3.run().singleton(), f42)
 
         # Test select with placeholders
-        s1_ph1 = fb1.select(Afact1).where(Afact1.num1 == ph_("num1"))
-        s1_ph2 = fb1.select(Afact1).where(Afact1.str1 == ph_("str1","42"),
+        s1_ph1 = fb1.select2(Afact1).where(Afact1.num1 == ph_("num1"))
+        s1_ph2 = fb1.select2(Afact1).where(Afact1.str1 == ph_("str1","42"),
                                           Afact1.num1 == ph_("num1"))
         self.assertEqual(set(s1_ph1.run(num1=4)), set([f4,f42]))
         self.assertEqual(set(list(s1_ph1.run(num1=3))), set([f3]))
@@ -1613,14 +1635,14 @@ class SelectNoJoinTestCase(unittest.TestCase):
         self.assertEqual(fb1, fb2)
         self.assertEqual(len(fb1), len(facts))
 
-        s1 = fb1.select(Fact).where(fpb == ph1_)
+        s1 = fb1.select2(Fact).where(fpb == ph1_)
         self.assertEqual(list(s1.run(f1)), [f1])
-        s1 = fb2.select(Fact).where(fpb == ph1_)
+        s1 = fb2.select2(Fact).where(fpb == ph1_)
         self.assertEqual(list(s1.run(f1)), [f1])
 
-        s2 = fb1.select(Fact).where(fpb <= ph1_).order_by(fpb)
+        s2 = fb1.select2(Fact).where(fpb <= ph1_).order_by(fpb)
         self.assertEqual(list(s2.run(f2b)), [f1,f2,f2b])
-        s2 = fb2.select(Fact).where(fpb <= ph1_).order_by(fpb)
+        s2 = fb2.select2(Fact).where(fpb <= ph1_).order_by(fpb)
         self.assertEqual(list(s2.run(f2b)), [f1,f2,f2b])
 
     #--------------------------------------------------------------------------
@@ -1655,13 +1677,13 @@ class SelectNoJoinTestCase(unittest.TestCase):
         self.assertEqual(set(fb.facts()), set(facts))
         self.assertEqual(set(fb.predicates), set([Afact,Bfact,Cfact]))
 
-        s_af_all = fb.select(Afact)
-        s_af_num1_eq_1 = fb.select(Afact).where(Afact.num1 == 1)
-        s_af_num1_le_2 = fb.select(Afact).where(Afact.num1 <= 2)
-        s_af_num2_eq_20 = fb.select(Afact).where(Afact.num2 == 20)
-        s_bf_str1_eq_aaa = fb.select(Bfact).where(Bfact.str1 == "aaa")
-        s_bf_str1_eq_ccc = fb.select(Bfact).where(Bfact.str1 == "ccc")
-        s_cf_num1_eq_1 = fb.select(Cfact).where(Cfact.num1 == 1)
+        s_af_all = fb.select2(Afact)
+        s_af_num1_eq_1 = fb.select2(Afact).where(Afact.num1 == 1)
+        s_af_num1_le_2 = fb.select2(Afact).where(Afact.num1 <= 2)
+        s_af_num2_eq_20 = fb.select2(Afact).where(Afact.num2 == 20)
+        s_bf_str1_eq_aaa = fb.select2(Bfact).where(Bfact.str1 == "aaa")
+        s_bf_str1_eq_ccc = fb.select2(Bfact).where(Bfact.str1 == "ccc")
+        s_cf_num1_eq_1 = fb.select2(Cfact).where(Cfact.num1 == 1)
 
         self.assertEqual(set(s_af_all.run()), set([af1,af2,af3]))
         self.assertEqual(s_af_all.run().count(), 3)
@@ -1683,7 +1705,7 @@ class SelectNoJoinTestCase(unittest.TestCase):
 
         # Test that the select can work with an initially empty factbase
         fb2 = FactBase()
-        s2 = fb2.select(Afact).where(Afact.num1 == 1)
+        s2 = fb2.select2(Afact).where(Afact.num1 == 1)
         self.assertEqual(set(s2.run()), set())
         fb2.add([af1,af2])
         self.assertEqual(set(s2.run()), set([af1]))
@@ -1693,19 +1715,19 @@ class SelectNoJoinTestCase(unittest.TestCase):
         fb3 = FactBase()
         fb3.add([af1,af2,af3])
 ####        self.assertEqual(fb3.add([af1,af2,af3]),3)
-        s3 = fb3.select(Afact).where(Afact.num1 == ph_("num1"))
+        s3 = fb3.select2(Afact).where(Afact.num1 == ph_("num1"))
         self.assertEqual(s3.run(num1=1).singleton(), af1)
         self.assertEqual(s3.run(num1=2).singleton(), af2)
         self.assertEqual(s3.run(num1=3).singleton(), af3)
 
 
         # Test placeholders with positional arguments
-        s4 = fb3.select(Afact).where(Afact.num1 < ph1_)
+        s4 = fb3.select2(Afact).where(Afact.num1 < ph1_)
         self.assertEqual(set(list(s4.run(1))), set([]))
         self.assertEqual(set(list(s4.run(2))), set([af1]))
         self.assertEqual(set(list(s4.run(3))), set([af1,af2]))
 
-        s5 = fb3.select(Afact).where(Afact.num1 <= ph1_, Afact.num2 == ph2_)
+        s5 = fb3.select2(Afact).where(Afact.num1 <= ph1_, Afact.num2 == ph2_)
         self.assertEqual(set(s5.run(3,10)), set([af1]))
 
         # Missing positional argument
@@ -1734,17 +1756,17 @@ class SelectNoJoinTestCase(unittest.TestCase):
         af3 = Afact(3,20,"aaa")
         fb = FactBase([af1,af2,af3])
 
-        q=fb.select(Afact).where((Afact.num1 == 2) | (Afact.num2 == 10))
+        q=fb.select2(Afact).where((Afact.num1 == 2) | (Afact.num2 == 10))
         self.assertEqual(set([af1,af2]), set(q.run()))
 
-        q=fb.select(Afact).where((Afact.num1 == 2) & (Afact.num2 == 20))
+        q=fb.select2(Afact).where((Afact.num1 == 2) & (Afact.num2 == 20))
         self.assertEqual(set([af2]), set(q.run()))
 
 
-        q=fb.select(Afact).where(~(Afact.num1 == 2) & (Afact.num2 == 20))
+        q=fb.select2(Afact).where(~(Afact.num1 == 2) & (Afact.num2 == 20))
         self.assertEqual(set([af3]), set(q.run()))
 
-        q=fb.select(Afact).where(~((Afact.num1 == 2) & (Afact.num2 == 20)))
+        q=fb.select2(Afact).where(~((Afact.num1 == 2) & (Afact.num2 == 20)))
         self.assertEqual(set([af1,af3]), set(q.run()))
 
 
@@ -1764,8 +1786,8 @@ class SelectNoJoinTestCase(unittest.TestCase):
         fb = FactBase([f1,f2,f3])
 
 
-        q=fb.select(F).where((F.num1 == 1) & (lambda f : f.str1 == "b"))
-        q=fb.select(F).where((F.num1 == 1) & (lambda f,v : f.str1 == v))
+        q=fb.select2(F).where((F.num1 == 1) & (lambda f : f.str1 == "b"))
+        q=fb.select2(F).where((F.num1 == 1) & (lambda f,v : f.str1 == v))
 
         self.assertEqual(set([f2]), set(q.run("b")))
         self.assertEqual(set([f2]), set(q.run(v="b")))
@@ -1785,11 +1807,11 @@ class SelectNoJoinTestCase(unittest.TestCase):
         f5 = Afact(2,2)
         fb1 = FactBase([f1,f2,f3,f4,f5], [Afact.num1])
 
-        s1 = fb1.select(Afact).where(Afact.num1 == ph1_, Afact.num2 == ph1_)
+        s1 = fb1.select2(Afact).where(Afact.num1 == ph1_, Afact.num2 == ph1_)
         self.assertTrue(set([f for f in s1.run(1)]), set([f1]))
         self.assertTrue(set([f for f in s1.run(2)]), set([f5]))
 
-        s2 = fb1.select(Afact).where(Afact.num1 == ph_("a",1), Afact.num2 == ph_("a",2))
+        s2 = fb1.select2(Afact).where(Afact.num1 == ph_("a",1), Afact.num2 == ph_("a",2))
         self.assertTrue(set([f for f in s2.run(a=1)]), set([f1]))
         self.assertTrue(set([f for f in s2.run(a=2)]), set([f5]))
         self.assertTrue(set([f for f in s2.run()]), set([f2]))
@@ -1798,7 +1820,7 @@ class SelectNoJoinTestCase(unittest.TestCase):
         def tmp(f,a,b=2):
             return f.num1 == a and f.num2 == b
 
-        s3 = fb1.select(Afact).where(tmp)
+        s3 = fb1.select2(Afact).where(tmp)
         with self.assertRaises(ValueError) as ctx:
             r=[f for f in s3.run()]
 
@@ -1806,7 +1828,7 @@ class SelectNoJoinTestCase(unittest.TestCase):
         self.assertTrue(set([f for f in s3.run(a=1,b=3)]), set([f3]))
 
         # Test manually created positional placeholders
-        s1 = fb1.select(Afact).where(Afact.num1 == ph1_, Afact.num2 == ph_(1))
+        s1 = fb1.select2(Afact).where(Afact.num1 == ph1_, Afact.num2 == ph_(1))
         self.assertTrue(set([f for f in s1.run(1)]), set([f1]))
         self.assertTrue(set([f for f in s1.run(2)]), set([f5]))
 
@@ -1826,31 +1848,31 @@ class SelectNoJoinTestCase(unittest.TestCase):
         f5 = Afact(num1=5,str1="1",str2="1")
         fb = FactBase(facts=[f1,f2,f3,f4,f5])
 
-        q = fb.select(Afact).order_by(Afact.num1)
+        q = fb.select2(Afact).order_by(Afact.num1)
         self.assertEqual([f1,f2,f3,f4,f5], list(q.run()))
 
-        q = fb.select(Afact).order_by(asc(Afact.num1))
+        q = fb.select2(Afact).order_by(asc(Afact.num1))
         self.assertEqual([f1,f2,f3,f4,f5], list(q.run()))
 
-        q = fb.select(Afact).order_by(desc(Afact.num1))
+        q = fb.select2(Afact).order_by(desc(Afact.num1))
         self.assertEqual([f5,f4,f3,f2,f1], list(q.run()))
 
-        q = fb.select(Afact).order_by(Afact.str2)
+        q = fb.select2(Afact).order_by(Afact.str2)
         self.assertEqual([f5,f4,f3,f2,f1], list(q.run()))
 
-        q = fb.select(Afact).order_by(desc(Afact.str2))
+        q = fb.select2(Afact).order_by(desc(Afact.str2))
         self.assertEqual([f1,f2,f3,f4,f5], list(q.run()))
 
-        q = fb.select(Afact).order_by(desc(Afact.str1), Afact.num1)
+        q = fb.select2(Afact).order_by(desc(Afact.str1), Afact.num1)
         self.assertEqual([f3,f2,f4,f1,f5], list(q.run()))
 
-        q = fb.select(Afact).order_by(desc(Afact.str1), Afact.num1)
+        q = fb.select2(Afact).order_by(desc(Afact.str1), Afact.num1)
         self.assertEqual([f3,f2,f4,f1,f5], list(q.run()))
 
         # Adding a duplicate object to a factbase shouldn't do anything
         f6 = Afact(num1=5,str1="1",str2="1")
         fb.add(f6)
-        q = fb.select(Afact).order_by(desc(Afact.str1), Afact.num1)
+        q = fb.select2(Afact).order_by(desc(Afact.str1), Afact.num1)
         self.assertEqual([f3,f2,f4,f1,f5], list(q.run()))
 
 
@@ -1882,13 +1904,13 @@ class SelectNoJoinTestCase(unittest.TestCase):
 
         fb = FactBase(facts=[f1,f2,f3,f4], indexes = [AFact.astr, AFact.cmplx])
 
-        q = fb.select(AFact).order_by(AFact.astr)
+        q = fb.select2(AFact).order_by(AFact.astr)
         self.assertEqual([f1,f2,f3,f4], list(q.run()))
 
-        q = fb.select(AFact).order_by(AFact.cmplx, AFact.astr)
+        q = fb.select2(AFact).order_by(AFact.cmplx, AFact.astr)
         self.assertEqual([f3,f4,f2,f1], list(q.run()))
 
-        q = fb.select(AFact).where(AFact.cmplx <= ph1_).order_by(AFact.cmplx, AFact.astr)
+        q = fb.select2(AFact).where(AFact.cmplx <= ph1_).order_by(AFact.cmplx, AFact.astr)
         self.assertEqual([f3,f4,f2], list(q.run(cmplx2)))
 
     #--------------------------------------------------------------------------
@@ -1908,25 +1930,25 @@ class SelectNoJoinTestCase(unittest.TestCase):
 
         fb = FactBase(facts=[f1,f2,f3,f4])
 
-        q = fb.select(AFact).where(AFact.cmplx1 == (1,2))
+        q = fb.select2(AFact).where(AFact.cmplx1 == (1,2))
         self.assertEqual([f1,f2], list(q.run()))
 
-        q = fb.select(AFact).where(AFact.cmplx1 == ph1_)
+        q = fb.select2(AFact).where(AFact.cmplx1 == ph1_)
         self.assertEqual([f1,f2], list(q.run((1,2))))
 
-        q = fb.select(AFact).where(AFact.cmplx1 == AFact.cmplx2)
+        q = fb.select2(AFact).where(AFact.cmplx1 == AFact.cmplx2)
         self.assertEqual([f1,f3], list(q.run()))
 
         # Some type mismatch failures
 #        with self.assertRaises(TypeError) as ctx:
-#            fb.select(AFact).where(AFact.cmplx1 == 1).run()
+#            fb.select2(AFact).where(AFact.cmplx1 == 1).run()
 
         # Fail because of type mismatch
 #        with self.assertRaises(TypeError) as ctx:
-#            q = fb.select(AFact).where(AFact.cmplx1 == (1,2,3)).run()
+#            q = fb.select2(AFact).where(AFact.cmplx1 == (1,2,3)).run()
 
 #        with self.assertRaises(TypeError) as ctx:
-#            q = fb.select(AFact).where(AFact.cmplx1 == ph1_).run((1,2,3))
+#            q = fb.select2(AFact).where(AFact.cmplx1 == ph1_).run((1,2,3))
 
     #--------------------------------------------------------------------------
     #   Test that the indexing works
@@ -1952,8 +1974,8 @@ class SelectNoJoinTestCase(unittest.TestCase):
             facts.add(f)
             return f.num2 == b
 
-        s1 = fb1.select(Afact).where(Afact.num1 == ph1_, track)
-        s2 = fb1.select(Afact).where(Afact.num1 < ph1_, track)
+        s1 = fb1.select2(Afact).where(Afact.num1 == ph1_, track)
+        s2 = fb1.select2(Afact).where(Afact.num1 < ph1_, track)
 
         self.assertTrue(set([f for f in s1.run(2,1)]), set([f4]))
         self.assertTrue(facts, set([f4,f5]))
@@ -1977,8 +1999,8 @@ class SelectNoJoinTestCase(unittest.TestCase):
         f10 = Afact(10,10,"10")
 
         fb1 = FactBase(facts=[f1,f3, f4,f42,f10], indexes = [Afact.num1, Afact.num2])
-        d1_num1 = fb1.select(Afact).where(Afact.num1 == ph1_)
-        s1_num1 = fb1.select(Afact).where(Afact.num1 == ph1_)
+        d1_num1 = fb1.select2(Afact).where(Afact.num1 == ph1_)
+        s1_num1 = fb1.select2(Afact).where(Afact.num1 == ph1_)
         self.assertEqual(set([f for f in s1_num1.run(4)]), set([f4,f42]))
         self.assertEqual(d1_num1.run(4).delete(), 2)
         self.assertEqual(set([f for f in s1_num1.run(4)]), set([]))
@@ -2005,10 +2027,10 @@ class SelectNoJoinTestCase(unittest.TestCase):
         fb.add(f1); fb.add(f2); fb.add(f3); fb.add(f4);
 
         # Three queries that uses index
-        s1 = fb.select(Fact).where(Fact.ct1.num1 <= ph1_).order_by(Fact.ct2)
-        s2 = fb.select(Fact).where(Fact.ct1 == ph1_)
-        s3 = fb.select(Fact).where(Fact.ct2 == ph1_)
-        s4 = fb.select(Fact).where(Fact.ct3 == ph1_)
+        s1 = fb.select2(Fact).where(Fact.ct1.num1 <= ph1_).order_by(Fact.ct2)
+        s2 = fb.select2(Fact).where(Fact.ct1 == ph1_)
+        s3 = fb.select2(Fact).where(Fact.ct2 == ph1_)
+        s4 = fb.select2(Fact).where(Fact.ct3 == ph1_)
 
         self.assertEqual(list(s1.run(20)), [f2,f1])
         self.assertEqual(list(s2.run(CT(20,"b"))), [f2])
@@ -2019,7 +2041,7 @@ class SelectNoJoinTestCase(unittest.TestCase):
         self.assertEqual(list(s4.run((2,1))), [f2])
 
         # One query doesn't use the index
-        s4 = fb.select(Fact).where(Fact.ct1.str1 == ph1_)
+        s4 = fb.select2(Fact).where(Fact.ct1.str1 == ph1_)
         self.assertEqual(list(s4.run("c")), [f3])
 
     #--------------------------------------------------------------------------
@@ -2042,60 +2064,60 @@ class SelectNoJoinTestCase(unittest.TestCase):
 
         # Making multiple calls to select where()
         with self.assertRaises(TypeError) as ctx:
-            q = fb.select(F).where(F.num1 == 1).where(F.num2 == 2)
+            q = fb.select2(F).where(F.num1 == 1).where(F.num2 == 2)
         check_errmsg("Cannot specify 'where' multiple times",ctx)
 
         # Bad select where clauses
         with self.assertRaises(TypeError) as ctx:
-            q = fb.select(F).where()
+            q = fb.select2(F).where()
         check_errmsg("Empty 'where' expression",ctx)
 
         with self.assertRaises(ValueError) as ctx:
-            q = fb.select(F).where(G.num1 == 1)
+            q = fb.select2(F).where(G.num1 == 1)
         check_errmsg("Invalid 'where' expression 'G.num1",ctx)
 
         with self.assertRaises(ValueError) as ctx:
-            q = fb.select(F).where(F.num1 == G.num1)
+            q = fb.select2(F).where(F.num1 == G.num1)
         check_errmsg("Invalid 'where' expression",ctx)
 
         with self.assertRaises(ValueError) as ctx:
-            q = fb.select(F).where(F.num1 == 1, G.num1 == 1)
+            q = fb.select2(F).where(F.num1 == 1, G.num1 == 1)
         check_errmsg("Invalid 'where' expression",ctx)
 
 #        with self.assertRaises(TypeError) as ctx:
-#            q = fb.select(F).where(0)
+#            q = fb.select2(F).where(0)
 #        check_errmsg("'int' object is not callable",ctx)
 
         # Bad delete where clause
         with self.assertRaises(ValueError) as ctx:
-            q = fb.select(F).where(G.num1 == 1).run().delete()
+            q = fb.select2(F).where(G.num1 == 1).run().delete()
         check_errmsg("Invalid 'where' expression",ctx)
 
 
         # Making multiple calls to select order_by()
         with self.assertRaises(TypeError) as ctx:
-            q = fb.select(F).order_by(F.num1).order_by(F.num2)
+            q = fb.select2(F).order_by(F.num1).order_by(F.num2)
         check_errmsg("Cannot specify 'order_by' multiple times",ctx)
 
         # Bad select where clauses
         with self.assertRaises(TypeError) as ctx:
-            q = fb.select(F).order_by()
+            q = fb.select2(F).order_by()
         check_errmsg("Empty 'order_by' expression",ctx)
 
         with self.assertRaises(TypeError) as ctx:
-            q = fb.select(F).order_by(1)
+            q = fb.select2(F).order_by(1)
         check_errmsg("Invalid 'order_by' expression",ctx)
 
         with self.assertRaises(ValueError) as ctx:
-            q = fb.select(F).order_by(G.num1)
+            q = fb.select2(F).order_by(G.num1)
         check_errmsg("Invalid 'order_by' expression",ctx)
 
         with self.assertRaises(ValueError) as ctx:
-            q = fb.select(F).order_by(F.num1,G.num1)
+            q = fb.select2(F).order_by(F.num1,G.num1)
         check_errmsg("Invalid 'order_by' expression",ctx)
 
         with self.assertRaises(ValueError) as ctx:
-            q = fb.select(F).order_by(F.num1,desc(G.num1))
+            q = fb.select2(F).order_by(F.num1,desc(G.num1))
         check_errmsg("Invalid 'order_by' expression",ctx)
 
 
@@ -2135,11 +2157,11 @@ class SelectJoinTestCase(unittest.TestCase):
 
         fb2 = FactBase(people+friends,indexes=[P.pid,F.src,F.dst])
 
-        s1_people = fb2.select(P).order_by(P.pid)
+        s1_people = fb2.select2(P).order_by(P.pid)
         self.assertEqual(list(s1_people.run()),[bill,bob,dave,jane,jill,sal])
 
         PA=alias(P)
-        all_friends = fb2.select(P,PA,F)\
+        all_friends = fb2.select2(P,PA,F)\
             .join(P.pid == F.src,PA.pid == F.dst)
         close_friends = all_friends\
             .where(P.name < PA.name,
@@ -2164,6 +2186,51 @@ class SelectJoinTestCase(unittest.TestCase):
         self.assertEqual(len(tmp["jill"]), 1)
         self.assertEqual(len(tmp["sal"]), 1)
 
+
+class QueryExecutorTestCase(unittest.TestCase):
+    def setUp(self):
+        class F(Predicate):
+            anum=IntegerField
+            astr=StringField
+        self.F = F
+
+        class G(Predicate):
+            anum=IntegerField
+            astr=StringField
+        self.G = G
+
+        factbase = FactBase([
+            G(1,"a"),G(1,"foo"),G(5,"a"),G(5,"foo"),
+            F(1,"a"),F(1,"foo"),F(5,"a"),F(5,"foo")])
+        self.factbase = factbase
+
+    #--------------------------------------------------------------------------
+    # Test some basic configurations
+    #--------------------------------------------------------------------------
+    def test_nonapi_QueryExecutor(self):
+        F = self.F
+        G = self.G
+        factbase=self.factbase
+        pw = process_where
+        pj = process_join
+        pob = process_orderby
+        fjoh = fixed_join_order_heuristic
+        bjoh = basic_join_order_heuristic
+
+        roots = (F,G)
+        join = pj([F.anum == G.anum],roots)
+        where = pw((F.astr == "foo"),roots)
+        order_by = pob([G.anum,G.astr],roots)
+        qspec = QuerySpec(roots=roots, join=join, where=where, order_by=order_by,joh=bjoh)
+
+        qe = QueryExecutor(factbase.factmaps, qspec)
+
+        # Test output with no options
+        result = list(qe.all())
+        expected = set([(F(1,"foo"),G(1,"a")), (F(1,"foo"),G(1,"foo")),
+                        (F(5,"foo"),G(5,"a")), (F(5,"foo"),G(5,"foo"))])
+        self.assertEqual(expected, set(result))
+ 
 #------------------------------------------------------------------------------
 # main
 #------------------------------------------------------------------------------

@@ -57,7 +57,6 @@ class Placeholder(abc.ABC):
     correspond to the positional arguments of the query execute function call.
 
     """
-
     @abc.abstractmethod
     def __eq__(self, other): pass
 
@@ -240,6 +239,18 @@ class Comparator(abc.ABC):
     @abc.abstractmethod
     def roots(self): pass
 
+    @property
+    @abc.abstractmethod
+    def executable(self):
+        """Return whether the Comparator is query executable
+
+        This will be the case either if the comparator has no Placeholders or if
+        the Placeholders have a default value. Because of the default values it
+        doesn't make sense to test if for the Comparator is ground.
+
+        """
+        pass
+
     @abc.abstractmethod
     def __eq__(self, other): pass
 
@@ -398,6 +409,7 @@ class StandardComparator(Comparator):
 
     def ground(self,*args,**kwargs):
         def get(arg):
+            if not isinstance(arg,Placeholder): return arg
             if isinstance(arg,PositionalPlaceholder):
                 if arg.posn < len(args): return args[arg.posn]
                 raise ValueError(("Missing positional placeholder argument '{}' "
@@ -410,8 +422,7 @@ class StandardComparator(Comparator):
                 raise ValueError(("Missing named placeholder argument '{}' "
                                   "when grounding '{}' with arguments: "
                                   "{}").format(arg,self,kwargs))
-            else:
-                return arg
+
         newargs = tuple([get(a) for a in self._args])
         if _hashables(newargs) == _hashables(self._args): return self
         return StandardComparator(self._operator, newargs)
@@ -466,6 +477,14 @@ class StandardComparator(Comparator):
     @property
     def roots(self):
         return self._roots
+
+    @property
+    def executable(self):
+        for arg in self._args:
+            if isinstance(arg,PositionalPlaceholder): return False
+            if isinstance(arg,NamedPlaceholder) and \
+               not arg.has_default: return False
+        return True
 
     def make_callable(self, root_signature):
         for arg in self._args:
@@ -623,6 +642,12 @@ class FunctionComparator(Comparator):
     @property
     def roots(self):
         return self._roots
+
+    @property
+    def executable(self):
+        for ph in self._placeholders:
+            if not ph.has_default: return False
+        return True
 
     def negate(self):
         neg = not self._negative
@@ -1061,6 +1086,12 @@ class Clause(object):
     def roots(self):
         return self._roots
 
+    @property
+    def executable(self):
+        for c in self._comparators:
+            if not c.executable: return False
+        return True
+
     def dealias(self):
         newcomps = [ c.dealias() for c in self._comparators]
         if newcomps == self._comparators: return self
@@ -1143,6 +1174,12 @@ class ClauseBlock(object):
     @property
     def clauses(self):
         return self._clauses
+
+    @property
+    def executable(self):
+        for cl in self._clauses:
+            if not cl.executable: return False
+        return True
 
     def ground(self,*args, **kwargs):
         newclauses = [ clause.ground(*args,**kwargs) for clause in self._clauses]
@@ -1579,8 +1616,8 @@ def make_join_pair(joins, clauseblock):
         else: return (joinsc, None)
 
 # ------------------------------------------------------------------------------
-# JoinQueryPlan is a part of the query plan that describes the plan to execute a
-# single link in a join.
+# JoinQueryPlan support functions. The JQP is a part of the query plan that
+# describes the plan to execute a single link in a join.
 # ------------------------------------------------------------------------------
 
 # Check that the formula only refers to paths with the allowable roots
@@ -1617,12 +1654,16 @@ def _extract_placeholders(elements):
         output.update(f.placeholders)
     return output
 
+# ------------------------------------------------------------------------------
+# JoinQueryPlan class is a single join within a broader QueryPlan
+# ------------------------------------------------------------------------------
+
 class JoinQueryPlan(object):
     '''Input:
        - input_signature tuple,
        - root,
        - indexes associated with the underlying fact type
-       - a prejoin standard-comparator (or None),
+       - a prejoin clause for indexed quering (or None),
        - a prejoin clauseblock (or None),
        - a prejoin orderbyblock (or None)
        - a join standard comparator (or None),
@@ -1664,6 +1705,11 @@ class JoinQueryPlan(object):
             raise ValueError(("Pre-join clause block '{}' refers to non '{}' "
                               "paths").format(prejoinobb,self._root))
 
+        # The joinsc cannot have placeholders
+        if self._joinsc and self._joinsc.placeholders:
+            raise ValueError(("A comparator with a placeholder is not valid as "
+                              "a join specificaton: {}").format(joinsc))
+
         # The joinsc, postjoincb, and postjoinobb must refer only to the insig + root
         allroots = list(self._insig) + [self._root]
         if not _check_roots(allroots, joinsc):
@@ -1678,7 +1724,7 @@ class JoinQueryPlan(object):
                               "paths").format(postjoinobb,allroots))
 
         self._placeholders = _extract_placeholders(
-            [self._joinsc, self._postjoincb, self._prejoincl, self._prejoincb])
+            [self._postjoincb, self._prejoincl, self._prejoincb])
 
 
     # -------------------------------------------------------------------------
@@ -1758,17 +1804,23 @@ class JoinQueryPlan(object):
     def placeholders(self):
         return self._placeholders
 
+    @property
+    def executable(self):
+        if not self._prejoincl.executable: return False
+        if not self._prejoincb.executable: return False
+        if not self._postjoincb.executable: return False
+        return True
+
     def ground(self,*args,**kwargs):
         gprejoincl  = self._prejoincl.ground(*args,**kwargs)  if self._prejoincl else None
         gprejoincb  = self._prejoincb.ground(*args,**kwargs)  if self._prejoincb else None
-        gjoinsc = self._joinsc.ground(*args,**kwargs) if self._joinsc else None
         gpostjoincb = self._postjoincb.ground(*args,**kwargs) if self._postjoincb else None
 
         if gprejoincl == self._prejoincl and gprejoincb == self._prejoincb and \
-           gjoinsc == self._joinsc and gpostjoincb == self._postjoincb: return self
+           gpostjoincb == self._postjoincb: return self
         return JoinQueryPlan(self._insig,self._root, self._indexes,
                              gprejoincl,gprejoincb,self._prejoinobb,
-                             gjoinsc,gpostjoincb,self._postjoinobb)
+                             self._joinsc,gpostjoincb,self._postjoinobb)
 
     def print(self,file=sys.stdout,pre=""):
         print("{}QuerySubPlan:".format(pre), file=file)
@@ -1836,6 +1888,12 @@ class QueryPlan(object):
     def output_signature(self):
         jqp = self._jqps[-1]
         return tuple(jqp.input_signature + (jqp.root,))
+
+    @property
+    def executable(self):
+        for jqp in self._jqps:
+            if not jqp.executable: return False
+        return True
 
     def ground(self,*args,**kwargs):
         newqpjs = [qpj.ground(*args,**kwargs) for qpj in self._jqps]
@@ -1978,17 +2036,74 @@ def partition_orderbys(root_join_order, orderbys=[]):
     return partitions
 
 #------------------------------------------------------------------------------
-# QuerySpec stores all the information about a query in one data-structure
-#------------------------------------------------------------------------------
+# QuerySpec stores all the parameters needed to generate a query plan in one
+# data-structure
+# ------------------------------------------------------------------------------
 
-QuerySpec = collections.namedtuple('QuerySpec', 'roots join where order_by')
+class QuerySpec(object):
+    allowed = [ "roots", "join", "where", "order_by",
+                "group_by", "tuple", "unique", "bind", "select", "delete",
+                "heuristic", "joh" ]
 
-def modify_query_spec(inspec,join=None,where=None,order_by=None):
-    if join is None: join = inspec.join
-    if where is None: where = inspec.where
-    if order_by is None: order_by = inspec.order_by
-    return QuerySpec(roots=inspec.roots, join=join,
-                     where=where, order_by=order_by)
+    def __init__(self,**kwargs):
+        for k,v in kwargs.items():
+            if k not in QuerySpec.allowed:
+                raise ValueError("Trying to set unknown parameter '{}'".format(k))
+            if v is None:
+                raise ValueError(("Error for QuerySpec parameter '{}': 'None' "
+                                  "values are not allowed").format(k))
+        self._params = dict(kwargs)
+
+    def newp(self, **kwargs):
+        if not kwargs: return self
+        nparams = dict(self._params)
+        for k,v in kwargs.items():
+            if v is None:
+                raise ValueError("Cannot specify empty '{}'".format(v))
+            if k in self._params:
+                raise ValueError("Cannot specify '{}' multiple times".format(k))
+            nparams[k] = v
+        return QuerySpec(**nparams)
+
+    def modp(self, name, value):
+        nqspec = QuerySpec(self)
+        nqspec._params[name] = value
+        return nqspec
+
+    def getp(self,name,default=None):
+        return self._params.get(name,default)
+
+    def fill_defaults(self):
+        toadd = dict(self._params)
+        for n in [ "roots","join","where","order_by" ]:
+            v = self._params.get(n,None)
+            if v is None: toadd[n]=[]
+        toadd["group_by"] = self._params.get("group_by",0)
+        toadd["bind"] = self._params.get("bind",{})
+        toadd["tuple"] = self._params.get("tuple",False)
+        toadd["unique"] = self._params.get("unique",False)
+        toadd["heuristic"] = self._params.get("heuristic",False)
+        toadd["joh"] = self._params.get("joh",basic_join_order_heuristic)
+
+        # Note: No default values for "select" and "delete" so calling their
+        # attributes will return None
+
+
+        if toadd: return QuerySpec(**toadd)
+        else: return self
+
+    def __getattr__(self, item):
+        if item not in QuerySpec.allowed:
+            raise ValueError(("Trying to get the value of unknown parameter "
+                              "'{}'").format(item))
+        return self._params.get(item,None)
+
+    def __str__(self):
+        return str(self._params)
+
+    def __repr__(self):
+        return repr(self._params)
+
 
 # Replace any None with a []
 def fix_query_spec(inspec):
@@ -2061,13 +2176,11 @@ def make_query_plan_preordered_roots(indexed_paths, root_join_order,
 #
 # ------------------------------------------------------------------------------
 
-def fixed_join_order_heuristic(indexed_paths, query_spec):
-    qspec = fix_query_spec(query_spec)
+def fixed_join_order_heuristic(indexed_paths, qspec):
     return [path(r) for r in qspec.roots]
 
 
-def basic_join_order_heuristic(indexed_paths, query_spec):
-    qspec = fix_query_spec(query_spec)
+def basic_join_order_heuristic(indexed_paths, qspec):
     roots= qspec.roots
     joins= qspec.join
 
@@ -2085,9 +2198,10 @@ def basic_join_order_heuristic(indexed_paths, query_spec):
 # and generates a query.
 # ------------------------------------------------------------------------------
 
-def make_query_plan(join_order_heuristic, indexed_paths, query_spec):
-    root_join_order=join_order_heuristic(indexed_paths, query_spec)
-    return make_query_plan_preordered_roots(indexed_paths, root_join_order, query_spec)
+def make_query_plan(indexed_paths, qspec):
+    qspec = qspec.fill_defaults()
+    root_order = qspec.joh(indexed_paths, qspec)
+    return make_query_plan_preordered_roots(indexed_paths, root_order, qspec)
 
 
 #------------------------------------------------------------------------------

@@ -1369,10 +1369,11 @@ class QueryPlanTestCase(unittest.TestCase):
         jqp = JoinQueryPlan.from_specification
         mkq = make_query_plan
         indexes=[F.anum,G.astr]
-        orderbys = pob([asc(F.astr),desc(G.astr),desc(G.anum)],[F,G])
-        qspec = QuerySpec([F,G],[],[],orderbys)
-
-        qplan = make_query_plan(fixed_join_order_heuristic, indexes, qspec)
+        order_by = pob([asc(F.astr),desc(G.astr),desc(G.anum)],[F,G])
+        qspec = QuerySpec(roots=[F,G],join=[],where=[],order_by=order_by,
+                          joh=fixed_join_order_heuristic)
+        
+        qplan = make_query_plan(indexes, qspec)
         self.assertEqual(qplan[0].prejoin_orderbys, [asc(F.astr)])
         self.assertEqual(qplan[1].prejoin_orderbys, [desc(G.astr),desc(G.anum)])
 
@@ -1543,7 +1544,7 @@ class QueryPlanTestCase(unittest.TestCase):
         where = pw((F.anum == 4) & (FA.anum < 2),[F,FA])
         orderbys = pob([GA.anum, FA.anum, F.anum, G.anum],[F,G,FA,GA])
 
-        qspec = QuerySpec([FA,GA,G,F],joins,where,orderbys)
+        qspec = QuerySpec(roots=[FA,GA,G,F],join=joins,where=where,order_by=orderbys)
         qp1 = make_query_plan_preordered_roots([F.anum],[FA,GA,G,F],qspec)
 
         self.assertEqual(len(qp1),4)
@@ -1581,7 +1582,7 @@ class QueryPlanTestCase(unittest.TestCase):
 
         # Same as qp1 but with placeholder - so equal after grounding
         where2 = pw((F.anum == ph1_) & (FA.anum < ph2_),[F,FA])
-        qspec = QuerySpec([FA,GA,G,F],joins,where2,orderbys)
+        qspec = QuerySpec(roots=[FA,GA,G,F],join=joins,where=where2,order_by=orderbys)
         qp2 = make_query_plan_preordered_roots([F.anum],[FA,GA,G,F],qspec)
         self.assertEqual(qp2.placeholders, set([ph1_,ph2_]))
 
@@ -1594,7 +1595,7 @@ class QueryPlanTestCase(unittest.TestCase):
         self.assertEqual(qp2.ground(4,2),qp1)
 
         # Same as qp1 but different root ordering
-        qspec = QuerySpec([FA,GA,G,F],joins,where,orderbys)
+        qspec = QuerySpec(roots=[FA,GA,G,F],join=joins,where=where,order_by=orderbys)
         qp3 = make_query_plan_preordered_roots([F.anum],[FA,GA,F,G],qspec)
         self.assertEqual(len(qp3),4)
         self.assertEqual(hp(qp3[0].root), hp(FA))
@@ -1629,7 +1630,7 @@ class QueryPlanTestCase(unittest.TestCase):
         pj = process_join
 
         joins = pj([F.anum == G.anum, F.anum < GA.anum, joinall_(G,FA)],[F,G,FA,GA])
-        qspec = QuerySpec([F,G,FA,GA],joins,None,None)
+        qspec = QuerySpec(roots=[F,G,FA,GA],join=joins,where=[],order_by=[])
         qorder = basic_join_order_heuristic([], qspec)
         self.assertEqual(qorder,[FA,GA,G,F])
 
@@ -1641,7 +1642,7 @@ class QueryPlanTestCase(unittest.TestCase):
         G = path(self.G)
         FA = alias(F)
         GA = alias(G)
-        qspec = QuerySpec([F,G,FA,GA],None,None,None)
+        qspec = QuerySpec(roots=[F,G,FA,GA],join=[],where=[],order_by=[])
         qorder = fixed_join_order_heuristic([], qspec)
         self.assertEqual(qorder,[F,G,FA,GA])
 
@@ -1665,8 +1666,8 @@ class QueryPlanTestCase(unittest.TestCase):
         joins = pj([G.anum == F.anum, F.anum < GA.anum, joinall_(G,FA)],[F,G,FA,GA])
         where = pw((F.anum == 4) & (FA.anum < 2),[F,FA])
         orderbys = pob([FA.anum, G.anum],[FA,G])
-        qspec=QuerySpec([F,G,FA,GA],joins,where,orderbys)
-        qp1 = make_query_plan(basic_join_order_heuristic,[F.anum],qspec)
+        qspec=QuerySpec(roots=[F,G,FA,GA],join=joins,where=where,order_by=orderbys)
+        qp1 = make_query_plan([F.anum],qspec)
         self.assertEqual(len(qp1), 4)
 
     # ------------------------------------------------------------------------------
