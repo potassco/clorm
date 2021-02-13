@@ -17,7 +17,8 @@ from ..util import OrderedSet as FactSet
 from ..util.tools import all_equal
 from .core import *
 from .core import get_field_definition, QCondition, PredicatePath, \
-    kwargs_check_keys, trueall, falseall
+    validate_root_paths, kwargs_check_keys, trueall, falseall
+from .factcontainers import FactSet, FactIndex, FactMap
 
 __all__ = [
     'Placeholder',
@@ -41,9 +42,6 @@ __all__ = [
 #------------------------------------------------------------------------------
 # Defining and manipulating conditional elements
 #------------------------------------------------------------------------------
-
-
-
 
 #------------------------------------------------------------------------------
 # Placeholder allows for variable substituion of a query. Placeholder is
@@ -2203,6 +2201,712 @@ def make_query_plan(indexed_paths, qspec):
     root_order = qspec.joh(indexed_paths, qspec)
     return make_query_plan_preordered_roots(indexed_paths, root_order, qspec)
 
+
+#------------------------------------------------------------------------------
+# Implementing Queries - taking a QuerySpec, QueryPlan, and a FactMap and
+# generating an actual query.
+# ------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+# Creates a mechanism for sorting using the order_by statements within queries.
+#
+# Works by creating a list of pairs consisting of a keyfunction and reverse
+# flag, corresponding to the orderbyblocks in reverse order. A list can then by
+# sorted by successively applying each sort function. Stable sort guarantees
+# that the the result is a multi-criteria sort.
+#------------------------------------------------------------------------------
+class InQuerySorter(object):
+    def __init__(self, orderbyblock, insig=None):
+        if insig is None and len(orderbyblock.roots) > 1:
+            raise ValueError(("Cannot create an InQuerySorter with no input "
+                              "signature and an OrderByBlock with multiple "
+                              "roots '{}'").format(orderbyblock))
+        if insig is not None and not insig:
+            raise ValueError("Cannot create an InQuerySorter with an empty signature")
+        if not insig: insig=()
+
+        # Create the list of (keyfunction,reverse flag) pairs then reverse it.
+        self._sorter = []
+        rp2idx = { hashable_path(rp) : idx for idx,rp in enumerate(insig) }
+        for ob in orderbyblock:
+            kf = ob.path.meta.attrgetter
+            if insig:
+                idx = rp2idx[hashable_path(ob.path.meta.root)]
+                ig=operator.itemgetter(idx)
+                kf = lambda f, kf=kf,ig=ig : kf(ig(f))
+            self._sorter.append((kf,not ob.asc))
+        self._sorter = tuple(reversed(self._sorter))
+
+    # List in-place sorting
+    def listsort(self, inlist):
+        for kf, reverse in self._sorter:
+            inlist.sort(key=kf,reverse=reverse)
+
+    # Sort an iterable input and return an output list
+    def sorted(self, input):
+        for idx, (kf, reverse) in enumerate(self._sorter):
+            if idx == 0:
+                outlist = sorted(input,key=kf,reverse=reverse)
+            else:
+                outlist.sort(key=kf,reverse=reverse)
+        return outlist
+
+# ------------------------------------------------------------------------------
+# prejoin query is the querying of the underlying factset or factindex
+# - factsets - a dictionary mapping a predicate to a factset
+# - factindexes - a dictionary mapping a hashable_path to a factindex
+# ------------------------------------------------------------------------------
+
+def make_first_prejoin_query(jqp, factsets, factindexes):
+    factset = factsets.get(jqp.root.meta.predicate, FactSet())
+
+    prejcl = jqp.prejoin_key
+    prejcb = jqp.prejoin_clauses
+    factindex = None
+    if prejcl:
+        factindex=factindexes.get(hashable_path(prejcl.paths[0]),None)
+        if not factindex:
+            raise ValueError(("Internal error: missing FactIndex for "
+                              "path '{}'").format(prejcl.args[0]))
+
+    def unsorted_query():
+        if prejcb: cc = prejcb.make_callable([jqp.root.meta.dealiased])
+        else: cc = lambda _ : True
+
+        if factindex:
+            for sc in prejcl:
+                for f in factindex.find(sc.operator,sc.args[1]):
+                    if cc((f,)): yield (f,)
+        else:
+            for f in factset:
+                    if cc((f,)): yield (f,)
+
+    return unsorted_query
+
+# ------------------------------------------------------------------------------
+#
+# - factsets - a dictionary mapping a predicate to a factset
+# - factindexes - a dictionary mapping a hashable_path to a factindex
+# ------------------------------------------------------------------------------
+
+def make_first_join_query(jqp, factsets, factindexes):
+
+    if jqp.input_signature:
+        raise ValueError(("A first JoinQueryPlan must have an empty input "
+                          "signature but '{}' found").format(jqp.input_signature))
+    if jqp.prejoin_orderbys and jqp.postjoin_orderbys:
+        raise ValueError(("Internal error: it doesn't make sense to have both "
+                          "a prejoin and join orderby sets for the first sub-query"))
+
+    base_query=make_first_prejoin_query(jqp,factsets, factindexes)
+    iqs=None
+    if jqp.prejoin_orderbys:
+        iqs = InQuerySorter(jqp.prejoin_orderbys,(jqp.root,))
+    elif jqp.postjoin_orderbys:
+        iqs = InQuerySorter(jqp.postjoin_orderbys,(jqp.root,))
+
+    def sorted_query():
+        return iqs.sorted(base_query())
+    if iqs: return sorted_query
+    else: return base_query
+
+# ------------------------------------------------------------------------------
+# Returns a function that takes no arguments and returns a populated data
+# source.  The data source can be either a FactIndex, a FactSet, or a list.  In
+# the simplest case this function simply passes through a reference to the
+# underlying factset or factindex object. If it is a list then either the order
+# doesn't matter or it is sorted by the prejoin_orderbys sort order.
+#
+# NOTE: We don't use this for the first JoinQueryPlan as that is handled as a
+# special case.
+# ------------------------------------------------------------------------------
+
+def make_prejoin_query_source(jqp, factsets, factindexes):
+    pjk  = jqp.prejoin_key
+    pjc  = jqp.prejoin_clauses
+    pjob = jqp.prejoin_orderbys
+    jk   = jqp.join_key
+    predicate = jqp.root.meta.predicate
+    factset = factsets.get(jqp.root.meta.predicate, FactSet())
+
+    # If there is a prejoin key clause
+    if pjk:
+        tmp = pjk.dealias().paths
+        pjk_path = hashable_path(tmp[0])
+        if len(tmp) != 1 or pjk_path not in factindexes \
+           or tmp[0].meta.predicate != predicate:
+            raise ValueError(("Internal error: prejoin key clause '{}' is invalid "
+                              "for JoinQueryPlan {}").format(pjk,jqp))
+        factindex = factindexes[pjk_path]
+
+    # A prejoin_key query uses the factindex
+    def query_pjk():
+        for sc in pjk:
+            for f in factindex.find(sc.operator,sc.args[1]):
+                yield (f,)
+
+    # If there is a set of prejoin clauses
+    if pjc:
+        pjc = pjc.dealias()
+        pjc_root = pjc.roots[0]
+        if len(pjc.roots) != 1 and pjc_root.meta.predicate != predicate:
+            raise ValueError(("Internal error: prejoin clauses '{}' is invalid "
+                              "for JoinQueryPlan {}").format(pjc,jqp))
+        pjc_check = pjc.make_callable([pjc_root])
+
+    # prejoin_clauses query uses the prejoin_key query or the underlying factset
+    def query_pjc():
+        if pjk:
+            for (f,) in query_pjk():
+                if pjc_check((f,)): yield (f,)
+        else:
+            for f in factset:
+                if pjc_check((f,)): yield (f,)
+
+    # If there is a join key
+    if jk:
+        jk_key_path = hashable_path(jk.args[0].meta.dealiased)
+        if jk.args[0].meta.predicate != predicate:
+            raise ValueError(("Internal error: join key '{}' is invalid "
+                              "for JoinQueryPlan {}").format(jk,jqp))
+
+    if pjob: pjiqs = InQuerySorter(pjob)
+    else: pjiqs = None
+
+    # If there is either a pjk or pjc then we need to create a temporary source
+    # (using a FactIndex if there is a join key or a list otherwise). If there
+    # is no pjk or pjc but there is a key then use an existing FactIndex if
+    # there is one or create it.
+    def query_source():
+        if jk:
+            if pjc:
+                fi = FactIndex(path(jk_key_path))
+                for (f,) in query_pjc(): fi.add(f)
+                return fi
+            elif pjk:
+                fi = FactIndex(path(jk_key_path))
+                for (f,) in query_pjk(): fi.add(f)
+                return fi
+            else:
+                fi = factindexes.get(hashable_path(jk_key_path),None)
+                if fi: return fi
+                fi = FactIndex(path(jk_key_path))
+                for f in factset: fi.add(f)
+                return fi
+        else:
+            source = None
+            if not pjc and not pjk and not pjob: return factset
+            elif pjc: source = [f for (f,) in query_pjc() ]
+            elif pjk: source = [f for (f,) in query_pjk() ]
+            if source and not pjob: return source
+
+            if not source and pjob:
+                if len(pjob) == 1:
+                    pjo = pjob[0]
+                    fi = factindexes.get(hashable_path(pjo.path),None)
+                    if fi and pjo.asc: return fi
+                    elif fi: return list(reversed(fi))
+
+            if source is None: source = factset
+
+            # If there is only one sort order use attrgetter
+            return pjiqs.sorted(source)
+
+    return query_source
+
+# ------------------------------------------------------------------------------
+#
+# - factsets - a dictionary mapping a predicate to a factset
+# - factindexes - a dictionary mapping a hashable_path to a factindex
+# ------------------------------------------------------------------------------
+
+def make_chained_join_query(jqp, inquery, factsets, factindexes):
+
+    if not jqp.input_signature:
+        raise ValueError(("A non-first JoinQueryPlan must have a non-empty input "
+                          "signature but '{}' found").format(jqp.input_signature))
+
+    pjob = jqp.prejoin_orderbys
+    jk   = jqp.join_key
+    jc   = jqp.postjoin_clauses
+    job  = jqp.postjoin_orderbys
+    predicate = jqp.root.meta.predicate
+
+    pjiqs = None
+    if jk and pjob: pjiqs = InQuerySorter(pjob)
+
+    # query_source will return a FactSet, FactIndex, or list
+    query_source = make_prejoin_query_source(jqp, factsets, factindexes)
+
+    # Setup any join clauses
+    if jc:
+        jc_check = jc.make_callable(list(jqp.input_signature) + [jqp.root])
+    else:
+        jc_check = lambda _: True
+
+    def query_jk():
+        operator = jk.operator
+        align_query_input = make_input_alignment_functor(
+            jqp.input_signature,(jk.args[1],))
+        fi = query_source()
+        for intuple in inquery():
+            v, = align_query_input(intuple)
+            result = list(fi.find(operator,v))
+            if pjob: pjiqs.listsort(result)
+
+            for f in result:
+                out = tuple(intuple + (f,))
+                if jc_check(out): yield out
+
+    def query_no_jk():
+        source = query_source()
+        for intuple in inquery():
+            for f in source:
+                out = tuple(intuple + (f,))
+                if jc_check(out): yield out
+
+
+    if jk: unsorted_query=query_jk
+    else: unsorted_query=query_no_jk
+    if not job: return unsorted_query
+
+    jiqs = InQuerySorter(job,list(jqp.input_signature) + [jqp.root])
+    def sorted_query():
+        return iter(jiqs.sorted(unsorted_query()))
+
+    return sorted_query
+
+#------------------------------------------------------------------------------
+# Makes a query given a ground QueryPlan and the underlying data. The returned
+# query object is a Python generator function that takes no arguments.
+# ------------------------------------------------------------------------------
+
+def make_query(qp, factsets, factindexes):
+    if qp.placeholders:
+        raise ValueError(("Cannot execute an ungrounded query. Missing values "
+                          "for placeholders: "
+                          "{}").format(", ".join([str(p) for p in qp.placeholders])))
+    query = None
+    for idx,jqp in enumerate(qp):
+        if not query:
+            query = make_first_join_query(
+                jqp,factsets,factindexes)
+        else:
+            query = make_chained_join_query(
+                jqp,query,factsets,factindexes)
+    return query
+
+
+
+#------------------------------------------------------------------------------
+# QueryOutput allows you to output the results of a Select query it different
+# ways.
+# ------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+# Given an input tuple of facts generate the appropriate output. Depending on
+# the output signature what we want to generate this can be a simple of a
+# complex operation. If it is just predicate paths or static values then a
+# simple outputter is ok, but if it has a function then a complex one is needed.
+# ------------------------------------------------------------------------------
+
+def make_outputter(insig,outsig):
+
+    def make_simple_outputter():
+        af=make_input_alignment_functor(insig, outsig)
+        return lambda intuple, af=af: af(intuple)
+
+    def make_complex_outputter():
+        metasig = []
+        for out in outsig:
+            if isinstance(out,PredicatePath) or \
+                 (inspect.isclass(out) and issubclass(out,Predicate)):
+                tmp = make_input_alignment_functor(insig, (path(out),))
+                metasig.append(lambda x,af=tmp: af(x)[0])
+            elif isinstance(out,FuncInputSpec):
+                tmp=make_input_alignment_functor(insig, out.paths)
+                metasig.append(lambda x,af=tmp,f=out.functor: f(*af(x)))
+            elif callable(out):
+                metasig.append(lambda x,f=out: f(*x))
+            else:
+                metasign.append(lambda x, out=out: out)
+
+        maf=tuple(metasig)
+        return lambda intuple, maf=maf: tuple(af(intuple) for af in maf)
+
+    needcomplex=False
+    for out in outsig:
+        if isinstance(out,PredicatePath) or \
+           (inspect.isclass(out) and issubclass(out,Predicate)):
+            continue
+        elif isinstance(out,FuncInputSpec) or callable(out):
+            needcomplex=True
+            break
+
+    if needcomplex: return make_complex_outputter()
+    else: return make_simple_outputter()
+
+class QueryOutput(object):
+
+    #--------------------------------------------------------------------------
+    # factbase - the underlying factbase. Needed for the delete() function
+    # query - the results generator function
+    #--------------------------------------------------------------------------
+    def __init__(self, factmaps, qspec, qplan, query):
+        self._factmaps = factmaps
+        self._qspec = qspec
+        self._qplan = qplan
+        self._query = query
+        self._unique = False
+        self._sigoverride = False
+        self._tuple_called = False
+        self._grouping = None
+        self._unwrap = len(self._qplan.output_signature) == 1
+
+        self._outputter = make_outputter(self._qplan.output_signature,
+                                         self._qspec.roots)
+        self._executed = False
+
+
+
+    #--------------------------------------------------------------------------
+    # Functions to modify the output
+    #--------------------------------------------------------------------------
+
+    def tuple(self):
+        if self._executed:
+            raise RuntimeError("The query instance has already been executed")
+        if self._tuple_called:
+            raise ValueError("tuple() can only be specified once")
+        self._tuple_called = True
+        self._unwrap = False
+        return self
+
+    def unique(self):
+        if self._executed:
+            raise RuntimeError("The query instance has already been executed")
+        if self._unique:
+            raise ValueError("unique() can only be specified once")
+        self._unique = True
+        return self
+
+    def output(self, *outsig):
+        if self._executed:
+            raise RuntimeError("The query instance has already been executed")
+        if not outsig:
+            raise ValueError("Empty output signature")
+        if self._sigoverride:
+            raise ValueError("output() can only be specified once")
+        self._sigoverride = True
+
+        if not self._tuple_called:
+            self._unwrap = len(outsig) == 1
+
+        tmp = tuple(outsig)
+
+        self._outputter = make_outputter(self._qplan.output_signature,tmp)
+        return self
+
+    def group_by(self,grouping=1):
+        if self._executed:
+            raise RuntimeError("The query instance has already been executed")
+        if self._grouping:
+            raise ValueError("group_by() can only be specified once")
+
+        if not self._qspec.order_by:
+            raise ValueError(("group_by() can only be specified in conjunction "
+                              "with order_by() in the query"))
+        if grouping <= 0:
+            raise ValueError("The grouping must be a positive integer")
+        if grouping > len(self._qspec.order_by):
+            raise ValueError(("The grouping size {} cannot be larger than the "
+                              "order_by() specification "
+                              "'{}'").format(grouping,self._qspec.order_by))
+
+        self._grouping = [ob.path for ob in self._qspec.order_by[:grouping]]
+        return self
+
+    # --------------------------------------------------------------------------
+    # Internal function generator for the query results
+    # --------------------------------------------------------------------------
+    def _all(self):
+        cache = set()
+        for input in self._query():
+            output = self._outputter(input)
+            if self._unwrap: output = output[0]
+            if self._unique:
+                if output not in cache:
+                    cache.add(output)
+                    yield output
+            else:
+                yield output
+
+    def _group_by_all(self):
+        def groupiter(group):
+            cache = set()
+            for input in group:
+                output = self._outputter(input)
+                if self._unwrap: output = output[0]
+                if self._unique:
+                    if output not in cache:
+                        cache.add(output)
+                        yield output
+                else:
+                    yield output
+
+        unwrapkey = len(self._grouping) == 1 and not self._tuple_called
+
+        group_by_keyfunc = make_input_alignment_functor(
+            self._qplan.output_signature, self._grouping)
+        for k,g in itertools.groupby(self._query(), group_by_keyfunc):
+            if unwrapkey: yield k[0], groupiter(g)
+            else: yield k, groupiter(g)
+
+
+    #--------------------------------------------------------------------------
+    # Functions to get the output - only one of these functions can be called
+    # for a QueryOutput instance.
+    # --------------------------------------------------------------------------
+
+    def all(self):
+        if self._executed:
+            raise RuntimeError("The query instance has already been executed")
+        self._executed = True
+        if self._grouping: return self._group_by_all()
+        else: return self._all()
+
+    def singleton(self):
+        if self._executed:
+            raise RuntimeError("The query instance has already been executed")
+        if self._grouping:
+            raise RuntimeError(("Returning a singleton() cannot be used in "
+                                "conjunction with group_by()"))
+        self._executed = True
+
+        found = None
+        for out in self._all():
+            if found: raise ValueError("Query returned more than a single element")
+            found = out
+        return found
+
+    def count(self):
+        if self._executed:
+            raise RuntimeError("The query instance has already been executed")
+        if self._grouping:
+            raise RuntimeError(("Returning count() cannot be used in "
+                                "conjunction with group_by()"))
+        self._executed = True
+        return len(list(self._all()))
+
+    def first(self):
+        if self._executed:
+            raise RuntimeError("The query instance has already been executed")
+        if self._grouping:
+            raise RuntimeError(("Returning first() cannot be used in "
+                                "conjunction with group_by()"))
+        self._executed = True
+        return next(iter(self._all()))
+
+    # --------------------------------------------------------------------------
+    # Delete a selection of facts. Maintains a set for each predicate type
+    # and adds the selected fact to that set. The delete the facts in each set.
+    # --------------------------------------------------------------------------
+
+    def delete(self,*subroots):
+        if self._executed:
+            raise RuntimeError("The query instance has already been executed")
+        if self._grouping:
+            raise RuntimeError(("delete() cannot be used in "
+                                "conjunction with group_by()"))
+        self._executed = True
+
+        roots = set([hashable_path(p) for p in self._qspec.roots])
+        subroots = set([hashable_path(p) for p in validate_root_paths(subroots)])
+
+        if not subroots.issubset(roots):
+            raise ValueError(("The roots to delete '{}' must be a subset of "
+                              "the query roots '{}").format(subroots,roots))
+        if not subroots: subroots = roots
+
+        # Find the roots to delete and generate a set of actions that are
+        # executed to add to a delete set
+        deletesets = {}
+        for r in subroots:
+            pr = path(r)
+            deletesets[pr.meta.predicate] = set()
+
+        actions = []
+        for out in self._qplan.output_signature:
+            hout = hashable_path(out)
+            if hout in subroots:
+                ds = deletesets[out.meta.predicate]
+                actions.append(lambda x, ds=ds: ds.add(x))
+            else:
+                actions.append(lambda x : None)
+
+        # Running the query adds the facts to the appropriate delete set
+        for input in self._query():
+            for fact, action in zip(input,actions):
+                action(fact)
+
+        # Delete the facts
+        count = 0
+        for pt,ds in deletesets.items():
+            count += len(ds)
+            fm = self._factmaps[pt]
+            for f in ds: fm.remove(f)
+        return count
+
+    # --------------------------------------------------------------------------
+    # Overload to make an iterator
+    # --------------------------------------------------------------------------
+    def __iter__(self):
+        return self.all()
+
+#------------------------------------------------------------------------------
+# QueryExecutor - actually executes the query and does the appropriate action
+# (eg., displaying to the user or deleting from the factbase)
+# ------------------------------------------------------------------------------
+
+class QueryExecutor(object):
+
+    #--------------------------------------------------------------------------
+    # factmaps - dictionary mapping predicates to FactMap.
+    # roots - the roots
+    # qspec - dictionary containing the specification of the query and output
+    #--------------------------------------------------------------------------
+    def __init__(self, factmaps, qspec):
+        self._factmaps = factmaps
+        self._qspec = qspec.fill_defaults()
+
+
+    #--------------------------------------------------------------------------
+    # Support function
+    #--------------------------------------------------------------------------
+    @classmethod
+    def get_factmap_data(cls, factmaps, qspec):
+        roots = qspec.roots
+        ptypes = set([ path(r).meta.predicate for r in roots])
+        factsets = {}
+        factindexes = {}
+        for ptype in ptypes:
+            fm =factmaps[ptype]
+            factsets[ptype] = fm.factset
+            for hpth, fi in fm.path2factindex.items(): factindexes[hpth] = fi
+        return (factsets,factindexes)
+
+    # --------------------------------------------------------------------------
+    # Internal support function
+    # --------------------------------------------------------------------------
+    def _make_plan_and_query(self):
+        (factsets,factindexes) = \
+            QueryExecutor.get_factmap_data(self._factmaps, self._qspec)
+        qplan = make_query_plan(factindexes.keys(), self._qspec)
+        query = make_query(qplan,factsets,factindexes)
+        return (qplan,query)
+
+
+    # --------------------------------------------------------------------------
+    # Internal function generator for the query results
+    # --------------------------------------------------------------------------
+    def _all(self):
+        cache = set()
+        for input in self._query():
+            output = self._outputter(input)
+            if self._unwrap: output = output[0]
+            if self._unique:
+                if output not in cache:
+                    cache.add(output)
+                    yield output
+            else:
+                yield output
+
+    def _group_by_all(self):
+        def groupiter(group):
+            cache = set()
+            for input in group:
+                output = self._outputter(input)
+                if self._unwrap: output = output[0]
+                if self._unique:
+                    if output not in cache:
+                        cache.add(output)
+                        yield output
+                else:
+                    yield output
+
+        unwrapkey = self._qspec.group_by == 1 and not self._qspec.tuple
+
+        group_by_keyfunc = make_input_alignment_functor(
+            self._qplan.output_signature, self._group_by)
+        for k,g in itertools.groupby(self._query(), group_by_keyfunc):
+            if unwrapkey: yield k[0], groupiter(g)
+            else: yield k, groupiter(g)
+
+
+    #--------------------------------------------------------------------------
+    # Function to return a generator of the query output
+    # --------------------------------------------------------------------------
+
+    def all(self):
+        (qplan,self._query) = self._make_plan_and_query()
+
+        outsig = self._qspec.getp("select", qplan.output_signature)
+        self._outputter = make_outputter(qplan.output_signature, outsig)
+        self._unwrap = not self._qspec.tuple and len(outsig) == 1
+        self._unique = self._qspec.unique
+
+        if self._qspec.group_by > 0: return self._group_by_all()
+        else: return self._all()
+
+    # --------------------------------------------------------------------------
+    # Delete a selection of facts. Maintains a set for each predicate type
+    # and adds the selected fact to that set. The delete the facts in each set.
+    # --------------------------------------------------------------------------
+
+    def delete(self,*subroots):
+        if self._executed:
+            raise RuntimeError("The query instance has already been executed")
+        if self._group_by:
+            raise RuntimeError(("delete() cannot be used in "
+                                "conjunction with group_by()"))
+        self._executed = True
+
+        roots = set([hashable_path(p) for p in self._qspec.roots])
+        subroots = set([hashable_path(p) for p in validate_root_paths(subroots)])
+
+        if not subroots.issubset(roots):
+            raise ValueError(("The roots to delete '{}' must be a subset of "
+                              "the query roots '{}").format(subroots,roots))
+        if not subroots: subroots = roots
+
+        # Find the roots to delete and generate a set of actions that are
+        # executed to add to a delete set
+        deletesets = {}
+        for r in subroots:
+            pr = path(r)
+            deletesets[pr.meta.predicate] = set()
+
+        actions = []
+        for out in self._qplan.output_signature:
+            hout = hashable_path(out)
+            if hout in subroots:
+                ds = deletesets[out.meta.predicate]
+                actions.append(lambda x, ds=ds: ds.add(x))
+            else:
+                actions.append(lambda x : None)
+
+        # Running the query adds the facts to the appropriate delete set
+        for input in self._query():
+            for fact, action in zip(input,actions):
+                action(fact)
+
+        # Delete the facts
+        count = 0
+        for pt,ds in deletesets.items():
+            count += len(ds)
+            fm = self._factmaps[pt]
+            for f in ds: fm.remove(f)
+        return count
 
 #------------------------------------------------------------------------------
 # main

@@ -362,6 +362,9 @@ class PredicatePath(object, metaclass=_PredicatePathMeta):
     class Hashable(object):
         def __init__(self, path):
             self._path = path
+            ps = self._path._pathseq
+            base = (ps[0].predicate.__name__,ps[0].name)
+            self._ordered = (base, ps[:1])
 
         @property
         def path(self):
@@ -376,6 +379,24 @@ class PredicatePath(object, metaclass=_PredicatePathMeta):
 
         def __ne__(self, other):
             result = self.__eq__(other)
+            if result is NotImplemented: return NotImplemented
+            return not result
+
+        def __lt__(self,other):
+            if not isinstance(other, self.__class__): return NotImplemented
+            return self._ordered < other._ordered
+
+        def __le__(self,other):
+            result = self.__gt__(other)
+            if result is NotImplemented: return NotImplemented
+            return not result
+
+        def __gt__(self,other):
+            if not isinstance(other, self.__class__): return NotImplemented
+            return self._ordered > other._ordered
+
+        def __ge__(self,other):
+            result = self.__lt__(other)
             if result is NotImplemented: return NotImplemented
             return not result
 
@@ -2312,6 +2333,29 @@ def simple_predicate(*args):
     proto['Meta'] = type("Meta", (object,),
                          {"name" : name, "is_tuple" : False, "_anon" : True})
     return type("ClormAnonPredicate", (Predicate,), proto)
+
+
+
+
+
+#------------------------------------------------------------------------------
+# Internal supporting functions
+# ------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+# Helper function to check if all the paths in a collection are root paths and
+# return path objects.
+# ------------------------------------------------------------------------------
+def validate_root_paths(paths):
+    def checkroot(p):
+        p = path(p)
+        if not p.meta.is_root:
+            raise ValueError("'{}' in '{}' is not a root path".format(p,paths))
+        return p
+    return list(map(checkroot,paths))
+
+
+
 
 
 #------------------------------------------------------------------------------
