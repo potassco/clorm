@@ -2,6 +2,7 @@ from .test_util_oset import OrderedSetTestCase
 from .test_util_wrapper import WrapperTestCase
 from .test_util_tools import *
 from .test_orm_core import *
+from .test_orm_factcontainers import *
 from .test_orm_factbase import *
 from .test_orm_queryplan import *
 from .test_orm_unifier import *

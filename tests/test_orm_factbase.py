@@ -24,10 +24,12 @@ from clorm.orm import FactBase, desc, asc, not_, and_, or_, \
     basic_join_order_heuristic, fixed_join_order_heuristic
 
 # Implementation imports
-from clorm.orm.factbase import FactIndex, FactMap, _FactSet, \
-    make_first_prejoin_query, make_prejoin_query_source, make_first_join_query, \
+from clorm.orm.factbase import make_first_prejoin_query, make_prejoin_query_source, \
+    make_first_join_query, \
     make_chained_join_query, make_query, \
     InQuerySorter, QueryOutput, QueryExecutor
+
+from clorm.orm.factcontainers import FactSet, FactIndex, FactMap
 
 from clorm.orm.queryplan import PositionalPlaceholder, NamedPlaceholder, QuerySpec
 
@@ -38,7 +40,6 @@ from clorm.orm.queryplan import process_where, process_join, process_orderby, \
 #------------------------------------------------------------------------------
 
 __all__ = [
-    'FactIndexTestCase',
     'FactBaseTestCase',
     'InQuerySorterTestCase',
     'QueryTestCase',
@@ -50,200 +51,6 @@ __all__ = [
 
 #------------------------------------------------------------------------------
 #
-#------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-# Test the FactIndex class
-#------------------------------------------------------------------------------
-
-class FactIndexTestCase(unittest.TestCase):
-    def setUp(self):
-        class Afact(Predicate):
-            num1=IntegerField()
-            str1=StringField()
-
-        class Bfact(Predicate):
-            num1=IntegerField()
-            str1=StringField()
-
-        self.Afact = Afact
-        self.Bfact = Bfact
-
-    #--------------------------------------------------------------------------
-    # Alternative for accessing elements - this looks at some performance
-    # differences
-    # --------------------------------------------------------------------------
-
-    def _test_getter_performance(self):
-        import timeit
-
-        testsetup='''
-from clorm import Predicate, IntegerField
-import random
-from operator import attrgetter
-
-class F(Predicate):
-    anum = IntegerField
-randlist=[]
-for i in range(0,10000):
-    randlist.append(F(random.randint(1,100)))
-'''
-        teststmt1='''
-randlist.sort(key=lambda x: x.anum)
-'''
-        teststmt2='''
-randlist.sort(key=F.anum)
-'''
-        teststmt3='''
-randlist.sort(key=F.anum.meta.attrgetter)
-'''
-        teststmt4='''
-randlist.sort(key=attrgetter('anum'))
-'''
-        repeat=1000
-        print("Lambda: {}".format(
-            timeit.timeit(stmt=teststmt1,setup=testsetup,number=repeat)))
-        print("Path: {}".format(
-            timeit.timeit(stmt=teststmt2,setup=testsetup,number=repeat)))
-        print("PathAttrGetter: {}".format(
-            timeit.timeit(stmt=teststmt3,setup=testsetup,number=repeat)))
-        print("RawAttrGetter: {}".format(
-            timeit.timeit(stmt=teststmt4,setup=testsetup,number=repeat)))
-
-
-    #--------------------------------------------------------------------------
-    #
-    #--------------------------------------------------------------------------
-    def test_create(self):
-        Afact = self.Afact
-        fi1 = FactIndex(Afact.num1)
-        self.assertTrue(type(fi1), FactIndex)
-        self.assertFalse(fi1)
-
-        # Should only accept fields
-        with self.assertRaises(TypeError) as ctx:
-            f2 = FactIndex(1)
-        with self.assertRaises(TypeError) as ctx:
-            f2 = FactIndex(Afact)
-
-    def test_add(self):
-        Afact = self.Afact
-        Bfact = self.Bfact
-        fi1 = FactIndex(Afact.num1)
-        fi2 = FactIndex(Afact.str1)
-        self.assertEqual(fi1.keys, [])
-
-        fi1.add(Afact(num1=1, str1="c"))
-        fi2.add(Afact(num1=1, str1="c"))
-        self.assertEqual(fi1.keys, [1])
-        self.assertEqual(fi2.keys, ["c"])
-
-        fi1.add(Afact(num1=2, str1="b"))
-        fi2.add(Afact(num1=2, str1="b"))
-        self.assertEqual(fi1.keys, [1,2])
-        self.assertEqual(fi2.keys, ["b","c"])
-        fi1.add(Afact(num1=3, str1="b"))
-        fi2.add(Afact(num1=3, str1="b"))
-        self.assertEqual(fi1.keys, [1,2,3])
-        self.assertEqual(fi2.keys, ["b","c"])
-
-    def test_remove(self):
-        Afact = self.Afact
-        Bfact = self.Bfact
-
-        af1a = Afact(num1=1, str1="a")
-        af2a = Afact(num1=2, str1="a")
-        af2b = Afact(num1=2, str1="b")
-        af3a = Afact(num1=3, str1="a")
-        af3b = Afact(num1=3, str1="b")
-
-        fi = FactIndex(Afact.num1)
-        for f in [ af1a, af2a, af2b, af3a, af3b ]: fi.add(f)
-        self.assertEqual(fi.keys, [1,2,3])
-
-        fi.remove(af1a)
-        self.assertEqual(fi.keys, [2,3])
-
-        fi.discard(af1a)
-        with self.assertRaises(KeyError) as ctx:
-            fi.remove(af1a)
-
-        fi.remove(af2a)
-        self.assertEqual(fi.keys, [2,3])
-
-        fi.remove(af3a)
-        self.assertEqual(fi.keys, [2,3])
-
-        fi.remove(af2b)
-        self.assertEqual(fi.keys, [3])
-
-        fi.remove(af3b)
-        self.assertEqual(fi.keys, [])
-
-    def test_find(self):
-        Afact = self.Afact
-
-        af1a = Afact(num1=1, str1="a")
-        af2a = Afact(num1=2, str1="a")
-        af2b = Afact(num1=2, str1="b")
-        af3a = Afact(num1=3, str1="a")
-        af3b = Afact(num1=3, str1="b")
-
-        fi = FactIndex(Afact.num1)
-        allfacts = [ af1a, af2a, af2b, af3a, af3b ]
-        for f in allfacts: fi.add(f)
-
-        self.assertEqual(set(fi.find(operator.eq, 1)), set([af1a]))
-        self.assertEqual(set(fi.find(operator.eq, 2)), set([af2a, af2b]))
-        self.assertEqual(set(fi.find(operator.ne, 5)), set(allfacts))
-        self.assertEqual(set(fi.find(operator.eq, 5)), set([]))
-        self.assertEqual(set(fi.find(operator.lt, 1)), set([]))
-        self.assertEqual(set(fi.find(operator.lt, 2)), set([af1a]))
-        self.assertEqual(set(fi.find(operator.le, 2)), set([af1a, af2a, af2b]))
-        self.assertEqual(set(fi.find(operator.gt, 2)), set([af3a, af3b]))
-        self.assertEqual(set(fi.find(operator.ge, 3)), set([af3a, af3b]))
-        self.assertEqual(set(fi.find(operator.gt, 3)), set([]))
-
-    def test_clear(self):
-        Afact = self.Afact
-        fi = FactIndex(Afact.num1)
-        fi.add(Afact(num1=1, str1="a"))
-        fi.clear()
-        self.assertEqual(fi.keys,[])
-
-
-    #--------------------------------------------------------------------------
-    # Test the support for indexes of subfields
-    #--------------------------------------------------------------------------
-    def test_subfields(self):
-        class CT(ComplexTerm):
-            num1=IntegerField()
-            str1=StringField()
-        class Fact(Predicate):
-            ct1=CT.Field()
-            ct2=(IntegerField(),IntegerField())
-
-        fi1 = FactIndex(Fact.ct1.num1)
-        fi2 = FactIndex(Fact.ct2[1])
-        fi3 = FactIndex(Fact.ct1)
-
-        f1=Fact(CT(10,"a"),(1,4))
-        f2=Fact(CT(20,"b"),(2,3))
-        f3=Fact(CT(30,"c"),(5,2))
-        f4=Fact(CT(40,"d"),(6,1))
-
-        fi1.add(f1); fi2.add(f1); fi3.add(f1)
-        fi1.add(f2); fi2.add(f2); fi3.add(f2)
-        fi1.add(f3); fi2.add(f3); fi3.add(f3)
-        fi1.add(f4); fi2.add(f4); fi3.add(f4)
-
-        self.assertEqual(fi1.keys, [10,20,30,40])
-        self.assertEqual(fi2.keys, [1,2,3,4])
-        self.assertEqual(set(fi3.keys),
-                         set([CT(10,"a"),CT(20,"b"),CT(30,"c"),CT(40,"d")]))
-
-#------------------------------------------------------------------------------
-# Test the _FactMap and Select _Delete class
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -684,7 +491,7 @@ class InQuerySorterTestCase(unittest.TestCase):
         self.factsets = {}
         self.indexes = {}
 
-        factset = _FactSet()
+        factset = FactSet()
         factindex = FactIndex(G.astr)
         for f in [G(1,"a"),G(1,"foo"),G(5,"a"),G(5,"foo")]:
             factset.add(f)
@@ -692,7 +499,7 @@ class InQuerySorterTestCase(unittest.TestCase):
         self.indexes[hashable_path(G.astr)] = factindex
         self.factsets[G] = factset
 
-        factset = _FactSet()
+        factset = FactSet()
         factindex = FactIndex(F.anum)
         for f in [F(1,"a"),F(1,"foo"),F(5,"a"),F(5,"foo")]:
             factset.add(f)
@@ -827,7 +634,7 @@ class QueryTestCase(unittest.TestCase):
         self.factsets = {}
         self.indexes = {}
 
-        factset = _FactSet()
+        factset = FactSet()
         factindex = FactIndex(G.astr)
         for f in [G(1,"a"),G(1,"foo"),G(5,"a"),G(5,"foo")]:
             factset.add(f)
@@ -835,7 +642,7 @@ class QueryTestCase(unittest.TestCase):
         self.indexes[hashable_path(G.astr)] = factindex
         self.factsets[G] = factset
 
-        factset = _FactSet()
+        factset = FactSet()
         factindex = FactIndex(F.anum)
         for f in [F(1,"a"),F(1,"foo"),F(5,"a"),F(5,"foo")]:
             factset.add(f)
@@ -860,7 +667,7 @@ class QueryTestCase(unittest.TestCase):
         roots = [F,G]
         fjoh = fixed_join_order_heuristic
         bjoh = basic_join_order_heuristic
-    
+
         # Simplest case. Nothing specified so pass through the factset
         qspec = QuerySpec(roots=roots,join=[],where=[],order_by=[],joh=fjoh)
         qp = make_query_plan(indexes.keys(), qspec)
@@ -1630,7 +1437,7 @@ class SelectNoJoinTestCase(unittest.TestCase):
         self.assertEqual(f1, fpb(f1))
         self.assertFalse(f2 == fpb(f1))
 
-        fb1 = FactBase(facts=facts, indexes=[path(Fact)])
+        fb1 = FactBase(facts=facts, indexes=[path(Fact.num1)])
         fb2 = FactBase(facts=facts)
         self.assertEqual(fb1, fb2)
         self.assertEqual(len(fb1), len(facts))
