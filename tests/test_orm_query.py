@@ -25,7 +25,7 @@ from clorm.orm.core import QCondition, trueall
 from clorm.orm import desc, asc, ph_, ph1_, ph2_, func_, not_, and_, or_, \
     joinall_
 
-from clorm.orm.queryplan import PositionalPlaceholder, NamedPlaceholder, \
+from clorm.orm.query import PositionalPlaceholder, NamedPlaceholder, \
     is_boolean_qcondition, is_comparison_qcondition, \
     StandardComparator, FunctionComparator, \
     make_input_alignment_functor, \

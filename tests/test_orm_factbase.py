@@ -31,9 +31,9 @@ from clorm.orm.factbase import make_first_prejoin_query, make_prejoin_query_sour
 
 from clorm.orm.factcontainers import FactSet, FactIndex, FactMap
 
-from clorm.orm.queryplan import PositionalPlaceholder, NamedPlaceholder, QuerySpec
+from clorm.orm.query import PositionalPlaceholder, NamedPlaceholder, QuerySpec
 
-from clorm.orm.queryplan import process_where, process_join, process_orderby, \
+from clorm.orm.query import process_where, process_join, process_orderby, \
     make_query_plan, make_input_alignment_functor
 
 #------------------------------------------------------------------------------

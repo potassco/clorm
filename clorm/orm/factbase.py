@@ -15,11 +15,11 @@ import itertools
 from .core import *
 from .core import get_field_definition, PredicatePath, kwargs_check_keys
 
-from .queryplan import *
+from .query import *
 
-from .queryplan import Placeholder, OrderBy, desc, asc
+from .query import Placeholder, OrderBy, desc, asc
 
-from .queryplan import JoinQueryPlan, QueryPlan, \
+from .query import JoinQueryPlan, QueryPlan, \
     process_where, process_join, process_orderby, \
     make_input_alignment_functor, basic_join_order_heuristic, make_query_plan,\
     FuncInputSpec, FunctionComparator, QuerySpec
