@@ -43,6 +43,11 @@ from clorm.orm.query import PositionalPlaceholder, NamedPlaceholder, \
     make_chained_join_query, make_query, \
     InQuerySorter, QueryExecutor
 
+###### NOTE: The QueryOutput tests need to be turned into QueryExecutor
+###### tests. We can then delete QueryOutput which is not being used for
+###### anything.
+
+
 from clorm.orm.factcontainers import FactSet, FactIndex, FactMap
 
 #------------------------------------------------------------------------------
@@ -1813,352 +1818,6 @@ class InQuerySorterTestCase(unittest.TestCase):
         ]
         self.assertEqual(outlistF,expected)
 
-#------------------------------------------------------------------------------
-# QueryOutputTest. Test functions for the post-processing the query
-# ------------------------------------------------------------------------------
-
-def factmaps_to_factsets(factmaps):
-    return { ptype : fm.factset for ptype,fm in factmaps.items() }
-
-
-def f_in_factmaps(f, factmaps):
-    fm = factmaps.get(type(f), factmaps)
-    if not fm: return False
-    return f in fm.factset
-
-def factmaps_dict(facts,indexes=[]):
-    from itertools import groupby
-    indexes = sorted([hashable_path(p) for p in indexes])
-    predicate2indexes = {}
-    for k,g in groupby(indexes, lambda p : path(p).meta.predicate):
-        predicate2indexes[k] = list(g)
-
-    factmaps = {}
-    keyfunc=lambda fact : hashable_path(type(fact))
-    facts = sorted(facts,key=keyfunc)
-    for pp,g in groupby(facts, keyfunc):
-        predicate = path(pp).meta.predicate
-        indexes = [path(p) for p in predicate2indexes.get(predicate,[])]
-        fm=FactMap(predicate,indexes)
-        fm.add_facts(list(g))
-        factmaps[predicate]=fm
-    return factmaps
-
-class QueryOutputTestCase(unittest.TestCase):
-    def setUp(self):
-        class F(Predicate):
-            anum=IntegerField
-            astr=StringField
-        self.F = F
-
-        class G(Predicate):
-            anum=IntegerField
-            astr=StringField
-        self.G = G
-
-        factmaps = factmaps_dict([
-            G(1,"a"),G(1,"foo"),G(5,"a"),G(5,"foo"),
-            F(1,"a"),F(1,"foo"),F(5,"a"),F(5,"foo")])
-        self.factmaps = factmaps
-
-    #--------------------------------------------------------------------------
-    # Test some basic configurations
-    #--------------------------------------------------------------------------
-    def test_api_QueryOutput(self):
-        F = self.F
-        G = self.G
-        factmaps=self.factmaps
-        indexes = {}
-        factsets = factmaps_to_factsets(factmaps)
-        pw = process_where
-        pj = process_join
-        pob = process_orderby
-        fjoh = fixed_join_order_heuristic
-        bjoh = basic_join_order_heuristic
-        roots = [F,G]
-
-        joins1 = pj([F.anum == G.anum],roots)
-        where1 = pw((G.anum > 4) | (F.astr == "foo"),roots)
-        orderbys = pob([F.anum,G.anum],roots)
-        qspec = QuerySpec(roots=roots, join=joins1,where= where1,order_by= orderbys,joh=bjoh)
-        qp1 = make_query_plan(indexes.keys(),qspec)
-        q1 = make_query(qp1, factsets, indexes)
-
-        # Test output with no options
-        qo = QueryOutput(factmaps, qspec, qp1, q1)
-        result = list(qo)
-        expected = set([(F(1,"foo"),G(1,"a")), (F(1,"foo"),G(1,"foo")),
-                        (F(5,"a"),G(5,"a")), (F(5,"a"),G(5,"foo")),
-                        (F(5,"foo"),G(5,"a")), (F(5,"foo"),G(5,"foo"))])
-        self.assertEqual(expected, set(result))
-
-        # Test output with no options - using the explicit all() method
-        qo = QueryOutput(factmaps, qspec, qp1, q1)
-        result = list(qo.all())
-        expected = set([(F(1,"foo"),G(1,"a")), (F(1,"foo"),G(1,"foo")),
-                        (F(5,"a"),G(5,"a")), (F(5,"a"),G(5,"foo")),
-                        (F(5,"foo"),G(5,"a")), (F(5,"foo"),G(5,"foo"))])
-        self.assertEqual(expected, set(result))
-
-        # Test output with no options - using the count() method
-        qo = QueryOutput(factmaps, qspec, qp1, q1)
-        self.assertEqual(qo.count(),6)
-
-        # Test output with a simple swapped signature
-        qo = QueryOutput(factmaps, qspec, qp1, q1)
-        result = list(qo.output(G,F))
-        expected = set([(G(1,"a"),F(1,"foo")), (G(1,"foo"),F(1,"foo")),
-                        (G(5,"a"),F(5,"a")), (G(5,"foo"),F(5,"a")),
-                        (G(5,"a"),F(5,"foo")), (G(5,"foo"),F(5,"foo"))])
-        self.assertEqual(expected, set(result))
-
-        # Test output with filtered signature
-        qo = QueryOutput(factmaps, qspec, qp1, q1)
-        result = list(qo.output(G.anum))
-        expected = set([1,5])
-        self.assertEqual(expected, set(result))
-
-        # Test output with an complex implicit function signature
-        qo = QueryOutput(factmaps, qspec, qp1, q1)
-        result = list(qo.output(G.anum,
-                                lambda f,g: "X{}".format(f.astr)))
-        expected = set([(1,"Xfoo"),(5,"Xa"),(5,"Xfoo")])
-        self.assertEqual(expected, set(result))
-
-        # Test output with an complex explicit function signature
-        qo = QueryOutput(factmaps, qspec, qp1, q1)
-        result = list(qo.output(G.anum,
-                                func_([F.astr], lambda v: "X{}".format(v))))
-        expected = set([(1,"Xfoo"),(5,"Xa"),(5,"Xfoo")])
-        self.assertEqual(expected, set(result))
-
-        # Test output with filtered signature and uniqueness
-        qo = QueryOutput(factmaps, qspec, qp1, q1)
-        result = list(qo.output(G.anum).unique())
-        expected = set([1,5])
-        self.assertTrue(result == [1,5] or result == [5,1])
-
-        # Test output with filtered signature and forced tuple
-        qo = QueryOutput(factmaps, qspec, qp1, q1)
-        result = list(qo.output(G.anum).tuple())
-        expected = set([(1,),(5,)])
-        self.assertEqual(expected, set(result))
-
-    #--------------------------------------------------------------------------
-    # Test singleton, count, first
-    #--------------------------------------------------------------------------
-    def test_api_QueryOutput_singleton_count_first(self):
-        F = self.F
-        G = self.G
-        fjoh = fixed_join_order_heuristic
-        bjoh = basic_join_order_heuristic
-
-        factmaps=self.factmaps
-
-        def qsetup(where):
-            indexes = {}
-            factsets = factmaps_to_factsets(factmaps)
-            pw = process_where
-            pj = process_join
-            pob = process_orderby
-            roots = [F,G]
-
-            join = pj([F.anum == G.anum],roots)
-            where = pw(where,roots)
-            orderby = pob([F.astr],roots)
-            qspec = QuerySpec(roots=roots, join=join, where=where, order_by=orderby,joh=bjoh)
-            qplan = make_query_plan(indexes.keys(),qspec)
-            query = make_query(qplan, factsets, indexes)
-            return QueryOutput(factmaps, qspec, qplan, query)
-
-        # Test getting the first element
-        qo = qsetup((G.anum == 5) & (G.astr == "foo"))
-        self.assertEqual(qo.first(),(F(5,"a"),G(5,"foo")))
-
-        # Test getting the first element with filtered output
-        qo = qsetup((G.anum == 5) & (G.astr == "foo"))
-        qo.output(F)
-        self.assertEqual(qo.first(),F(5,"a"))
-
-        # Test the count
-        qo = qsetup((G.anum == 5) & (G.astr == "foo"))
-        qo.output(F)
-        self.assertEqual(qo.count(),2)
-
-        # Test count with filtered output and uniqueness
-        qo = qsetup((G.anum == 5) & (G.astr == "foo"))
-        qo.output(F.anum).unique()
-        self.assertEqual(qo.count(),1)
-
-        # Test singleton with filtered output and uniqueness
-        qo = qsetup((G.anum == 5) & (G.astr == "foo"))
-        qo.output(F.anum).unique()
-        self.assertEqual(qo.singleton(),5)
-
-        # Test singleton failure
-        qo = qsetup((G.anum == 5) & (G.astr == "foo"))
-        with self.assertRaises(ValueError) as ctx:
-            qo.singleton()
-        check_errmsg("Query returned more",ctx)
-
-    #--------------------------------------------------------------------------
-    # Test delete
-    #--------------------------------------------------------------------------
-    def test_api_QueryOutput_delete(self):
-        F = self.F
-        G = self.G
-        fjoh = fixed_join_order_heuristic
-        bjoh = basic_join_order_heuristic
-
-        def delsetup():
-            tmp = factmaps_to_factsets(self.factmaps)
-            facts = [f for p, fs in tmp.items() for f in fs]
-            factmaps=factmaps_dict(facts)
-            factsets = factmaps_to_factsets(factmaps)
-            indexes = {}
-            pw = process_where
-            pj = process_join
-            pob = process_orderby
-            roots = [F,G]
-
-            join = pj([F.anum == G.anum],roots)
-            where = pw(G.anum > 4,roots)
-            orderby = pob([F.anum,G.anum],roots)
-            qspec = QuerySpec(roots=roots, join=join,where=where,
-                              order_by=orderby,joh=bjoh)
-            qplan = make_query_plan(indexes.keys(),qspec)
-            query = make_query(qplan, factsets, indexes)
-            return (factmaps,QueryOutput(factmaps, qspec, qplan, query))
-
-        # Test deleting all selected elements
-        factmaps,qo = delsetup()
-        qo.delete()
-
-        self.assertEqual(len(factmaps),2)
-        self.assertFalse(f_in_factmaps(F(5,"a"), factmaps))
-        self.assertFalse(f_in_factmaps(F(5,"foo"), factmaps))
-        self.assertFalse(f_in_factmaps(G(5,"a"), factmaps))
-        self.assertFalse(f_in_factmaps(G(5,"foo"), factmaps))
-
-        # Test deleting all selected elements chosen explicitly
-        factmaps,qo = delsetup()
-        qo.delete(F,G)
-
-        self.assertEqual(len(factmaps),2)
-        self.assertFalse(f_in_factmaps(F(5,"a"),factmaps))
-        self.assertFalse(f_in_factmaps(F(5,"foo"),factmaps))
-        self.assertFalse(f_in_factmaps(G(5,"a"),factmaps))
-        self.assertFalse(f_in_factmaps(G(5,"foo"),factmaps))
-
-        # Test deleting only the F instances
-        factmaps,qo = delsetup()
-        qo.delete(F)
-
-        self.assertEqual(len(factmaps),2)
-        self.assertFalse(f_in_factmaps(F(5,"a"),factmaps))
-        self.assertFalse(f_in_factmaps(F(5,"foo"),factmaps))
-
-        # Test deleting only the G instances using a path object
-        factmaps,qo = delsetup()
-        qo.delete(path(G))
-
-        self.assertEqual(len(factmaps),2)
-        self.assertFalse(f_in_factmaps(G(5,"a"),factmaps))
-        self.assertFalse(f_in_factmaps(G(5,"foo"),factmaps))
-
-        # Bad delete - deleting an alias path that is not in the original
-        factmaps,qo = delsetup()
-        FA = alias(self.F)
-        with self.assertRaises(ValueError) as ctx:
-            qo.delete(FA)
-        check_errmsg("The roots to delete",ctx)
-
-        # Bad deletes -  deleting all plus an extra
-        fb,qo = delsetup()
-        FA = alias(self.F)
-        with self.assertRaises(ValueError) as ctx:
-            qo.delete(F,G,FA)
-        check_errmsg("The roots to delete",ctx)
-
-    #--------------------------------------------------------------------------
-    # Test group_by
-    #--------------------------------------------------------------------------
-    def test_api_QueryOutput_group_by(self):
-        F = self.F
-        G = self.G
-        fjoh = fixed_join_order_heuristic
-        bjoh = basic_join_order_heuristic
-
-        factmaps=self.factmaps
-
-        def qsetup(ordering, where):
-            indexes = {}
-            factsets = factmaps_to_factsets(factmaps)
-            pw = process_where
-            pj = process_join
-            pob = process_orderby
-            roots = [F,G]
-
-            join = pj([F.anum == G.anum],roots)
-            where = pw(where,roots) if where else []
-            orderby = pob(ordering,roots) if ordering else []
-            qspec = QuerySpec(roots=roots, join=join,where=where,order_by=orderby,joh=bjoh)
-            qplan = make_query_plan(indexes.keys(),qspec)
-            query = make_query(qplan, factsets, indexes)
-            return QueryOutput(factmaps, qspec, qplan, query)
-
-        # Test some bad group_by setups
-        qo = qsetup([], (G.anum == 5) & (G.astr == "foo"))
-        with self.assertRaises(ValueError) as ctx:
-            qo.group_by()
-        check_errmsg("group_by() can only",ctx)
-
-        qo = qsetup([F.anum], (G.anum == 5) & (G.astr == "foo"))
-        with self.assertRaises(ValueError) as ctx:
-            qo.group_by(0)
-        check_errmsg("The grouping must be a positive integer",ctx)
-
-        qo = qsetup([F.anum], (G.anum == 5) & (G.astr == "foo"))
-        with self.assertRaises(ValueError) as ctx:
-            qo.group_by(2)
-        check_errmsg("The grouping size",ctx)
-
-        qo = qsetup([F.anum], (G.anum == 5) & (G.astr == "foo"))
-        with self.assertRaises(ValueError) as ctx:
-            qo.group_by(1).group_by()
-        check_errmsg("group_by() can only be specified once",ctx)
-
-        # Test output with various options
-
-        # Default grouping by first item (removes tuple)
-        qo = qsetup([F.anum,F.astr], None)
-#        print("\nTHE SPEC\n{}".format(qo._qspec))
-#        print("\nTHE PLAN\n{}".format(qo._qplan))
-        self.assertEqual([k for k,_ in list(qo.group_by())], [1,5])
-
-        # Default grouping by first item but different order (removes tuple)
-        qo = qsetup([desc(F.anum),F.astr], None)
-        self.assertEqual([k for k,_ in list(qo.group_by())], [5,1])
-
-        # Default grouping by first item with tuple not removed
-        qo = qsetup([F.anum,F.astr], None).tuple()
-        self.assertEqual([k for k,_ in list(qo.group_by())], [(1,),(5,)])
-
-        # Default grouping by first item - check number of items
-        qo = qsetup([F.anum,F.astr], None)
-        for k,g in qo.group_by():
-            self.assertEqual(len(list(g)),4)
-
-        # Group by both items - check keys
-        qo = qsetup([F.anum,F.astr], None)
-        self.assertEqual([k for k,_ in list(qo.group_by(2).output(G))],
-                         [(1,'a'),(1,'foo'),(5,'a'),(5,'foo')])
-
-        # Group by both items with unique - single output for each group
-        qo = qsetup([F.anum,F.astr], None)
-        for k,g in qo.group_by(2).output(G.anum).unique():
-            self.assertEqual(len(list(g)),1)
-
 
 #------------------------------------------------------------------------------
 # QueryTest. Test functions for the underlying query mechanism
@@ -2541,7 +2200,37 @@ class QueryTestCase(unittest.TestCase):
         check_errmsg("Cannot execute an ungrounded query",ctx)
 
 #------------------------------------------------------------------------------
+# Helper function for QueryExecutor testing
+#------------------------------------------------------------------------------
+def factmaps_to_factsets(factmaps):
+    return { ptype : fm.factset for ptype,fm in factmaps.items() }
 
+
+def f_in_factmaps(f, factmaps):
+    fm = factmaps.get(type(f), factmaps)
+    if not fm: return False
+    return f in fm.factset
+
+def factmaps_dict(facts,indexes=[]):
+    from itertools import groupby
+    indexes = sorted([hashable_path(p) for p in indexes])
+    predicate2indexes = {}
+    for k,g in groupby(indexes, lambda p : path(p).meta.predicate):
+        predicate2indexes[k] = list(g)
+
+    factmaps = {}
+    keyfunc=lambda fact : hashable_path(type(fact))
+    facts = sorted(facts,key=keyfunc)
+    for pp,g in groupby(facts, keyfunc):
+        predicate = path(pp).meta.predicate
+        indexes = [path(p) for p in predicate2indexes.get(predicate,[])]
+        fm=FactMap(predicate,indexes)
+        fm.add_facts(list(g))
+        factmaps[predicate]=fm
+    return factmaps
+
+#------------------------------------------------------------------------------
+#
 #------------------------------------------------------------------------------
 
 class QueryExecutorTestCase(unittest.TestCase):
@@ -2587,6 +2276,153 @@ class QueryExecutorTestCase(unittest.TestCase):
         expected = set([(F(1,"foo"),G(1,"a")), (F(1,"foo"),G(1,"foo")),
                         (F(5,"foo"),G(5,"a")), (F(5,"foo"),G(5,"foo"))])
         self.assertEqual(expected, set(result))
+
+
+    #--------------------------------------------------------------------------
+    # Test some basic configurations
+    #--------------------------------------------------------------------------
+    def test_noapi_basic_tests(self):
+        F = self.F
+        G = self.G
+        factmaps=self.factmaps
+
+        pw = process_where
+        pj = process_join
+        pob = process_orderby
+        fjoh = fixed_join_order_heuristic
+        bjoh = basic_join_order_heuristic
+        roots = [F,G]
+
+        joins1 = pj([F.anum == G.anum],roots)
+        where1 = pw((G.anum > 4) | (F.astr == "foo"),roots)
+        orderbys = pob([F.anum,G.anum],roots)
+        qspec = QuerySpec(roots=roots, join=joins1,where=where1,
+                          order_by=orderbys,joh=bjoh)
+
+        # Test output with no options
+        qe = QueryExecutor(factmaps, qspec)
+        result = list(qe.all())
+        expected = set([(F(1,"foo"),G(1,"a")), (F(1,"foo"),G(1,"foo")),
+                        (F(5,"a"),G(5,"a")), (F(5,"a"),G(5,"foo")),
+                        (F(5,"foo"),G(5,"a")), (F(5,"foo"),G(5,"foo"))])
+        self.assertEqual(expected, set(result))
+
+        # Test output with a simple swapped signature
+        nqspec = qspec.newp(select=(G,F))
+        qe = QueryExecutor(factmaps, nqspec)
+        result = list(qe.all())
+        expected = set([(G(1,"a"),F(1,"foo")), (G(1,"foo"),F(1,"foo")),
+                        (G(5,"a"),F(5,"a")), (G(5,"foo"),F(5,"a")),
+                        (G(5,"a"),F(5,"foo")), (G(5,"foo"),F(5,"foo"))])
+        self.assertEqual(expected, set(result))
+
+        # Test output with filtered signature
+        nqspec = qspec.newp(select=[G.anum])
+        qe = QueryExecutor(factmaps, nqspec)
+        result = list(qe.all())
+        expected = set([1,5])
+        self.assertEqual(expected, set(result))
+
+        # Test output with an complex implicit function signature
+        nqspec = qspec.newp(select=(G.anum,
+                                    lambda f,g: "X{}".format(f.astr)))
+        qe = QueryExecutor(factmaps, nqspec)
+        result = list(qe.all())
+        expected = set([(1,"Xfoo"),(5,"Xa"),(5,"Xfoo")])
+        self.assertEqual(expected, set(result))
+
+        # Test output with an complex explicit function signature
+        nqspec = qspec.newp(select=(G.anum,
+                                    func_([F.astr], lambda v: "X{}".format(v))))
+        qe = QueryExecutor(factmaps, nqspec)
+        result = list(qe.all())
+        expected = set([(1,"Xfoo"),(5,"Xa"),(5,"Xfoo")])
+        self.assertEqual(expected, set(result))
+
+        # Test output with filtered signature and uniqueness
+        nqspec = qspec.newp(select=(G.anum,),unique=True)
+        qe = QueryExecutor(factmaps, nqspec)
+        result = list(qe.all())
+        expected = set([1,5])
+        self.assertTrue(result == [1,5] or result == [5,1])
+
+        # Test output with filtered signature and forced tuple
+        nqspec = qspec.newp(select=(G.anum,),tuple=True)
+        qe = QueryExecutor(factmaps, nqspec)
+        result = list(qe.all())
+        expected = set([(1,),(5,)])
+        self.assertEqual(expected, set(result))
+
+
+
+    #--------------------------------------------------------------------------
+    # Test delete
+    #--------------------------------------------------------------------------
+    def test_api_QueryOutput_delete(self):
+        F = self.F
+        G = self.G
+        fjoh = fixed_join_order_heuristic
+        bjoh = basic_join_order_heuristic
+
+        def delete(*subroots):
+            tmp = factmaps_to_factsets(self.factmaps)
+            facts = [f for p, fs in tmp.items() for f in fs]
+            factmaps=factmaps_dict(facts)
+            pw = process_where
+            pj = process_join
+            pob = process_orderby
+
+            roots = [F,G]
+            join = pj([F.anum == G.anum],roots)
+            where = pw(G.anum > 4,roots)
+            orderby = pob([F.anum,G.anum],roots)
+            qspec = QuerySpec(roots=roots, join=join,where=where,
+                              order_by=orderby,joh=bjoh, delete=subroots)
+            qe = QueryExecutor(factmaps, qspec)
+            return(factmaps,qe.delete())
+
+        # Test deleting all selected elements
+        factmaps,count = delete()
+        self.assertEqual(count,4)
+        self.assertEqual(len(factmaps),2)
+        self.assertFalse(f_in_factmaps(F(5,"a"), factmaps))
+        self.assertFalse(f_in_factmaps(F(5,"foo"), factmaps))
+        self.assertFalse(f_in_factmaps(G(5,"a"), factmaps))
+        self.assertFalse(f_in_factmaps(G(5,"foo"), factmaps))
+
+        # Test deleting all selected elements chosen explicitly
+        factmaps,count = delete(F,G)
+        self.assertEqual(count,4)
+        self.assertFalse(f_in_factmaps(F(5,"a"),factmaps))
+        self.assertFalse(f_in_factmaps(F(5,"foo"),factmaps))
+        self.assertFalse(f_in_factmaps(G(5,"a"),factmaps))
+        self.assertFalse(f_in_factmaps(G(5,"foo"),factmaps))
+
+        # Test deleting only the F instances
+        factmaps,count = delete(F)
+        self.assertEqual(count,2)
+        self.assertFalse(f_in_factmaps(F(5,"a"),factmaps))
+        self.assertFalse(f_in_factmaps(F(5,"foo"),factmaps))
+
+
+        # Test deleting only the G instances using a path object
+        factmaps,count = delete(G)
+        self.assertEqual(count,2)
+        self.assertFalse(f_in_factmaps(G(5,"a"),factmaps))
+        self.assertFalse(f_in_factmaps(G(5,"foo"),factmaps))
+
+        # Bad delete - deleting an alias path that is not in the original
+        FA = alias(self.F)
+        with self.assertRaises(ValueError) as ctx:
+            factmaps,count = delete(FA)
+        check_errmsg("The roots to delete",ctx)
+
+        # Bad deletes -  deleting all plus an extra
+        FA = alias(self.F)
+        with self.assertRaises(ValueError) as ctx:
+            fb,count = delete(F,G,FA)
+        check_errmsg("The roots to delete",ctx)
+
 
 #------------------------------------------------------------------------------
 # main
