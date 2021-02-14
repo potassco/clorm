@@ -20,10 +20,8 @@ from .query import *
 
 from .query import Placeholder, OrderBy, desc, asc
 
-from .query import JoinQueryPlan, QueryPlan, \
-    process_where, process_join, process_orderby, \
-    make_input_alignment_functor, basic_join_order_heuristic, make_query_plan,\
-    FuncInputSpec, FunctionComparator, QuerySpec, make_query, QueryOutput
+from .query import process_where, process_join, process_orderby, \
+    make_query_plan, QuerySpec, QueryExecutor
 
 from .factcontainers import FactSet, FactIndex, FactMap, factset_equality
 
@@ -201,29 +199,39 @@ class FactBase(object):
     #--------------------------------------------------------------------------
     # Special FactBase member functions
     #--------------------------------------------------------------------------
-    def select(self, *roots):
+    def select(self, root):
         """Create a Select query for a predicate type."""
         self._check_init()  # Check for delayed init
 
+        roots = validate_root_paths([root])
+        ptypes = set([ root.meta.predicate for root in roots])
+
         # Make sure there are factmaps for each referenced predicate type
-        ptypes = set([r.meta.predicate for r in validate_root_paths(roots)])
         for ptype in ptypes: self._factmaps.setdefault(ptype, FactMap(ptype))
 
-        return SelectImpl(self, roots)
+        return SelectImpl(self, QuerySpec(roots=roots))
 
     def delete(self, root):
         self._check_init()  # Check for delayed init
-        return _Delete(self, root)
 
-    def select2(self, *roots):
-        """Create a Select query for a predicate type."""
+        roots = validate_root_paths([root])
+        ptypes = set([ root.meta.predicate for root in roots])
+
+        # Make sure there are factmaps for each referenced predicate type
+        for ptype in ptypes: self._factmaps.setdefault(ptype, FactMap(ptype))
+
+        return _Delete(self, QuerySpec(roots=roots))
+
+    def query(self, *roots):
+        """Create a select/delete query using Query API v2."""
         self._check_init()  # Check for delayed init
 
         # Make sure there are factmaps for each referenced predicate type
         ptypes = set([r.meta.predicate for r in validate_root_paths(roots)])
         for ptype in ptypes: self._factmaps.setdefault(ptype, FactMap(ptype))
 
-        return Select2Impl(self, QuerySpec(roots=tuple(validate_root_paths(roots))))
+        qspec = QuerySpec(roots=roots)
+        return QueryImpl(self._factmaps, qspec)
 
     @property
     def predicates(self):
@@ -568,16 +576,6 @@ class Select(abc.ABC):
     ``order_by()`` clause can be omitted.
 
     """
-    @abc.abstractmethod
-    def join(self, *expressions):
-        """Set the select statement's join conditions.
-
-        The join statement consists of a list of comparison expressions, where
-        each comparison expression specifies the join between two predicate
-        types.
-
-        """
-        pass
 
     @abc.abstractmethod
     def where(self, *expressions):
@@ -667,138 +665,90 @@ class Delete(abc.ABC):
 
 class SelectImpl(Select):
 
-    def __init__(self, factbase, roots):
+    def __init__(self, factbase, qspec):
         self._factbase = factbase
-        self._roots = tuple(validate_root_paths(roots))
-        ptypes = set([ root.meta.predicate for root in self._roots])
-
-        self._where = None
-        self._joins = None
-        self._orderbys = None
-        self._pred2factset = {}
-        self._path2factindex = {}
-
-        for ptype in ptypes:
-            fm =factbase.factmaps[ptype]
-            self._pred2factset[ptype] = fm.factset
-            for hpth, fi in fm.path2factindex.items():
-                self._path2factindex[hpth] = fi
-
-        qspec = QuerySpec(roots=self._roots,join=[],where=[],order_by=[])
-        self._queryplan = make_query_plan(self._path2factindex.keys(), qspec)
-
-
-    #--------------------------------------------------------------------------
-    # Add a join expression
-    #--------------------------------------------------------------------------
-    def join(self, *expressions):
-        if self._where:
-            raise TypeError(("The 'join' condition must come before the "
-                             "'where' condition"))
-        if self._orderbys:
-            raise TypeError(("The 'join' condition must come before the "
-                             "'order_by' condition"))
-        if self._joins:
-            raise TypeError("Cannot specify 'join' multiple times")
-        if not expressions:
-            raise TypeError("Empty 'join' expression")
-        self._joins = process_join(expressions, self._roots)
-
-        # Make a query plan in case there is no other inputs
-        qspec = QuerySpec(roots=self._roots,join=self._joins,where=[],order_by=[])
-        self._queryplan = make_query_plan(self._path2factindex.keys(), spec)
-        return self
+        self._qspec = qspec
 
     #--------------------------------------------------------------------------
     # Add an order_by expression
     #--------------------------------------------------------------------------
     def where(self, *expressions):
-        if self._orderbys:
-            raise TypeError(("The 'where' condition must come before the "
+        if self._qspec.order_by:
+            raise ValueError(("The 'where' condition must come before the "
                              "'order_by' condition"))
-        if self._where:
-            raise TypeError("Cannot specify 'where' multiple times")
+            raise ValueError("Cannot specify 'where' multiple times")
         if not expressions:
-            raise TypeError("Empty 'where' expression")
+            raise ValueError("Empty 'where' expression")
         elif len(expressions) == 1:
-            self._where = process_where(expressions[0],self._roots)
+            where = process_where(expressions[0],self._qspec.roots)
         else:
-            self._where = process_where(and_(*expressions),self._roots)
+            where = process_where(and_(*expressions),self._qspec.roots)
+        nqspec = self._qspec.newp(where=where)
 
-        # Make a query plan in case there is no other inputs
-        joins = self._joins if self._joins else []
-        where = self._where if self._where else []
-        qspec = QuerySpec(roots=self._roots,join=joins,where=where,order_by=[])
-        self._queryplan = make_query_plan(self._path2factindex.keys(), qspec)
-        return self
+        return SelectImpl(self._factbase,nqspec)
 
     #--------------------------------------------------------------------------
     # Add an order_by expression
     #--------------------------------------------------------------------------
     def order_by(self, *expressions):
-        if self._orderbys:
-            raise TypeError("Cannot specify 'order_by' multiple times")
         if not expressions:
-            raise TypeError("Empty 'order_by' expression")
-        self._orderbys = process_orderby(expressions,self._roots)
+            raise ValueError("Empty 'order_by' expression")
+        order_by=process_orderby(expressions,self._qspec.roots)
+        nqspec = self._qspec.newp(order_by=order_by)
 
-        # Make a query plan in case there is no other inputs
-        joins = self._joins if self._joins else []
-        where = self._where if self._where else []
-        qspec = QuerySpec(roots=self._roots,join=joins,
-                          where=where,order_by=self._orderbys)
-        self._queryplan = make_query_plan(self._path2factindex.keys(), qspec)
-        return self
+        return SelectImpl(self._factbase,nqspec)
 
     #--------------------------------------------------------------------------
     #
     #--------------------------------------------------------------------------
     def query_plan(self,*args,**kwargs):
-        if not args and not kwargs: return self._queryplan
-        return self._queryplan.ground(*args,**kwargs)
+        qspec = self._qspec.fill_defaults()
+
+        (factsets,factindexes) = \
+            QueryExecutor.get_factmap_data(self._factbase.factmaps, qspec)
+        qplan = make_query_plan(factindexes.keys(), qspec)
+
+        return qplan.ground(*args,**kwargs)
 
     #--------------------------------------------------------------------------
     # Functions currently mirroring the old interface
     # --------------------------------------------------------------------------
 
     def get(self, *args, **kwargs):
-        gqplan = self._queryplan.ground(*args,**kwargs)
-        query = make_query(gqplan, self._pred2factset, self._path2factindex)
+        qspec = self._qspec
+        if args or kwargs:
+            if self._qspec.where is None:
+                raise ValueError(("No where clause to ground"))
+            qspec = self._qspec.bindp(*args, **kwargs)
 
-        join = self._joins if self._joins else []
-        where = self._where if self._where else []
-        order_by = self._orderbys if self._orderbys else []
-        qspec = QuerySpec(roots=self._roots, join=join,
-                          where=where, order_by=order_by)
-
-        qo = QueryOutput(self._factbase.factmaps,qspec,gqplan,query)
-        return list(qo.all())
+        qe = QueryExecutor(self._factbase.factmaps, qspec)
+        return qe.all()
 
     def get_unique(self, *args, **kwargs):
-        gqplan = self._queryplan.ground(*args,**kwargs)
-        query = make_query(gqplan, self._pred2factset, self._path2factindex)
+        qspec = self._qspec
+        if args or kwargs:
+            if self._qspec.where is None:
+                raise ValueError(("No where clause to ground"))
+            qspec = self._qspec.bindp(*args, **kwargs)
 
-        join = self._joins if self._joins else []
-        where = self._where if self._where else []
-        order_by = self._orderbys if self._orderbys else []
-        qspec = QuerySpec(roots=self._roots, join=join,
-                          where=where, order_by=order_by)
-
-        qo = QueryOutput(self._factbase.factmaps,qspec,gqplan,query)
-        return qo.singleton()
+        qe = QueryExecutor(self._factbase.factmaps, qspec)
+        found = None
+        for out in qe.all():
+            if found: raise ValueError("Query returned more than a single element")
+            found = out
+        return found
 
     def count(self, *args, **kwargs):
-        gqplan = self._queryplan.ground(*args,**kwargs)
-        query = make_query(gqplan, self._pred2factset, self._path2factindex)
+        qspec = self._qspec
+        if args or kwargs:
+            if self._qspec.where is None:
+                raise ValueError(("No where clause to ground"))
+            qspec = self._qspec.bindp(*args, **kwargs)
 
-        join = self._joins if self._joins else []
-        where = self._where if self._where else []
-        order_by = self._orderbys if self._orderbys else []
-        qspec = QuerySpec(roots=self._roots, join=join,
-                          where=where, order_by=order_by)
-
-        qo = QueryOutput(self._factbase.factmaps,qspec,gqplan,query)
-        return qo.count()
+        qe = QueryExecutor(self._factbase.factmaps, qspec)
+        count = 0
+        for _ in qe.all(): count += 1
+        return count
 
 #------------------------------------------------------------------------------
 # The Delete class
@@ -806,188 +756,30 @@ class SelectImpl(Select):
 
 class _Delete(Delete):
 
-    def __init__(self, factbase, root):
-
-        ptype = path(root).meta.predicate
-
-        if ptype not in factbase.factmaps: return
-        self._factmap = factbase.factmaps[ptype]
-        self._select = SelectImpl(factbase,[root])
+    def __init__(self, factbase, qspec):
+        self._factbase = factbase
+        self._root = qspec.roots[0]
+        self._select = SelectImpl(factbase,qspec)
         self._has_where = False
 
     def where(self, *expressions):
         self._has_where = True
-        self._select.where(*expressions)
+        self._select = self._select.where(*expressions)
         return self
 
     def execute(self, *args, **kwargs):
+        factmap = self._factbase.factmaps[self._root.meta.predicate]
+
         # If there is no where clause then delete everything
         if not self._has_where:
-            num_deleted = len(self._factmap.facts())
-            self._factmap.clear()
+            num_deleted = len(factmap.facts())
+            factmap.clear()
             return num_deleted
 
         # Gather all the facts to delete and remove them
         to_delete = [ f for f in self._select.get(*args, **kwargs) ]
-        for fact in to_delete: self._factmap.remove(fact)
+        for fact in to_delete: factmap.remove(fact)
         return len(to_delete)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#------------------------------------------------------------------------------
-# Select V2 API
-#------------------------------------------------------------------------------
-class Select2Impl(object):
-
-    def __init__(self,factbase, qspec, join_order_heuristic=None):
-        self._factbase = factbase
-        self._qspec = qspec
-        self._join_order_heuristic = join_order_heuristic
-        self._qplan = None
-
-        self._pred2factset = {}
-        self._path2factindex = {}
-
-        ptypes = set([ root.meta.predicate for root in self._qspec.roots])
-        for ptype in ptypes:
-            fm =factbase.factmaps[ptype]
-            self._pred2factset[ptype] = fm.factset
-            for hpth, fi in fm.path2factindex.items():
-                self._path2factindex[hpth] = fi
-
-    #--------------------------------------------------------------------------
-    # Overide the heuristic
-    #--------------------------------------------------------------------------
-    def heuristic(self, join_order):
-        if self._join_order_heuristic:
-            raise TypeError("Cannot specify 'heuristic' multiple times")
-        self._join_order_heuristic = join_order
-        self._qplan = None
-        return Select2Impl(self._factbase, self._qspec, self._join_order_heuristic)
-
-
-    #--------------------------------------------------------------------------
-    # Add a join expression
-    #--------------------------------------------------------------------------
-    def join(self, *expressions):
-        if self._qspec.getp("where"):
-            raise TypeError(("The 'join' condition must come before the "
-                             "'where' condition"))
-        if self._qspec.getp("order_by"):
-            raise TypeError(("The 'join' condition must come before the "
-                             "'order_by' condition"))
-        if self._qspec.join:
-            raise TypeError("Cannot specify 'join' multiple times")
-        if not expressions:
-            raise TypeError("Empty 'join' expression")
-
-        join=process_join(expressions, self._qspec.roots)
-        return Select2Impl(self._factbase, self._qspec.newp(join=join))
-
-    #--------------------------------------------------------------------------
-    # Add an order_by expression
-    #--------------------------------------------------------------------------
-    def where(self, *expressions):
-        if self._qspec.getp("order_by"):
-            raise TypeError(("The 'where' condition must come before the "
-                             "'order_by' condition"))
-        if self._qspec.getp("where"):
-            raise TypeError("Cannot specify 'where' multiple times")
-        if not expressions:
-            raise TypeError("Empty 'where' expression")
-        elif len(expressions) == 1:
-            where = process_where(expressions[0],self._qspec.roots)
-        else:
-            where = process_where(and_(*expressions),self._qspec.roots)
-
-        return Select2Impl(self._factbase, self._qspec.newp(where=where))
-
-    #--------------------------------------------------------------------------
-    # Add an order_by expression
-    #--------------------------------------------------------------------------
-    def order_by(self, *expressions):
-        if self._qspec.order_by:
-            raise TypeError("Cannot specify 'order_by' multiple times")
-        if not expressions:
-            raise TypeError("Empty 'order_by' expression")
-        order_by = process_orderby(expressions,self._qspec.roots)
-        return Select2Impl(self._factbase,self._qspec.newp(order_by=order_by))
-
-    #--------------------------------------------------------------------------
-    #
-    #--------------------------------------------------------------------------
-    def query_plan(self,*args,**kwargs):
-        if not self._qplan:
-            self._qplan = make_query_plan(self._path2factindex.keys(),
-                                          self._qspec)
-
-        if not args and not kwargs: return self._qplan
-        return self._qplan.ground(*args,**kwargs)
-
-    #--------------------------------------------------------------------------
-    # Functions currently mirroring the old interface
-    # --------------------------------------------------------------------------
-
-    def run(self, *args, **kwargs):
-
-        # NOTE: a limitation of the current implementation of FunctionComparator
-        # means that I have to call ground() to make the assignment valid. Need
-        # to look at this.
-
-        qplan = self.query_plan()
-        gqplan = qplan.ground(*args,**kwargs)
-        query = make_query(gqplan, self._pred2factset, self._path2factindex)
-
-        return QueryOutput(self._factbase.factmaps,self._qspec,gqplan,query)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 #------------------------------------------------------------------------------
@@ -999,200 +791,138 @@ class Select2Impl(object):
 #------------------------------------------------------------------------------
 class QueryImpl(object):
 
-    def __init__(self, factmaps, roots=None, qspec={}):
-        def root_path(p):
-            p = path(p)
-            if not p.is_root:
-                raise ValueError(("Non-root path '{}' in query roots "
-                                  "specification '{}'").format(p,roots))
-
+    def __init__(self, factmaps, qspec):
         self._factmaps = factmaps
-        if roots is None and qspec:
-            raise ValueError(("Internal error: cannot specify 'roots' and "
-                              "'qspec' together"))
-        if roots is not None:
-            roots = ( root_path(r) for r in roots )
-            self._qspec = { 'roots' : roots }
-        else:
-            self._qspec = dict(qspec)
+        self._qspec = qspec
 
     #--------------------------------------------------------------------------
     # Internal function to test whether a function has been called and add it
     #--------------------------------------------------------------------------
-    def _setp(self, name, value):
-        if value is None:
-            raise ValueError("Cannot specify empty '{}'".format(name))
-        if name in self._qspec:
-            raise ValueError("Cannot specify '{}' multiple times".format(name))
-        nqspec = dict(self._qspec)
-        nqspec[name] = value
-        return nqspec
-
-    def _modp(self, name, value):
-        nqspec = dict(self._qspec)
-        nqspec[name] = value
-        return nqspec
-
-    def _getp(self, name,default=None):
-        return self.qspec.get(name,default)
-
-    def _check_join_first(self, name):
-        if len(self._getp['roots']) == 1: return True
-        if "join" not in nqspec:
+    def _check_join_called_first(self, name):
+        if self._qspec.join is None and len(self._qspec.roots) > 1:
             raise ValueError("'join' must be specified before '{}'".format(name))
-        return True
 
     #--------------------------------------------------------------------------
     # Overide the default heuristic
     #--------------------------------------------------------------------------
     def heuristic(self, join_order):
-        nqspec = self._setp("heuristic", join_order)
+        nqspec = self._qspec.newp(heuristic=True, joh=join_order)
         return QueryImpl(self._factmaps, nqspec)
 
     #--------------------------------------------------------------------------
     # Add a join expression
     #--------------------------------------------------------------------------
     def join(self, *expressions):
-        nqspec = self._setp("join",
-                            process_join(expressions, self._getp["roots"]))
+        nqspec = self._qspec.newp("join",
+                                  process_join(expressions, self._qspec.roots))
         return QueryImpl(self._factmaps, nqspec)
 
     #--------------------------------------------------------------------------
     # Add an order_by expression
     #--------------------------------------------------------------------------
     def where(self, *expressions):
-        self._check_join_first("where")
-        roots = self._getp["roots"]
-        if not expressions:
-            self._setp("where", None)
-        if len(expressions) == 1:
-            where = process_where(expressions[0], roots)
-        else:
-            where = process_where(and_(*expressions), roots)
+        self._check_join_called_first("where")
 
-        nqspec = self._setp("where", where)
+        if not expressions:
+            self._qspec.newp("where", None)    # Raise an error
+
+        if len(expressions) == 1:
+            where = process_where(expressions[0], self._qspec.roots)
+        else:
+            where = process_where(and_(*expressions), self._qspec.roots)
+
+        nqspec = self._qspec.newp(where=where)
         return QueryImpl(self._factmaps, nqspec)
 
     #--------------------------------------------------------------------------
     # Add an order_by expression
     #--------------------------------------------------------------------------
     def order_by(self, *expressions):
-        self._check_join_first("order_by")
+        self._check_join_called_first("order_by")
         if not expressions:
-            nqspec = self._setp("order_by", None)
+            nqspec = self._qspec.newp("order_by", None)
         else:
-            nqspec = self._setp("order_by",
-                                process_orderby(expressions,self._getp["roots"]))
+            nqspec = self._qspec.newp(
+                order_by=process_orderby(expressions,self._qspec.roots))
         return QueryImpl(self._factmaps, nqspec)
 
     #--------------------------------------------------------------------------
     # Add a group_by expression
     #--------------------------------------------------------------------------
     def group_by(self, grouping=1):
-        self._check_join_first("group_by")
-        order_by = self._getp("order_by")
+        self._check_join_called_first("order_by")
+        order_by = self._qspec.order_by
         if order_by is None:
-            raise ValueError("'order_by' must be set before 'group_by'")
-        if grouping <= 0:
-            raise ValueError("The grouping must be a positive integer")
+            raise ValueError("'order_by' must be specified before 'group_by'")
+        if len(order_by) <= 0:
+            raise ValueError("The group_by value must be a positive integer")
         if grouping > len(order_by):
-            raise ValueError(("The grouping size {} cannot be larger than the "
+            raise ValueError(("The group_by size {} cannot be larger than the "
                               "order_by() specification "
-                              "'{}'").format(grouping,self._qspec.order_by))
+                              "'{}'").format(grouping, order_by))
 
-        nqspec = self._setp("group_by",
-                            [ob.path for ob in self._getp["order_by"][:grouping]])
+        nqspec = self._qspec.newp(
+            group_by=[ob.path for ob in order_by[:grouping]])
         return QueryImpl(self._factmaps, nqspec)
 
     #--------------------------------------------------------------------------
     # The tuple flag
     #--------------------------------------------------------------------------
     def tuple(self):
-        self._check_join_first("tuple")
-        nqspec = self._setp("tuple", True)
+        self._check_join_called_first("tuple")
+        nqspec = self._qspec.newp(tuple=True)
         return QueryImpl(self._factmaps, nqspec)
 
     #--------------------------------------------------------------------------
     # The unique flag
     #--------------------------------------------------------------------------
     def unique(self):
-        self._check_join_first("unique")
-        nqspec = self._setp("unique", True)
+        self._check_join_called_first("unique")
+        nqspec = self._qspec.newp(unique=True)
         return QueryImpl(self._factmaps, nqspec)
 
     #--------------------------------------------------------------------------
-    # Ground
+    # Ground - bind
     #--------------------------------------------------------------------------
-    def ground(self,*args,**kwargs):
-        self._check_join_first("ground")
-
-        nqspec = self._setp("ground", True)
-        where = self._getp("where")
-        if not where:
-            raise ValueError(("Cannot 'ground' a query when no 'where' "
-                              "condition has been set"))
-        nqspec = self._modp("where", where.ground(*args,**kwargs))
-        return QueryImpl(self._factmaps, self._roots, nqspec)
+    def bind(self,*args,**kwargs):
+        self._check_join_called_first("bind")
+        nqspec = self._qspec.bindp(*args, **kwargs)
+        return QueryImpl(self._factmaps, nqspec)
 
     #--------------------------------------------------------------------------
-    # Support function
-    #--------------------------------------------------------------------------
-    def _get_facts_data(self):
-        ptypes = set([ r.meta.predicate for r in self._roots])
-        factsets = {}
-        indexes = {}
-        for ptype in ptypes:
-            fm =self_.factmaps[ptype]
-            factsets[ptype] = fm.factset
-            for hpth, fi in fm.path2factindex.items(): indexes[hpth] = fi
-        return (factsets,indexes)
-
-    def _get_query_plan_spec(self):
-        join = self._getp("join",[])
-        where = self._getp("where",[])
-        order_by = self._getp("order_by",[])
-        return QuerySpec(roots=self._roots,join=join,where=where,order_by=order_by)
-
-    def _get_query_output(self):
-        qpspec = self._get_query_plan_spec()
-
-    #--------------------------------------------------------------------------
-    # End points
+    # End points that do something useful
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
     # For the user to see what the query plan looks like
     #--------------------------------------------------------------------------
     def query_plan():
-        self._check_join_first("query_plan")
-        return QueryExecutor.make_query_plan(self._factmaps, self._qspec)
+        self._check_join_called_first("query_plan")
+        qspec = self._qspec.fill_defaults()
+
+        (factsets,factindexes) = \
+            QueryExecutor.get_factmap_data(self._factmaps, qspec)
+        return make_query_plan(factindexes.keys(), qspec)
 
     #--------------------------------------------------------------------------
     # Select to display all the output of the query
     # --------------------------------------------------------------------------
     def select(self, *outsig):
-        self._check_join_first("select")
+        self._check_join_called_first("select")
 
-        if outsig:
-            qspec = self._setp("outsig", outsig)
-        else:
-            qspec = self._qspec
+        nqspec = self._qspec.newp(select=outsig)
 
-        qe = QueryExecutor(self._factmaps, qspec)
+        qe = QueryExecutor(self._factmaps, nqspec)
         return qe.all()
 
     #--------------------------------------------------------------------------
     # Show the single element and throw an exception if there is more than one
     # --------------------------------------------------------------------------
     def singleton(self, *outsig):
-        self._check_join_first("singleton")
+        self._check_join_called_first("singleton")
 
-        if outsig:
-            qspec = self._setp("outsig", outsig)
-        else:
-            qspec = self._qspec
-
-        qe = QueryExecutor(self._factmaps, qspec)
+        nqspec = self._qspec.newp(select=outsig)
+        qe = QueryExecutor(self._factmaps, nqspec)
 
         found = None
         for out in qe.all():
@@ -1201,40 +931,37 @@ class QueryImpl(object):
         return found
 
     #--------------------------------------------------------------------------
-    # Return the count of elements
+    # Return the count of elements - Note: the reason to add an output signature
+    # is that if you use count with projection then you can potentially get
+    # different output with the unique() flag.
     # --------------------------------------------------------------------------
-    def count(self):
-        self._check_join_first("count")
-        qe = QueryExecutor(self._factmaps, self._qspec)
-        return len(list(qe.all()))
+    def count(self,*outsig):
+        self._check_join_called_first("count")
 
+        nqspec = self._qspec.newp(select=outsig)
+        qe = QueryExecutor(self._factmaps, nqspec)
+        count = 0
+        for _ in qe.all(): count += 1
+        return count
 
     #--------------------------------------------------------------------------
     # Show the single element and throw an exception if there is more than one
     # --------------------------------------------------------------------------
     def first(self, *outsig):
-        self._check_join_first("first")
+        self._check_join_called_first("first")
 
-        if outsig:
-            qspec = self._setp("outsig", tuple(outsig))
-        else:
-            qspec = self._qspec
-
-        qe = QueryExecutor(self._factmaps, qspec)
+        nqspec = self._qspec.newp(select=outsig)
+        qe = QueryExecutor(self._factmaps, nqspec)
         return next(iter(qe.all()))
 
     #--------------------------------------------------------------------------
     # Delete a selection of fact
     #--------------------------------------------------------------------------
     def delete(self,*subroots):
-        self._check_join_first("delete")
+        self._check_join_called_first("delete")
 
-        if subroots:
-            qspec = self._setp("", outsig)
-        else:
-            qspec = self._qspec
-
-        qe = QueryExecutor(self._factmaps, qspec)
+        nqspec = self._qspec.newp(delete=subroots)
+        qe = QueryExecutor(self._factmaps, nqspec)
         return qe.delete()
 
 #------------------------------------------------------------------------------

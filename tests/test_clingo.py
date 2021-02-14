@@ -186,16 +186,16 @@ class ClingoTestCase(unittest.TestCase):
         ctrl2 = Control()
         ctrl2.add_facts([af1,af2,af3.raw,bf1.raw,bf2])
 
-        safact1 = fb2.select2(Afact).where(Afact.num1 == ph1_)
-        safact2 = fb2.select2(Afact).where(Afact.num1 < ph1_)
-        self.assertEqual(safact1.run(1).singleton(), af1)
-        self.assertEqual(safact1.run(2).singleton(), af2)
-        self.assertEqual(safact1.run(3).singleton(), af3)
-        self.assertEqual(set(list(safact2.run(1))), set([]))
-        self.assertEqual(set(list(safact2.run(2))), set([af1]))
-        self.assertEqual(set(list(safact2.run(3))), set([af1,af2]))
-        self.assertEqual(fb2.select2(Bfact).where(Bfact.str1 == "aaa").run().singleton(), bf1)
-        self.assertEqual(fb2.select2(Bfact).where(Bfact.str1 == "bbb").run().singleton(), bf2)
+        safact1 = fb2.query(Afact).where(Afact.num1 == ph1_)
+        safact2 = fb2.query(Afact).where(Afact.num1 < ph1_)
+        self.assertEqual(safact1.bind(1).singleton(), af1)
+        self.assertEqual(safact1.bind(2).singleton(), af2)
+        self.assertEqual(safact1.bind(3).singleton(), af3)
+        self.assertEqual(set(list(safact2.bind(1).select())), set([]))
+        self.assertEqual(set(list(safact2.bind(2).select())), set([af1]))
+        self.assertEqual(set(list(safact2.bind(3).select())), set([af1,af2]))
+        self.assertEqual(fb2.query(Bfact).where(Bfact.str1 == "aaa").singleton(), bf1)
+        self.assertEqual(fb2.query(Bfact).where(Bfact.str1 == "bbb").singleton(), bf2)
 
         # Now test a select
 

@@ -20,26 +20,21 @@ from clorm.orm import RawField, IntegerField, StringField, ConstantField, \
 
 # Official Clorm API imports for the fact base components
 from clorm.orm import FactBase, desc, asc, not_, and_, or_, \
-    ph_, ph1_, ph2_, func_, alias, \
-    basic_join_order_heuristic, fixed_join_order_heuristic
+    ph_, ph1_, ph2_, func_, alias
 
 # Implementation imports
 
 from clorm.orm.factcontainers import FactSet, FactIndex, FactMap
 
 from clorm.orm.query import PositionalPlaceholder, NamedPlaceholder, QuerySpec
+from clorm.orm.query import process_where, process_join, process_orderby
 
-from clorm.orm.query import process_where, process_join, process_orderby, \
-    make_query_plan, make_input_alignment_functor, make_prejoin_query_source, \
-    make_first_prejoin_query, make_first_join_query, make_chained_join_query, \
-    make_query
 
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
 
 __all__ = [
     'FactBaseTestCase',
-    'QueryTestCase',
     'QueryAPI1TestCase',
     'QueryAPI2TestCase',
     'SelectJoinTestCase',
@@ -469,397 +464,6 @@ class FactBaseTestCase(unittest.TestCase):
 
 
 
-#------------------------------------------------------------------------------
-# QueryTest. Test functions for the underlying query mechanism
-# ------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-# support function to take a list of fact tuples transforms the order of facts
-# based on the signature transform
-# ------------------------------------------------------------------------------
-
-def align_facts(insig, outsig, it):
-    insig = tuple([path(a) for a in insig])
-    outsig = tuple([path(a) for a in outsig])
-    f = make_input_alignment_functor(insig,outsig)
-    return [ f(t) for t in it ]
-
-
-class QueryTestCase(unittest.TestCase):
-    def setUp(self):
-        class F(Predicate):
-            anum=IntegerField
-            astr=StringField
-        self.F = F
-
-        class G(Predicate):
-            anum=IntegerField
-            astr=StringField
-        self.G = G
-
-        self.factsets = {}
-        self.indexes = {}
-
-        factset = FactSet()
-        factindex = FactIndex(G.astr)
-        for f in [G(1,"a"),G(1,"foo"),G(5,"a"),G(5,"foo")]:
-            factset.add(f)
-            factindex.add(f)
-        self.indexes[hashable_path(G.astr)] = factindex
-        self.factsets[G] = factset
-
-        factset = FactSet()
-        factindex = FactIndex(F.anum)
-        for f in [F(1,"a"),F(1,"foo"),F(5,"a"),F(5,"foo")]:
-            factset.add(f)
-            factindex.add(f)
-        self.indexes[hashable_path(F.anum)] = factindex
-        self.factsets[F] = factset
-
-
-
-    # ------------------------------------------------------------------------------
-    # Test generating the prejoin query source function
-    # ------------------------------------------------------------------------------
-
-    def test_nonapi_make_prejoin_query_source(self):
-        F = self.F
-        G = self.G
-        indexes = self.indexes
-        factsets = self.factsets
-        pw = process_where
-        pj = process_join
-        pob = process_orderby
-        roots = [F,G]
-        fjoh = fixed_join_order_heuristic
-        bjoh = basic_join_order_heuristic
-
-        # Simplest case. Nothing specified so pass through the factset
-        qspec = QuerySpec(roots=roots,join=[],where=[],order_by=[],joh=fjoh)
-        qp = make_query_plan(indexes.keys(), qspec)
-        out = make_prejoin_query_source(qp[1], factsets, indexes)()
-        self.assertTrue(out is factsets[G])
-
-        # A prejoin key but nothing else
-        where = pw(G.astr == "foo",roots)
-        qspec = QuerySpec(roots=roots,join=[],where=where,order_by=[],joh=fjoh)
-        qp = make_query_plan(indexes.keys(), qspec)
-        out = make_prejoin_query_source(qp[1], factsets, indexes)()
-        self.assertTrue(isinstance(out,list))
-        self.assertEqual(set(out), set([G(1,"foo"),G(5,"foo")]))
-
-        # A prejoin clause but nothing else
-        where = pw(G.anum == 1,roots)
-        qspec = QuerySpec(roots=roots,join=[],where=where,order_by=[],joh=fjoh)
-        qp = make_query_plan(indexes.keys(), qspec)
-        out = make_prejoin_query_source(qp[1], factsets, indexes)()
-        self.assertTrue(isinstance(out,list))
-        self.assertEqual(set(out), set([G(1,"a"),G(1,"foo")]))
-
-        # Both a prejoin key and a prejoin clause
-        where = pw((G.anum == 1) & (G.astr == "foo"),roots)
-        qspec = QuerySpec(roots=roots,join=[],where=where,order_by=[],joh=fjoh)
-        qp = make_query_plan(indexes.keys(), qspec)
-        out = make_prejoin_query_source(qp[1], factsets, indexes)()
-        self.assertTrue(isinstance(out,list))
-        self.assertEqual(set(out), set([G(1,"foo")]))
-
-        # A prejoin key with no join and a single ascending order matching an index
-        where = pw(G.astr == "foo",roots)
-        orderby = pob([F.astr,asc(G.astr)],roots)
-        qspec = QuerySpec(roots=roots,join=[],where=where,order_by=orderby,joh=fjoh)
-        qp = make_query_plan(indexes.keys(), qspec)
-        out = make_prejoin_query_source(qp[1], factsets, indexes)()
-        self.assertTrue(isinstance(out,list))
-        self.assertEqual(out[0].astr, "foo")
-        self.assertEqual(out[1].astr, "foo")
-        self.assertEqual(len(out),2)
-
-        # A prejoin key with no join and a single desc order matching an index
-        where = pw(G.astr == "foo",roots)
-        orderby = pob([F.astr,desc(G.astr)],roots)
-        qspec = QuerySpec(roots=roots,join=[],where=where,order_by=orderby,joh=fjoh)
-        qp = make_query_plan(indexes.keys(), qspec)
-        out = make_prejoin_query_source(qp[1], factsets, indexes)()
-        self.assertTrue(isinstance(out,list))
-        self.assertEqual(out[0].astr, "foo")
-        self.assertEqual(out[1].astr, "foo")
-        self.assertEqual(len(out),2)
-
-        # A prejoin key with no join and a complex order
-        where = pw(G.astr == "foo",roots)
-        orderby = pob([F.astr,desc(G.astr),G.anum],roots)
-        qspec = QuerySpec(roots=roots,join=[],where=where,order_by=orderby,joh=fjoh)
-        qp = make_query_plan(indexes.keys(), qspec)
-        out0 = make_prejoin_query_source(qp[0], factsets, indexes)()
-        out1 = make_prejoin_query_source(qp[1], factsets, indexes)()
-        self.assertEqual(out0[0].astr, "a")
-        self.assertEqual(out0[1].astr, "a")
-        self.assertEqual(out0[2].astr, "foo")
-        self.assertEqual(out0[3].astr, "foo")
-        self.assertEqual(out1, [G(1,"foo"),G(5,"foo")])
-
-        # A prejoin key with no join and non index matching sort
-        where = pw(G.astr == "foo",roots)
-        orderby = pob([F.astr,desc(G.anum)],roots)
-        qspec = QuerySpec(roots=roots,join=[],where=where,order_by=orderby,joh=fjoh)
-        qp = make_query_plan(indexes.keys(), qspec)
-        out = make_prejoin_query_source(qp[1], factsets, indexes)()
-        self.assertTrue(isinstance(out,list))
-        self.assertEqual(out, [G(5,"foo"),G(1,"foo")])
-
-        # A join key that matches an existing index but nothing else
-        join = pj([F.astr == G.astr],roots)
-        qspec = QuerySpec(roots=roots,join=join,where=[],order_by=[],joh=fjoh)
-        qp = make_query_plan(indexes.keys(), qspec)
-        out = make_prejoin_query_source(qp[1], factsets, indexes)()
-        self.assertTrue(out is indexes[hashable_path(G.astr)])
-
-        # A join key that doesn't match an existing index - and nothing else
-        join = pj([F.anum == G.anum],roots)
-        qspec = QuerySpec(roots=roots,join=join,where=[],order_by=[],joh=fjoh)
-        qp = make_query_plan(indexes.keys(), qspec)
-        out = make_prejoin_query_source(qp[1], factsets, indexes)()
-        self.assertTrue(isinstance(out,FactIndex))
-        self.assertEqual(hashable_path(out.path), hashable_path(G.anum))
-        self.assertEqual(set(out), set(factsets[G]))
-
-        # A join key and a prejoin key
-        join = pj([F.astr == G.astr],roots)
-        where = pw(G.astr == "foo",roots)
-        qspec = QuerySpec(roots=roots,join=join,where=where,order_by=[],joh=fjoh)
-        qp = make_query_plan(indexes.keys(), qspec)
-        out = make_prejoin_query_source(qp[1], factsets, indexes)()
-        self.assertTrue(isinstance(out,FactIndex))
-        self.assertEqual(hashable_path(out.path), hashable_path(G.astr))
-        self.assertEqual(set(out), set([G(1,"foo"),G(5,"foo")]))
-
-        # A join key and a prejoin clause
-        join = pj([F.astr == G.astr],roots)
-        where = pw(G.anum == 1,roots)
-        qspec = QuerySpec(roots=roots,join=join,where=where,order_by=[],joh=fjoh)
-        qp = make_query_plan(indexes.keys(), qspec)
-        out = make_prejoin_query_source(qp[1], factsets, indexes)()
-        self.assertTrue(isinstance(out,FactIndex))
-        self.assertEqual(hashable_path(out.path), hashable_path(G.astr))
-        self.assertEqual(set(out), set([G(1,"a"),G(1,"foo")]))
-
-    # ------------------------------------------------------------------------------
-    # Test generating the prejoin query source function
-    # ------------------------------------------------------------------------------
-
-    def test_nonapi_make_chained_join_query(self):
-        F = self.F
-        G = self.G
-        indexes = self.indexes
-        factsets = self.factsets
-        pw = process_where
-        pj = process_join
-        pob = process_orderby
-        fjoh = fixed_join_order_heuristic
-        bjoh = basic_join_order_heuristic
-        roots = [F,G]
-
-#        orderby = pob([F.astr,desc(G.anum)],roots)
-
-        # Simplest case. No join or no G-where clauses.
-        # (Note: the where clause for F is to simplify to only one join).
-        where = pw((F.anum == 1) & (F.astr == "foo"),roots)
-        qspec = QuerySpec(roots=roots,join=[],where=where,order_by=[],joh=fjoh)
-        qp = make_query_plan(indexes.keys(), qspec)
-        inquery=make_first_join_query(qp[0], factsets, indexes)
-        query = make_chained_join_query(qp[1], inquery, factsets, indexes)()
-        self.assertEqual(set(query),
-                         set([(F(1,"foo"), G(1,"a")),
-                              (F(1,"foo"), G(1,"foo")),
-                              (F(1,"foo"), G(5,"a")),
-                              (F(1,"foo"), G(5,"foo"))]))
-
-        # No join but a prejoin where clause
-        where = pw(((F.anum == 1) & (F.astr == "foo")) & (G.anum == 1), roots)
-        qspec = QuerySpec(roots=roots,join=[],where=where,order_by=[],joh=fjoh)
-        qp = make_query_plan(indexes.keys(), qspec)
-        inquery=make_first_join_query(qp[0], factsets, indexes)
-        query = make_chained_join_query(qp[1], inquery, factsets, indexes)()
-        self.assertEqual(set(query),
-                         set([(F(1,"foo"), G(1,"a")),
-                              (F(1,"foo"), G(1,"foo"))]))
-
-        # No join but a post-join where clause - by adding useless extra F
-        where = pw(((F.anum == 1) & (F.astr == "foo")) &
-                   ((G.anum == 1) | (F.anum == 5)), roots)
-        qspec = QuerySpec(roots=roots,join=[],where=where,order_by=[],joh=fjoh)
-        qp = make_query_plan(indexes.keys(), qspec)
-        inquery=make_first_join_query(qp[0], factsets, indexes)
-        query = make_chained_join_query(qp[1], inquery, factsets, indexes)()
-        self.assertEqual(set(query),
-                         set([(F(1,"foo"), G(1,"a")),
-                              (F(1,"foo"), G(1,"foo"))]))
-
-        # A join key but nothing else
-        join = pj([F.astr == G.astr],roots)
-        where = pw((F.anum == 1) & (F.astr == "foo"),roots)
-        qspec = QuerySpec(roots=roots,join=join,where=where,order_by=[],joh=fjoh)
-        qp = make_query_plan(indexes.keys(), qspec)
-        inquery=make_first_join_query(qp[0], factsets, indexes)
-        query = make_chained_join_query(qp[1], inquery, factsets, indexes)()
-        self.assertEqual(set(query),
-                         set([(F(1,"foo"), G(1,"foo")),
-                              (F(1,"foo"), G(5,"foo"))]))
-
-        # A join key and a prejoin-sort
-        join = pj([F.astr == G.astr],roots)
-        where = pw((F.anum == 1) & (F.astr == "foo"),roots)
-        orderby = pob([F.astr,desc(G.anum)],roots)
-        qspec = QuerySpec(roots=roots,join=join,where=where,order_by=orderby,joh=fjoh)
-        qp = make_query_plan(indexes.keys(), qspec)
-        inquery=make_first_join_query(qp[0], factsets, indexes)
-        query = make_chained_join_query(qp[1], inquery, factsets, indexes)()
-        self.assertEqual(set(query),
-                         set([(F(1,"foo"), G(5,"foo")),
-                              (F(1,"foo"), G(1,"foo"))]))
-
-
-        # A join key and a post join-sort
-        join = pj([F.astr == G.astr],roots)
-        where = pw((F.anum == 1) & (F.astr == "foo"),roots)
-        orderby = pob([desc(G.anum)],roots)
-        qspec = QuerySpec(roots=roots,join=join,where=where,order_by=orderby,joh=fjoh)
-        qp = make_query_plan(indexes.keys(), qspec)
-        inquery=make_first_join_query(qp[0], factsets, indexes)
-        query = make_chained_join_query(qp[1], inquery, factsets, indexes)()
-        self.assertEqual(set(query),
-                         set([(F(1,"foo"), G(5,"foo")),
-                              (F(1,"foo"), G(1,"foo"))]))
-
-        # A join key and a complex post join sort
-        join = pj([F.astr == G.astr],roots)
-        where = pw((F.anum == 1) & (F.astr == "foo"),roots)
-        orderby = pob([desc(G.anum),F.anum,G.astr],roots)
-        qspec = QuerySpec(roots=roots,join=join,where=where,order_by=orderby,joh=fjoh)
-        qp = make_query_plan(indexes.keys(), qspec)
-
-        inquery=make_first_join_query(qp[0], factsets, indexes)
-        query = make_chained_join_query(qp[1], inquery, factsets, indexes)()
-        self.assertEqual(set(query),
-                         set([(F(1,"foo"), G(5,"foo")),
-                              (F(1,"foo"), G(1,"foo"))]))
-
- 
-    #--------------------------------------------------------------------------
-    # Test initialising a placeholder (named and positional)
-    #--------------------------------------------------------------------------
-    def test_make_first_prejoin_query(self):
-        def strip(it): return [f for f, in it]
-
-        G = self.G
-        pw = process_where
-        pob = process_orderby
-        fjoh = fixed_join_order_heuristic
-        bjoh = basic_join_order_heuristic
-        indexes = self.indexes
-        factsets = self.factsets
-
-        which1 = pw((G.astr == "foo"),[G])
-        qspec1 = QuerySpec(roots=[G],join=[],where=which1,order_by=[],joh=bjoh)
-        qp1 = make_query_plan([G.astr],qspec1)
-        q1 = make_first_prejoin_query(qp1[0],factsets,indexes)
-        self.assertEqual(set([f for (f,) in q1()]),set([G(1,"foo"),G(5,"foo")]))
-
-        which2 = pw((G.astr == "foo") | (G.astr == "a") ,[G])
-        qspec2 = QuerySpec(roots=[G],join=[],where=which2,order_by=[],joh=bjoh)
-        qp2 = make_query_plan([G.astr],qspec2)
-        q2 = make_first_prejoin_query(qp2[0],factsets,indexes)
-        self.assertEqual(set([f for (f,) in q2()]),
-                         set([G(1,"foo"),G(5,"foo"),G(1,"a"),G(5,"a")]))
-
-
-    #--------------------------------------------------------------------------
-    # Test initialising a placeholder (named and positional)
-    #--------------------------------------------------------------------------
-    def test_make_first_join_query(self):
-        def strip(it): return [f for f, in it]
-
-        G = self.G
-        pw = process_where
-        pob = process_orderby
-        bjoh = basic_join_order_heuristic
-        fjoh = fixed_join_order_heuristic
-
-        indexes = self.indexes
-        factsets = self.factsets
-
-        which1 = pw((G.anum > 4) & (G.astr == "foo"),[G])
-        orderbys = pob([G.anum,desc(G.astr)],[G])
-        qspec = QuerySpec(roots=[G],join=[],where=which1,order_by=orderbys,joh=bjoh)
-        qp1 = make_query_plan([G.astr],qspec)
-
-        query1 = make_first_join_query(qp1[0], factsets, indexes)
-        self.assertEqual(set(strip(query1())), set([G(5,"foo")]))
-
-
-        which2 = pw((G.anum > 4) | (G.astr == "foo"),[G])
-        qspec = QuerySpec(roots=[G],join=[],where=which2,order_by=orderbys,joh=bjoh)
-        qp2 = make_query_plan([G.astr], qspec)
-
-        query2 = make_first_join_query(qp2[0], factsets, indexes)
-        self.assertEqual(list(strip(query2())),
-                         [G(1,"foo"), G(5,"foo"), G(5,"a")])
-
-
-    #--------------------------------------------------------------------------
-    # Test initialising a placeholder (named and positional)
-    #--------------------------------------------------------------------------
-    def test_make_query(self):
-        F = self.F
-        G = self.G
-        indexes = self.indexes
-        factsets = self.factsets
-        pw = process_where
-        pj = process_join
-        pob = process_orderby
-        bjoh = basic_join_order_heuristic
-        fjoh = fixed_join_order_heuristic
-        roots = [F,G]
-
-        joins1 = pj([F.anum == G.anum],roots)
-        which1 = pw((G.anum > 4) | (F.astr == "foo"),roots)
-        orderbys = pob([desc(G.anum),F.astr,desc(G.astr)],roots)
-        qspec = QuerySpec(roots=roots,join=joins1,where=which1,order_by=orderbys,joh=bjoh)
-        qp1 = make_query_plan(indexes.keys(), qspec)
-        q1 = make_query(qp1, factsets, indexes)
-        result = list(q1())
-        expected = [
-            (F(5,"a"),G(5,"foo")),
-            (F(5,"a"),G(5,"a")),
-            (F(5,"foo"),G(5,"foo")),
-            (F(5,"foo"),G(5,"a")),
-            (F(1,"foo"),G(1,"foo")),
-            (F(1,"foo"),G(1,"a")),
-        ]
-        self.assertEqual(expected, result)
-
-        # Ungrounded query
-        joins2 = pj([F.anum == G.anum],roots)
-        which2 = pw((G.anum > 4) | (F.astr == ph1_),roots)
-        orderbys2 = pob([desc(G.anum),F.astr,desc(G.astr)],roots)
-        qspec = QuerySpec(roots=roots,join=joins2,where=which2,order_by=orderbys2,joh=bjoh)
-        qp2 = make_query_plan(indexes.keys(),qspec)
-        with self.assertRaises(ValueError) as ctx:
-            q1 = make_query(qp2, factsets, indexes)
-        check_errmsg("Cannot execute an ungrounded query",ctx)
-
-
-
-
-
-
-
-
-
-
-
-
 
 #------------------------------------------------------------------------------
 # Test QueryAPI version 1 (called via FactBase.select() and FactBase.delete())
@@ -1148,11 +752,13 @@ class QueryAPI1TestCase(unittest.TestCase):
         f3 = F(2,"b")
         fb = FactBase([f1,f2,f3])
 
-
-        q=fb.select(F).where((F.num1 == 1) & (lambda f : f.str1 == "b"))
         q=fb.select(F).where((F.num1 == 1) & (lambda f,v : f.str1 == v))
 
-        self.assertEqual(set([f2]), set(q.get("b")))
+        # Note: this now raises an exception for Query API v2
+        with self.assertRaises(ValueError) as ctx:
+            self.assertEqual(set([f2]), set(q.get("b")))
+        check_errmsg("Trying to bind value",ctx)
+
         self.assertEqual(set([f2]), set(q.get(v="b")))
 
     #--------------------------------------------------------------------------
@@ -1339,11 +945,11 @@ class QueryAPI1TestCase(unittest.TestCase):
 
         s1 = fb1.select(Afact).where(Afact.num1 == ph1_, track)
         s2 = fb1.select(Afact).where(Afact.num1 < ph1_, track)
-
-        self.assertTrue(set([f for f in s1.get(2,1)]), set([f4]))
+ 
+        self.assertTrue(set([f for f in s1.get(2,b=1)]), set([f4]))
         self.assertTrue(facts, set([f4,f5]))
 
-        self.assertTrue(set([f for f in s2.get(2,2)]), set([f2]))
+        self.assertTrue(set([f for f in s2.get(2,b=2)]), set([f2]))
         self.assertTrue(facts, set([f1,f2,f3]))
 
     #--------------------------------------------------------------------------
@@ -1426,12 +1032,12 @@ class QueryAPI1TestCase(unittest.TestCase):
         fb = FactBase([f])
 
         # Making multiple calls to select where()
-        with self.assertRaises(TypeError) as ctx:
+        with self.assertRaises(ValueError) as ctx:
             q = fb.delete(F).where(F.num1 == 1).where(F.num2 == 2)
         check_errmsg("Cannot specify 'where' multiple times",ctx)
 
         # Bad select where clauses
-        with self.assertRaises(TypeError) as ctx:
+        with self.assertRaises(ValueError) as ctx:
             q = fb.delete(F).where()
         check_errmsg("Empty 'where' expression",ctx)
 
@@ -1457,12 +1063,12 @@ class QueryAPI1TestCase(unittest.TestCase):
         check_errmsg("Invalid 'where' expression",ctx)
 
         # Making multiple calls to select order_by()
-        with self.assertRaises(TypeError) as ctx:
+        with self.assertRaises(ValueError) as ctx:
             q = fb.select(F).order_by(F.num1).order_by(F.num2)
         check_errmsg("Cannot specify 'order_by' multiple times",ctx)
 
         # Bad select order_by clause
-        with self.assertRaises(TypeError) as ctx:
+        with self.assertRaises(ValueError) as ctx:
             q = fb.select(F).order_by()
         check_errmsg("Empty 'order_by' expression",ctx)
 
@@ -1483,725 +1089,154 @@ class QueryAPI1TestCase(unittest.TestCase):
         check_errmsg("Invalid 'order_by' expression",ctx)
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 #------------------------------------------------------------------------------
 # Test QueryAPI version 2 (called via FactBase.query())
 # This class contains the same test as API V1 but ported to V2
+#
+# Note: the query engine is tested in test_orm_query.py. So here we are mainly
+# testing the user-level API for constructing the query.
 # ------------------------------------------------------------------------------
 
 class QueryAPI2TestCase(unittest.TestCase):
     def setUp(self):
-        pass
+        class F(Predicate):
+            anum=IntegerField
+            astr=StringField
+
+        class G(Predicate):
+            anum=IntegerField
+            astr=StringField
+
+        self.F = F
+        self.G = G
+
+        self.factbase = FactBase([
+            F(1,"a"), F(2,"a"), F(3,"b"),
+            G(1,"c"), G(2,"d"), G(5,"e")
+        ])
+
 
     #--------------------------------------------------------------------------
     #   Test that the select works
     #--------------------------------------------------------------------------
-    def test_api_select_factbase2(self):
-        class Afact1(Predicate):
-            num1=IntegerField()
-            num2=StringField()
-            str1=StringField()
-            class Meta: name = "afact"
+    def test_api_select_single_table(self):
+        F = self.F
+        factbase = self.factbase
 
-        f1 = Afact1(1,1,"1")
-        f3 = Afact1(3,3,"3")
-        f4 = Afact1(4,4,"4")
-        f42 = Afact1(4,42,"42")
-        f10 = Afact1(10,10,"10")
-        fb1 = FactBase([f1,f3,f4,f42,f10], [Afact1.num1,Afact1.str1])
-        fb2 = FactBase([f1,f3,f4,f42,f10])
+        # Select everything
+        q = factbase.query(F)
+        r = q.select(); self.assertEqual(set(r),
+                                         set([F(1,"a"), F(2,"a"), F(3,"b")]))
 
-        s1_all = fb1.select2(Afact1)
-        s1_num1_eq_4 = fb1.select2(Afact1).where(Afact1.num1 == 4)
-        s1_num1_ne_4 = fb1.select2(Afact1).where(Afact1.num1 != 4)
-        s1_num1_lt_4 = fb1.select2(Afact1).where(Afact1.num1 < 4)
-        s1_num1_le_4 = fb1.select2(Afact1).where(Afact1.num1 <= 4)
-        s1_num1_gt_4 = fb1.select2(Afact1).where(Afact1.num1 > 4)
-        s1_num1_ge_4 = fb1.select2(Afact1).where(Afact1.num1 >= 4)
-        s1_str1_eq_4 = fb1.select2(Afact1).where(Afact1.str1 == "4")
-        s1_num2_eq_4 = fb1.select2(Afact1).where(Afact1.num2 == 4)
+        # A single where clause
+        q = factbase.query(F).where(F.anum == 1)
+        r = q.select(); self.assertEqual(set(r), set([F(1,"a")]))
 
-        s2_all = fb1.select2(Afact1)
-        s2_num1_eq_4 = fb2.select2(Afact1).where(Afact1.num1 == 4)
-        s2_num1_ne_4 = fb2.select2(Afact1).where(Afact1.num1 != 4)
-        s2_num1_lt_4 = fb2.select2(Afact1).where(Afact1.num1 < 4)
-        s2_num1_le_4 = fb2.select2(Afact1).where(Afact1.num1 <= 4)
-        s2_num1_gt_4 = fb2.select2(Afact1).where(Afact1.num1 > 4)
-        s2_num1_ge_4 = fb2.select2(Afact1).where(Afact1.num1 >= 4)
-        s2_str1_eq_4 = fb2.select2(Afact1).where(Afact1.str1 == "4")
-        s2_num2_eq_4 = fb2.select2(Afact1).where(Afact1.num2 == 4)
+        # Multiple where clauses
+        q = factbase.query(F).where(F.anum > 1,F.astr == "b")
+        r = q.select(); self.assertEqual(set(r), set([F(3,"b")]))
 
-        self.assertEqual(s1_all.query_plan()[0].prejoin_key,None)
-        self.assertEqual(str(s1_num1_eq_4.query_plan()[0].prejoin_key),
-                         "[ Afact1.num1 == 4 ]")
-        self.assertEqual(str(s1_str1_eq_4.query_plan()[0].prejoin_key),
-                         "[ Afact1.str1 == '4' ]")
-        self.assertEqual(s2_all.query_plan()[0].prejoin_key,None)
-        self.assertEqual(s2_num1_eq_4.query_plan()[0].prejoin_key, None)
-        self.assertEqual(s2_str1_eq_4.query_plan()[0].prejoin_key, None)
+        # A where clause with placeholders
+        q = factbase.query(F).where(F.anum == ph1_)
+        r = q.bind(1).select(); self.assertEqual(set(r), set([F(1,"a")]))
+        r = q.bind(2).select(); self.assertEqual(set(r), set([F(2,"a")]))
 
-        self.assertEqual(set(list(s1_all.run())), set([f1,f3,f4,f42,f10]))
-        self.assertEqual(set(list(s1_num1_eq_4.run())), set([f4,f42]))
-        self.assertEqual(set(list(s1_num1_ne_4.run())), set([f1,f3,f10]))
-        self.assertEqual(set(list(s1_num1_lt_4.run())), set([f1,f3]))
-        self.assertEqual(set(list(s1_num1_le_4.run())), set([f1,f3,f4,f42]))
-        self.assertEqual(set(list(s1_num1_gt_4.run())), set([f10]))
-        self.assertEqual(set(list(s1_num1_ge_4.run())), set([f4,f42,f10]))
-        self.assertEqual(s1_str1_eq_4.run().singleton(), f4)
-        self.assertEqual(s1_num2_eq_4.run().singleton(), f4)
+        # A where clause with named placeholder with default value
+        q = factbase.query(F).where(F.anum == ph_("a",1))
+        r = q.bind().select(); self.assertEqual(set(r), set([F(1,"a")]))
+        r = q.bind(a=2).select(); self.assertEqual(set(r), set([F(2,"a")]))
 
-        self.assertEqual(set(list(s2_all.run())), set([f1,f3,f4,f42,f10]))
-        self.assertEqual(set(list(s2_num1_eq_4.run())), set([f4,f42]))
-        self.assertEqual(set(list(s2_num1_ne_4.run())), set([f1,f3,f10]))
-        self.assertEqual(set(list(s2_num1_lt_4.run())), set([f1,f3]))
-        self.assertEqual(set(list(s2_num1_le_4.run())), set([f1,f3,f4,f42]))
-        self.assertEqual(set(list(s2_num1_gt_4.run())), set([f10]))
-        self.assertEqual(set(list(s2_num1_ge_4.run())), set([f4,f42,f10]))
-        self.assertEqual(s2_str1_eq_4.run().singleton(), f4)
-        self.assertEqual(s2_num2_eq_4.run().singleton(), f4)
+        # Order_by clause
+        q = factbase.query(F).where(F.anum > 1).order_by(desc(F.anum))
+        r = q.select(); self.assertEqual(set(r), set([F(3,"b"),F(2,"a")]))
 
+        # Group_by clause - default value
+        q = factbase.query(F).where(F.anum > 1).order_by(desc(F.anum)).group_by()
+        r = q.select()
+        result = { k : list(g) for k,g in r }
+        expected = { 3: [F(3,"b")], 2 : [F(2,"a")] }
+        self.assertEqual(result,expected)
 
-        # Test simple conjunction select
-        s1_conj1 = fb1.select2(Afact1).where(Afact1.str1 == "42", Afact1.num1 == 4)
-        s1_conj2 = fb1.select2(Afact1).where(Afact1.num1 == 4, Afact1.str1 == "42")
-        s1_conj3 = fb1.select2(Afact1).where(lambda x: x.str1 == "42", Afact1.num1 == 4)
+        # Group_by clause - explicit grouping value
+        q = factbase.query(F).where(F.anum > 1).order_by(desc(F.anum)).group_by(1)
+        r = q.select()
+        result = { k : list(g) for k,g in r }
+        expected = { 3: [F(3,"b")], 2 : [F(2,"a")] }
+        self.assertEqual(result,expected)
 
-        self.assertNotEqual(s1_conj1.query_plan()[0].prejoin_key, None)
-        self.assertEqual(s1_conj1.run().singleton(), f42)
-        self.assertEqual(s1_conj2.run().singleton(), f42)
-        self.assertEqual(s1_conj3.run().singleton(), f42)
+        # Group_by clause and force tuple
+        q = factbase.query(F).where(F.anum > 1)\
+            .tuple().order_by(desc(F.anum)).group_by(1)
+        r = q.select()
+        result = { k : list(g) for k,g in r }
+        expected = { (3,): [(F(3,"b"),)], (2,) : [(F(2,"a"),)] }
+        self.assertEqual(result,expected)
 
-        # Test select with placeholders
-        s1_ph1 = fb1.select2(Afact1).where(Afact1.num1 == ph_("num1"))
-        s1_ph2 = fb1.select2(Afact1).where(Afact1.str1 == ph_("str1","42"),
-                                          Afact1.num1 == ph_("num1"))
-        self.assertEqual(set(s1_ph1.run(num1=4)), set([f4,f42]))
-        self.assertEqual(set(list(s1_ph1.run(num1=3))), set([f3]))
-        self.assertEqual(set(list(s1_ph1.run(num1=2))), set([]))
-        self.assertEqual(s1_ph2.run(num1=4).singleton(), f42)
-        self.assertEqual(s1_ph2.run(str1="42",num1=4).singleton(), f42)
+        # Projection
+        q = factbase.query(F).order_by(F.astr)
+        r = q.select(F.astr)
+        self.assertEqual(list(r), ['a','a','b'])
+
+        # Projection and unique
+        q = factbase.query(F).order_by(F.astr).unique()
+        r = q.select(F.astr)
+        self.assertEqual(list(r), ['a','b'])
+
+    #--------------------------------------------------------------------------
+    #   Test bad calls to selecting on a single table
+    #--------------------------------------------------------------------------
+    def test_api_select_single_table_bad(self):
+        F = self.F
+        factbase = self.factbase
+
+        # A where clause with a placeholder - a missing value
+        q = factbase.query(F).where(F.anum == ph_("a"))
+        with self.assertRaises(ValueError) as ctx:
+            r = q.bind().select(); self.assertEqual(set(r), set([F(1,"a")]))
+        check_errmsg("Missing named placeholder argument", ctx)
+
+        # A where clause with a no placeholder but trying to ground
+        q = factbase.query(F).where(F.anum == 1)
+        with self.assertRaises(ValueError) as ctx:
+            q.bind(1)
+        check_errmsg("Trying to bind value '1'", ctx)
 
         with self.assertRaises(ValueError) as ctx:
-            tmp = list(s1_ph1.run(num1=4).singleton())  # fails because of multiple values
-        with self.assertRaises(ValueError) as ctx:
-            tmp = list(s1_ph2.run(num2=5))         # fails because of no values
-        with self.assertRaises(ValueError) as ctx:
-            tmp = list(s1_ph2.run(str1="42"))
+            q.bind(a=1)
+        check_errmsg("Trying to bind value '1'", ctx)
 
 
     #--------------------------------------------------------------------------
-    # Test select by the predicate object itself (and not a field). This is a
-    # boundary case.
-    # --------------------------------------------------------------------------
-
-    def test_select_by_predicate(self):
-
-        class Fact(Predicate):
-            num1=IntegerField()
-            str1=StringField()
-
-        f1 = Fact(1,"bbb")
-        f2 = Fact(2,"aaa")
-        f2b = Fact(2,"bbb")
-        f3 = Fact(3,"aaa")
-        f4 = Fact(4,"aaa")
-        facts=[f1,f2,f2b,f3,f4]
-
-        self.assertTrue(f1 <= f2)
-        self.assertTrue(f1 <= f2b)
-        self.assertTrue(f2 <= f2b)
-        self.assertTrue(f2b <= f2b)
-        self.assertFalse(f3 <= f2b)
-
-        fpb = path(Fact)
-        self.assertEqual(f1, fpb(f1))
-        self.assertFalse(f2 == fpb(f1))
-
-        fb1 = FactBase(facts=facts, indexes=[path(Fact.num1)])
-        fb2 = FactBase(facts=facts)
-        self.assertEqual(fb1, fb2)
-        self.assertEqual(len(fb1), len(facts))
-
-        s1 = fb1.select2(Fact).where(fpb == ph1_)
-        self.assertEqual(list(s1.run(f1)), [f1])
-        s1 = fb2.select2(Fact).where(fpb == ph1_)
-        self.assertEqual(list(s1.run(f1)), [f1])
-
-        s2 = fb1.select2(Fact).where(fpb <= ph1_).order_by(fpb)
-        self.assertEqual(list(s2.run(f2b)), [f1,f2,f2b])
-        s2 = fb2.select2(Fact).where(fpb <= ph1_).order_by(fpb)
-        self.assertEqual(list(s2.run(f2b)), [f1,f2,f2b])
-
+    #   Test single table count/first/delete
     #--------------------------------------------------------------------------
-    # Test basic insert and selection of facts in a factbase
-    #--------------------------------------------------------------------------
-
-    def test_factbase_select(self):
-
-        class Afact(Predicate):
-            num1=IntegerField()
-            num2=IntegerField()
-            str1=StringField()
-        class Bfact(Predicate):
-            num1=IntegerField()
-            str1=StringField()
-        class Cfact(Predicate):
-            num1=IntegerField()
-
-        af1 = Afact(1,10,"bbb")
-        af2 = Afact(2,20,"aaa")
-        af3 = Afact(3,20,"aaa")
-        bf1 = Bfact(1,"aaa")
-        bf2 = Bfact(2,"bbb")
-        cf1 = Cfact(1)
-
-#        fb = FactBase([Afact.num1, Afact.num2, Afact.str1])
-        fb = FactBase()
-        facts=[af1,af2,af3,bf1,bf2,cf1]
-        fb.add(facts)
-#####        self.assertEqual(fb.add(facts), 6)
-
-        self.assertEqual(set(fb.facts()), set(facts))
-        self.assertEqual(set(fb.predicates), set([Afact,Bfact,Cfact]))
-
-        s_af_all = fb.select2(Afact)
-        s_af_num1_eq_1 = fb.select2(Afact).where(Afact.num1 == 1)
-        s_af_num1_le_2 = fb.select2(Afact).where(Afact.num1 <= 2)
-        s_af_num2_eq_20 = fb.select2(Afact).where(Afact.num2 == 20)
-        s_bf_str1_eq_aaa = fb.select2(Bfact).where(Bfact.str1 == "aaa")
-        s_bf_str1_eq_ccc = fb.select2(Bfact).where(Bfact.str1 == "ccc")
-        s_cf_num1_eq_1 = fb.select2(Cfact).where(Cfact.num1 == 1)
-
-        self.assertEqual(set(s_af_all.run()), set([af1,af2,af3]))
-        self.assertEqual(s_af_all.run().count(), 3)
-        self.assertEqual(set(s_af_num1_eq_1.run()), set([af1]))
-        self.assertEqual(set(s_af_num1_le_2.run()), set([af1,af2]))
-        self.assertEqual(set(s_af_num2_eq_20.run()), set([af2, af3]))
-        self.assertEqual(set(s_bf_str1_eq_aaa.run()), set([bf1]))
-        self.assertEqual(set(s_bf_str1_eq_ccc.run()), set([]))
-        self.assertEqual(set(s_cf_num1_eq_1.run()), set([cf1]))
-
-        fb.clear()
-        self.assertEqual(set(s_af_all.run()), set())
-        self.assertEqual(set(s_af_num1_eq_1.run()), set())
-        self.assertEqual(set(s_af_num1_le_2.run()), set())
-        self.assertEqual(set(s_af_num2_eq_20.run()), set())
-        self.assertEqual(set(s_bf_str1_eq_aaa.run()), set())
-        self.assertEqual(set(s_bf_str1_eq_ccc.run()), set())
-        self.assertEqual(set(s_cf_num1_eq_1.run()), set())
-
-        # Test that the select can work with an initially empty factbase
-        fb2 = FactBase()
-        s2 = fb2.select2(Afact).where(Afact.num1 == 1)
-        self.assertEqual(set(s2.run()), set())
-        fb2.add([af1,af2])
-        self.assertEqual(set(s2.run()), set([af1]))
-
-        # Test select with placeholders
-#        fb3 = FactBase([Afact.num1])
-        fb3 = FactBase()
-        fb3.add([af1,af2,af3])
-####        self.assertEqual(fb3.add([af1,af2,af3]),3)
-        s3 = fb3.select2(Afact).where(Afact.num1 == ph_("num1"))
-        self.assertEqual(s3.run(num1=1).singleton(), af1)
-        self.assertEqual(s3.run(num1=2).singleton(), af2)
-        self.assertEqual(s3.run(num1=3).singleton(), af3)
-
-
-        # Test placeholders with positional arguments
-        s4 = fb3.select2(Afact).where(Afact.num1 < ph1_)
-        self.assertEqual(set(list(s4.run(1))), set([]))
-        self.assertEqual(set(list(s4.run(2))), set([af1]))
-        self.assertEqual(set(list(s4.run(3))), set([af1,af2]))
-
-        s5 = fb3.select2(Afact).where(Afact.num1 <= ph1_, Afact.num2 == ph2_)
-        self.assertEqual(set(s5.run(3,10)), set([af1]))
-
-        # Missing positional argument
-        with self.assertRaises(ValueError) as ctx:
-            tmp = list(s5.run(1))
-
-        # Test that the fact base index
-        fb = FactBase(indexes=[Afact.num2, Bfact.str1])
-        self.assertEqual(set([hashable_path(p) for p in fb.indexes]),
-                         set([hashable_path(Afact.num2),
-                              hashable_path(Bfact.str1)]))
-
-    #--------------------------------------------------------------------------
-    # Test factbase select with complex where clause
-    #--------------------------------------------------------------------------
-
-    def test_factbase_select_complex_where(self):
-
-        class Afact(Predicate):
-            num1=IntegerField
-            num2=IntegerField
-            str1=StringField
-
-        af1 = Afact(1,10,"bbb")
-        af2 = Afact(2,20,"aaa")
-        af3 = Afact(3,20,"aaa")
-        fb = FactBase([af1,af2,af3])
-
-        q=fb.select2(Afact).where((Afact.num1 == 2) | (Afact.num2 == 10))
-        self.assertEqual(set([af1,af2]), set(q.run()))
-
-        q=fb.select2(Afact).where((Afact.num1 == 2) & (Afact.num2 == 20))
-        self.assertEqual(set([af2]), set(q.run()))
-
-
-        q=fb.select2(Afact).where(~(Afact.num1 == 2) & (Afact.num2 == 20))
-        self.assertEqual(set([af3]), set(q.run()))
-
-        q=fb.select2(Afact).where(~((Afact.num1 == 2) & (Afact.num2 == 20)))
-        self.assertEqual(set([af1,af3]), set(q.run()))
-
-
-    #--------------------------------------------------------------------------
-    # Test factbase select with a lambda and placeholders
-    #--------------------------------------------------------------------------
-
-    def test_api_factbase_select_placeholders_with_lambda(self):
-
-        class F(Predicate):
-            num1=IntegerField
-            str1=StringField
-
-        f1 = F(1,"a")
-        f2 = F(1,"b")
-        f3 = F(2,"b")
-        fb = FactBase([f1,f2,f3])
-
-
-        q=fb.select2(F).where((F.num1 == 1) & (lambda f : f.str1 == "b"))
-        q=fb.select2(F).where((F.num1 == 1) & (lambda f,v : f.str1 == v))
-
-        self.assertEqual(set([f2]), set(q.run("b")))
-        self.assertEqual(set([f2]), set(q.run(v="b")))
-
-    #--------------------------------------------------------------------------
-    #   Test that we can use the same placeholder multiple times
-    #--------------------------------------------------------------------------
-    def test_api_factbase_select_multi_placeholder(self):
-        class Afact(Predicate):
-            num1=IntegerField()
-            num2=IntegerField()
-
-        f1 = Afact(1,1)
-        f2 = Afact(1,2)
-        f3 = Afact(1,3)
-        f4 = Afact(2,1)
-        f5 = Afact(2,2)
-        fb1 = FactBase([f1,f2,f3,f4,f5], [Afact.num1])
-
-        s1 = fb1.select2(Afact).where(Afact.num1 == ph1_, Afact.num2 == ph1_)
-        self.assertTrue(set([f for f in s1.run(1)]), set([f1]))
-        self.assertTrue(set([f for f in s1.run(2)]), set([f5]))
-
-        s2 = fb1.select2(Afact).where(Afact.num1 == ph_("a",1), Afact.num2 == ph_("a",2))
-        self.assertTrue(set([f for f in s2.run(a=1)]), set([f1]))
-        self.assertTrue(set([f for f in s2.run(a=2)]), set([f5]))
-        self.assertTrue(set([f for f in s2.run()]), set([f2]))
-
-        # test that we can do different parameters with normal functions
-        def tmp(f,a,b=2):
-            return f.num1 == a and f.num2 == b
-
-        s3 = fb1.select2(Afact).where(tmp)
-        with self.assertRaises(ValueError) as ctx:
-            r=[f for f in s3.run()]
-
-        self.assertTrue(set([f for f in s3.run(a=1)]), set([f2]))
-        self.assertTrue(set([f for f in s3.run(a=1,b=3)]), set([f3]))
-
-        # Test manually created positional placeholders
-        s1 = fb1.select2(Afact).where(Afact.num1 == ph1_, Afact.num2 == ph_(1))
-        self.assertTrue(set([f for f in s1.run(1)]), set([f1]))
-        self.assertTrue(set([f for f in s1.run(2)]), set([f5]))
-
-    #--------------------------------------------------------------------------
-    #   Test that select works with order_by
-    #--------------------------------------------------------------------------
-    def test_api_factbase_select_order_by(self):
-        class Afact(Predicate):
-            num1=IntegerField()
-            str1=StringField()
-            str2=ConstantField()
-
-        f1 = Afact(num1=1,str1="1",str2="5")
-        f2 = Afact(num1=2,str1="3",str2="4")
-        f3 = Afact(num1=3,str1="5",str2="3")
-        f4 = Afact(num1=4,str1="3",str2="2")
-        f5 = Afact(num1=5,str1="1",str2="1")
-        fb = FactBase(facts=[f1,f2,f3,f4,f5])
-
-        q = fb.select2(Afact).order_by(Afact.num1)
-        self.assertEqual([f1,f2,f3,f4,f5], list(q.run()))
-
-        q = fb.select2(Afact).order_by(asc(Afact.num1))
-        self.assertEqual([f1,f2,f3,f4,f5], list(q.run()))
-
-        q = fb.select2(Afact).order_by(desc(Afact.num1))
-        self.assertEqual([f5,f4,f3,f2,f1], list(q.run()))
-
-        q = fb.select2(Afact).order_by(Afact.str2)
-        self.assertEqual([f5,f4,f3,f2,f1], list(q.run()))
-
-        q = fb.select2(Afact).order_by(desc(Afact.str2))
-        self.assertEqual([f1,f2,f3,f4,f5], list(q.run()))
-
-        q = fb.select2(Afact).order_by(desc(Afact.str1), Afact.num1)
-        self.assertEqual([f3,f2,f4,f1,f5], list(q.run()))
-
-        q = fb.select2(Afact).order_by(desc(Afact.str1), Afact.num1)
-        self.assertEqual([f3,f2,f4,f1,f5], list(q.run()))
-
-        # Adding a duplicate object to a factbase shouldn't do anything
-        f6 = Afact(num1=5,str1="1",str2="1")
-        fb.add(f6)
-        q = fb.select2(Afact).order_by(desc(Afact.str1), Afact.num1)
-        self.assertEqual([f3,f2,f4,f1,f5], list(q.run()))
-
-
-    #--------------------------------------------------------------------------
-    #   Test that select works with order_by for complex term
-    #--------------------------------------------------------------------------
-    def test_api_factbase_select_order_by_complex_term(self):
-
-        class SwapField(IntegerField):
-            pytocl = lambda x: 100 - x
-            cltopy = lambda x: 100 - x
-
-        class AComplex(ComplexTerm):
-            swap=SwapField(index=True)
-            norm=IntegerField(index=True)
-
-        class AFact(Predicate):
-            astr = StringField(index=True)
-            cmplx = AComplex.Field(index=True)
-
-        cmplx1 = AComplex(swap=99,norm=1)
-        cmplx2 = AComplex(swap=98,norm=2)
-        cmplx3 = AComplex(swap=97,norm=3)
-
-        f1 = AFact(astr="aaa", cmplx=cmplx1)
-        f2 = AFact(astr="bbb", cmplx=cmplx2)
-        f3 = AFact(astr="ccc", cmplx=cmplx3)
-        f4 = AFact(astr="ddd", cmplx=cmplx3)
-
-        fb = FactBase(facts=[f1,f2,f3,f4], indexes = [AFact.astr, AFact.cmplx])
-
-        q = fb.select2(AFact).order_by(AFact.astr)
-        self.assertEqual([f1,f2,f3,f4], list(q.run()))
-
-        q = fb.select2(AFact).order_by(AFact.cmplx, AFact.astr)
-        self.assertEqual([f3,f4,f2,f1], list(q.run()))
-
-        q = fb.select2(AFact).where(AFact.cmplx <= ph1_).order_by(AFact.cmplx, AFact.astr)
-        self.assertEqual([f3,f4,f2], list(q.run(cmplx2)))
-
-    #--------------------------------------------------------------------------
-    #   Test that select works with order_by for complex term
-    #--------------------------------------------------------------------------
-    def test_api_factbase_select_complex_term_placeholders(self):
-
-        class AFact(Predicate):
-            astr = StringField()
-            cmplx1 = (IntegerField(), IntegerField())
-            cmplx2 = (IntegerField(), IntegerField())
-
-        f1 = AFact(astr="aaa", cmplx1=(1,2), cmplx2=(1,2))
-        f2 = AFact(astr="bbb", cmplx1=(1,2), cmplx2=(1,5))
-        f3 = AFact(astr="ccc", cmplx1=(1,5), cmplx2=(1,5))
-        f4 = AFact(astr="ddd", cmplx1=(1,4), cmplx2=(1,2))
-
-        fb = FactBase(facts=[f1,f2,f3,f4])
-
-        q = fb.select2(AFact).where(AFact.cmplx1 == (1,2))
-        self.assertEqual([f1,f2], list(q.run()))
-
-        q = fb.select2(AFact).where(AFact.cmplx1 == ph1_)
-        self.assertEqual([f1,f2], list(q.run((1,2))))
-
-        q = fb.select2(AFact).where(AFact.cmplx1 == AFact.cmplx2)
-        self.assertEqual([f1,f3], list(q.run()))
-
-        # Some type mismatch failures
-#        with self.assertRaises(TypeError) as ctx:
-#            fb.select2(AFact).where(AFact.cmplx1 == 1).run()
-
-        # Fail because of type mismatch
-#        with self.assertRaises(TypeError) as ctx:
-#            q = fb.select2(AFact).where(AFact.cmplx1 == (1,2,3)).run()
-
-#        with self.assertRaises(TypeError) as ctx:
-#            q = fb.select2(AFact).where(AFact.cmplx1 == ph1_).run((1,2,3))
-
-    #--------------------------------------------------------------------------
-    #   Test that the indexing works
-    #--------------------------------------------------------------------------
-    def test_api_factbase_select_indexing(self):
-        class Afact(Predicate):
-            num1=IntegerField()
-            num2=IntegerField()
-
-        f1 = Afact(1,1)
-        f2 = Afact(1,2)
-        f3 = Afact(1,3)
-        f4 = Afact(2,1)
-        f5 = Afact(2,2)
-        f6 = Afact(3,1)
-        fb1 = FactBase([f1,f2,f3,f4,f5,f6], indexes=[Afact.num1])
-
-        # Use a function to track the facts that are visited. This will show
-        # that the first operator selects only the appropriate terms.
-        facts = set()
-        def track(f,a,b):
-            nonlocal facts
-            facts.add(f)
-            return f.num2 == b
-
-        s1 = fb1.select2(Afact).where(Afact.num1 == ph1_, track)
-        s2 = fb1.select2(Afact).where(Afact.num1 < ph1_, track)
-
-        self.assertTrue(set([f for f in s1.run(2,1)]), set([f4]))
-        self.assertTrue(facts, set([f4,f5]))
-
-        self.assertTrue(set([f for f in s2.run(2,2)]), set([f2]))
-        self.assertTrue(facts, set([f1,f2,f3]))
-
-    #--------------------------------------------------------------------------
-    #   Test the delete
-    #--------------------------------------------------------------------------
-    def test_factbase_delete(self):
-        class Afact(Predicate):
-            num1=IntegerField()
-            num2=StringField()
-            str1=StringField()
-
-        f1 = Afact(1,1,"1")
-        f3 = Afact(3,3,"3")
-        f4 = Afact(4,4,"4")
-        f42 = Afact(4,42,"42")
-        f10 = Afact(10,10,"10")
-
-        fb1 = FactBase(facts=[f1,f3, f4,f42,f10], indexes = [Afact.num1, Afact.num2])
-        d1_num1 = fb1.select2(Afact).where(Afact.num1 == ph1_)
-        s1_num1 = fb1.select2(Afact).where(Afact.num1 == ph1_)
-        self.assertEqual(set([f for f in s1_num1.run(4)]), set([f4,f42]))
-        self.assertEqual(d1_num1.run(4).delete(), 2)
-        self.assertEqual(set([f for f in s1_num1.run(4)]), set([]))
-
-    #--------------------------------------------------------------------------
-    # Test the support for indexes of subfields
-    #--------------------------------------------------------------------------
-    def test_factbase_select_with_subfields(self):
-        class CT(ComplexTerm):
-            num1=IntegerField()
-            str1=StringField()
-        class Fact(Predicate):
-            ct1=CT.Field()
-            ct2=(IntegerField(),IntegerField())
-            ct3=(IntegerField(),IntegerField())
-
-        fb = FactBase(indexes=[Fact.ct1.num1, Fact.ct1, Fact.ct2])
-
-        f1=Fact(CT(10,"a"),(3,4),(4,3))
-        f2=Fact(CT(20,"b"),(1,2),(2,1))
-        f3=Fact(CT(30,"c"),(5,2),(2,5))
-        f4=Fact(CT(40,"d"),(6,1),(1,6))
-
-        fb.add(f1); fb.add(f2); fb.add(f3); fb.add(f4);
-
-        # Three queries that uses index
-        s1 = fb.select2(Fact).where(Fact.ct1.num1 <= ph1_).order_by(Fact.ct2)
-        s2 = fb.select2(Fact).where(Fact.ct1 == ph1_)
-        s3 = fb.select2(Fact).where(Fact.ct2 == ph1_)
-        s4 = fb.select2(Fact).where(Fact.ct3 == ph1_)
-
-        self.assertEqual(list(s1.run(20)), [f2,f1])
-        self.assertEqual(list(s2.run(CT(20,"b"))), [f2])
-
-        # NOTE: Important test as it requires tuple complex terms to have the
-        # same hash as the corresponding python tuple.
-        self.assertEqual(list(s3.run((1,2))), [f2])
-        self.assertEqual(list(s4.run((2,1))), [f2])
-
-        # One query doesn't use the index
-        s4 = fb.select2(Fact).where(Fact.ct1.str1 == ph1_)
-        self.assertEqual(list(s4.run("c")), [f3])
-
-    #--------------------------------------------------------------------------
-    #   Test badly formed select/delete statements where the where clause (or
-    #   order by clause for select statements) refers to fields that are not
-    #   part of the predicate being queried. Instead of creating an error at
-    #   query time creating the error when the statement is declared can help
-    #   with debugging.
-    #   --------------------------------------------------------------------------
-    def test_bad_factbase_select_delete_statements(self):
-        class F(Predicate):
-            num1=IntegerField()
-            num2=IntegerField()
-        class G(Predicate):
-            num1=IntegerField()
-            num2=IntegerField()
-
-        f = F(1,2)
-        fb = FactBase([f])
-
-        # Making multiple calls to select where()
-        with self.assertRaises(TypeError) as ctx:
-            q = fb.select2(F).where(F.num1 == 1).where(F.num2 == 2)
-        check_errmsg("Cannot specify 'where' multiple times",ctx)
-
-        # Bad select where clauses
-        with self.assertRaises(TypeError) as ctx:
-            q = fb.select2(F).where()
-        check_errmsg("Empty 'where' expression",ctx)
-
-        with self.assertRaises(ValueError) as ctx:
-            q = fb.select2(F).where(G.num1 == 1)
-        check_errmsg("Invalid 'where' expression 'G.num1",ctx)
-
-        with self.assertRaises(ValueError) as ctx:
-            q = fb.select2(F).where(F.num1 == G.num1)
-        check_errmsg("Invalid 'where' expression",ctx)
-
-        with self.assertRaises(ValueError) as ctx:
-            q = fb.select2(F).where(F.num1 == 1, G.num1 == 1)
-        check_errmsg("Invalid 'where' expression",ctx)
-
-#        with self.assertRaises(TypeError) as ctx:
-#            q = fb.select2(F).where(0)
-#        check_errmsg("'int' object is not callable",ctx)
-
-        # Bad delete where clause
-        with self.assertRaises(ValueError) as ctx:
-            q = fb.select2(F).where(G.num1 == 1).execute()
-        check_errmsg("Invalid 'where' expression",ctx)
-
-
-        # Making multiple calls to select order_by()
-        with self.assertRaises(TypeError) as ctx:
-            q = fb.select2(F).order_by(F.num1).order_by(F.num2)
-        check_errmsg("Cannot specify 'order_by' multiple times",ctx)
-
-        # Bad select where clauses
-        with self.assertRaises(TypeError) as ctx:
-            q = fb.select2(F).order_by()
-        check_errmsg("Empty 'order_by' expression",ctx)
-
-        with self.assertRaises(TypeError) as ctx:
-            q = fb.select2(F).order_by(1)
-        check_errmsg("Invalid 'order_by' expression",ctx)
-
-        with self.assertRaises(ValueError) as ctx:
-            q = fb.select2(F).order_by(G.num1)
-        check_errmsg("Invalid 'order_by' expression",ctx)
-
-        with self.assertRaises(ValueError) as ctx:
-            q = fb.select2(F).order_by(F.num1,G.num1)
-        check_errmsg("Invalid 'order_by' expression",ctx)
-
-        with self.assertRaises(ValueError) as ctx:
-            q = fb.select2(F).order_by(F.num1,desc(G.num1))
-        check_errmsg("Invalid 'order_by' expression",ctx)
+    def test_api_nonselect_single_table(self):
+        F = self.F
+        factbase = FactBase(self.factbase)
+
+        # Count (with/without projection and unique)
+        q = factbase.query(F).order_by(F.astr)
+        r1 = q.count()
+        r2 = q.unique().count(F.astr)
+        self.assertEqual(r1,3)
+        self.assertEqual(r2,2)
+
+        # First
+        q = factbase.query(F).order_by(F.anum,F.astr)
+        self.assertEqual(q.first(), F(1,"a"))
+
+        # First and projection
+        q = factbase.query(F).order_by(F.anum,F.astr)
+        self.assertEqual(q.first(F.anum), 1)
+
+        # First, projection and force tuple
+        q = factbase.query(F).order_by(F.anum,F.astr).tuple()
+        self.assertEqual(q.first(F.anum), (1,))
+
+        # Delete where clauses
+        q = factbase.query(F).where(F.anum > 1,F.astr == "b")
+        r = q.delete(); self.assertEqual(r,1)
+        self.assertEqual(len(factbase), 5)
+        self.assertTrue(F(3,"b") not in factbase)
 
 
 #------------------------------------------------------------------------------
@@ -2215,7 +1250,7 @@ class SelectJoinTestCase(unittest.TestCase):
     #--------------------------------------------------------------------------
     #   Test that the select works
     #--------------------------------------------------------------------------
-    def test_api_select_self_join(self):
+    def _test_api_select_self_join(self):
         class P(Predicate):
             pid = ConstantField
             name = StringField
@@ -2240,11 +1275,11 @@ class SelectJoinTestCase(unittest.TestCase):
 
         fb2 = FactBase(people+friends,indexes=[P.pid,F.src,F.dst])
 
-        s1_people = fb2.select2(P).order_by(P.pid)
-        self.assertEqual(list(s1_people.run()),[bill,bob,dave,jane,jill,sal])
+        s1_people = fb2.query(P).order_by(P.pid)
+        self.assertEqual(list(s1_people.select()),[bill,bob,dave,jane,jill,sal])
 
         PA=alias(P)
-        all_friends = fb2.select2(P,PA,F)\
+        all_friends = fb2.query(P,PA,F)\
             .join(P.pid == F.src,PA.pid == F.dst)
         close_friends = all_friends\
             .where(P.name < PA.name,
@@ -2252,16 +1287,15 @@ class SelectJoinTestCase(unittest.TestCase):
             .order_by(P.name)
         all_friends_sorted=all_friends.order_by(P.pid,PA.pid)
 
-        results = list(all_friends_sorted.run().output(F))
+        results = list(all_friends_sorted.select(F))
         self.assertEqual([F(bill.pid,dave.pid),
                           F(dave.pid,bill.pid),F(dave.pid,jill.pid),
                           F(jane.pid,sal.pid),
                           F(jill.pid,dave.pid),
                           F(sal.pid,jane.pid)], results)
 
-        all_friends = all_friends.order_by(P.pid,PA.name)
-        tmp = { p : list(fs) for p,fs in all_friends.run()\
-                .group_by(1).output(PA.name) }
+        all_friends = all_friends.order_by(P.pid,PA.name).group_by(1)
+        tmp = { p : list(fs) for p,fs in all_friends.select(PA.name) }
         self.assertEqual(len(tmp), 5)
         self.assertEqual(len(tmp["bill"]), 1)
         self.assertEqual(len(tmp["dave"]), 2)
@@ -2272,8 +1306,7 @@ class SelectJoinTestCase(unittest.TestCase):
 
 
 
-
-
+        
 
 
 

@@ -1804,9 +1804,9 @@ class JoinQueryPlan(object):
 
     @property
     def executable(self):
-        if not self._prejoincl.executable: return False
-        if not self._prejoincb.executable: return False
-        if not self._postjoincb.executable: return False
+        if self._prejoincl and not self._prejoincl.executable: return False
+        if self._prejoincb and not self._prejoincb.executable: return False
+        if self._postjoincb and not self._postjoincb.executable: return False
         return True
 
     def ground(self,*args,**kwargs):
@@ -2063,20 +2063,49 @@ class QuerySpec(object):
             nparams[k] = v
         return QuerySpec(**nparams)
 
-    def modp(self, name, value):
-        nqspec = QuerySpec(self)
-        nqspec._params[name] = value
-        return nqspec
+    def modp(self, **kwargs):
+        if not kwargs: return self
+        nparams = dict(self._params)
+        for k,v in kwargs.items():
+            if v is None:
+                raise ValueError("Cannot specify empty '{}'".format(v))
+            nparams[k] = v
+        return QuerySpec(**nparams)
 
     def getp(self,name,default=None):
         return self._params.get(name,default)
+
+
+    def bindp(self, *args, **kwargs):
+        where = self.where
+        if where is None:
+            raise ValueError("'where' must be specified before binding placeholders")
+        np = {}
+        pp = {}
+        for p in where.placeholders:
+            if isinstance(p, NamedPlaceholder): np[p.name] = p
+            elif isinstance(p, PositionalPlaceholder): pp[p.posn] = p
+        for idx, v in enumerate(args):
+            if idx not in pp:
+                raise ValueError(("Trying to bind value '{}' to positional "
+                                  "argument '{}'  but there is no corresponding "
+                                  "positional placeholder in where clause "
+                                  "'{}'").format(v,idx,where))
+        for k,v in kwargs.items():
+            if k not in np:
+                raise ValueError(("Trying to bind value '{}' to named "
+                                  "argument '{}' but there is no corresponding "
+                                  "named placeholder in where clause "
+                                  "'{}'").format(v,k,where))
+        nwhere = where.ground(*args, **kwargs)
+        return self.modp(where=nwhere,bind=True)
 
     def fill_defaults(self):
         toadd = dict(self._params)
         for n in [ "roots","join","where","order_by" ]:
             v = self._params.get(n,None)
             if v is None: toadd[n]=[]
-        toadd["group_by"] = self._params.get("group_by",0)
+        toadd["group_by"] = self._params.get("group_by",[])
         toadd["bind"] = self._params.get("bind",{})
         toadd["tuple"] = self._params.get("tuple",False)
         toadd["unique"] = self._params.get("unique",False)
@@ -2799,9 +2828,20 @@ class QueryExecutor(object):
     # Internal support function
     # --------------------------------------------------------------------------
     def _make_plan_and_query(self):
+        where = self._qspec.where
+        if where and not where.executable:
+            placeholders = where.placeholders
+            raise ValueError(("Placeholders '{}' must be bound to values before "
+                              "executing the query").format(placeholders))
+        qspec = self._qspec
+        if where:
+            where = where.ground()
+            qspec = self._qspec.modp(where=where)
+
         (factsets,factindexes) = \
-            QueryExecutor.get_factmap_data(self._factmaps, self._qspec)
-        qplan = make_query_plan(factindexes.keys(), self._qspec)
+            QueryExecutor.get_factmap_data(self._factmaps, qspec)
+        qplan = make_query_plan(factindexes.keys(), qspec)
+        qplan = qplan.ground()
         query = make_query(qplan,factsets,factindexes)
         return (qplan,query)
 
@@ -2834,10 +2874,10 @@ class QueryExecutor(object):
                 else:
                     yield output
 
-        unwrapkey = self._qspec.group_by == 1 and not self._qspec.tuple
+        unwrapkey = len(self._qspec.group_by) == 1 and not self._qspec.tuple
 
         group_by_keyfunc = make_input_alignment_functor(
-            self._qplan.output_signature, self._group_by)
+            self._qplan.output_signature, self._qspec.group_by)
         for k,g in itertools.groupby(self._query(), group_by_keyfunc):
             if unwrapkey: yield k[0], groupiter(g)
             else: yield k, groupiter(g)
@@ -2848,14 +2888,15 @@ class QueryExecutor(object):
     # --------------------------------------------------------------------------
 
     def all(self):
-        (qplan,self._query) = self._make_plan_and_query()
+        (self._qplan,self._query) = self._make_plan_and_query()
 
-        outsig = self._qspec.getp("select", qplan.output_signature)
-        self._outputter = make_outputter(qplan.output_signature, outsig)
+        outsig = self._qspec.select
+        if outsig is None or not outsig: outsig = self._qplan.output_signature
+        self._outputter = make_outputter(self._qplan.output_signature, outsig)
         self._unwrap = not self._qspec.tuple and len(outsig) == 1
         self._unique = self._qspec.unique
 
-        if self._qspec.group_by > 0: return self._group_by_all()
+        if len(self._qspec.group_by) > 0: return self._group_by_all()
         else: return self._all()
 
     # --------------------------------------------------------------------------
@@ -2863,21 +2904,27 @@ class QueryExecutor(object):
     # and adds the selected fact to that set. The delete the facts in each set.
     # --------------------------------------------------------------------------
 
-    def delete(self,*subroots):
-        if self._executed:
-            raise RuntimeError("The query instance has already been executed")
-        if self._group_by:
-            raise RuntimeError(("delete() cannot be used in "
-                                "conjunction with group_by()"))
-        self._executed = True
+    def delete(self):
+        if self._qspec.group_by:
+            raise ValueError("'group_by' is incompatible with 'delete'")
+        if self._qspec.unique:
+            raise ValueError("'unique' is incompatible with 'delete'")
+        if self._qspec.tuple:
+            raise ValueError("'tuple' is incompatible with 'delete'")
 
-        roots = set([hashable_path(p) for p in self._qspec.roots])
+        (self._qplan,self._query) = self._make_plan_and_query()
+
+        subroots = self._qspec.delete
+        if subroots is None:
+            raise ValueError("Internal error: delete subroots not configured")
+
+        if not subroots: subroots = self._qspec.roots
+        roots= set([hashable_path(p) for p in self._qspec.roots])
         subroots = set([hashable_path(p) for p in validate_root_paths(subroots)])
 
         if not subroots.issubset(roots):
             raise ValueError(("The roots to delete '{}' must be a subset of "
                               "the query roots '{}").format(subroots,roots))
-        if not subroots: subroots = roots
 
         # Find the roots to delete and generate a set of actions that are
         # executed to add to a delete set

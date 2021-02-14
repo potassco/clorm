@@ -231,16 +231,16 @@ class UnifyTestCase(unittest.TestCase):
         # unify with all raw
         fb = unify([F1,F2], [ pos_raw1, pos_raw2, neg_raw1, neg_raw2])
         self.assertEqual(len(fb), 4)
-        self.assertEqual(set(fb.select2(F1).run()), set([pos1,pos2]))
-        self.assertEqual(set(fb.select2(F2).run()), set([neg1,neg2]))
+        self.assertEqual(set(fb.query(F1).select()), set([pos1,pos2]))
+        self.assertEqual(set(fb.query(F2).select()), set([neg1,neg2]))
 
         fb = unify([F1], [ pos_raw1, pos_raw2, neg_raw1, neg_raw2])
         self.assertEqual(len(fb), 2)
-        self.assertEqual(fb.select2(F1).run().count(), 2)
+        self.assertEqual(fb.query(F1).count(), 2)
 
         fb = unify([F2], [ pos_raw1, pos_raw2, neg_raw1, neg_raw2])
         self.assertEqual(len(fb), 2)
-        self.assertEqual(fb.select2(F2).run().count(), 2)
+        self.assertEqual(fb.query(F2).count(), 2)
 
         with self.assertRaises(ValueError) as ctx:
             bad1 = F1(a=1,sign=False)
@@ -393,20 +393,20 @@ class UnifyTestCase(unittest.TestCase):
         fb = spu.unify(symbols=raws)
         self.assertFalse(fb._delayed_init)
         self.assertEqual(set(fb.predicates), set([Afact,Bfact,Cfact]))
-        s_af_all = fb.select2(Afact)
-        self.assertEqual(set(s_af_all.run()), set([af1,af2,af3]))
+        s_af_all = fb.query(Afact)
+        self.assertEqual(set(s_af_all.select()), set([af1,af2,af3]))
 
         fb = spu.unify(symbols=raws, delayed_init=True)
         self.assertTrue(fb._delayed_init)
         self.assertEqual(set(fb.predicates), set([Afact,Bfact,Cfact]))
-        s_af_all = fb.select2(Afact)
-        self.assertEqual(set(s_af_all.run()), set([af1,af2,af3]))
+        s_af_all = fb.query(Afact)
+        self.assertEqual(set(s_af_all.select()), set([af1,af2,af3]))
 
         fb = FactBase()
         fb.add([af1,af2,af3])
 ####        self.assertEqual(fb.add([af1,af2,af3]),3)
-        s_af_all = fb.select2(Afact)
-        self.assertEqual(set(s_af_all.run()), set([af1,af2,af3]))
+        s_af_all = fb.query(Afact)
+        self.assertEqual(set(s_af_all.select()), set([af1,af2,af3]))
 
         fb = FactBase()
         fb.add(af1)
@@ -415,13 +415,13 @@ class UnifyTestCase(unittest.TestCase):
 ####        self.assertEqual(fb.add(af1),1)
 ####        self.assertEqual(fb.add(af2),1)
 ####        self.assertEqual(fb.add(af3),1)
-        s_af_all = fb.select2(Afact)
-        self.assertEqual(set(s_af_all.run()), set([af1,af2,af3]))
+        s_af_all = fb.query(Afact)
+        self.assertEqual(set(s_af_all.select()), set([af1,af2,af3]))
 
         # Test that adding symbols can handle symbols that don't unify
         fb = spu.unify(symbols=raws)
-        s_af_all = fb.select2(Afact)
-        self.assertEqual(set(s_af_all.run()), set([af1,af2,af3]))
+        s_af_all = fb.query(Afact)
+        self.assertEqual(set(s_af_all.select()), set([af1,af2,af3]))
 
         return
 
@@ -433,9 +433,9 @@ class UnifyTestCase(unittest.TestCase):
                                      indexes=[Afact.num1, Bfact.num1])
 
         fb = spu.unify(symbols=raws)
-        s = fb.select2(Afact).where(Afact.num1 == 1)
+        s = fb.query(Afact).where(Afact.num1 == 1)
         self.assertEqual(s.get_unique(), af1)
-        s = fb.select2(Bfact).where(Bfact.num1 == 1)
+        s = fb.query(Bfact).where(Bfact.num1 == 1)
         self.assertEqual(s.get_unique(), bf1)
 
 
