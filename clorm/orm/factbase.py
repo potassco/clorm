@@ -907,8 +907,8 @@ class QueryImpl(object):
     #--------------------------------------------------------------------------
     # Select to display all the output of the query
     # --------------------------------------------------------------------------
-    def select(self, *outsig):
-        self._check_join_called_first("select")
+    def all(self, *outsig):
+        self._check_join_called_first("all")
 
         nqspec = self._qspec.newp(select=outsig)
 

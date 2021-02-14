@@ -1125,41 +1125,41 @@ class QueryAPI2TestCase(unittest.TestCase):
 
         # Select everything
         q = factbase.query(F)
-        r = q.select(); self.assertEqual(set(r),
+        r = q.all(); self.assertEqual(set(r),
                                          set([F(1,"a"), F(2,"a"), F(3,"b")]))
 
         # A single where clause
         q = factbase.query(F).where(F.anum == 1)
-        r = q.select(); self.assertEqual(set(r), set([F(1,"a")]))
+        r = q.all(); self.assertEqual(set(r), set([F(1,"a")]))
 
         # Multiple where clauses
         q = factbase.query(F).where(F.anum > 1,F.astr == "b")
-        r = q.select(); self.assertEqual(set(r), set([F(3,"b")]))
+        r = q.all(); self.assertEqual(set(r), set([F(3,"b")]))
 
         # A where clause with placeholders
         q = factbase.query(F).where(F.anum == ph1_)
-        r = q.bind(1).select(); self.assertEqual(set(r), set([F(1,"a")]))
-        r = q.bind(2).select(); self.assertEqual(set(r), set([F(2,"a")]))
+        r = q.bind(1).all(); self.assertEqual(set(r), set([F(1,"a")]))
+        r = q.bind(2).all(); self.assertEqual(set(r), set([F(2,"a")]))
 
         # A where clause with named placeholder with default value
         q = factbase.query(F).where(F.anum == ph_("a",1))
-        r = q.bind().select(); self.assertEqual(set(r), set([F(1,"a")]))
-        r = q.bind(a=2).select(); self.assertEqual(set(r), set([F(2,"a")]))
+        r = q.bind().all(); self.assertEqual(set(r), set([F(1,"a")]))
+        r = q.bind(a=2).all(); self.assertEqual(set(r), set([F(2,"a")]))
 
         # Order_by clause
         q = factbase.query(F).where(F.anum > 1).order_by(desc(F.anum))
-        r = q.select(); self.assertEqual(set(r), set([F(3,"b"),F(2,"a")]))
+        r = q.all(); self.assertEqual(set(r), set([F(3,"b"),F(2,"a")]))
 
         # Group_by clause - default value
         q = factbase.query(F).where(F.anum > 1).order_by(desc(F.anum)).group_by()
-        r = q.select()
+        r = q.all()
         result = { k : list(g) for k,g in r }
         expected = { 3: [F(3,"b")], 2 : [F(2,"a")] }
         self.assertEqual(result,expected)
 
         # Group_by clause - explicit grouping value
         q = factbase.query(F).where(F.anum > 1).order_by(desc(F.anum)).group_by(1)
-        r = q.select()
+        r = q.all()
         result = { k : list(g) for k,g in r }
         expected = { 3: [F(3,"b")], 2 : [F(2,"a")] }
         self.assertEqual(result,expected)
@@ -1167,19 +1167,19 @@ class QueryAPI2TestCase(unittest.TestCase):
         # Group_by clause and force tuple
         q = factbase.query(F).where(F.anum > 1)\
             .tuple().order_by(desc(F.anum)).group_by(1)
-        r = q.select()
+        r = q.all()
         result = { k : list(g) for k,g in r }
         expected = { (3,): [(F(3,"b"),)], (2,) : [(F(2,"a"),)] }
         self.assertEqual(result,expected)
 
         # Projection
         q = factbase.query(F).order_by(F.astr)
-        r = q.select(F.astr)
+        r = q.all(F.astr)
         self.assertEqual(list(r), ['a','a','b'])
 
         # Projection and unique
         q = factbase.query(F).order_by(F.astr).unique()
-        r = q.select(F.astr)
+        r = q.all(F.astr)
         self.assertEqual(list(r), ['a','b'])
 
     #--------------------------------------------------------------------------
@@ -1192,7 +1192,7 @@ class QueryAPI2TestCase(unittest.TestCase):
         # A where clause with a placeholder - a missing value
         q = factbase.query(F).where(F.anum == ph_("a"))
         with self.assertRaises(ValueError) as ctx:
-            r = q.bind().select(); self.assertEqual(set(r), set([F(1,"a")]))
+            r = q.bind().all(); self.assertEqual(set(r), set([F(1,"a")]))
         check_errmsg("Missing named placeholder argument", ctx)
 
         # A where clause with a no placeholder but trying to ground
@@ -1276,7 +1276,7 @@ class SelectJoinTestCase(unittest.TestCase):
         fb2 = FactBase(people+friends,indexes=[P.pid,F.src,F.dst])
 
         s1_people = fb2.query(P).order_by(P.pid)
-        self.assertEqual(list(s1_people.select()),[bill,bob,dave,jane,jill,sal])
+        self.assertEqual(list(s1_people.all()),[bill,bob,dave,jane,jill,sal])
 
         PA=alias(P)
         all_friends = fb2.query(P,PA,F)\
@@ -1287,7 +1287,7 @@ class SelectJoinTestCase(unittest.TestCase):
             .order_by(P.name)
         all_friends_sorted=all_friends.order_by(P.pid,PA.pid)
 
-        results = list(all_friends_sorted.select(F))
+        results = list(all_friends_sorted.all(F))
         self.assertEqual([F(bill.pid,dave.pid),
                           F(dave.pid,bill.pid),F(dave.pid,jill.pid),
                           F(jane.pid,sal.pid),
@@ -1295,7 +1295,7 @@ class SelectJoinTestCase(unittest.TestCase):
                           F(sal.pid,jane.pid)], results)
 
         all_friends = all_friends.order_by(P.pid,PA.name).group_by(1)
-        tmp = { p : list(fs) for p,fs in all_friends.select(PA.name) }
+        tmp = { p : list(fs) for p,fs in all_friends.all(PA.name) }
         self.assertEqual(len(tmp), 5)
         self.assertEqual(len(tmp["bill"]), 1)
         self.assertEqual(len(tmp["dave"]), 2)

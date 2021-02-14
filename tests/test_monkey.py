@@ -63,7 +63,7 @@ class ClingoPatchTestCase(unittest.TestCase):
         ctrl.solve(on_model=on_model)
 
         s_a_all = fb2.query(Afact)
-        self.assertEqual(set([a for a in s_a_all.select()]), set([af1,af2,af3]))
+        self.assertEqual(set([a for a in s_a_all.all()]), set([af1,af2,af3]))
 
 
 class NoClingoPatchTestCase(unittest.TestCase):

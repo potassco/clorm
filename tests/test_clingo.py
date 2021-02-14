@@ -191,9 +191,9 @@ class ClingoTestCase(unittest.TestCase):
         self.assertEqual(safact1.bind(1).singleton(), af1)
         self.assertEqual(safact1.bind(2).singleton(), af2)
         self.assertEqual(safact1.bind(3).singleton(), af3)
-        self.assertEqual(set(list(safact2.bind(1).select())), set([]))
-        self.assertEqual(set(list(safact2.bind(2).select())), set([af1]))
-        self.assertEqual(set(list(safact2.bind(3).select())), set([af1,af2]))
+        self.assertEqual(set(list(safact2.bind(1).all())), set([]))
+        self.assertEqual(set(list(safact2.bind(2).all())), set([af1]))
+        self.assertEqual(set(list(safact2.bind(3).all())), set([af1,af2]))
         self.assertEqual(fb2.query(Bfact).where(Bfact.str1 == "aaa").singleton(), bf1)
         self.assertEqual(fb2.query(Bfact).where(Bfact.str1 == "bbb").singleton(), bf2)
 
