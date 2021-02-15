@@ -1238,6 +1238,21 @@ class QueryAPI2TestCase(unittest.TestCase):
         self.assertEqual(len(factbase), 5)
         self.assertTrue(F(3,"b") not in factbase)
 
+    #--------------------------------------------------------------------------
+    #   Test select on multiple tables
+    #--------------------------------------------------------------------------
+    def test_api_select_multi_table(self):
+        F = self.F
+        G = self.G
+        factbase = self.factbase
+
+        # Select everything with an equality join
+        q = factbase.query(F,G).join(F.anum == G.anum)
+        self.assertEqual(set(q.all()),
+                         set([(F(1,"a"), G(1,"c")),
+                              (F(2,"a"), G(2,"d"))]))
+
+
 
 #------------------------------------------------------------------------------
 # Tests for additional V2 select and delete statements

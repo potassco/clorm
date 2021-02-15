@@ -813,9 +813,8 @@ class QueryImpl(object):
     # Add a join expression
     #--------------------------------------------------------------------------
     def join(self, *expressions):
-        nqspec = self._qspec.newp("join",
-                                  process_join(expressions, self._qspec.roots))
-        return QueryImpl(self._factmaps, nqspec)
+        join=process_join(expressions, self._qspec.roots)
+        return QueryImpl(self._factmaps, self._qspec.newp(join=join))
 
     #--------------------------------------------------------------------------
     # Add an order_by expression
@@ -824,7 +823,7 @@ class QueryImpl(object):
         self._check_join_called_first("where")
 
         if not expressions:
-            self._qspec.newp("where", None)    # Raise an error
+            self._qspec.newp(where=None)    # Raise an error
 
         if len(expressions) == 1:
             where = process_where(expressions[0], self._qspec.roots)
@@ -840,7 +839,7 @@ class QueryImpl(object):
     def order_by(self, *expressions):
         self._check_join_called_first("order_by")
         if not expressions:
-            nqspec = self._qspec.newp("order_by", None)
+            nqspec = self._qspec.newp(order_by=None)   # raise exception
         else:
             nqspec = self._qspec.newp(
                 order_by=process_orderby(expressions,self._qspec.roots))
