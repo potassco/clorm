@@ -28,7 +28,7 @@ from clorm.orm.factcontainers import FactSet, FactIndex, FactMap
 
 from clorm.orm.query import PositionalPlaceholder, NamedPlaceholder, QuerySpec
 from clorm.orm.query import process_where, process_join, process_orderby
-
+from clorm.orm.query import fixed_join_order_heuristic, basic_join_order_heuristic
 
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
@@ -1252,6 +1252,21 @@ class QueryAPI2TestCase(unittest.TestCase):
                          set([(F(1,"a"), G(1,"c")),
                               (F(2,"a"), G(2,"d"))]))
 
+
+    #--------------------------------------------------------------------------
+    #   Complex query query_plan
+    #--------------------------------------------------------------------------
+    def test_api_complex_query_query_plan(self):
+        F = self.F
+        G = self.G
+        factbase = self.factbase
+
+        # Select everything with an equality join
+        q = factbase.query(G,F).heuristic(fixed_join_order_heuristic)\
+                               .join(F.anum == G.anum).where(F.astr < G.astr)
+        qplan = q.query_plan()
+        self.assertEqual(qplan[0].root,G)
+        self.assertEqual(qplan[1].root,F)
 
 
 #------------------------------------------------------------------------------

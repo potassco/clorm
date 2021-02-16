@@ -377,7 +377,7 @@ class ContextBuilder(object):
 
            # Register with a different name and override the signature in the
            # function annotation
-           cb._register_name("adds", SF, SF, SF, addi)
+           cb.register_name("adds", SF, SF, SF, addi)
 
            ctx=cb.make_context()
 

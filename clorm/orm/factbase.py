@@ -895,7 +895,7 @@ class QueryImpl(object):
     #--------------------------------------------------------------------------
     # For the user to see what the query plan looks like
     #--------------------------------------------------------------------------
-    def query_plan():
+    def query_plan(self,*args,**kwargs):
         self._check_join_called_first("query_plan")
         qspec = self._qspec.fill_defaults()
 
