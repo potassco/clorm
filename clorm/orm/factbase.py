@@ -936,17 +936,27 @@ class QueryImpl(object):
         return found
 
     #--------------------------------------------------------------------------
-    # Return the count of elements - Note: the reason to add an output signature
-    # is that if you use count with projection then you can potentially get
-    # different output with the unique() flag.
+    # Return the count of elements - Note: the behaviour of what is counted
+    # changes if group_by() has been specified.
     # --------------------------------------------------------------------------
     def count(self):
         self._check_join_called_first("count")
 
         qe = QueryExecutor(self._factmaps, self._qspec)
-        count = 0
-        for _ in qe.all(): count += 1
-        return count
+
+        def group_by_generator():
+            for k, g in qe.all():
+                yield k, sum(1 for _ in g)
+
+        # If group_by is set then we want to count records associated with each
+        # key and not just total records.
+        if self._qspec.group_by:
+            return group_by_generator()
+        else:
+            count = 0
+            for _ in qe.all(): count += 1
+            return count
+
 
     #--------------------------------------------------------------------------
     # Show the single element and throw an exception if there is more than one

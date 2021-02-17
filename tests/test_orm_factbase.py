@@ -1172,6 +1172,13 @@ class QueryAPI2TestCase(unittest.TestCase):
         expected = { (3,): [(F(3,"b"),)], (2,) : [(F(2,"a"),)] }
         self.assertEqual(result,expected)
 
+        # Group_by clause and count
+        q = factbase.query(F).where(F.anum > 1).order_by(desc(F.anum)).group_by()
+        r = q.count()
+        result = { k : c for k,c in r }
+        expected = { 3: 1, 2 : 1 }
+        self.assertEqual(result,expected)
+
         # Projection
         q = factbase.query(F).order_by(F.astr)
         r = q.select(F.astr).all()
