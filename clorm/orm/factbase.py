@@ -889,6 +889,16 @@ class QueryImpl(object):
         return QueryImpl(self._factmaps, nqspec)
 
     #--------------------------------------------------------------------------
+    # Explicitly select the elements to output or delete
+    #--------------------------------------------------------------------------
+    def select(self,*outsig):
+        self._check_join_called_first("select")
+        if not outsig:
+            raise ValueError("An empty 'select' signature is invalid")
+        nqspec = self._qspec.newp(select=outsig)
+        return QueryImpl(self._factmaps, nqspec)
+
+    #--------------------------------------------------------------------------
     # End points that do something useful
     #--------------------------------------------------------------------------
 
@@ -906,23 +916,19 @@ class QueryImpl(object):
     #--------------------------------------------------------------------------
     # Select to display all the output of the query
     # --------------------------------------------------------------------------
-    def all(self, *outsig):
+    def all(self):
         self._check_join_called_first("all")
 
-        nqspec = self._qspec.newp(select=outsig)
-
-        qe = QueryExecutor(self._factmaps, nqspec)
+        qe = QueryExecutor(self._factmaps, self._qspec)
         return qe.all()
 
     #--------------------------------------------------------------------------
     # Show the single element and throw an exception if there is more than one
     # --------------------------------------------------------------------------
-    def singleton(self, *outsig):
+    def singleton(self):
         self._check_join_called_first("singleton")
 
-        nqspec = self._qspec.newp(select=outsig)
-        qe = QueryExecutor(self._factmaps, nqspec)
-
+        qe = QueryExecutor(self._factmaps, self._qspec)
         found = None
         for out in qe.all():
             if found: raise ValueError("Query returned more than a single element")
@@ -934,11 +940,10 @@ class QueryImpl(object):
     # is that if you use count with projection then you can potentially get
     # different output with the unique() flag.
     # --------------------------------------------------------------------------
-    def count(self,*outsig):
+    def count(self):
         self._check_join_called_first("count")
 
-        nqspec = self._qspec.newp(select=outsig)
-        qe = QueryExecutor(self._factmaps, nqspec)
+        qe = QueryExecutor(self._factmaps, self._qspec)
         count = 0
         for _ in qe.all(): count += 1
         return count
@@ -946,11 +951,10 @@ class QueryImpl(object):
     #--------------------------------------------------------------------------
     # Show the single element and throw an exception if there is more than one
     # --------------------------------------------------------------------------
-    def first(self, *outsig):
+    def first(self):
         self._check_join_called_first("first")
 
-        nqspec = self._qspec.newp(select=outsig)
-        qe = QueryExecutor(self._factmaps, nqspec)
+        qe = QueryExecutor(self._factmaps, self._qspec)
         return next(iter(qe.all()))
 
     #--------------------------------------------------------------------------

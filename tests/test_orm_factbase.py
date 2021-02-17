@@ -28,7 +28,7 @@ from clorm.orm.factcontainers import FactSet, FactIndex, FactMap
 
 from clorm.orm.query import PositionalPlaceholder, NamedPlaceholder, QuerySpec
 from clorm.orm.query import process_where, process_join, process_orderby
-from clorm.orm.query import fixed_join_order_heuristic, basic_join_order_heuristic
+from clorm.orm.query import fixed_join_order
 
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
@@ -1174,13 +1174,21 @@ class QueryAPI2TestCase(unittest.TestCase):
 
         # Projection
         q = factbase.query(F).order_by(F.astr)
-        r = q.all(F.astr)
+        r = q.select(F.astr).all()
         self.assertEqual(list(r), ['a','a','b'])
 
         # Projection and unique
         q = factbase.query(F).order_by(F.astr).unique()
-        r = q.all(F.astr)
+        r = q.select(F.astr).all()
         self.assertEqual(list(r), ['a','b'])
+
+        # Singleton answer
+        q = factbase.query(F).where(F.astr == "b")
+        self.assertEqual(q.singleton(), F(3,"b"))
+
+        # Singleton due to projection and unique
+        q = factbase.query(F).where(F.astr == "a").select(F.astr).unique()
+        self.assertEqual(q.singleton(),"a")
 
     #--------------------------------------------------------------------------
     #   Test bad calls to selecting on a single table
@@ -1216,7 +1224,7 @@ class QueryAPI2TestCase(unittest.TestCase):
         # Count (with/without projection and unique)
         q = factbase.query(F).order_by(F.astr)
         r1 = q.count()
-        r2 = q.unique().count(F.astr)
+        r2 = q.select(F.astr).unique().count()
         self.assertEqual(r1,3)
         self.assertEqual(r2,2)
 
@@ -1225,12 +1233,12 @@ class QueryAPI2TestCase(unittest.TestCase):
         self.assertEqual(q.first(), F(1,"a"))
 
         # First and projection
-        q = factbase.query(F).order_by(F.anum,F.astr)
-        self.assertEqual(q.first(F.anum), 1)
+        q = factbase.query(F).order_by(F.anum,F.astr).select(F.anum)
+        self.assertEqual(q.first(), 1)
 
         # First, projection and force tuple
-        q = factbase.query(F).order_by(F.anum,F.astr).tuple()
-        self.assertEqual(q.first(F.anum), (1,))
+        q = factbase.query(F).order_by(F.anum,F.astr).tuple().select(F.anum)
+        self.assertEqual(q.first(), (1,))
 
         # Delete where clauses
         q = factbase.query(F).where(F.anum > 1,F.astr == "b")
@@ -1256,18 +1264,30 @@ class QueryAPI2TestCase(unittest.TestCase):
     #--------------------------------------------------------------------------
     #   Complex query query_plan
     #--------------------------------------------------------------------------
-    def test_api_complex_query_query_plan(self):
+    def test_api_complex_query_join_order_output(self):
         F = self.F
         G = self.G
         factbase = self.factbase
 
         # Select everything with an equality join
-        q = factbase.query(G,F).heuristic(fixed_join_order_heuristic)\
-                               .join(F.anum == G.anum).where(F.astr < G.astr)
+        q = factbase.query(G,F).heuristic(fixed_join_order(G,F))\
+                               .join(F.anum == G.anum)
         qplan = q.query_plan()
         self.assertEqual(qplan[0].root,G)
         self.assertEqual(qplan[1].root,F)
+        self.assertEqual(set(q.all()),
+                         set([(G(1,"c"), F(1,"a")),
+                              (G(2,"d"), F(2,"a"))]))
 
+        # Select everything with an equality join
+        q = factbase.query(G,F).heuristic(fixed_join_order(F,G))\
+                               .join(F.anum == G.anum)
+        qplan = q.query_plan()
+        self.assertEqual(qplan[0].root,F)
+        self.assertEqual(qplan[1].root,G)
+        self.assertEqual(set(q.all()),
+                         set([(G(1,"c"), F(1,"a")),
+                              (G(2,"d"), F(2,"a"))]))
 
 #------------------------------------------------------------------------------
 # Tests for additional V2 select and delete statements
@@ -1317,7 +1337,7 @@ class SelectJoinTestCase(unittest.TestCase):
             .order_by(P.name)
         all_friends_sorted=all_friends.order_by(P.pid,PA.pid)
 
-        results = list(all_friends_sorted.all(F))
+        results = list(all_friends_sorted.select(F).all())
         self.assertEqual([F(bill.pid,dave.pid),
                           F(dave.pid,bill.pid),F(dave.pid,jill.pid),
                           F(jane.pid,sal.pid),
@@ -1325,7 +1345,7 @@ class SelectJoinTestCase(unittest.TestCase):
                           F(sal.pid,jane.pid)], results)
 
         all_friends = all_friends.order_by(P.pid,PA.name).group_by(1)
-        tmp = { p : list(fs) for p,fs in all_friends.all(PA.name) }
+        tmp = { p : list(fs) for p,fs in all_friends.select(PA.name).all() }
         self.assertEqual(len(tmp), 5)
         self.assertEqual(len(tmp["bill"]), 1)
         self.assertEqual(len(tmp["dave"]), 2)
@@ -1334,9 +1354,6 @@ class SelectJoinTestCase(unittest.TestCase):
         self.assertEqual(len(tmp["sal"]), 1)
 
 
-
-
-        
 
 
 

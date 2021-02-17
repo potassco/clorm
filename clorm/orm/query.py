@@ -30,8 +30,9 @@ __all__ = [
     'ph3_',
     'ph4_',
     'func_',
-    'fixed_join_order_heuristic',
-    'basic_join_order_heuristic',
+    'fixed_join_order',
+    'basic_join_order',
+    'oppref_join_order',
     ]
 
 #------------------------------------------------------------------------------
@@ -2110,7 +2111,7 @@ class QuerySpec(object):
         toadd["tuple"] = self._params.get("tuple",False)
         toadd["unique"] = self._params.get("unique",False)
         toadd["heuristic"] = self._params.get("heuristic",False)
-        toadd["joh"] = self._params.get("joh",basic_join_order_heuristic)
+        toadd["joh"] = self._params.get("joh",oppref_join_order)
 
         # Note: No default values for "select" and "delete" so calling their
         # attributes will return None
@@ -2203,11 +2204,34 @@ def make_query_plan_preordered_roots(indexed_paths, root_join_order,
 #
 # ------------------------------------------------------------------------------
 
-def fixed_join_order_heuristic(indexed_paths, qspec):
+def fixed_join_order(*roots):
+    def validate(r):
+        r=path(r)
+        if not r.meta.is_root:
+            raise ValueError(("Bad query roots specification '{}': '{}' is not "
+                             "a root path").format(roots, r))
+        return r
+
+    if not roots:
+        raise ValueError("Missing query roots specification: cannot create "
+                         "a fixed join order heuristic from an empty list")
+    paths = [validate(r) for r in roots]
+    hashables = set([ hashable_path(r) for r in roots ])
+
+    def fixed_join_order_heuristic(indexed_paths, qspec):
+        hps = set([hashable_path(r) for r in qspec.roots])
+        if hps != set(hashables):
+            raise ValueError(("Mis-matched query roots: fixed join order "
+                              "heuristic '{}' must contain exactly the "
+                              "roots '{}").format(roots, qspec.roots))
+        return list(paths)
+    return fixed_join_order_heuristic
+
+def basic_join_order(indexed_paths, qspec):
     return [path(r) for r in qspec.roots]
 
 
-def basic_join_order_heuristic(indexed_paths, qspec):
+def oppref_join_order(indexed_paths, qspec):
     roots= qspec.roots
     joins= qspec.join
 
@@ -2217,7 +2241,8 @@ def basic_join_order_heuristic(indexed_paths, qspec):
             hrp = hashable_path(rp)
             v = root2val.setdefault(hrp, 0)
             root2val[hrp] += join.preference
-    return [path(hrp) for hrp in sorted(root2val.keys(), key = lambda k : root2val[k])]
+    return [path(hrp) for hrp in \
+            sorted(root2val.keys(), key = lambda k : root2val[k])]
 
 
 # ------------------------------------------------------------------------------
@@ -2674,7 +2699,8 @@ class QueryExecutor(object):
         (self._qplan,self._query) = self._make_plan_and_query()
 
         outsig = self._qspec.select
-        if outsig is None or not outsig: outsig = self._qplan.output_signature
+        if outsig is None or not outsig: outsig = self._qspec.roots
+
         self._outputter = make_outputter(self._qplan.output_signature, outsig)
         self._unwrap = not self._qspec.tuple and len(outsig) == 1
         self._unique = self._qspec.unique
@@ -2697,17 +2723,17 @@ class QueryExecutor(object):
 
         (self._qplan,self._query) = self._make_plan_and_query()
 
-        subroots = self._qspec.delete
-        if subroots is None:
-            raise ValueError("Internal error: delete subroots not configured")
+        selection = self._qspec.select
+        roots = [hashable_path(p) for p in self._qspec.roots]
+        if selection:
+            subroots = set([hashable_path(p) for p in selection])
+        else:
+            subroots = set(roots)
 
-        if not subroots: subroots = self._qspec.roots
-        roots= set([hashable_path(p) for p in self._qspec.roots])
-        subroots = set([hashable_path(p) for p in validate_root_paths(subroots)])
-
-        if not subroots.issubset(roots):
-            raise ValueError(("The roots to delete '{}' must be a subset of "
-                              "the query roots '{}").format(subroots,roots))
+        if not subroots.issubset(set(roots)):
+            raise ValueError(("For a 'delete' query the selected items '{}' "
+                              "must be a subset of the query roots "
+                              "'{}'").format(selection, roots))
 
         # Find the roots to delete and generate a set of actions that are
         # executed to add to a delete set

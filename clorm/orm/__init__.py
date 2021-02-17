@@ -42,8 +42,8 @@ __all__ = [
     'or_',
     'func_',
     'joinall_',
-    'fixed_join_order_heuristic',
-    'basic_join_order_heuristic',
+    'basic_join_order',
+    'oppref_join_order',
     'make_function_asp_callable',
     'make_method_asp_callable'
     ]

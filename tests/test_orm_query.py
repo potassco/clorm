@@ -33,8 +33,9 @@ from clorm.orm.query import PositionalPlaceholder, NamedPlaceholder, \
     where_expression_to_nnf, where_expression_to_cnf, \
     Clause, ClauseBlock, normalise_where_expression, \
     process_where, partition_clauses, \
-    validate_join_expression, process_join, fixed_join_order_heuristic, \
-    basic_join_order_heuristic, make_query_plan_preordered_roots, \
+    validate_join_expression, process_join, \
+    basic_join_order, fixed_join_order, oppref_join_order, \
+    make_query_plan_preordered_roots, \
     validate_orderby_expression, OrderBy, OrderByBlock, process_orderby, \
     partition_orderbys, make_prejoin_pair, make_join_pair, make_query_plan, \
     JoinQueryPlan, QueryPlan, QuerySpec, \
@@ -1385,7 +1386,7 @@ class QueryPlanTestCase(unittest.TestCase):
         indexes=[F.anum,G.astr]
         order_by = pob([asc(F.astr),desc(G.astr),desc(G.anum)],[F,G])
         qspec = QuerySpec(roots=[F,G],join=[],where=[],order_by=order_by,
-                          joh=fixed_join_order_heuristic)
+                          joh=basic_join_order)
 
         qplan = make_query_plan(indexes, qspec)
         self.assertEqual(qplan[0].prejoin_orderbys, [asc(F.astr)])
@@ -1634,9 +1635,9 @@ class QueryPlanTestCase(unittest.TestCase):
 
 
     # ------------------------------------------------------------------------------
-    # Test the basic heuristic for generating the join order
+    # Test the operator preference heuristic for generating the join order
     # ------------------------------------------------------------------------------
-    def test_nonapi_basic_join_order_heuristic(self):
+    def test_nonapi_oppref_join_order(self):
         F = path(self.F)
         G = path(self.G)
         FA = alias(F)
@@ -1645,20 +1646,54 @@ class QueryPlanTestCase(unittest.TestCase):
 
         joins = pj([F.anum == G.anum, F.anum < GA.anum, joinall_(G,FA)],[F,G,FA,GA])
         qspec = QuerySpec(roots=[F,G,FA,GA],join=joins,where=[],order_by=[])
-        qorder = basic_join_order_heuristic([], qspec)
+        qorder = oppref_join_order([], qspec)
         self.assertEqual(qorder,[FA,GA,G,F])
 
     # ------------------------------------------------------------------------------
-    # Test the fixed heuristic for generating the join order
+    # Test the basic heuristic for generating the join order
     # ------------------------------------------------------------------------------
-    def test_nonapi_basic_join_order_heuristic(self):
+    def test_nonapi_oppref_join_order(self):
         F = path(self.F)
         G = path(self.G)
         FA = alias(F)
         GA = alias(G)
         qspec = QuerySpec(roots=[F,G,FA,GA],join=[],where=[],order_by=[])
-        qorder = fixed_join_order_heuristic([], qspec)
+        qorder = basic_join_order([], qspec)
         self.assertEqual(qorder,[F,G,FA,GA])
+
+    # ------------------------------------------------------------------------------
+    # Test the fixed join order heuristic generator
+    # ------------------------------------------------------------------------------
+    def test_nonapi_fixed_join_order(self):
+        F = path(self.F)
+        G = path(self.G)
+        FA = alias(F)
+        GA = alias(G)
+        qspec = QuerySpec(roots=[F,G,FA,GA],join=[],where=[],order_by=[])
+
+        qorder = fixed_join_order(F,G,FA,GA)([], qspec)
+        self.assertEqual(qorder,[F,G,FA,GA])
+
+        qorder = fixed_join_order(G,F,FA,GA)([], qspec)
+        self.assertEqual(qorder,[G,F,FA,GA])
+
+        qorder = fixed_join_order(GA,FA,F,G)([], qspec)
+        self.assertEqual(qorder,[GA,FA,F,G])
+
+        # Detect creation of bad heuristics
+        with self.assertRaises(ValueError) as ctx:
+            qorder = fixed_join_order(F,G)([], qspec)
+        check_errmsg("Mis-matched query roots: fixed join",ctx)
+
+        with self.assertRaises(ValueError) as ctx:
+            qorder = fixed_join_order(F.anum,G)([], qspec)
+        check_errmsg("Bad query roots specification",ctx)
+
+        with self.assertRaises(ValueError) as ctx:
+            qorder = fixed_join_order()
+        check_errmsg("Missing query roots",ctx)
+
+
 
     # ------------------------------------------------------------------------------
     # Test making a plan from joins and whereclauses
@@ -1881,8 +1916,8 @@ class QueryTestCase(unittest.TestCase):
         pj = process_join
         pob = process_orderby
         roots = [F,G]
-        fjoh = fixed_join_order_heuristic
-        bjoh = basic_join_order_heuristic
+        fjoh = basic_join_order
+        bjoh = oppref_join_order
 
         # Simplest case. Nothing specified so pass through the factset
         qspec = QuerySpec(roots=roots,join=[],where=[],order_by=[],joh=fjoh)
@@ -2006,8 +2041,8 @@ class QueryTestCase(unittest.TestCase):
         pw = process_where
         pj = process_join
         pob = process_orderby
-        fjoh = fixed_join_order_heuristic
-        bjoh = basic_join_order_heuristic
+        fjoh = basic_join_order
+        bjoh = oppref_join_order
         roots = [F,G]
 
 #        orderby = pob([F.astr,desc(G.anum)],roots)
@@ -2105,8 +2140,8 @@ class QueryTestCase(unittest.TestCase):
         G = self.G
         pw = process_where
         pob = process_orderby
-        fjoh = fixed_join_order_heuristic
-        bjoh = basic_join_order_heuristic
+        fjoh = basic_join_order
+        bjoh = oppref_join_order
         indexes = self.indexes
         factsets = self.factsets
 
@@ -2133,8 +2168,8 @@ class QueryTestCase(unittest.TestCase):
         G = self.G
         pw = process_where
         pob = process_orderby
-        bjoh = basic_join_order_heuristic
-        fjoh = fixed_join_order_heuristic
+        bjoh = oppref_join_order
+        fjoh = basic_join_order
 
         indexes = self.indexes
         factsets = self.factsets
@@ -2168,8 +2203,8 @@ class QueryTestCase(unittest.TestCase):
         pw = process_where
         pj = process_join
         pob = process_orderby
-        bjoh = basic_join_order_heuristic
-        fjoh = fixed_join_order_heuristic
+        bjoh = oppref_join_order
+        fjoh = basic_join_order
         roots = [F,G]
 
         joins1 = pj([F.anum == G.anum],roots)
@@ -2260,15 +2295,15 @@ class QueryExecutorTestCase(unittest.TestCase):
         pw = process_where
         pj = process_join
         pob = process_orderby
-        fjoh = fixed_join_order_heuristic
-        bjoh = basic_join_order_heuristic
+        fjoh = basic_join_order
+        bjoh = oppref_join_order
 
         roots = (F,G)
         join = pj([F.anum == G.anum],roots)
         where = pw((F.astr == "foo"),roots)
         order_by = pob([G.anum,G.astr],roots)
-        qspec = QuerySpec(roots=roots, join=join, where=where, order_by=order_by,joh=bjoh)
-
+        qspec = QuerySpec(roots=roots, join=join, where=where,
+                          order_by=order_by,joh=bjoh)
         qe = QueryExecutor(factmaps, qspec)
 
         # Test output with no options
@@ -2281,7 +2316,7 @@ class QueryExecutorTestCase(unittest.TestCase):
     #--------------------------------------------------------------------------
     # Test some basic configurations
     #--------------------------------------------------------------------------
-    def test_noapi_basic_tests(self):
+    def test_nonapi_basic_tests(self):
         F = self.F
         G = self.G
         factmaps=self.factmaps
@@ -2289,8 +2324,8 @@ class QueryExecutorTestCase(unittest.TestCase):
         pw = process_where
         pj = process_join
         pob = process_orderby
-        fjoh = fixed_join_order_heuristic
-        bjoh = basic_join_order_heuristic
+        fjoh = basic_join_order
+        bjoh = oppref_join_order
         roots = [F,G]
 
         joins1 = pj([F.anum == G.anum],roots)
@@ -2353,6 +2388,32 @@ class QueryExecutorTestCase(unittest.TestCase):
         expected = set([(1,),(5,)])
         self.assertEqual(expected, set(result))
 
+    #--------------------------------------------------------------------------
+    # Test that the default output order always follows the specification and
+    # not the order decided by the join_order heuristic.
+    # --------------------------------------------------------------------------
+    def test_nonapi_default_output_spec(self):
+        F = self.F
+        G = self.G
+        factmaps=self.factmaps
+
+        pw = process_where
+        pj = process_join
+        pob = process_orderby
+        roots = [F,G]
+        join = pj([F.anum == G.anum, F.astr == G.astr],roots)
+        where = pw((F.anum == 1) & (F.astr == "a"),roots)
+        qspec = QuerySpec(roots=roots, join=join,where=where)
+
+        # First case
+        nqspec = qspec.newp(joh=fixed_join_order(F,G))
+        qe = QueryExecutor(factmaps, nqspec)
+        self.assertEqual(list(qe.all()),[(F(1,"a"),G(1,"a"))])
+
+        # Swap the heuristic join order - should make no difference
+        nqspec = qspec.newp(joh=fixed_join_order(G,F))
+        qe = QueryExecutor(factmaps, nqspec)
+        self.assertEqual(list(qe.all()),[(F(1,"a"),G(1,"a"))])
 
 
     #--------------------------------------------------------------------------
@@ -2361,8 +2422,8 @@ class QueryExecutorTestCase(unittest.TestCase):
     def test_api_QueryOutput_delete(self):
         F = self.F
         G = self.G
-        fjoh = fixed_join_order_heuristic
-        bjoh = basic_join_order_heuristic
+        fjoh = basic_join_order
+        bjoh = oppref_join_order
 
         def delete(*subroots):
             tmp = factmaps_to_factsets(self.factmaps)
@@ -2377,7 +2438,7 @@ class QueryExecutorTestCase(unittest.TestCase):
             where = pw(G.anum > 4,roots)
             orderby = pob([F.anum,G.anum],roots)
             qspec = QuerySpec(roots=roots, join=join,where=where,
-                              order_by=orderby,joh=bjoh, delete=subroots)
+                              order_by=orderby,joh=bjoh,select=subroots)
             qe = QueryExecutor(factmaps, qspec)
             return(factmaps,qe.delete())
 
@@ -2415,13 +2476,19 @@ class QueryExecutorTestCase(unittest.TestCase):
         FA = alias(self.F)
         with self.assertRaises(ValueError) as ctx:
             factmaps,count = delete(FA)
-        check_errmsg("The roots to delete",ctx)
+        check_errmsg("For a 'delete' query",ctx)
+
+        # Bad delete - deleting a field path
+        FA = alias(self.F)
+        with self.assertRaises(ValueError) as ctx:
+            factmaps,count = delete(FA.anum)
+        check_errmsg("For a 'delete' query",ctx)
 
         # Bad deletes -  deleting all plus an extra
         FA = alias(self.F)
         with self.assertRaises(ValueError) as ctx:
             fb,count = delete(F,G,FA)
-        check_errmsg("The roots to delete",ctx)
+        check_errmsg("For a 'delete' query",ctx)
 
 
 #------------------------------------------------------------------------------
