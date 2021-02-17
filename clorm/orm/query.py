@@ -2198,16 +2198,24 @@ def make_query_plan_preordered_roots(indexed_paths, root_join_order,
     return QueryPlan(output)
 
 # ------------------------------------------------------------------------------
-# Order a list of join expressions heuristically. Returns a list of root paths
-# where the first should be the outer loop query and the last should be the
+# Join-order heuristics. The heuristic is a function that takes a set of
+# indexes, and a query specification with a set of roots and join/where
+# expressions. It then returns an ordering over the roots that are used to
+# determine how the joins are built. To interpret the returned list of root
+# paths: the first element will be the outer loop query and the last will be the
 # inner loop query.
 #
+# Providing two fixed heuristics: 1) fixed_join_order is a heuristic generator
+# and the user specifies the exact ordering, 2) basic_join_order simply retains
+# the ordering given as part of the query specification.
+#
+# The default heuristic, oppref_join_order, is a operator preference heuristic.
 # The idea is to assign a preference value to each join expression based on the
 # number of join expressions connected with a root path and the operator
-# preference. The higher the value the further it is to the inner loop. The
-# intuition is that the inner loop will be repeated the most so should be the
-# one that can the executed the quickes.
-#
+# preference. The higher the value the further it is to the outer loop. The
+# intuition is that the joins reduce the number of tuples, so by assigning the
+# joins early you generate the fewest tuples. Note: not sure about my intuitions
+# here. Need to look more closely at the mysql discussion on query execution.
 # ------------------------------------------------------------------------------
 
 def fixed_join_order(*roots):
@@ -2248,7 +2256,7 @@ def oppref_join_order(indexed_paths, qspec):
             v = root2val.setdefault(hrp, 0)
             root2val[hrp] += join.preference
     return [path(hrp) for hrp in \
-            sorted(root2val.keys(), key = lambda k : root2val[k])]
+            sorted(root2val.keys(), key = lambda k : root2val[k], reverse=True)]
 
 
 # ------------------------------------------------------------------------------
