@@ -1096,6 +1096,11 @@ class JoinExpressionTestCase(unittest.TestCase):
         joins = vje([joinall_(F,G)],[F,G])
         self.assertEqual(joins,[])
 
+        # Bad specification that is not an operator
+        with self.assertRaises(ValueError) as ctx:
+            vje([F.anum],[F])
+        check_errmsg("Invalid join element", ctx)
+
         # Missing root path
         with self.assertRaises(ValueError) as ctx:
             vje([F.anum <= G.anum],[F])

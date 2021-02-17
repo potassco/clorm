@@ -1379,8 +1379,14 @@ def validate_join_expression(qconds, roots):
 
     for qcond in qconds:
         if not is_join_qcondition(qcond):
-            raise ValueError(("Invalid join operator '{}' in "
-                              "{}").format(qcond.operator,qcond))
+            if not isinstance(qcond,QCondition):
+                raise ValueError(("Invalid join element '{}': expecting a "
+                                  "comparison specifying the join "
+                                  "between two fields").format(qcond))
+            else:
+                raise ValueError(("Invalid join operator '{}' in "
+                                  "{}").format(qcond.operator,qcond))
+
         add_join(StandardComparator.from_join_qcondition(qcond))
 
     # Check that we have all roots in the join matches the base roots
