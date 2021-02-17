@@ -22,8 +22,8 @@ from clorm.orm import RawField, IntegerField, StringField, ConstantField, \
 from clorm.orm.core import QCondition, trueall
 
 # Official Clorm API imports for the fact base components
-from clorm.orm import desc, asc, ph_, ph1_, ph2_, func_, not_, and_, or_, \
-    joinall_
+from clorm.orm import desc, asc, ph_, ph1_, ph2_, func, not_, and_, or_, \
+    cross
 
 from clorm.orm.query import PositionalPlaceholder, NamedPlaceholder, \
     is_boolean_qcondition, is_comparison_qcondition, \
@@ -266,7 +266,7 @@ class QQConditionTestCase(unittest.TestCase):
 
         self.assertTrue(is_boolean_qcondition((F.anum == 1) & (G.anum == 1)))
         self.assertFalse(is_boolean_qcondition(F.anum == 1))
-        self.assertFalse(is_boolean_qcondition(joinall_(F,G)))
+        self.assertFalse(is_boolean_qcondition(cross(F,G)))
 
 
 #------------------------------------------------------------------------------
@@ -530,7 +530,7 @@ class ComparatorTestCase(unittest.TestCase):
         # Test the paths and roots properties
         func3 = lambda x,y,z : x==y+z
         X=alias(F)
-        bf = func_([F.anum,X.anum,G.anum], func3)
+        bf = func([F.anum,X.anum,G.anum], func3)
         bf = FunctionComparator.from_specification(bf.paths,bf.functor)
         self.assertEqual(hps(bf.paths),hps([F.anum,X.anum,G.anum]))
         self.assertEqual(hps(bf.roots),hps([F,X,G]))
@@ -621,16 +621,16 @@ class ComparatorTestCase(unittest.TestCase):
         self.assertTrue(sat1((fact2,))) ; self.assertFalse(nsat1((fact2,)))
 
     #------------------------------------------------------------------------------
-    # Test the func_ API functor for creating FunctionComparator
+    # Test the func API functor for creating FunctionComparator
     # ------------------------------------------------------------------------------
-    def test_api_func_(self):
+    def test_api_func(self):
 
         F = self.F
         G = self.G
         func1 = lambda x, y : x.anum == y.anum
 
         wrap1 = FunctionComparator(func1,[F,G])
-        wrap2 = func_([F,G],func1)
+        wrap2 = func([F,G],func1)
         wrap2 = FunctionComparator.from_specification(wrap2.paths,wrap2.functor)
         self.assertEqual(wrap1,wrap2)
         sat1 = wrap1.ground().make_callable([F,G])
@@ -750,7 +750,7 @@ class WhereExpressionTestCase(unittest.TestCase):
         vwe = validate_where_expression
         nwe = negate_where_expression
 
-        bf = vwe(func_([F.anum],lambda x: x < 2),[F])
+        bf = vwe(func([F.anum],lambda x: x < 2),[F])
         nbf = bf.negate()
 
         self.assertEqual(nwe(nbf), bf)
@@ -1093,7 +1093,7 @@ class JoinExpressionTestCase(unittest.TestCase):
         joins = vje([F.anum >= G.anum],[F,G])
         self.assertEqual(joins,[SC(operator.ge, [F.anum,G.anum])])
 
-        joins = vje([joinall_(F,G)],[F,G])
+        joins = vje([cross(F,G)],[F,G])
         self.assertEqual(joins,[])
 
         # Bad specification that is not an operator
@@ -1118,7 +1118,7 @@ class JoinExpressionTestCase(unittest.TestCase):
 
         # Bad cross-product specification
         with self.assertRaises(ValueError) as ctx:
-            vje([joinall_(F.anum,G.anum)],[F,G])
+            vje([cross(F.anum,G.anum)],[F,G])
         check_errmsg("Cross-product expression", ctx)
 
         X = alias(F)
@@ -1338,7 +1338,7 @@ class QueryPlanTestCase(unittest.TestCase):
 
 
         joins = pj([G.anum == FA.anum, FA.anum < GA.anum,
-                     joinall_(F,G),joinall_(G,FA)],[F,G,FA,GA])
+                     cross(F,G),cross(G,FA)],[F,G,FA,GA])
         joinsc = jsc(G.anum == F.anum)
         cl1 = Clause([wsc(F.anum == GA.anum)])
         cl2 = Clause([wsc(F.anum == 5)])
@@ -1560,7 +1560,7 @@ class QueryPlanTestCase(unittest.TestCase):
         jqp = JoinQueryPlan.from_specification
         hp = hashable_path
 
-        joins = pj([G.anum == F.anum, F.anum < GA.anum, joinall_(G,FA)],[F,G,FA,GA])
+        joins = pj([G.anum == F.anum, F.anum < GA.anum, cross(G,FA)],[F,G,FA,GA])
         where = pw((F.anum == 4) & (FA.anum < 2),[F,FA])
         orderbys = pob([GA.anum, FA.anum, F.anum, G.anum],[F,G,FA,GA])
 
@@ -1649,7 +1649,7 @@ class QueryPlanTestCase(unittest.TestCase):
         GA = alias(G)
         pj = process_join
 
-        joins = pj([F.anum == G.anum, F.anum < GA.anum, joinall_(G,FA)],[F,G,FA,GA])
+        joins = pj([F.anum == G.anum, F.anum < GA.anum, cross(G,FA)],[F,G,FA,GA])
         qspec = QuerySpec(roots=[F,G,FA,GA],join=joins,where=[],order_by=[])
         qorder = oppref_join_order([], qspec)
         self.assertEqual(qorder,[FA,GA,G,F])
@@ -1717,7 +1717,7 @@ class QueryPlanTestCase(unittest.TestCase):
         jqp = JoinQueryPlan.from_specification
         hp = hashable_path
 
-        joins = pj([G.anum == F.anum, F.anum < GA.anum, joinall_(G,FA)],[F,G,FA,GA])
+        joins = pj([G.anum == F.anum, F.anum < GA.anum, cross(G,FA)],[F,G,FA,GA])
         where = pw((F.anum == 4) & (FA.anum < 2),[F,FA])
         orderbys = pob([FA.anum, G.anum],[FA,G])
         qspec=QuerySpec(roots=[F,G,FA,GA],join=joins,where=where,order_by=orderbys)
@@ -2373,7 +2373,7 @@ class QueryExecutorTestCase(unittest.TestCase):
 
         # Test output with an complex explicit function signature
         nqspec = qspec.newp(select=(G.anum,
-                                    func_([F.astr], lambda v: "X{}".format(v))))
+                                    func([F.astr], lambda v: "X{}".format(v))))
         qe = QueryExecutor(factmaps, nqspec)
         result = list(qe.all())
         expected = set([(1,"Xfoo"),(5,"Xa"),(5,"Xfoo")])

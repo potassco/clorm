@@ -29,7 +29,7 @@ __all__ = [
     'ph2_',
     'ph3_',
     'ph4_',
-    'func_',
+    'func',
     'fixed_join_order',
     'basic_join_order',
     'oppref_join_order',
@@ -183,7 +183,7 @@ ph4_ = PositionalPlaceholder(posn=3)
 # ------------------------------------------------------------------------------
 
 FuncInputSpec = collections.namedtuple('FuncInputSpec', 'paths functor')
-def func_(paths, func):
+def func(paths, func):
     '''Wrap a boolean functor with predicate paths for use as a query condition'''
     return FuncInputSpec(paths,func)
     return FunctionComparator.from_specification(paths,func)
@@ -521,7 +521,7 @@ class StandardComparator(Comparator):
         return self.__str__()
 
 # ------------------------------------------------------------------------------
-# Comparator for arbitrary functions. From the API generated with func_()
+# Comparator for arbitrary functions. From the API generated with func()
 # The constructor takes a reference to the function and a path signature.
 #
 # FIXUP NOTE: a limitation of the current implementation of FunctionComparator
@@ -715,7 +715,7 @@ class FunctionComparator(Comparator):
 
     def __str__(self):
         assignstr = ": {}".format(self._assignment) if self._assignment else ""
-        funcstr = "func_({}{}, {})".format(self._pathsig,assignstr,self._func,)
+        funcstr = "func({}{}, {})".format(self._pathsig,assignstr,self._func,)
         if not self._negative: return funcstr
         return "not_({})".format(funcstr)
 

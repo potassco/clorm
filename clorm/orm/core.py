@@ -43,7 +43,7 @@ __all__ = [
     'not_',
     'and_',
     'or_',
-    'joinall_'
+    'cross'
     ]
 
 #------------------------------------------------------------------------------
@@ -152,7 +152,7 @@ class QCondition(object):
 
         # A cross-product join operator
         trueall : OpSig(2, Form.FUNCTIONAL,
-                        lambda x,y: "joinall_({},{})".format(path(x),path(y)))
+                        lambda x,y: "cross({},{})".format(path(x),path(y)))
     }
 
     def __init__(self, operator, *args):
@@ -236,7 +236,7 @@ def or_(*conditions):
     '''Return the disjunction of two of more conditions'''
     return functools.reduce((lambda x,y: QCondition(operator.or_,x,y)),conditions)
 
-def joinall_(*args):
+def cross(*args):
     '''Return a cross-product join condition'''
     newargs = [ path(a) for a in args ]
     return QCondition(trueall, *newargs)

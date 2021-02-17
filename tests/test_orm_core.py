@@ -22,7 +22,7 @@ from clorm.orm import \
     RawField, IntegerField, StringField, ConstantField, SimpleField,  \
     Predicate, ComplexTerm, refine_field, combine_fields, \
     define_nested_list_field, simple_predicate, path, hashable_path, alias, \
-    not_, and_, or_, joinall_
+    not_, and_, or_, cross
 
 # Implementation imports
 from clorm.orm.core import get_field_definition, PredicatePath, \
@@ -2140,7 +2140,7 @@ class QConditionTestCase(unittest.TestCase):
                          "(F.anum >= 2) | (F.anum >= 2)")
         self.assertEqual(str(~(F.anum >= 2)), "~(F.anum >= 2)")
 
-        self.assertEqual(str(QCondition(trueall,F,F)), "joinall_(F,F)")
+        self.assertEqual(str(QCondition(trueall,F,F)), "cross(F,F)")
 
 #------------------------------------------------------------------------------
 # main

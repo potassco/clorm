@@ -242,25 +242,25 @@ def compare_query_times():
     print("Raw Symbol search: {} => {}".format(len(r),fb_raw_search))
 
     # Now time the FactBase query results
-    q_a_posn_c = fb.select(P).where(P[0][1][1][1][0] <= ph1_)
-    q_a_name_c = fb.select(P).where(P.i.arg2.arg2.arg2.a <= ph1_)
-    q_b_name_c = fb.select(P).where(P.i.arg2.arg2.arg2.b <= ph1_)
-    q_a_posn_l = fb.select(P).where(lambda f, a: f[0][1][1][1][0] <= a)
-    q_a_name_l = fb.select(P).where(lambda f, a: f.i.arg2.arg2.arg2.a <= a)
+    q_a_posn_c = fb.query(P).where(P[0][1][1][1][0] <= ph1_)
+    q_a_name_c = fb.query(P).where(P.i.arg2.arg2.arg2.a <= ph1_)
+    q_b_name_c = fb.query(P).where(P.i.arg2.arg2.arg2.b <= ph1_)
+    q_a_posn_l = fb.query(P).where(lambda f, a: f[0][1][1][1][0] <= a)
+    q_a_name_l = fb.query(P).where(lambda f, a: f.i.arg2.arg2.arg2.a <= a)
 
-    with Timer() as t1: r = q_a_posn_c.get(q)
+    with Timer() as t1: r = list(q_a_posn_c.bind(q).all())
     print("Clorm syntax positional arguments : {} => {}".format(len(r), t1))
 
-    with Timer() as t2: r = q_a_name_c.get(q)
+    with Timer() as t2: r = list(q_a_name_c.bind(q).all())
     print("Clorm syntax named arguments: {} => {}".format(len(r), t2))
 
-    with Timer() as t3: r = q_b_name_c.get(q)
+    with Timer() as t3: r = list(q_b_name_c.bind(q).all())
     print("Clorm syntax, indexed, named arguments: {} => {}".format(len(r), t3))
 
-    with Timer() as t4: r = q_a_posn_l.get(q)
+    with Timer() as t4: r = list(q_a_posn_l.bind(a=q).all())
     print("Lambda positional arguments: {} => {}".format(len(r), t4))
 
-    with Timer() as t5: r = q_a_posn_c.get(q)
+    with Timer() as t5: r = list(q_a_posn_c.bind(q).all())
     print("Lambda named arguments: {} => {}".format(len(r), t5))
     # Access
     print("--------------------------------------------------------\n")

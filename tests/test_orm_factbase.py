@@ -20,7 +20,7 @@ from clorm.orm import RawField, IntegerField, StringField, ConstantField, \
 
 # Official Clorm API imports for the fact base components
 from clorm.orm import FactBase, desc, asc, not_, and_, or_, \
-    ph_, ph1_, ph2_, func_, alias
+    ph_, ph1_, ph2_, func, alias
 
 # Implementation imports
 
@@ -1340,7 +1340,7 @@ class SelectJoinTestCase(unittest.TestCase):
             .join(P.pid == F.src,PA.pid == F.dst)
         close_friends = all_friends\
             .where(P.name < PA.name,
-                   func_([P.postcode,PA.postcode], lambda p,pa : abs(p-pa) < 3))\
+                   func([P.postcode,PA.postcode], lambda p,pa : abs(p-pa) < 3))\
             .order_by(P.name)
         all_friends_sorted=all_friends.order_by(P.pid,PA.pid)
 
