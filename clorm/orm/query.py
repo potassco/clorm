@@ -2047,7 +2047,7 @@ def partition_orderbys(root_join_order, orderbys=[]):
 
 class QuerySpec(object):
     allowed = [ "roots", "join", "where", "order_by",
-                "group_by", "tuple", "unique", "bind", "select", "delete",
+                "group_by", "tuple", "unique", "bind", "select",
                 "heuristic", "joh" ]
 
     def __init__(self,**kwargs):
@@ -2119,8 +2119,8 @@ class QuerySpec(object):
         toadd["heuristic"] = self._params.get("heuristic",False)
         toadd["joh"] = self._params.get("joh",oppref_join_order)
 
-        # Note: No default values for "select" and "delete" so calling their
-        # attributes will return None
+        # Note: No default values for "select" so calling its attribute will
+        # return None
 
 
         if toadd: return QuerySpec(**toadd)

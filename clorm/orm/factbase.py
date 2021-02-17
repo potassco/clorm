@@ -973,8 +973,7 @@ class QueryImpl(object):
     def delete(self,*subroots):
         self._check_join_called_first("delete")
 
-        nqspec = self._qspec.newp(delete=subroots)
-        qe = QueryExecutor(self._factmaps, nqspec)
+        qe = QueryExecutor(self._factmaps, self._qspec)
         return qe.delete()
 
 #------------------------------------------------------------------------------
