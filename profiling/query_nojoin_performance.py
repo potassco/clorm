@@ -68,20 +68,29 @@ class Q(Predicate):
 def create_facts(num):
     return [Q(a,P(a,(a,"blah"))) for a in range(0,num)]
 
-def run_select(s):
-    if clorm.__version__ >= "2.0.0":
-        print("{}\n".format(s.query_plan()))
-        return s.run().count()
-    else:
-        return s.count()
+def run_select_v1(s):
+    return s.count()
+
+def run_select_v2(s):
+    print("{}\n".format(s.query_plan()))
+    return s.count()
 
 def query_conj(fb):
-    s=fb.select(Q).where((Q.ap.atuple[0] < 1000) & (Q.anum == 1000))
-    run_select(s)
+    if clorm.__version__ < "2.0.0":
+        s=fb.select(Q).where((Q.ap.atuple[0] < 1000) & (Q.anum == 1000))
+        run_select_v1(s)
+    else:
+        s=fb.query(Q).where((Q.ap.atuple[0] < 1000) & (Q.anum == 1000))
+        run_select_v2(s)
+
 
 def query_disj(fb):
-    s=fb.select(Q).where((Q.anum == 2000) | (Q.anum == 1000))
-    run_select(s)
+    if clorm.__version__ < "2.0.0":
+        s=fb.select(Q).where((Q.anum == 2000) | (Q.anum == 1000))
+        run_select_v1(s)
+    else:
+        s=fb.query(Q).where((Q.anum == 2000) | (Q.anum == 1000))
+        run_select_v2(s)
 
 
 g_facts=None

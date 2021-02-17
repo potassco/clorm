@@ -7,7 +7,7 @@
 from clorm import Predicate, ComplexTerm, ConstantField, IntegerField, FactBase, ph1_
 from clingo import Function,Number
 
-from clorm.orm.factbase import _FactSet
+from clorm.orm.factbase import FactSet
 
 import time
 import cProfile
@@ -130,7 +130,7 @@ def run(indexed):
     return pr
 
 def main():
-    print("\nProfiling FactBase built on using FactSet: {}".format(_FactSet))
+    print("\nProfiling FactBase built on using FactSet: {}".format(FactSet))
 
     # Profile the non-index and index fact bases
     pr1 = run(indexed=False)

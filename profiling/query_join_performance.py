@@ -85,32 +85,31 @@ def make_fb(facts,indexed):
     else:
         return FactBase(facts)
 
-def run_count(qo):
-    print("Query returned: {} records".format(qo.count()))
+def run_count(q):
+    print("Query returned: {} records".format(q.count()))
 
-    
-def run_print(qo):
-    for name,sales in qo.output(Sale).group_by():
+def run_print(q):
+    for name,sales in q.group_by().select(Sale).all():
         print("Customer: {} => {}".format(name,
                                           len(sorted(list(sales),key=lambda s: s.sid ))))
 
 def customer_sorted_query(fb):
     print("===========================================================")
     print("Index for Factbase with indexes: {}".format(fb.indexes))
-    q=fb.select(Customer,Sale).join(Customer.cid == Sale.cid) \
-                              .order_by(Customer.name)
+    q=fb.query(Customer,Sale).join(Customer.cid == Sale.cid) \
+                             .order_by(Customer.name)
     print("Query Plan\n{}".format(q.query_plan()))
     print("===========================================================")
-    return q.run()
+    return q
 
 def all_sorted_query(fb):
     print("===========================================================")
     print("Index for Factbase with indexes: {}".format(fb.indexes))
-    q=fb.select(Customer,Sale).join(Customer.cid == Sale.cid) \
-                              .order_by(Customer.name,Sale.sid)
+    q=fb.query(Customer,Sale).join(Customer.cid == Sale.cid) \
+                             .order_by(Customer.name,Sale.sid)
     print("Query Plan\n{}".format(q.query_plan()))
     print("===========================================================")
-    return q.run()
+    return q
 
 g_facts=None
 
@@ -125,13 +124,13 @@ def run_fact_querying(nc,spc):
     pr(msg1, go)
     fb1 = pr("Adding facts to non-indexed FactBase", lambda : make_fb(g_facts,False))
     fb2 = pr("Adding facts to indexed FactBase", lambda : make_fb(g_facts,True))
-#    qo1 = pr("Query non-indexed FactBase", lambda : query(fb1))
-#    qo2 = pr("Query indexed FactBase", lambda : customer_sorted_query(fb2))
-    qo2 = pr("Query indexed FactBase", lambda : all_sorted_query(fb2))
-#    c1 = pr("Counting non-indexed query", lambda : run_count(qo1))
-#    c1 = pr("Counting indexed query", lambda : run_count(qo2))
-#    qo2 = pr("Query indexed FactBase - second", lambda : query(fb2))
-    c1 = pr("Printing indexed query", lambda : run_print(qo2))
+#    q1 = pr("Query non-indexed FactBase", lambda : query(fb1))
+#    q2 = pr("Query indexed FactBase", lambda : customer_sorted_query(fb2))
+    q2 = pr("Query indexed FactBase", lambda : all_sorted_query(fb2))
+#    c1 = pr("Counting non-indexed query", lambda : run_count(q1))
+#    c1 = pr("Counting indexed query", lambda : run_count(q2))
+#    q2 = pr("Query indexed FactBase - second", lambda : query(fb2))
+    c1 = pr("Printing indexed query", lambda : run_print(q2))
 
     return pr
 
