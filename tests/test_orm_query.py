@@ -23,7 +23,7 @@ from clorm.orm.core import QCondition, trueall
 
 # Official Clorm API imports for the fact base components
 from clorm.orm import desc, asc, ph_, ph1_, ph2_, func, not_, and_, or_, \
-    cross
+    cross, in_, notin_
 
 from clorm.orm.query import PositionalPlaceholder, NamedPlaceholder, \
     is_boolean_qcondition, is_comparison_qcondition, \
@@ -738,9 +738,10 @@ class WhereExpressionTestCase(unittest.TestCase):
         self.assertEqual(vwe(cond1, [F]),cond2)
         self.assertEqual(vwe(cond2, [F]),cond2)
 
-#        with self.assertRaises(ValueError) as ctx:
-#            vwe(F.anum == 4,[])
-#        check_errmsg("Invalid signature match", ctx)
+
+        # Where expression with a membership operator
+        # Comparison QConditions and raw functions are turned into Comparators
+        self.assertEqual(vwe(in_(F.anum,[1,4]), [F]), wsc(in_(F.anum,[1,4])))
 
     # ------------------------------------------------------------------------------
     # ------------------------------------------------------------------------------
@@ -769,6 +770,11 @@ class WhereExpressionTestCase(unittest.TestCase):
 
         c = vwe(~(~(F.anum == 3) | ~(F.anum != 4)),[F])
         nc = vwe((F.anum != 3) | (F.anum == 4),[F])
+        self.assertEqual(nwe(c),nc)
+
+        # Negate contains/notcontains
+        c = vwe(in_(F.anum, [1,2]),[F])
+        nc = vwe(notin_(F.anum, [1,2]),[F])
         self.assertEqual(nwe(c),nc)
 
     # ------------------------------------------------------------------------------
@@ -2392,6 +2398,44 @@ class QueryExecutorTestCase(unittest.TestCase):
         result = list(qe.all())
         expected = set([(1,),(5,)])
         self.assertEqual(expected, set(result))
+
+    #--------------------------------------------------------------------------
+    # Test where clause with member operator
+    #--------------------------------------------------------------------------
+    def test_nonapi_QueryExecutor_contains(self):
+        F = self.F
+        G = self.G
+        factmaps=self.factmaps
+        pw = process_where
+        pj = process_join
+        pob = process_orderby
+        fjoh = fixed_join_order
+
+        roots = (F,G)
+        join = pj([F.anum == G.anum],roots)
+        order_by = pob([G.anum,G.astr],roots)
+        where = pw((in_(F.astr,("foo"))),roots)
+        qspec = QuerySpec(roots=roots, join=join, where=where,
+                          order_by=order_by,joh=fjoh(F,G))
+        qe = QueryExecutor(factmaps, qspec)
+
+        # Test output with no options
+        result = list(qe.all())
+        expected = set([(F(1,"foo"),G(1,"a")), (F(1,"foo"),G(1,"foo")),
+                        (F(5,"foo"),G(5,"a")), (F(5,"foo"),G(5,"foo"))])
+        self.assertEqual(expected, set(result))
+
+        where = pw((notin_(F.astr,["foo"])),roots)
+        qspec = QuerySpec(roots=roots, join=join, where=where,
+                          order_by=order_by,joh=fjoh(F,G))
+        qe = QueryExecutor(factmaps, qspec)
+
+        # Test output with no options
+        result = list(qe.all())
+        expected = set([(F(1,"a"),G(1,"a")), (F(1,"a"),G(1,"foo")),
+                        (F(5,"a"),G(5,"a")), (F(5,"a"),G(5,"foo"))])
+        self.assertEqual(expected, set(result))
+
 
     #--------------------------------------------------------------------------
     # Some tests when we have non-equality joins. Example taken from:

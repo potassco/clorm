@@ -22,11 +22,11 @@ from clorm.orm import \
     RawField, IntegerField, StringField, ConstantField, SimpleField,  \
     Predicate, ComplexTerm, refine_field, combine_fields, \
     define_nested_list_field, simple_predicate, path, hashable_path, alias, \
-    not_, and_, or_, cross
+    not_, and_, or_, cross, in_, notin_
 
 # Implementation imports
 from clorm.orm.core import get_field_definition, PredicatePath, \
-    QCondition, trueall
+    QCondition, trueall, falseall, notcontains
 
 
 #------------------------------------------------------------------------------
@@ -2141,6 +2141,20 @@ class QConditionTestCase(unittest.TestCase):
         self.assertEqual(str(~(F.anum >= 2)), "~(F.anum >= 2)")
 
         self.assertEqual(str(QCondition(trueall,F,F)), "cross(F,F)")
+
+        self.assertEqual(str(in_(F.anum,[1,2])), "F.anum in [1, 2]")
+        self.assertEqual(str(notin_(F.anum,[1,2])), "F.anum not in [1, 2]")
+
+    # -------------------------------------------------------------------------
+    # Test functions for building QConditions and QCondition operators
+    # -------------------------------------------------------------------------
+    def test_api_misc_functions(self):
+        F=self.F
+
+        self.assertTrue(trueall(1,2))
+        self.assertFalse(falseall(3,4))
+        self.assertTrue(notcontains([1,2,3],4))
+        self.assertFalse(notcontains([1,2,3],3))
 
 #------------------------------------------------------------------------------
 # main

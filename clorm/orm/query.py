@@ -17,7 +17,7 @@ from ..util import OrderedSet as FactSet
 from ..util.tools import all_equal
 from .core import *
 from .core import get_field_definition, QCondition, PredicatePath, \
-    validate_root_paths, kwargs_check_keys, trueall, falseall
+    validate_root_paths, kwargs_check_keys, trueall, falseall, notcontains
 from .factcontainers import FactSet, FactIndex, FactMap
 
 __all__ = [
@@ -287,6 +287,13 @@ def _hashables(seq):
 
 # ------------------------------------------------------------------------------
 # Comparator for the standard operators
+#
+# Implementation detail: with the use of membership operators
+# ('operator.contains' and 'notcontains') we want to pass an arbitrary sequence
+# to the object. This object may be mutable and will therefore not be
+# hashable. To support hashing and adding comparators to a set, the hash of the
+# comparator only takes into account predicate paths. A bit of a hack but it
+# works ok. The main thing is that equality will work properly.
 # ------------------------------------------------------------------------------
 
 class StandardComparator(Comparator):
@@ -320,8 +327,13 @@ class StandardComparator(Comparator):
                              form=QCondition.Form.FUNCTIONAL),
         falseall    : OpSpec(pref=Preference.HIGH, join=True, where=False,
                              negop=trueall, swapop=falseall,
-                             form=QCondition.Form.FUNCTIONAL)}
-
+                             form=QCondition.Form.FUNCTIONAL),
+        operator.contains : OpSpec(pref=Preference.HIGH, join=False, where=True,
+                                   negop=notcontains, swapop=None,
+                                   form=QCondition.Form.INFIX),
+        notcontains       : OpSpec(pref=Preference.LOW, join=False, where=True,
+                                   negop=operator.contains, swapop=None,
+                                   form=QCondition.Form.INFIX)}
 
     def __init__(self,operator,args):
         spec = StandardComparator.operators.get(operator,None)
@@ -332,7 +344,11 @@ class StandardComparator(Comparator):
         self._args = tuple(args)
 
         self._hashableargs = tuple([ hashable_path(a) if isinstance(a,PredicatePath) \
-                                     else a for a in self._args])
+                                     else None for a in self._args])
+
+        # Changed because lists are not immutable
+#        self._hashableargs = tuple([ hashable_path(a) if isinstance(a,PredicatePath) \
+#                                     else a for a in self._args])
 
         self._paths=tuple(filter(lambda x : isinstance(x,PredicatePath),self._args))
 
@@ -929,6 +945,14 @@ def validate_where_expression(qcond, roots=[]):
     def validate_comp_condition(ccond):
         for a in ccond.args:
             if isinstance(a,PredicatePath): check_path(a)
+
+        # contains/notcontains operator requires the left argument to not be a
+        # path and the right must be a path.
+        if ccond.operator == operator.contains or ccond.operator == notcontains:
+            if not isinstance(ccond.args[1],PredicatePath):
+                raise ValueError("Invalid membership expression: {}".format(ccond))
+            if isinstance(ccond.args[0],PredicatePath):
+                raise ValueError("Invalid membership expression: {}".format(ccond))
         return StandardComparator.from_where_qcondition(ccond)
 
     # Validate a condition

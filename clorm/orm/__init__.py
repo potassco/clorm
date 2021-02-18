@@ -42,6 +42,8 @@ __all__ = [
     'or_',
     'func',
     'cross',
+    'in_',
+    'notin_',
     'fixed_join_order',
     'basic_join_order',
     'oppref_join_order',

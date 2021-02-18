@@ -43,6 +43,8 @@ __all__ = [
     'not_',
     'and_',
     'or_',
+    'in_',
+    'notin_',
     'cross'
     ]
 
@@ -104,7 +106,14 @@ class _lateinit(object):
 # comparator functions that always return true (or false). This is useful for
 # the cross product join operator that always returns true
 def trueall(x,y): return True
-def falseall(x,y): return True
+def falseall(x,y): return False
+
+# Membership functions - contains is part of operator but there is no not
+# contains so we create one.
+
+def notcontains(seq, obj):
+    return not operator.contains(seq,obj)
+
 
 # support functions to _wrap_query_condition in parentheses and wrap string
 # comparison elements in quotes
@@ -152,7 +161,13 @@ class QCondition(object):
 
         # A cross-product join operator
         trueall : OpSig(2, Form.FUNCTIONAL,
-                        lambda x,y: "cross({},{})".format(path(x),path(y)))
+                        lambda x,y: "cross({},{})".format(path(x),path(y))),
+
+        # Membership operators
+        operator.contains : OpSig(
+            2, Form.INFIX, lambda seq,obj: "{} in {}".format(path(obj),seq)),
+        notcontains       : OpSig(
+            2, Form.INFIX, lambda seq,obj: "{} not in {}".format(path(obj),seq))
     }
 
     def __init__(self, operator, *args):
@@ -240,6 +255,12 @@ def cross(*args):
     '''Return a cross-product join condition'''
     newargs = [ path(a) for a in args ]
     return QCondition(trueall, *newargs)
+
+# iterable membership operators
+def in_(path, seq):
+    return QCondition(operator.contains, seq, path)
+def notin_(path, seq):
+    return QCondition(notcontains, seq, path)
 
 #------------------------------------------------------------------------------
 # PredicatePath class and supporting metaclass and functions. The PredicatePath

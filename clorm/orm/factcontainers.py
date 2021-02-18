@@ -154,14 +154,14 @@ class FactIndex(object):
     #--------------------------------------------------------------------------
     # Find elements based on boolean match to a key
     #--------------------------------------------------------------------------
-    def find(self, op, key,reverse=False):
+    def find(self, op, val,reverse=False):
         keys = []
-        if op == operator.eq: keys = self._keys_eq(key)
-        elif op == operator.ne: keys = self._keys_ne(key)
-        elif op == operator.lt: keys = self._keys_lt(key)
-        elif op == operator.le: keys = self._keys_le(key)
-        elif op == operator.gt: keys = self._keys_gt(key)
-        elif op == operator.ge: keys = self._keys_ge(key)
+        if op == operator.eq: keys = self._keys_eq(val)
+        elif op == operator.ne: keys = self._keys_ne(val)
+        elif op == operator.lt: keys = self._keys_lt(val)
+        elif op == operator.le: keys = self._keys_le(val)
+        elif op == operator.gt: keys = self._keys_gt(val)
+        elif op == operator.ge: keys = self._keys_ge(val)
         else: raise ValueError("unsupported operator {}".format(op))
 
         if reverse:
