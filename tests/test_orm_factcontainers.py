@@ -171,6 +171,8 @@ randlist.sort(key=attrgetter('anum'))
         self.assertEqual(set(fi.find(operator.eq, 1)), set([af1a]))
         self.assertEqual(set(fi.find(operator.eq, 2)), set([af2a, af2b]))
         self.assertEqual(set(fi.find(operator.ne, 5)), set(allfacts))
+        self.assertEqual(set(fi.find(operator.ne, 0)), set(allfacts))
+        self.assertEqual(set(fi.find(operator.ne, 3)), set([af1a,af2a,af2b]))
         self.assertEqual(set(fi.find(operator.eq, 5)), set([]))
         self.assertEqual(set(fi.find(operator.lt, 1)), set([]))
         self.assertEqual(set(fi.find(operator.lt, 2)), set([af1a]))
@@ -178,6 +180,8 @@ randlist.sort(key=attrgetter('anum'))
         self.assertEqual(set(fi.find(operator.gt, 2)), set([af3a, af3b]))
         self.assertEqual(set(fi.find(operator.ge, 3)), set([af3a, af3b]))
         self.assertEqual(set(fi.find(operator.gt, 3)), set([]))
+        self.assertEqual(set(fi.find(operator.gt, 0)), set(allfacts))
+        self.assertEqual(set(fi.find(operator.ge, 0)), set(allfacts))
 
     def test_clear(self):
         Afact = self.Afact

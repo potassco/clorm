@@ -1921,18 +1921,18 @@ class QueryTestCase(unittest.TestCase):
         pj = process_join
         pob = process_orderby
         roots = [F,G]
-        fjoh = basic_join_order
+        bjoh = basic_join_order
         bjoh = oppref_join_order
 
         # Simplest case. Nothing specified so pass through the factset
-        qspec = QuerySpec(roots=roots,join=[],where=[],order_by=[],joh=fjoh)
+        qspec = QuerySpec(roots=roots,join=[],where=[],order_by=[],joh=bjoh)
         qp = make_query_plan(indexes.keys(), qspec)
         out = make_prejoin_query_source(qp[1], factsets, indexes)()
         self.assertTrue(out is factsets[G])
 
         # A prejoin key but nothing else
         where = pw(G.astr == "foo",roots)
-        qspec = QuerySpec(roots=roots,join=[],where=where,order_by=[],joh=fjoh)
+        qspec = QuerySpec(roots=roots,join=[],where=where,order_by=[],joh=bjoh)
         qp = make_query_plan(indexes.keys(), qspec)
         out = make_prejoin_query_source(qp[1], factsets, indexes)()
         self.assertTrue(isinstance(out,list))
@@ -1940,7 +1940,7 @@ class QueryTestCase(unittest.TestCase):
 
         # A prejoin clause but nothing else
         where = pw(G.anum == 1,roots)
-        qspec = QuerySpec(roots=roots,join=[],where=where,order_by=[],joh=fjoh)
+        qspec = QuerySpec(roots=roots,join=[],where=where,order_by=[],joh=bjoh)
         qp = make_query_plan(indexes.keys(), qspec)
         out = make_prejoin_query_source(qp[1], factsets, indexes)()
         self.assertTrue(isinstance(out,list))
@@ -1948,7 +1948,7 @@ class QueryTestCase(unittest.TestCase):
 
         # Both a prejoin key and a prejoin clause
         where = pw((G.anum == 1) & (G.astr == "foo"),roots)
-        qspec = QuerySpec(roots=roots,join=[],where=where,order_by=[],joh=fjoh)
+        qspec = QuerySpec(roots=roots,join=[],where=where,order_by=[],joh=bjoh)
         qp = make_query_plan(indexes.keys(), qspec)
         out = make_prejoin_query_source(qp[1], factsets, indexes)()
         self.assertTrue(isinstance(out,list))
@@ -1957,7 +1957,7 @@ class QueryTestCase(unittest.TestCase):
         # A prejoin key with no join and a single ascending order matching an index
         where = pw(G.astr == "foo",roots)
         orderby = pob([F.astr,asc(G.astr)],roots)
-        qspec = QuerySpec(roots=roots,join=[],where=where,order_by=orderby,joh=fjoh)
+        qspec = QuerySpec(roots=roots,join=[],where=where,order_by=orderby,joh=bjoh)
         qp = make_query_plan(indexes.keys(), qspec)
         out = make_prejoin_query_source(qp[1], factsets, indexes)()
         self.assertTrue(isinstance(out,list))
@@ -1968,7 +1968,7 @@ class QueryTestCase(unittest.TestCase):
         # A prejoin key with no join and a single desc order matching an index
         where = pw(G.astr == "foo",roots)
         orderby = pob([F.astr,desc(G.astr)],roots)
-        qspec = QuerySpec(roots=roots,join=[],where=where,order_by=orderby,joh=fjoh)
+        qspec = QuerySpec(roots=roots,join=[],where=where,order_by=orderby,joh=bjoh)
         qp = make_query_plan(indexes.keys(), qspec)
         out = make_prejoin_query_source(qp[1], factsets, indexes)()
         self.assertTrue(isinstance(out,list))
@@ -1979,7 +1979,7 @@ class QueryTestCase(unittest.TestCase):
         # A prejoin key with no join and a complex order
         where = pw(G.astr == "foo",roots)
         orderby = pob([F.astr,desc(G.astr),G.anum],roots)
-        qspec = QuerySpec(roots=roots,join=[],where=where,order_by=orderby,joh=fjoh)
+        qspec = QuerySpec(roots=roots,join=[],where=where,order_by=orderby,joh=bjoh)
         qp = make_query_plan(indexes.keys(), qspec)
         out0 = make_prejoin_query_source(qp[0], factsets, indexes)()
         out1 = make_prejoin_query_source(qp[1], factsets, indexes)()
@@ -1992,7 +1992,7 @@ class QueryTestCase(unittest.TestCase):
         # A prejoin key with no join and non index matching sort
         where = pw(G.astr == "foo",roots)
         orderby = pob([F.astr,desc(G.anum)],roots)
-        qspec = QuerySpec(roots=roots,join=[],where=where,order_by=orderby,joh=fjoh)
+        qspec = QuerySpec(roots=roots,join=[],where=where,order_by=orderby,joh=bjoh)
         qp = make_query_plan(indexes.keys(), qspec)
         out = make_prejoin_query_source(qp[1], factsets, indexes)()
         self.assertTrue(isinstance(out,list))
@@ -2000,14 +2000,14 @@ class QueryTestCase(unittest.TestCase):
 
         # A join key that matches an existing index but nothing else
         join = pj([F.astr == G.astr],roots)
-        qspec = QuerySpec(roots=roots,join=join,where=[],order_by=[],joh=fjoh)
+        qspec = QuerySpec(roots=roots,join=join,where=[],order_by=[],joh=bjoh)
         qp = make_query_plan(indexes.keys(), qspec)
         out = make_prejoin_query_source(qp[1], factsets, indexes)()
         self.assertTrue(out is indexes[hashable_path(G.astr)])
 
         # A join key that doesn't match an existing index - and nothing else
         join = pj([F.anum == G.anum],roots)
-        qspec = QuerySpec(roots=roots,join=join,where=[],order_by=[],joh=fjoh)
+        qspec = QuerySpec(roots=roots,join=join,where=[],order_by=[],joh=bjoh)
         qp = make_query_plan(indexes.keys(), qspec)
         out = make_prejoin_query_source(qp[1], factsets, indexes)()
         self.assertTrue(isinstance(out,FactIndex))
@@ -2017,7 +2017,7 @@ class QueryTestCase(unittest.TestCase):
         # A join key and a prejoin key
         join = pj([F.astr == G.astr],roots)
         where = pw(G.astr == "foo",roots)
-        qspec = QuerySpec(roots=roots,join=join,where=where,order_by=[],joh=fjoh)
+        qspec = QuerySpec(roots=roots,join=join,where=where,order_by=[],joh=bjoh)
         qp = make_query_plan(indexes.keys(), qspec)
         out = make_prejoin_query_source(qp[1], factsets, indexes)()
         self.assertTrue(isinstance(out,FactIndex))
@@ -2027,7 +2027,7 @@ class QueryTestCase(unittest.TestCase):
         # A join key and a prejoin clause
         join = pj([F.astr == G.astr],roots)
         where = pw(G.anum == 1,roots)
-        qspec = QuerySpec(roots=roots,join=join,where=where,order_by=[],joh=fjoh)
+        qspec = QuerySpec(roots=roots,join=join,where=where,order_by=[],joh=bjoh)
         qp = make_query_plan(indexes.keys(), qspec)
         out = make_prejoin_query_source(qp[1], factsets, indexes)()
         self.assertTrue(isinstance(out,FactIndex))
@@ -2046,7 +2046,7 @@ class QueryTestCase(unittest.TestCase):
         pw = process_where
         pj = process_join
         pob = process_orderby
-        fjoh = basic_join_order
+        bjoh = basic_join_order
         bjoh = oppref_join_order
         roots = [F,G]
 
@@ -2055,7 +2055,7 @@ class QueryTestCase(unittest.TestCase):
         # Simplest case. No join or no G-where clauses.
         # (Note: the where clause for F is to simplify to only one join).
         where = pw((F.anum == 1) & (F.astr == "foo"),roots)
-        qspec = QuerySpec(roots=roots,join=[],where=where,order_by=[],joh=fjoh)
+        qspec = QuerySpec(roots=roots,join=[],where=where,order_by=[],joh=bjoh)
         qp = make_query_plan(indexes.keys(), qspec)
         inquery=make_first_join_query(qp[0], factsets, indexes)
         query = make_chained_join_query(qp[1], inquery, factsets, indexes)()
@@ -2067,7 +2067,7 @@ class QueryTestCase(unittest.TestCase):
 
         # No join but a prejoin where clause
         where = pw(((F.anum == 1) & (F.astr == "foo")) & (G.anum == 1), roots)
-        qspec = QuerySpec(roots=roots,join=[],where=where,order_by=[],joh=fjoh)
+        qspec = QuerySpec(roots=roots,join=[],where=where,order_by=[],joh=bjoh)
         qp = make_query_plan(indexes.keys(), qspec)
         inquery=make_first_join_query(qp[0], factsets, indexes)
         query = make_chained_join_query(qp[1], inquery, factsets, indexes)()
@@ -2078,7 +2078,7 @@ class QueryTestCase(unittest.TestCase):
         # No join but a post-join where clause - by adding useless extra F
         where = pw(((F.anum == 1) & (F.astr == "foo")) &
                    ((G.anum == 1) | (F.anum == 5)), roots)
-        qspec = QuerySpec(roots=roots,join=[],where=where,order_by=[],joh=fjoh)
+        qspec = QuerySpec(roots=roots,join=[],where=where,order_by=[],joh=bjoh)
         qp = make_query_plan(indexes.keys(), qspec)
         inquery=make_first_join_query(qp[0], factsets, indexes)
         query = make_chained_join_query(qp[1], inquery, factsets, indexes)()
@@ -2089,7 +2089,7 @@ class QueryTestCase(unittest.TestCase):
         # A join key but nothing else
         join = pj([F.astr == G.astr],roots)
         where = pw((F.anum == 1) & (F.astr == "foo"),roots)
-        qspec = QuerySpec(roots=roots,join=join,where=where,order_by=[],joh=fjoh)
+        qspec = QuerySpec(roots=roots,join=join,where=where,order_by=[],joh=bjoh)
         qp = make_query_plan(indexes.keys(), qspec)
         inquery=make_first_join_query(qp[0], factsets, indexes)
         query = make_chained_join_query(qp[1], inquery, factsets, indexes)()
@@ -2101,7 +2101,7 @@ class QueryTestCase(unittest.TestCase):
         join = pj([F.astr == G.astr],roots)
         where = pw((F.anum == 1) & (F.astr == "foo"),roots)
         orderby = pob([F.astr,desc(G.anum)],roots)
-        qspec = QuerySpec(roots=roots,join=join,where=where,order_by=orderby,joh=fjoh)
+        qspec = QuerySpec(roots=roots,join=join,where=where,order_by=orderby,joh=bjoh)
         qp = make_query_plan(indexes.keys(), qspec)
         inquery=make_first_join_query(qp[0], factsets, indexes)
         query = make_chained_join_query(qp[1], inquery, factsets, indexes)()
@@ -2114,7 +2114,7 @@ class QueryTestCase(unittest.TestCase):
         join = pj([F.astr == G.astr],roots)
         where = pw((F.anum == 1) & (F.astr == "foo"),roots)
         orderby = pob([desc(G.anum)],roots)
-        qspec = QuerySpec(roots=roots,join=join,where=where,order_by=orderby,joh=fjoh)
+        qspec = QuerySpec(roots=roots,join=join,where=where,order_by=orderby,joh=bjoh)
         qp = make_query_plan(indexes.keys(), qspec)
         inquery=make_first_join_query(qp[0], factsets, indexes)
         query = make_chained_join_query(qp[1], inquery, factsets, indexes)()
@@ -2126,7 +2126,7 @@ class QueryTestCase(unittest.TestCase):
         join = pj([F.astr == G.astr],roots)
         where = pw((F.anum == 1) & (F.astr == "foo"),roots)
         orderby = pob([desc(G.anum),F.anum,G.astr],roots)
-        qspec = QuerySpec(roots=roots,join=join,where=where,order_by=orderby,joh=fjoh)
+        qspec = QuerySpec(roots=roots,join=join,where=where,order_by=orderby,joh=bjoh)
         qp = make_query_plan(indexes.keys(), qspec)
 
         inquery=make_first_join_query(qp[0], factsets, indexes)
@@ -2145,7 +2145,7 @@ class QueryTestCase(unittest.TestCase):
         G = self.G
         pw = process_where
         pob = process_orderby
-        fjoh = basic_join_order
+        bjoh = basic_join_order
         bjoh = oppref_join_order
         indexes = self.indexes
         factsets = self.factsets
@@ -2174,7 +2174,7 @@ class QueryTestCase(unittest.TestCase):
         pw = process_where
         pob = process_orderby
         bjoh = oppref_join_order
-        fjoh = basic_join_order
+        bjoh = basic_join_order
 
         indexes = self.indexes
         factsets = self.factsets
@@ -2209,7 +2209,7 @@ class QueryTestCase(unittest.TestCase):
         pj = process_join
         pob = process_orderby
         bjoh = oppref_join_order
-        fjoh = basic_join_order
+        bjoh = basic_join_order
         roots = [F,G]
 
         joins1 = pj([F.anum == G.anum],roots)
@@ -2300,7 +2300,7 @@ class QueryExecutorTestCase(unittest.TestCase):
         pw = process_where
         pj = process_join
         pob = process_orderby
-        fjoh = basic_join_order
+        bjoh = basic_join_order
         bjoh = oppref_join_order
 
         roots = (F,G)
@@ -2329,7 +2329,7 @@ class QueryExecutorTestCase(unittest.TestCase):
         pw = process_where
         pj = process_join
         pob = process_orderby
-        fjoh = basic_join_order
+        bjoh = basic_join_order
         bjoh = oppref_join_order
         roots = [F,G]
 
@@ -2394,6 +2394,57 @@ class QueryExecutorTestCase(unittest.TestCase):
         self.assertEqual(expected, set(result))
 
     #--------------------------------------------------------------------------
+    # Some tests when we have non-equality joins. Example taken from:
+    # https://en.wikipedia.org/wiki/Relational_algebra
+    # --------------------------------------------------------------------------
+    def test_nonapi_inequality_join_tests(self):
+        class Employee(Predicate):
+            name=StringField
+            eid=IntegerField
+            deptname=StringField
+
+        class Dept(Predicate):
+            deptname=StringField
+            manager=StringField
+
+        E=Employee
+        D=Dept
+
+        e1 = E("Harry",3415,"Finance")
+        e2 = E("Sally",2241,"Sales")
+        e3 = E("George",3401,"Finance")
+        e4 = E("Harriet",2202,"Sales")
+        e5 = E("Tim",1123,"Executive")
+
+        d1 = D("Sales", "Harriet")
+        d2 = D("Production", "Charles")
+
+        factmaps = factmaps_dict([e1,e2,e3,e4,e5,d1,d2])
+
+        pw = process_where
+        pj = process_join
+        pob = process_orderby
+        fjoh = fixed_join_order
+        roots = [E,D]
+        join = pj([E.deptname != D.deptname],roots)
+        expected = set([(e1,d1),(e1,d2),
+                        (e2,d2),
+                        (e3,d1),(e3,d2),
+                        (e4,d2),
+                        (e5,d1),(e5,d2)])
+
+        qspec = QuerySpec(roots=roots,join=join,where=[],order_by=[],joh=fjoh(E,D))
+        qe = QueryExecutor(factmaps, qspec)
+        result = list(qe.all())
+        self.assertEqual(expected, set(result))
+
+        qspec = QuerySpec(roots=roots,join=join,where=[],order_by=[],joh=fjoh(D,E))
+        qe = QueryExecutor(factmaps, qspec)
+        result = list(qe.all())
+        self.assertEqual(expected, set(result))
+
+
+    #--------------------------------------------------------------------------
     # Test that the default output order always follows the specification and
     # not the order decided by the join_order heuristic.
     # --------------------------------------------------------------------------
@@ -2427,7 +2478,7 @@ class QueryExecutorTestCase(unittest.TestCase):
     def test_api_QueryOutput_delete(self):
         F = self.F
         G = self.G
-        fjoh = basic_join_order
+        bjoh = basic_join_order
         bjoh = oppref_join_order
 
         def delete(*subroots):

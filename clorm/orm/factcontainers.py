@@ -130,32 +130,26 @@ class FactIndex(object):
 
     def _keys_ne(self, key):
         posn1 = bisect.bisect_left(self._keylist, key)
-        if posn1: left =  self._keylist[:posn1]
-        else: left = []
+        left = self._keylist[:posn1]
         posn2 = bisect.bisect_right(self._keylist, key)
-        if posn2: right = self._keylist[posn2:]
-        else: right = []
+        right = self._keylist[posn2:]
         return left + right
 
     def _keys_lt(self, key):
         posn = bisect.bisect_left(self._keylist, key)
-        if posn: return self._keylist[:posn]
-        return []
+        return self._keylist[:posn]
 
     def _keys_le(self, key):
         posn = bisect.bisect_right(self._keylist, key)
-        if posn: return self._keylist[:posn]
-        return []
+        return self._keylist[:posn]
 
     def _keys_gt(self, key):
         posn = bisect.bisect_right(self._keylist, key)
-        if posn: return self._keylist[posn:]
-        return []
+        return self._keylist[posn:]
 
     def _keys_ge(self, key):
         posn = bisect.bisect_left(self._keylist, key)
-        if posn: return self._keylist[posn:]
-        return []
+        return self._keylist[posn:]
 
     #--------------------------------------------------------------------------
     # Find elements based on boolean match to a key

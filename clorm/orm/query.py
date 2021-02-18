@@ -2521,7 +2521,6 @@ def make_chained_join_query(jqp, inquery, factsets, factindexes):
             v, = align_query_input(intuple)
             result = list(fi.find(operator,v))
             if pjob: pjiqs.listsort(result)
-
             for f in result:
                 out = tuple(intuple + (f,))
                 if jc_check(out): yield out
