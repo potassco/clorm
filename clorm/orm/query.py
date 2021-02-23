@@ -129,8 +129,6 @@ class PositionalPlaceholder(Placeholder):
     def __hash__(self):
         return hash(self._posn)
 
-#def ph_(value,default=None):
-
 def ph_(value, *args, **kwargs):
     ''' A function for building new placeholders, either named or positional.'''
 
@@ -286,14 +284,151 @@ def _hashables(seq):
 
 
 # ------------------------------------------------------------------------------
+# MembershipSeq is used for holding a reference to some form of sequence that is
+# used as part of a query membership "in_" (or "notin_") condition. When a query
+# is executed the sequence is turned into a set which is then used for
+# membership comparisons. So any update of the reference sequence after the
+# query is declared will effect the execution of the query. Note: eventually,
+# will also add the ability for the sequence to be a sub-query.
+# ------------------------------------------------------------------------------
+
+class MembershipSeq(object):
+    def __init__(self, src):
+        self._src = src
+        self._fixed = False
+
+    def __contains__(self,key):
+        if not self._fixed:
+            self._src = set(self._src)
+            self._fixed = True
+        return key in self._src
+
+    def ground(self,*args,**kwargs):
+        return self
+
+    def __eq__(self,other):
+        if not isinstance(other, MembershipSeq): return NotImplemented
+        return self._src == other._src
+
+    def __ne__(self,other):
+        result = self.__eq__(other)
+        if result is NotImplemented: return NotImplemented
+        return not result
+
+    def __str__(self):
+        return self._src.__str__()
+
+    def __repr__(self):
+        return self._src.__repr__()
+
+
+# ------------------------------------------------------------------------------
+# functions to validate a QCondition objects for a standard comparator objects
+# from QCondition objects for either a join or where condition. Returns a pair
+# consisting of the operator and validated and normalised arguments. The
+# function will raise exceptions if there are any problems.
+# ------------------------------------------------------------------------------
+
+def _normalise_op_args(arg):
+    p=path(arg,exception=False)
+    if p is None: return arg
+    return p
+
+def _is_static_op_arg(arg):
+    return not isinstance(arg,PredicatePath)
+
+def where_comparison_op(qcond):
+    newargs = [_normalise_op_args(a) for a in qcond.args]
+
+    if all(map(_is_static_op_arg, newargs)):
+        raise ValueError(("Invalid comparison of only static inputs "
+                          "(at least one argument must reference a "
+                          "a component of a fact): {}").format(qcond))
+
+    spec = StandardComparator.operators.get(qcond.operator,None)
+    if spec is None:
+        raise TypeError(("Internal bug: cannot create StandardComparator() with "
+                         "non-comparison operator '{}' ").format(qcond.operator))
+    if not spec.where and spec.join:
+        raise ValueError(("Invalid 'where' comparison operator '{}' is only "
+                          "valid for a join specification").format(qcond.operator))
+    return (qcond.operator,newargs)
+
+def where_membership_op(qcond):
+    pth = _normalise_op_args(qcond.args[1])
+    seq = qcond.args[0]
+    if not isinstance(pth,PredicatePath):
+        raise ValueError(("Invalid 'where' condition '{}': missing path in "
+                          "membership declaration").format(qcond))
+    if isinstance(seq,PredicatePath):
+        raise ValueError(("Invalid 'where' condition '{}': invalid sequence in "
+                          "membership declaration").format(qcond))
+
+    return (qcond.operator, [MembershipSeq(seq),pth])
+
+def join_comparison_op(qcond):
+    if qcond.operator == falseall:
+        raise ValueError("Internal bug: cannot use falseall operator in QCondition")
+
+    paths = list(filter(lambda x: isinstance(x,PredicatePath), qcond.args))
+    paths = set(map(lambda x: hashable_path(x), paths))
+    roots = set(map(lambda x: hashable_path(path(x).meta.root), paths))
+    if len(roots) != 2:
+        raise ValueError(("A join specification must have "
+                          "exactly two root paths: '{}'").format(qcond))
+
+    if qcond.operator == trueall:
+        if paths != roots:
+            raise ValueError(("Cross-product expression '{}' must contain only "
+                              "root paths").format(qcond))
+    return (qcond.operator,qcond.args)
+
+
+# ------------------------------------------------------------------------------
+# keyable functions are operator specific functions to extract keyable/indexable
+# information form StandardComparator instances. This is then used to give keyed
+# lookups on a FactIndex. If the function returns None then the comparator
+# cannot be used to key on the given list of indexes.
+# ------------------------------------------------------------------------------
+
+def comparison_op_keyable(sc, indexes):
+    indexes = set([hashable_path(p) for p in indexes])
+    swapop = {
+        operator.eq : operator.eq,  operator.eq : operator.eq,
+        operator.lt : operator.gt,  operator.gt : operator.lt,
+        operator.le : operator.ge,  operator.ge : operator.le,
+        trueall : trueall,  falseall : falseall }
+
+    def hp(a):
+        try:
+            return hashable_path(a)
+        except:
+            return a
+
+    a1 = hp(sc.args[0])
+    a2 = hp(sc.args[1])
+    if a1 in indexes: return (a1, swapop[sc.operator], sc.args[1])
+    if a2 in indexes: return (a2, swapop[sc.operator], sc.args[0])
+    return None
+
+def membership_op_keyable(sc,indexes):
+    indexes = set([hashable_path(p) for p in indexes])
+    return None
+    return (hashable_path(sc.args[0]), sc.operator, sc.args[1])
+
+
+
+# ------------------------------------------------------------------------------
 # Comparator for the standard operators
 #
 # Implementation detail: with the use of membership operators
 # ('operator.contains' and 'notcontains') we want to pass an arbitrary sequence
 # to the object. This object may be mutable and will therefore not be
 # hashable. To support hashing and adding comparators to a set, the hash of the
-# comparator only takes into account predicate paths. A bit of a hack but it
-# works ok. The main thing is that equality will work properly.
+# comparator only takes into account predicate paths. The main thing is that
+# equality works properly. While this is a bit of a hack I think it is ok
+# provided StandardComparator is used only in this specific way within clorm and
+# is not exposed outside clorm.
 # ------------------------------------------------------------------------------
 
 class StandardComparator(Comparator):
@@ -302,37 +437,67 @@ class StandardComparator(Comparator):
         MEDIUM= 1
         HIGH=2
 
-    OpSpec = collections.namedtuple('OpSpec','pref join where negop swapop form')
+    OpSpec = collections.namedtuple('OpSpec','pref join where negop swapop keyable form')
     operators = {
-        operator.eq : OpSpec(pref=Preference.HIGH, join=True, where=True,
+        operator.eq : OpSpec(pref=Preference.HIGH,
+                             join=join_comparison_op,
+                             where=where_comparison_op,
                              negop=operator.ne, swapop=operator.eq,
+                             keyable=comparison_op_keyable,
                              form=QCondition.Form.INFIX),
-        operator.ne : OpSpec(pref=Preference.LOW, join=True, where=True,
+        operator.ne : OpSpec(pref=Preference.LOW,
+                             join=join_comparison_op,
+                             where=where_comparison_op,
                              negop=operator.eq, swapop=operator.ne,
+                             keyable=comparison_op_keyable,
                              form=QCondition.Form.INFIX),
-        operator.lt : OpSpec(pref=Preference.MEDIUM, join=True, where=True,
+        operator.lt : OpSpec(pref=Preference.MEDIUM,
+                             join=join_comparison_op,
+                             where=where_comparison_op,
                              negop=operator.ge, swapop=operator.gt,
+                             keyable=comparison_op_keyable,
                              form=QCondition.Form.INFIX),
-        operator.le : OpSpec(pref=Preference.MEDIUM, join=True, where=True,
+        operator.le : OpSpec(pref=Preference.MEDIUM,
+                             join=join_comparison_op,
+                             where=where_comparison_op,
                              negop=operator.gt, swapop=operator.ge,
+                             keyable=comparison_op_keyable,
                              form=QCondition.Form.INFIX),
-        operator.gt : OpSpec(pref=Preference.MEDIUM, join=True, where=True,
+        operator.gt : OpSpec(pref=Preference.MEDIUM,
+                             join=join_comparison_op,
+                             where=where_comparison_op,
                              negop=operator.le, swapop=operator.lt,
+                             keyable=comparison_op_keyable,
                              form=QCondition.Form.INFIX),
-        operator.ge : OpSpec(pref=Preference.MEDIUM, join=True, where=True,
+        operator.ge : OpSpec(pref=Preference.MEDIUM,
+                             join=join_comparison_op,
+                             where=where_comparison_op,
                              negop=operator.lt, swapop=operator.le,
+                             keyable=comparison_op_keyable,
                              form=QCondition.Form.INFIX),
-        trueall     : OpSpec(pref=Preference.LOW, join=True, where=False,
+        trueall     : OpSpec(pref=Preference.LOW,
+                             join=join_comparison_op,
+                             where=None,
                              negop=falseall, swapop=trueall,
+                             keyable=comparison_op_keyable,
                              form=QCondition.Form.FUNCTIONAL),
-        falseall    : OpSpec(pref=Preference.HIGH, join=True, where=False,
+        falseall    : OpSpec(pref=Preference.HIGH,
+                             join=join_comparison_op,
+                             where=None,
                              negop=trueall, swapop=falseall,
+                             keyable=comparison_op_keyable,
                              form=QCondition.Form.FUNCTIONAL),
-        operator.contains : OpSpec(pref=Preference.HIGH, join=False, where=True,
+        operator.contains : OpSpec(pref=Preference.HIGH,
+                                   join=None,
+                                   where=where_membership_op,
                                    negop=notcontains, swapop=None,
+                                   keyable=membership_op_keyable,
                                    form=QCondition.Form.INFIX),
-        notcontains       : OpSpec(pref=Preference.LOW, join=False, where=True,
+        notcontains       : OpSpec(pref=Preference.LOW,
+                                   join=None,
+                                   where=where_membership_op,
                                    negop=operator.contains, swapop=None,
+                                   keyable=membership_op_keyable,
                                    form=QCondition.Form.INFIX)}
 
     def __init__(self,operator,args):
@@ -367,26 +532,9 @@ class StandardComparator(Comparator):
 
     @classmethod
     def from_where_qcondition(cls,qcond):
-        def normalise_arg(arg):
-            p=path(arg,exception=False)
-            if p is None: return arg
-            return p
-
-        def is_static_arg(arg):
-            return not isinstance(arg,PredicatePath)
-
         if not isinstance(qcond, QCondition):
             raise TypeError(("Internal bug: trying to make StandardComparator() "
                              "from non QCondition object: {}").format(qcond))
-        newargs = [normalise_arg(a) for a in qcond.args]
-
-        if all(map(is_static_arg, newargs)):
-            raise ValueError(("Invalid comparison of only static inputs "
-                              "(at least one argument must reference a "
-                              "a component of a fact): {}").format(qcond))
-
-        if qcond.operator == falseall:
-            raise ValueError("Internal bug: cannot use falseall operator in QCondition")
 
         spec = StandardComparator.operators.get(qcond.operator,None)
         if spec is None:
@@ -395,28 +543,33 @@ class StandardComparator(Comparator):
         if not spec.where and spec.join:
             raise ValueError(("Invalid 'where' comparison operator '{}' is only "
                               "valid for a join specification").format(qcond.operator))
-        return cls(qcond.operator,newargs)
+        if not spec.where:
+            raise ValueError(("Invalid 'where' comparison operator "
+                              "'{}'").format(qcond.operator))
+        op, newargs = spec.where(qcond)
+        return cls(op,newargs)
 
     @classmethod
     def from_join_qcondition(cls,qcond):
         if not isinstance(qcond, QCondition):
             raise TypeError(("Internal bug: trying to make Join() "
                              "from non QCondition object: {}").format(qcond))
-        if qcond.operator == falseall:
-            raise ValueError("Internal bug: cannot use falseall operator in QCondition")
 
-        paths = list(filter(lambda x: isinstance(x,PredicatePath), qcond.args))
-        paths = set(map(lambda x: hashable_path(x), paths))
-        roots = set(map(lambda x: hashable_path(path(x).meta.root), paths))
-        if len(roots) != 2:
-            raise ValueError(("A join specification must have "
-                              "exactly two root paths: '{}'").format(qcond))
+        spec = StandardComparator.operators.get(qcond.operator,None)
+        if spec is None:
+            raise TypeError(("Internal bug: cannot create StandardComparator() with "
+                             "non-comparison operator '{}' ").format(qcond.operator))
 
-        if qcond.operator == trueall:
-            if paths != roots:
-                raise ValueError(("Cross-product expression '{}' must contain only "
-                                  "root paths").format(qcond))
-        return cls(qcond.operator,qcond.args)
+        if not spec.join and spec.where:
+            raise ValueError(("Invalid 'join' comparison operator '{}' is only "
+                              "valid for a join specification").format(qcond.operator))
+        if not spec.join:
+            raise ValueError(("Invalid 'join' comparison operator "
+                              "'{}'").format(qcond.operator))
+
+        op, newargs = spec.join(qcond)
+        return cls(op,newargs)
+
 
     # -------------------------------------------------------------------------
     # Implement ABC functions
@@ -460,6 +613,10 @@ class StandardComparator(Comparator):
             raise ValueError(("Internal bug: comparator '{}' doesn't support "
                               "the swap operation").format(self._operator))
         return StandardComparator(spec.swapop, reversed(self._args))
+
+    def keyable(self, indexes):
+        spec = StandardComparator.operators[self._operator]
+        return spec.keyable(indexes, self)
 
     @property
     def paths(self):
@@ -945,14 +1102,6 @@ def validate_where_expression(qcond, roots=[]):
     def validate_comp_condition(ccond):
         for a in ccond.args:
             if isinstance(a,PredicatePath): check_path(a)
-
-        # contains/notcontains operator requires the left argument to not be a
-        # path and the right must be a path.
-        if ccond.operator == operator.contains or ccond.operator == notcontains:
-            if not isinstance(ccond.args[1],PredicatePath):
-                raise ValueError("Invalid membership expression: {}".format(ccond))
-            if isinstance(ccond.args[0],PredicatePath):
-                raise ValueError("Invalid membership expression: {}".format(ccond))
         return StandardComparator.from_where_qcondition(ccond)
 
     # Validate a condition
@@ -1594,12 +1743,17 @@ def make_prejoin_pair(indexed_paths, clauseblock):
         c = min(cl, key=lambda c: c.preference)
         return c.preference
 
+    def is_candidate_sc(indexes, sc):
+        if sc.operator == operator.contains or sc.operator == notcontains:
+            return False
+        if len(sc.paths) != 1: return False
+        return hashable_path(sc.paths[0].meta.dealiased) in indexes
+
     def is_candidate(indexes, cl):
         for c in cl:
             if not isinstance(c, StandardComparator): return False
-        hpaths = set([hashable_path(p.meta.dealiased) for p in cl.paths])
-        if len(hpaths) != 1: return False
-        return next(iter(hpaths)) in indexes
+            if not is_candidate_sc(indexes,c): return False
+        return True
 
     if not clauseblock: return (None,None)
 
@@ -1812,7 +1966,7 @@ class JoinQueryPlan(object):
     def indexes(self): return self._indexes
  
     @property
-    def prejoin_key(self): return self._prejoincl
+    def prejoin_key_clause(self): return self._prejoincl
 
     @property
     def join_key(self): return self._joinsc
@@ -2352,7 +2506,7 @@ class InQuerySorter(object):
 def make_first_prejoin_query(jqp, factsets, factindexes):
     factset = factsets.get(jqp.root.meta.predicate, FactSet())
 
-    prejcl = jqp.prejoin_key
+    prejcl = jqp.prejoin_key_clause
     prejcb = jqp.prejoin_clauses
     factindex = None
     if prejcl:
@@ -2414,27 +2568,31 @@ def make_first_join_query(jqp, factsets, factindexes):
 # ------------------------------------------------------------------------------
 
 def make_prejoin_query_source(jqp, factsets, factindexes):
-    pjk  = jqp.prejoin_key
+    pjk  = jqp.prejoin_key_clause
     pjc  = jqp.prejoin_clauses
     pjob = jqp.prejoin_orderbys
     jk   = jqp.join_key
     predicate = jqp.root.meta.predicate
     factset = factsets.get(jqp.root.meta.predicate, FactSet())
 
-    # If there is a prejoin key clause
+    # If there is a prejoin key clause then every comparator within it must
+    # refer to exactly one index
     if pjk:
-        tmp = pjk.dealias().paths
-        pjk_path = hashable_path(tmp[0])
-        if len(tmp) != 1 or pjk_path not in factindexes \
-           or tmp[0].meta.predicate != predicate:
-            raise ValueError(("Internal error: prejoin key clause '{}' is invalid "
-                              "for JoinQueryPlan {}").format(pjk,jqp))
-        factindex = factindexes[pjk_path]
-
-    # A prejoin_key query uses the factindex
-    def query_pjk():
+        factindex_sc = []
         for sc in pjk:
-            for f in factindex.find(sc.operator,sc.args[1]):
+            tmp = sc.dealias().paths
+            scpath = hashable_path(tmp[0])
+            if len(tmp) != 1 or scpath not in factindexes \
+               or tmp[0].meta.predicate != predicate:
+                raise ValueError(("Internal error: prejoin key clause '{}' "
+                                  "is invalid for JoinQueryPlan "
+                                  "{}").format(pjk,jqp))
+        factindex_sc.append((factindexes[scpath],sc))
+
+    # A prejoin_key_clause query uses the factindex
+    def query_pjk():
+        for fi, sc in factindex_sc:
+            for f in fi.find(sc.operator,sc.args[1]):
                 yield (f,)
 
     # If there is a set of prejoin clauses
@@ -2446,7 +2604,7 @@ def make_prejoin_query_source(jqp, factsets, factindexes):
                               "for JoinQueryPlan {}").format(pjc,jqp))
         pjc_check = pjc.make_callable([pjc_root])
 
-    # prejoin_clauses query uses the prejoin_key query or the underlying factset
+    # prejoin_clauses query uses the prejoin_key_clause query or the underlying factset
     def query_pjc():
         if pjk:
             for (f,) in query_pjk():

@@ -511,14 +511,14 @@ class QueryAPI1TestCase(unittest.TestCase):
         s2_str1_eq_4 = fb2.select(Afact1).where(Afact1.str1 == "4")
         s2_num2_eq_4 = fb2.select(Afact1).where(Afact1.num2 == 4)
 
-        self.assertEqual(s1_all.query_plan()[0].prejoin_key,None)
-        self.assertEqual(str(s1_num1_eq_4.query_plan()[0].prejoin_key),
+        self.assertEqual(s1_all.query_plan()[0].prejoin_key_clause,None)
+        self.assertEqual(str(s1_num1_eq_4.query_plan()[0].prejoin_key_clause),
                          "[ Afact1.num1 == 4 ]")
-        self.assertEqual(str(s1_str1_eq_4.query_plan()[0].prejoin_key),
+        self.assertEqual(str(s1_str1_eq_4.query_plan()[0].prejoin_key_clause),
                          "[ Afact1.str1 == '4' ]")
-        self.assertEqual(s2_all.query_plan()[0].prejoin_key,None)
-        self.assertEqual(s2_num1_eq_4.query_plan()[0].prejoin_key, None)
-        self.assertEqual(s2_str1_eq_4.query_plan()[0].prejoin_key, None)
+        self.assertEqual(s2_all.query_plan()[0].prejoin_key_clause,None)
+        self.assertEqual(s2_num1_eq_4.query_plan()[0].prejoin_key_clause, None)
+        self.assertEqual(s2_str1_eq_4.query_plan()[0].prejoin_key_clause, None)
 
         self.assertEqual(set(list(s1_all.get())), set([f1,f3,f4,f42,f10]))
         self.assertEqual(set(list(s1_num1_eq_4.get())), set([f4,f42]))
@@ -546,7 +546,7 @@ class QueryAPI1TestCase(unittest.TestCase):
         s1_conj2 = fb1.select(Afact1).where(Afact1.num1 == 4, Afact1.str1 == "42")
         s1_conj3 = fb1.select(Afact1).where(lambda x: x.str1 == "42", Afact1.num1 == 4)
 
-        self.assertNotEqual(s1_conj1.query_plan()[0].prejoin_key, None)
+        self.assertNotEqual(s1_conj1.query_plan()[0].prejoin_key_clause, None)
         self.assertEqual(s1_conj1.get_unique(), f42)
         self.assertEqual(s1_conj2.get_unique(), f42)
         self.assertEqual(s1_conj3.get_unique(), f42)
