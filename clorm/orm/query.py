@@ -616,7 +616,7 @@ class StandardComparator(Comparator):
 
     def keyable(self, indexes):
         spec = StandardComparator.operators[self._operator]
-        return spec.keyable(indexes, self)
+        return spec.keyable(self, indexes)
 
     @property
     def paths(self):
@@ -1824,11 +1824,6 @@ def _align_sc_path(root, sc):
                           "it doesn't reference the root").format(root,sc))
     return sc
 
-# For a clause consisting of standard comparators align each standard comparator
-def _align_clause_path(root,clause):
-    if not clause: return None
-    return Clause([_align_sc_path(root,sc) for sc in clause])
-
 # Extract the placeholders
 def _extract_placeholders(elements):
     output = set()
@@ -1865,7 +1860,7 @@ class JoinQueryPlan(object):
         self._joinsc = _align_sc_path(self._root, joinsc)
         self._postjoincb = postjoincb
         self._postjoinobb = postjoinobb
-        self._prejoincl = _align_clause_path(self._root.meta.dealiased, prejoincl)
+        self._prejoincl = prejoincl
         self._prejoincb = prejoincb
         self._prejoinobb = prejoinobb
 
@@ -2580,19 +2575,18 @@ def make_prejoin_query_source(jqp, factsets, factindexes):
     if pjk:
         factindex_sc = []
         for sc in pjk:
-            tmp = sc.dealias().paths
-            scpath = hashable_path(tmp[0])
-            if len(tmp) != 1 or scpath not in factindexes \
-               or tmp[0].meta.predicate != predicate:
+            keyable = sc.keyable(factindexes)
+            if keyable is None:
                 raise ValueError(("Internal error: prejoin key clause '{}' "
                                   "is invalid for JoinQueryPlan "
                                   "{}").format(pjk,jqp))
-        factindex_sc.append((factindexes[scpath],sc))
+            kpath,op,key = keyable
+            factindex_sc.append((factindexes[kpath],op,key))
 
     # A prejoin_key_clause query uses the factindex
     def query_pjk():
-        for fi, sc in factindex_sc:
-            for f in fi.find(sc.operator,sc.args[1]):
+        for fi,op,key in factindex_sc:
+            for f in fi.find(op,key):
                 yield (f,)
 
     # If there is a set of prejoin clauses
