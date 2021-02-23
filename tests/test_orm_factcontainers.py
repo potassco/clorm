@@ -15,6 +15,8 @@ from clorm.orm import RawField, IntegerField, StringField, ConstantField, \
 # Implementation imports
 from clorm.orm.factcontainers import FactIndex, FactMap, FactSet
 
+from clorm.orm.core import notcontains
+
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
 
@@ -182,6 +184,50 @@ randlist.sort(key=attrgetter('anum'))
         self.assertEqual(set(fi.find(operator.gt, 3)), set([]))
         self.assertEqual(set(fi.find(operator.gt, 0)), set(allfacts))
         self.assertEqual(set(fi.find(operator.ge, 0)), set(allfacts))
+
+    def test_find_ordering(self):
+        Afact = self.Afact
+
+        af1 = Afact(num1=1, str1="a")
+        af3 = Afact(num1=3, str1="a")
+        af5 = Afact(num1=5, str1="a")
+        af7 = Afact(num1=7, str1="a")
+        af9 = Afact(num1=9, str1="a")
+
+        fi = FactIndex(Afact.num1)
+        allfacts = [ af1, af3, af5, af7, af9 ]
+        for f in allfacts: fi.add(f)
+
+        # Checking ordering of standard operators
+        self.assertEqual(list(fi.find(operator.ne, 6)), allfacts)
+        self.assertEqual(list(fi.find(operator.ne, 0)), allfacts)
+        self.assertEqual(list(fi.find(operator.ne, 3)), [af1,af5,af7,af9])
+        self.assertEqual(list(fi.find(operator.lt, 3)), [af1])
+        self.assertEqual(list(fi.find(operator.lt, 4)), [af1,af3])
+        self.assertEqual(list(fi.find(operator.le, 3)), [af1, af3])
+        self.assertEqual(list(fi.find(operator.gt, 2)), [af3, af5,af7,af9])
+        self.assertEqual(list(fi.find(operator.ge, 0)), allfacts)
+
+        # The contains/notcontains operator
+        self.assertEqual(list(fi.find(operator.contains,[])), [])
+        self.assertEqual(list(fi.find(operator.contains,[3])), [af3])
+        self.assertEqual(list(fi.find(operator.contains,[4])), [])
+        self.assertEqual(list(fi.find(operator.contains,[4,7])), [af7])
+        self.assertEqual(list(fi.find(operator.contains,[3,7])), [af3,af7])
+        self.assertEqual(list(fi.find(notcontains,[])), allfacts)
+        self.assertEqual(list(fi.find(notcontains,[4])), allfacts)
+        self.assertEqual(list(fi.find(notcontains,[5,6])), [af1,af3,af7,af9])
+        self.assertEqual(list(fi.find(notcontains,[3,7])), [af1,af5,af9])
+
+        # Checking reverse ordering for standard operators
+        allfacts.reverse()
+        self.assertEqual(list(fi.find(operator.ne, 6,reverse=True)), allfacts)
+        self.assertEqual(list(fi.find(operator.ne, 0,reverse=True)), allfacts)
+        self.assertEqual(list(fi.find(operator.ne, 3,reverse=True)), [af9,af7,af5,af1])
+        self.assertEqual(list(fi.find(operator.lt, 4,reverse=True)), [af3,af1])
+        self.assertEqual(list(fi.find(operator.le, 3,reverse=True)), [af3, af1])
+        self.assertEqual(list(fi.find(operator.gt, 2,reverse=True)), [af9, af7,af5,af3])
+        self.assertEqual(list(fi.find(operator.ge, 0,reverse=True)), allfacts)
 
     def test_clear(self):
         Afact = self.Afact

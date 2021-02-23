@@ -13,7 +13,8 @@ import functools
 import itertools
 
 from .core import *
-from .core import get_field_definition, PredicatePath, kwargs_check_keys
+from .core import notcontains, PredicatePath, \
+    get_field_definition, kwargs_check_keys
 
 # ------------------------------------------------------------------------------
 # In order to implement FactBase I originally used the built in 'set'
@@ -151,6 +152,19 @@ class FactIndex(object):
         posn = bisect.bisect_left(self._keylist, key)
         return self._keylist[posn:]
 
+    def _keys_contains(self, seq):
+        tmp = []
+        for key in sorted(seq):
+            if key in self._key2values: tmp.append(key)
+        return tmp
+
+    def _keys_notcontains(self, seq):
+        tmp = []
+        for key in self._keylist:
+            if key not in seq:
+                tmp.append(key)
+        return tmp
+
     #--------------------------------------------------------------------------
     # Find elements based on boolean match to a key
     #--------------------------------------------------------------------------
@@ -162,6 +176,8 @@ class FactIndex(object):
         elif op == operator.le: keys = self._keys_le(val)
         elif op == operator.gt: keys = self._keys_gt(val)
         elif op == operator.ge: keys = self._keys_ge(val)
+        elif op == operator.contains: keys = self._keys_contains(val)
+        elif op == notcontains: keys = self._keys_notcontains(val)
         else: raise ValueError("unsupported operator {}".format(op))
 
         if reverse:
