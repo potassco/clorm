@@ -154,8 +154,9 @@ class FactIndex(object):
 
     def _keys_contains(self, seq):
         tmp = []
-        for key in sorted(seq):
+        for key in seq:
             if key in self._key2values: tmp.append(key)
+        tmp.sort()
         return tmp
 
     def _keys_notcontains(self, seq):

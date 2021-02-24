@@ -19,7 +19,7 @@ from clorm.orm import RawField, IntegerField, StringField, ConstantField, \
     Predicate, ComplexTerm, path, hashable_path, alias
 
 # Implementation imports
-from clorm.orm.core import QCondition, trueall
+from clorm.orm.core import QCondition, trueall, notcontains
 
 # Official Clorm API imports for the fact base components
 from clorm.orm import desc, asc, ph_, ph1_, ph2_, func, not_, and_, or_, \
@@ -488,6 +488,83 @@ class ComparatorTestCase(unittest.TestCase):
         self.assertTrue(cmp((f1,)))
         self.assertFalse(cmp((f2,)))
 
+
+    # ------------------------------------------------------------------------------
+    # Test the standard comparator keyable function
+    # ------------------------------------------------------------------------------
+    def test_nonapi_StandardComparator_keyable(self):
+        SC=StandardComparator
+        class F(Predicate):
+            anum = IntegerField
+
+        sc = SC(operator.eq,[F.anum,2])
+        result = sc.keyable([])
+        self.assertEqual(result,None)
+
+        # F.anum == 2
+        sc = SC(operator.eq,[F.anum,2])
+        self.assertEqual(sc.keyable([F.anum]),(hashable_path(F.anum),operator.eq,2))
+
+        # F.anum != 2
+        sc = SC(operator.ne,[F.anum,2])
+        self.assertEqual(sc.keyable([F.anum]),(hashable_path(F.anum),operator.ne,2))
+
+        # F.anum < 2
+        sc = SC(operator.lt,[F.anum,2])
+        self.assertEqual(sc.keyable([F.anum]),(hashable_path(F.anum),operator.lt,2))
+
+        # F.anum <= 2
+        sc = SC(operator.le,[F.anum,2])
+        self.assertEqual(sc.keyable([F.anum]),(hashable_path(F.anum),operator.le,2))
+
+        # F.anum > 2
+        sc = SC(operator.gt,[F.anum,2])
+        self.assertEqual(sc.keyable([F.anum]),(hashable_path(F.anum),operator.gt,2))
+
+        # F.anum >= 2
+        sc = SC(operator.ge,[F.anum,2])
+        self.assertEqual(sc.keyable([F.anum]),(hashable_path(F.anum),operator.ge,2))
+
+        # 2 == F.anum
+        sc = SC(operator.eq,[2,F.anum])
+        self.assertEqual(sc.keyable([F.anum]),(hashable_path(F.anum),operator.eq,2))
+
+        # 2 != F.anum
+        sc = SC(operator.ne,[2,F.anum])
+        self.assertEqual(sc.keyable([F.anum]),(hashable_path(F.anum),operator.ne,2))
+
+         # 2 < F.anum
+        sc = SC(operator.lt,[2,F.anum])
+        self.assertEqual(sc.keyable([F.anum]),(hashable_path(F.anum),operator.gt,2))
+
+         # 2 <= F.anum
+        sc = SC(operator.le,[2,F.anum])
+        self.assertEqual(sc.keyable([F.anum]),(hashable_path(F.anum),operator.ge,2))
+
+         # 2 > F.anum
+        sc = SC(operator.gt,[2,F.anum])
+        self.assertEqual(sc.keyable([F.anum]),(hashable_path(F.anum),operator.lt,2))
+
+         # 2 >= F.anum
+        sc = SC(operator.ge,[2,F.anum])
+        self.assertEqual(sc.keyable([F.anum]),(hashable_path(F.anum),operator.le,2))
+
+
+        # Membership operator
+
+        # No keyable
+        sc = SC(operator.contains,[[1,2],F.anum])
+        self.assertEqual(sc.keyable([]),None)
+
+        # F.anum in [1,2]
+        sc = SC(operator.contains,[[1,2],F.anum])
+        self.assertEqual(sc.keyable([F.anum]),
+                         (hashable_path(F.anum),operator.contains,[1,2]))
+
+        # F.anum not in [1,2]
+        sc = SC(notcontains,[[1,2],F.anum])
+        self.assertEqual(sc.keyable([F.anum]),
+                         (hashable_path(F.anum),notcontains,[1,2]))
 
     #------------------------------------------------------------------------------
     # Test the wrapping of comparison functors in FunctionComparator
@@ -1768,6 +1845,34 @@ class QueryPlanTestCase(unittest.TestCase):
         qp1 = make_query_plan([F.anum],qspec)
         self.assertEqual(len(qp1), 4)
 
+
+    # ------------------------------------------------------------------------------
+    # Test the plan with a membership operator in the key
+    # ------------------------------------------------------------------------------
+    def test_make_query_plan_membership(self):
+        F = path(self.F)
+
+        pw = process_where
+        pob = process_orderby
+        wsc = StandardComparator.from_where_qcondition
+        jqp = JoinQueryPlan.from_specification
+        hp = hashable_path
+
+        wherein = pw(in_(F.anum,[3,4]),[F])
+        wherenotin1 = pw(~in_(F.anum,[3,4]),[F])
+        wherenotin2 = pw(notin_(F.anum,[3,4]),[F])
+
+        qspec=QuerySpec(roots=[F],where=wherein)
+        qp = make_query_plan([F.anum],qspec)
+        self.assertEqual(len(qp), 1)
+        self.assertEqual(qp[0].prejoin_key_clause, wherein[0])
+
+        qspec=QuerySpec(roots=[F],where=wherenotin1)
+        qp = make_query_plan([F.anum],qspec)
+        self.assertEqual(len(qp), 1)
+        self.assertEqual(qp[0].prejoin_key_clause, wherenotin1[0])
+        self.assertEqual(qp[0].prejoin_key_clause, wherenotin2[0])
+
     # ------------------------------------------------------------------------------
     #
     # ------------------------------------------------------------------------------
@@ -2231,7 +2336,6 @@ class QueryTestCase(unittest.TestCase):
         query1 = make_first_join_query(qp1[0], factsets, indexes)
         self.assertEqual(set(strip(query1())), set([G(5,"foo")]))
 
-
         which2 = pw((G.anum > 4) | (G.astr == "foo"),[G])
         qspec = QuerySpec(roots=[G],join=[],where=which2,order_by=orderbys,joh=bjoh)
         qp2 = make_query_plan([G.astr], qspec)
@@ -2449,19 +2553,89 @@ class QueryExecutorTestCase(unittest.TestCase):
         pob = process_orderby
         fjoh = fixed_join_order
 
-        roots = (F,G)
-        join = pj([F.anum == G.anum],roots)
-        order_by = pob([G.anum,G.astr],roots)
-        where = pw((in_(F.astr,("foo",))),roots)
-        qspec = QuerySpec(roots=roots, join=join, where=where,
-                          order_by=order_by,joh=fjoh(F,G))
+        def runtests():
+            roots = (F,G)
+            join = pj([F.anum == G.anum],roots)
+            order_by = pob([G.anum,G.astr],roots)
+
+            # F.astr in ["foo"] - force F to be the first join
+            where = pw((in_(F.astr,("foo",))),roots)
+            qspec = QuerySpec(roots=roots, join=join, where=where,
+                              order_by=order_by,joh=fjoh(F,G))
+            qe = QueryExecutor(factmaps, qspec)
+
+#            (qplan,query) = qe._make_plan_and_query()
+#            print("QPLAN:\n{}\n".format(qplan))
+
+            result = list(qe.all())
+            expected = set([(F(1,"foo"),G(1,"a")), (F(1,"foo"),G(1,"foo")),
+                            (F(5,"foo"),G(5,"a")), (F(5,"foo"),G(5,"foo"))])
+            self.assertEqual(expected, set(result))
+
+            # F.astr in ["foo"] - force F to be the second join - expect same result
+            qspec = QuerySpec(roots=roots, join=join, where=where,
+                              order_by=order_by,joh=fjoh(G,F))
+            qe = QueryExecutor(factmaps, qspec)
+            result = list(qe.all())
+            expected = set([(F(1,"foo"),G(1,"a")), (F(1,"foo"),G(1,"foo")),
+                            (F(5,"foo"),G(5,"a")), (F(5,"foo"),G(5,"foo"))])
+            self.assertEqual(expected, set(result))
+
+            # F.astr not in ["foo"] - force F to be the first join
+            where = pw((notin_(F.astr,["foo"])),roots)
+            qspec = QuerySpec(roots=roots, join=join, where=where,
+                              order_by=order_by,joh=fjoh(F,G))
+            qe = QueryExecutor(factmaps, qspec)
+            result = list(qe.all())
+            expected = set([(F(1,"a"),G(1,"a")), (F(1,"a"),G(1,"foo")),
+                            (F(5,"a"),G(5,"a")), (F(5,"a"),G(5,"foo"))])
+            self.assertEqual(expected, set(result))
+
+            # F.astr not in ["foo"] - force F to be the second join
+            where = pw((notin_(F.astr,["foo"])),roots)
+            qspec = QuerySpec(roots=roots, join=join, where=where,
+                              order_by=order_by,joh=fjoh(G,F))
+            qe = QueryExecutor(factmaps, qspec)
+            result = list(qe.all())
+            expected = set([(F(1,"a"),G(1,"a")), (F(1,"a"),G(1,"foo")),
+                            (F(5,"a"),G(5,"a")), (F(5,"a"),G(5,"foo"))])
+            self.assertEqual(expected, set(result))
+
+        # Run tests with factmap containing no indexes
+        runtests()
+
+        # Repeat tests with factmap contain index for F.astr
+        factmaps = factmaps_dict([
+            G(1,"a"),G(1,"foo"),G(5,"a"),G(5,"foo"),
+            F(1,"a"),F(1,"foo"),F(5,"a"),F(5,"foo")], [F.astr])
+        runtests()
+
+
+
+    #--------------------------------------------------------------------------
+    # Test where clause with member operator
+    #--------------------------------------------------------------------------
+    def test_nonapi_QueryExecutor_contains_indexed(self):
+        pw = process_where
+        pob = process_orderby
+        fjoh = fixed_join_order
+        F = self.F
+        f1=F(1,"a") ; f3=F(3,"a") ; f5=F(5,"a") ; f7=F(7,"a") ; f9=F(9,"a")
+        factmaps = factmaps_dict([f1,f3,f5,f7,f9], [F.anum])
+        self.assertEqual(len(factmaps),1)
+        self.assertEqual(list(factmaps[F].path2factindex.keys()), [F.anum])
+
+        roots = (F,)
+        order_by = pob([F.anum],roots)
+        where = pw(in_(F.anum,[1,2]),roots)
+        qspec = QuerySpec(roots=roots, where=where,order_by=order_by)
         qe = QueryExecutor(factmaps, qspec)
 
+        return
         # Test output with no options
         result = list(qe.all())
-        expected = set([(F(1,"foo"),G(1,"a")), (F(1,"foo"),G(1,"foo")),
-                        (F(5,"foo"),G(5,"a")), (F(5,"foo"),G(5,"foo"))])
-        self.assertEqual(expected, set(result))
+        self.assertEqual(result,[f1])
+        return
 
         where = pw((notin_(F.astr,["foo"])),roots)
         qspec = QuerySpec(roots=roots, join=join, where=where,

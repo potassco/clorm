@@ -945,12 +945,13 @@ class QueryAPI1TestCase(unittest.TestCase):
 
         s1 = fb1.select(Afact).where(Afact.num1 == ph1_, track)
         s2 = fb1.select(Afact).where(Afact.num1 < ph1_, track)
- 
-        self.assertTrue(set([f for f in s1.get(2,b=1)]), set([f4]))
-        self.assertTrue(facts, set([f4,f5]))
 
-        self.assertTrue(set([f for f in s2.get(2,b=2)]), set([f2]))
-        self.assertTrue(facts, set([f1,f2,f3]))
+        facts = set()
+        self.assertEqual(set([f for f in s1.get(2,b=1)]), set([f4]))
+        self.assertEqual(facts, set([f4,f5]))
+        facts = set()
+        self.assertEqual(set([f for f in s2.get(2,b=2)]), set([f2]))
+        self.assertEqual(facts, set([f1,f2,f3]))
 
     #--------------------------------------------------------------------------
     #   Test the delete

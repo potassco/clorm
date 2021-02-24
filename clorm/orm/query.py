@@ -297,14 +297,21 @@ class MembershipSeq(object):
         self._src = src
         self._fixed = False
 
-    def __contains__(self,key):
+    def _fixit(self):
         if not self._fixed:
             self._src = set(self._src)
             self._fixed = True
-        return key in self._src
 
     def ground(self,*args,**kwargs):
         return self
+
+    def __contains__(self,key):
+        if not self._fixed: self._fixit()
+        return key in self._src
+
+    def __iter__(self):
+        if not self._fixed: self._fixit()
+        return iter(self._src)
 
     def __eq__(self,other):
         if not isinstance(other, MembershipSeq): return NotImplemented
@@ -394,7 +401,7 @@ def join_comparison_op(qcond):
 def comparison_op_keyable(sc, indexes):
     indexes = set([hashable_path(p) for p in indexes])
     swapop = {
-        operator.eq : operator.eq,  operator.eq : operator.eq,
+        operator.eq : operator.eq,  operator.ne : operator.ne,
         operator.lt : operator.gt,  operator.gt : operator.lt,
         operator.le : operator.ge,  operator.ge : operator.le,
         trueall : trueall,  falseall : falseall }
@@ -405,16 +412,19 @@ def comparison_op_keyable(sc, indexes):
         except:
             return a
 
-    a1 = hp(sc.args[0])
-    a2 = hp(sc.args[1])
-    if a1 in indexes: return (a1, swapop[sc.operator], sc.args[1])
-    if a2 in indexes: return (a2, swapop[sc.operator], sc.args[0])
+    a0 = hp(sc.args[0])
+    a1 = hp(sc.args[1])
+    if isinstance(a0,PredicatePath.Hashable) and a0 in indexes:
+        return (a0, sc.operator, sc.args[1])
+    if isinstance(a1,PredicatePath.Hashable) and a1 in indexes:
+        return (a1, swapop[sc.operator], sc.args[0])
     return None
 
 def membership_op_keyable(sc,indexes):
     indexes = set([hashable_path(p) for p in indexes])
-    return None
-    return (hashable_path(sc.args[0]), sc.operator, sc.args[1])
+    hpa1 = hashable_path(sc.args[1])
+    if hpa1 not in indexes: return None
+    return (hpa1, sc.operator, sc.args[0])
 
 
 
@@ -511,9 +521,11 @@ class StandardComparator(Comparator):
         self._hashableargs = tuple([ hashable_path(a) if isinstance(a,PredicatePath) \
                                      else None for a in self._args])
 
-        # Changed because lists are not immutable
-#        self._hashableargs = tuple([ hashable_path(a) if isinstance(a,PredicatePath) \
-#                                     else a for a in self._args])
+        # Changed because of the membership operators contains and notcontains
+        # which allow lists - but lists are mutable so don't have a hash value
+
+#       self._hashableargs =tuple([ hashable_path(a) if isinstance(a,PredicatePath) \
+#                                   else a for a in self._args])
 
         self._paths=tuple(filter(lambda x : isinstance(x,PredicatePath),self._args))
 
@@ -1744,8 +1756,6 @@ def make_prejoin_pair(indexed_paths, clauseblock):
         return c.preference
 
     def is_candidate_sc(indexes, sc):
-        if sc.operator == operator.contains or sc.operator == notcontains:
-            return False
         if len(sc.paths) != 1: return False
         return hashable_path(sc.paths[0].meta.dealiased) in indexes
 
@@ -2501,22 +2511,31 @@ class InQuerySorter(object):
 def make_first_prejoin_query(jqp, factsets, factindexes):
     factset = factsets.get(jqp.root.meta.predicate, FactSet())
 
-    prejcl = jqp.prejoin_key_clause
+    pjk = jqp.prejoin_key_clause
     prejcb = jqp.prejoin_clauses
     factindex = None
-    if prejcl:
-        factindex=factindexes.get(hashable_path(prejcl.paths[0]),None)
-        if not factindex:
-            raise ValueError(("Internal error: missing FactIndex for "
-                              "path '{}'").format(prejcl.args[0]))
+
+    # If there is a prejoin key clause then every comparator within it must
+    # refer to exactly one index
+    if pjk:
+        factindex_sc = []
+
+        for sc in pjk:
+            keyable = sc.keyable(factindexes)
+            if keyable is None:
+                raise ValueError(("Internal error: prejoin key clause '{}' "
+                                  "is invalid for JoinQueryPlan "
+                                  "{}").format(pjk,jqp))
+            kpath,op,key = keyable
+            factindex_sc.append((factindexes[kpath],op,key))
 
     def unsorted_query():
         if prejcb: cc = prejcb.make_callable([jqp.root.meta.dealiased])
         else: cc = lambda _ : True
 
-        if factindex:
-            for sc in prejcl:
-                for f in factindex.find(sc.operator,sc.args[1]):
+        if pjk:
+            for fi,op,key in factindex_sc:
+                for f in fi.find(op,key):
                     if cc((f,)): yield (f,)
         else:
             for f in factset:
