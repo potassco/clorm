@@ -21,6 +21,7 @@ from .core import get_field_definition, QCondition, PredicatePath, \
 from .factcontainers import FactSet, FactIndex, FactMap
 
 __all__ = [
+    'Query',
     'Placeholder',
     'desc',
     'asc',
@@ -212,6 +213,9 @@ class Comparator(abc.ABC):
     def ground(self,*args,**kwargs): pass
 
     @abc.abstractmethod
+    def fixed(self): pass
+
+    @abc.abstractmethod
     def negate(self): pass
 
     @abc.abstractmethod
@@ -288,41 +292,71 @@ def _hashables(seq):
 # used as part of a query membership "in_" (or "notin_") condition. When a query
 # is executed the sequence is turned into a set which is then used for
 # membership comparisons. So any update of the reference sequence after the
-# query is declared will effect the execution of the query. Note: eventually,
-# will also add the ability for the sequence to be a sub-query.
+# query is declared but before the query is executed will affect the execution
+# of the query. It also also for the sequence to be specified as a sub-query.
 # ------------------------------------------------------------------------------
 
 class MembershipSeq(object):
+
     def __init__(self, src):
         self._src = src
-        self._fixed = False
 
-    def _fixit(self):
-        if not self._fixed:
-            self._src = set(self._src)
-            self._fixed = True
+    def fixed(self):
+        if isinstance(self._src, Placeholder):
+            raise ValueError(("Cannot fix unground sequence specification : "
+                              "{}").format(self))
+        if isinstance(self._src, Query):
+            return frozenset(self._src.all())
+        else:
+             return frozenset(self._src)
 
     def ground(self,*args,**kwargs):
-        return self
+        def get(arg):
+            if not isinstance(arg,Placeholder): return arg
+            if isinstance(arg,PositionalPlaceholder):
+                if arg.posn < len(args): return args[arg.posn]
+                raise ValueError(("Missing positional placeholder argument '{}' "
+                                  "when grounding '{}' with positional arguments: "
+                                  "{}").format(arg,self,args))
+            elif isinstance(arg,NamedPlaceholder):
+                v = kwargs.get(arg.name,None)
+                if v: return v
+                if arg.has_default: return arg.default
+                raise ValueError(("Missing named placeholder argument '{}' "
+                                  "when grounding '{}' with arguments: "
+                                  "{}").format(arg,self,kwargs))
 
-    def __contains__(self,key):
-        if not self._fixed: self._fixit()
-        return key in self._src
 
-    def __iter__(self):
-        if not self._fixed: self._fixit()
-        return iter(self._src)
+        if isinstance(self._src, Query):
+            where = self._src.qspec.where
+            if where is None: return self
+            return MembershipSeq(self._src.bind(*args,**kwargs))
+
+        elif not isinstance(self._src, Placeholder): return self
+        return MembershipSeq(get(self._src))
+
+    @property
+    def placeholders(self):
+        if isinstance(self._src, Placeholder): return set([self._src])
+        elif not isinstance(self._src, Query): return set()
+        where = self._src.qspec.where
+        if where is None: return set()
+        return where.placeholders
 
     def __eq__(self,other):
         if not isinstance(other, MembershipSeq): return NotImplemented
-        return self._src == other._src
+        return self._src is other._src
 
     def __ne__(self,other):
         result = self.__eq__(other)
         if result is NotImplemented: return NotImplemented
         return not result
 
+    def __hash__(self):
+        return hash(id(self._src))
+
     def __str__(self):
+        return "MS:{}".format(self._src.__str__())
         return self._src.__str__()
 
     def __repr__(self):
@@ -517,16 +551,8 @@ class StandardComparator(Comparator):
                              "non-comparison operator '{}' ").format(operator))
         self._operator = operator
         self._args = tuple(args)
-
-        self._hashableargs = tuple([ hashable_path(a) if isinstance(a,PredicatePath) \
-                                     else None for a in self._args])
-
-        # Changed because of the membership operators contains and notcontains
-        # which allow lists - but lists are mutable so don't have a hash value
-
-#       self._hashableargs =tuple([ hashable_path(a) if isinstance(a,PredicatePath) \
-#                                   else a for a in self._args])
-
+        self._hashableargs =tuple([ hashable_path(a) if isinstance(a,PredicatePath) \
+                                    else a for a in self._args])
         self._paths=tuple(filter(lambda x : isinstance(x,PredicatePath),self._args))
 
         tmppaths = set([])
@@ -587,6 +613,16 @@ class StandardComparator(Comparator):
     # Implement ABC functions
     # -------------------------------------------------------------------------
 
+    def fixed(self):
+        gself = self.ground()
+        if gself._operator not in [ operator.contains, notcontains]: return gself
+        elif isinstance(gself._args[0],frozenset): return gself
+        elif not isinstance(gself._args[0],MembershipSeq):
+            raise ValueError(("Internal error: unexpected sequence type object: "
+                              "'{}'").format(gself._args[0]))
+        return StandardComparator(self._operator,
+                                  [gself._args[0].fixed(),gself._args[1]])
+
     def ground(self,*args,**kwargs):
         def get(arg):
             if not isinstance(arg,Placeholder): return arg
@@ -603,7 +639,12 @@ class StandardComparator(Comparator):
                                   "when grounding '{}' with arguments: "
                                   "{}").format(arg,self,kwargs))
 
-        newargs = tuple([get(a) for a in self._args])
+        if self._operator not in [ operator.contains, notcontains] or \
+           not isinstance(self._args[0],MembershipSeq):
+            newargs = tuple([get(a) for a in self._args])
+        else:
+            newargs = tuple([self._args[0].ground(*args,**kwargs), self._args[1]])
+
         if _hashables(newargs) == _hashables(self._args): return self
         return StandardComparator(self._operator, newargs)
 
@@ -636,7 +677,11 @@ class StandardComparator(Comparator):
 
     @property
     def placeholders(self):
-        return set(filter(lambda x : isinstance(x,Placeholder), self._args))
+        tmp = set(filter(lambda x : isinstance(x,Placeholder), self._args))
+        if self._operator not in [ operator.contains, notcontains]: return tmp
+        elif not isinstance(self._args[0], MembershipSeq): return tmp
+        tmp.update(self._args[0].placeholders)
+        return tmp
 
     @property
     def preference(self):
@@ -708,11 +753,6 @@ class StandardComparator(Comparator):
 # ------------------------------------------------------------------------------
 # Comparator for arbitrary functions. From the API generated with func()
 # The constructor takes a reference to the function and a path signature.
-#
-# FIXUP NOTE: a limitation of the current implementation of FunctionComparator
-# means that ground() has to be called to make the assignment valid. Need to
-# look at this.
-#
 # ------------------------------------------------------------------------------
 
 class FunctionComparator(Comparator):
@@ -843,6 +883,9 @@ class FunctionComparator(Comparator):
         if _hashables(newpathsig) == _hashables(self._pathsig): return self
         return FunctionComparator(self._func, newpathsig, self._negative,
                                           assignment=self._assignment)
+
+    def fixed(self):
+        return self.ground()
 
     def ground(self, *args, **kwargs):
         if self._assignment is not None: return self
@@ -1281,8 +1324,13 @@ class Clause(object):
         if newcomps == self._comparators: return self
         return Clause(newcomps)
 
+    def fixed(self):
+        newcomps = tuple([ c.fixed() for c in self._comparators])
+        if self._comparators == newcomps: return self
+        return Clause(newcomps)
+
     def ground(self,*args, **kwargs):
-        newcomps = [ comp.ground(*args,**kwargs) for comp in self._comparators]
+        newcomps = tuple([ comp.ground(*args,**kwargs) for comp in self._comparators])
         if newcomps == self._comparators: return self
         return Clause(newcomps)
 
@@ -1364,6 +1412,11 @@ class ClauseBlock(object):
         for cl in self._clauses:
             if not cl.executable: return False
         return True
+
+    def fixed(self):
+        newclauses = tuple([cl.fixed() for cl in self._clauses])
+        if self._clauses == newclauses: return self
+        return ClauseBlock(newclauses)
 
     def ground(self,*args, **kwargs):
         newclauses = [ clause.ground(*args,**kwargs) for clause in self._clauses]
@@ -2808,6 +2861,296 @@ def make_outputter(insig,outsig):
     if needcomplex: return make_complex_outputter()
     else: return make_simple_outputter()
 
+
+#------------------------------------------------------------------------------
+# Query is a abstract class that provides the interface to the Query API.  The
+# implementation QueryImpl is in factbase.py but the interface is declared here
+# so that we can deal with subqueries (imbedded within a membership clause (e.g,
+# F.anum in fb.query(...)]).
+# ------------------------------------------------------------------------------
+
+class Query(abc.ABC):
+    """An abstract class that defines the interface to the Clorm Query API v2.
+
+    ``Query`` objects cannot be constructed directly.
+
+    Instead a ``Query`` object is returned by the ``FactBase.query()`` function.
+    Queries can take a number of different forms but contain the components of a
+    fairly traditional SQL query.
+
+    The simples query must at least specify the predicate to search for:
+
+          ``query = fb.query(<predicate>)``
+
+    If there are multiple predicates involved in the search then it must contain
+    a ``join()`` clause:
+
+          ``query = fb.query(<predicates>).join(<expressions>)``
+
+    A query can also contain a ``where`` clauses as well as ``order_by`` and
+    ``group_by`` components. It can also contain a ``select`` clause that
+    specifies a projection (or filtering) over the elements of the result tuple.
+
+          ``query = fb.query(<predicates>)\
+                      .join(<expressions>)\
+                      .where(<expressions>)\
+                      .order_by(<ordering>)\
+                      .group_by()``
+
+    Each of these sub-functions returns a modified copy of the query object
+    itself so provide reusability of query components.
+
+    A query is executed using a number of functions. To iterate over all results
+    of the query:
+
+          ``query.all()``
+
+    Alternatively, if there is at least one element then to return the first
+    result (or throw an exception if there are no results):
+
+          ``query.all()``
+
+    Or if there must be exactly one element (and to throw an exception
+    otherwise):
+
+          ``query.singleton()``
+
+    To count elements:
+
+           ``query.count()``
+
+    And finally to delete all matching facts from the underlying FactBase:
+
+           ``query.delete()``
+
+    """
+
+    #--------------------------------------------------------------------------
+    # Overide the default heuristic
+    #--------------------------------------------------------------------------
+    @abc.abstractmethod
+    def heuristic(self, join_order):
+        """Allows the query engine's query plan to be modified.
+
+        This is an advanced option that can be used if the query is not
+        performing as expected. For multi-predicate queries the order in which
+        the joins are performed can affect performance. By default the Query API
+        will try to optimise this join order based on the ``join`` expressions;
+        with predicates with more restricted joins being higher up in the join
+        order.
+
+        This join order can be controlled explicitly by the ``fixed_join_order``
+        heuristic function. Assuming predicate definitions ``F`` and ``G`` the
+        query:
+
+            ``from clorm import fixed_join_order
+
+              query=fb.query(F,G).heuristic(fixed_join_order(G,F)).join(...)``
+
+        forces the join order to first be the ``G`` predicate followed by the
+        ``F`` predicate.
+
+        Args:
+          join_order: the join order heuristic
+
+        Returns:
+          Returns the modified copy of the query.
+        """
+        pass
+
+    #--------------------------------------------------------------------------
+    # Add a join expression
+    #--------------------------------------------------------------------------
+    @abc.abstractmethod
+    def join(self, *expressions):
+        """Specifying how the predicate/tables in the query are to be joined.
+
+        Joins are expressions that connect the predicates/tables of the
+        query. They range from a pure SQL-like inner-join through to an
+        unrestricted cross-product. The standard form is:
+
+             ``<PredicatePath> <compop> <PredicatePath>``
+
+        with the full cross-product expressed using a function:
+
+             ``cross(<PredicatePath>,<PredicatePath>)``
+
+        Every predicate/table in the query must be reachable to every other
+        predicate/table through some form of join. For example, given predicate
+        definitions ``F``, ``G``, ``H``, each with a field ``anum``:
+
+              ``query = fb.query(F,G,H).join(F.anum == G.anum,cross(F,H))``
+
+        generates an inner join between ``F`` and ``G``, but a full
+        cross-product between ``F`` and ``H``.
+
+        Finally, it is possible to perform self joins using the function
+        ``alias()`` that generates an alias for the predicate/table. For
+        example:
+
+              ``from clorm import alias
+
+                FA=alias(F)
+                query = fb.query(F,G,FA).join(F.anum == FA.anum,cross(F,G))``
+
+        generates an inner join between ``F`` and itself, and a full
+        cross-product between ``F`` and ``G``.
+
+        Args:
+          expressions: one or more join expressions.
+
+        Returns:
+          Returns the modified copy of the query.
+
+        """
+        pass
+
+    #--------------------------------------------------------------------------
+    # Add an order_by expression
+    #--------------------------------------------------------------------------
+    @abc.abstractmethod
+    def where(self, *expressions):
+        """Sets a list of query conditions.
+
+        The where clause consists of a single (or list) of simple/complex
+        boolean and comparison expressions. This expression specifies a search
+        criteria for matching facts within the corresponding ``FactBase``.
+
+        Boolean expression are built from other boolean expression or a
+        comparison expression. Comparison expressions are of the form:
+
+               ``<PredicatePath> <compop>  <value>``
+
+       where ``<compop>`` is a comparison operator such as ``==``, ``!=``, or
+       ``<=`` and ``<value>`` is either a Python value or another predicate path
+       object refering to a field of the same predicate or a placeholder.
+
+        A placeholder is a special value that allows queries to be
+        parameterised. A value can be bound to each placeholder. These
+        placeholders are named ``ph1_``, ``ph2_``, ``ph3_``, and ``ph4_`` and
+        correspond to the 1st to 4th arguments when the ``bind()`` function is
+        called. Placeholders also allow for named arguments using the
+        "ph_("<name>") function.
+
+        Args:
+          expressions: one or more comparison expressions.
+
+        Returns:
+          Returns the modified copy of the query.
+
+        """
+        pass
+
+    #--------------------------------------------------------------------------
+    # Add an order_by expression
+    #--------------------------------------------------------------------------
+    @abc.abstractmethod
+    def order_by(self, *expressions):
+        """Provide an ordering over the results.
+
+        Args:
+          field_order: an ordering over fields
+
+        Returns:
+          Returns the modified copy of the query.
+
+        """
+        pass
+
+    #--------------------------------------------------------------------------
+    # Add a group_by expression
+    #--------------------------------------------------------------------------
+    @abc.abstractmethod
+    def group_by(self, grouping=1):
+        """Provide grouping over ordered results.
+
+        If an ordering is specified with ``order_by`` then the results of the
+        query can be grouped. By default only the first element in the ordering
+        will be part of the group. This can be controlled up to the number of
+        orderings specified in the query.
+
+        Args: grouping: The number of elements to group by
+
+        Returns:
+          Returns the modified copy of the query.
+
+        """
+        pass
+
+    #--------------------------------------------------------------------------
+    # The tuple flag
+    #--------------------------------------------------------------------------
+    @abc.abstractmethod
+    def tuple(self): pass
+
+    #--------------------------------------------------------------------------
+    # The unique flag
+    #--------------------------------------------------------------------------
+    @abc.abstractmethod
+    def unique(self): pass
+
+    #--------------------------------------------------------------------------
+    # Ground - bind
+    #--------------------------------------------------------------------------
+    @abc.abstractmethod
+    def bind(self,*args,**kwargs): pass
+
+    #--------------------------------------------------------------------------
+    # Explicitly select the elements to output or delete
+    #--------------------------------------------------------------------------
+    @abc.abstractmethod
+    def select(self,*outsig): pass
+
+    #--------------------------------------------------------------------------
+    # End points that do something useful
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    # For the user to see what the query plan looks like
+    #--------------------------------------------------------------------------
+    @abc.abstractmethod
+    def query_plan(self,*args,**kwargs): pass
+
+    #--------------------------------------------------------------------------
+    # Internal API property
+    #--------------------------------------------------------------------------
+    @property
+    def qspec(self): pass
+
+    #--------------------------------------------------------------------------
+    # Select to display all the output of the query
+    # --------------------------------------------------------------------------
+    @abc.abstractmethod
+    def all(self): pass
+
+    #--------------------------------------------------------------------------
+    # Show the single element and throw an exception if there is more than one
+    # --------------------------------------------------------------------------
+    @abc.abstractmethod
+    def singleton(self): pass
+
+    #--------------------------------------------------------------------------
+    # Return the count of elements - Note: the behaviour of what is counted
+    # changes if group_by() has been specified.
+    # --------------------------------------------------------------------------
+    @abc.abstractmethod
+    def count(self): pass
+
+    #--------------------------------------------------------------------------
+    # Show the single element and throw an exception if there is more than one
+    # --------------------------------------------------------------------------
+    @abc.abstractmethod
+    def first(self):
+        pass
+
+    #--------------------------------------------------------------------------
+    # Delete a selection of fact
+    #--------------------------------------------------------------------------
+    @abc.abstractmethod
+    def delete(self):
+        pass
+
+
 #------------------------------------------------------------------------------
 # QueryExecutor - actually executes the query and does the appropriate action
 # (eg., displaying to the user or deleting from the factbase)
@@ -2851,13 +3194,13 @@ class QueryExecutor(object):
                               "executing the query").format(placeholders))
         qspec = self._qspec
         if where:
-            where = where.ground()
+            where = where.fixed()
             qspec = self._qspec.modp(where=where)
 
         (factsets,factindexes) = \
             QueryExecutor.get_factmap_data(self._factmaps, qspec)
         qplan = make_query_plan(factindexes.keys(), qspec)
-        qplan = qplan.ground()
+#        qplan = qplan.ground()
         query = make_query(qplan,factsets,factindexes)
         return (qplan,query)
 

@@ -789,7 +789,7 @@ class _Delete(Delete):
 # - factmaps             - dictionary mapping predicate types to FactMap objects
 # - qspec                - a dictionary with query parameters
 #------------------------------------------------------------------------------
-class QueryImpl(object):
+class QueryImpl(Query):
 
     def __init__(self, factmaps, qspec):
         self._factmaps = factmaps
@@ -914,6 +914,13 @@ class QueryImpl(object):
         return make_query_plan(factindexes.keys(), qspec)
 
     #--------------------------------------------------------------------------
+    # Return the placeholders
+    #--------------------------------------------------------------------------
+    @property
+    def qspec(self):
+        return self._qspec
+
+    #--------------------------------------------------------------------------
     # Select to display all the output of the query
     # --------------------------------------------------------------------------
     def all(self):
@@ -970,7 +977,7 @@ class QueryImpl(object):
     #--------------------------------------------------------------------------
     # Delete a selection of fact
     #--------------------------------------------------------------------------
-    def delete(self,*subroots):
+    def delete(self):
         self._check_join_called_first("delete")
 
         qe = QueryExecutor(self._factmaps, self._qspec)

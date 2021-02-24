@@ -42,7 +42,7 @@ from clorm.orm.query import PositionalPlaceholder, NamedPlaceholder, \
     make_first_prejoin_query, make_prejoin_query_source, \
     make_first_join_query, \
     make_chained_join_query, make_query, \
-    InQuerySorter, QueryExecutor
+    InQuerySorter, QueryExecutor, MembershipSeq
 
 ###### NOTE: The QueryOutput tests need to be turned into QueryExecutor
 ###### tests. We can then delete QueryOutput which is not being used for
@@ -468,7 +468,6 @@ class ComparatorTestCase(unittest.TestCase):
         with self.assertRaises(TypeError) as ctx:
             SC(operator.eq,[G.anum,ph1_]).make_callable([F,G])
 
-
     # ------------------------------------------------------------------------------
     # ------------------------------------------------------------------------------
     def test_nonapi_StandardComparator_make_callable_with_tuples(self):
@@ -550,8 +549,7 @@ class ComparatorTestCase(unittest.TestCase):
         self.assertEqual(sc.keyable([F.anum]),(hashable_path(F.anum),operator.le,2))
 
 
-        # Membership operator
-
+        # Membership operators
         # No keyable
         sc = SC(operator.contains,[[1,2],F.anum])
         self.assertEqual(sc.keyable([]),None)
@@ -815,10 +813,10 @@ class WhereExpressionTestCase(unittest.TestCase):
         self.assertEqual(vwe(cond1, [F]),cond2)
         self.assertEqual(vwe(cond2, [F]),cond2)
 
-
         # Where expression with a membership operator
         # Comparison QConditions and raw functions are turned into Comparators
-        self.assertEqual(vwe(in_(F.anum,[1,4]), [F]), wsc(in_(F.anum,[1,4])))
+        seq = [1,4]
+        self.assertEqual(vwe(in_(F.anum,seq), [F]), wsc(in_(F.anum,seq)))
 
     # ------------------------------------------------------------------------------
     # ------------------------------------------------------------------------------
@@ -850,8 +848,9 @@ class WhereExpressionTestCase(unittest.TestCase):
         self.assertEqual(nwe(c),nc)
 
         # Negate contains/notcontains
-        c = vwe(in_(F.anum, [1,2]),[F])
-        nc = vwe(notin_(F.anum, [1,2]),[F])
+        seq = [1,2]
+        c = vwe(in_(F.anum, seq),[F])
+        nc = vwe(notin_(F.anum, seq),[F])
         self.assertEqual(nwe(c),nc)
 
     # ------------------------------------------------------------------------------
@@ -1858,9 +1857,10 @@ class QueryPlanTestCase(unittest.TestCase):
         jqp = JoinQueryPlan.from_specification
         hp = hashable_path
 
-        wherein = pw(in_(F.anum,[3,4]),[F])
-        wherenotin1 = pw(~in_(F.anum,[3,4]),[F])
-        wherenotin2 = pw(notin_(F.anum,[3,4]),[F])
+        seq = [3,4]
+        wherein = pw(in_(F.anum,seq),[F])
+        wherenotin1 = pw(~in_(F.anum,seq),[F])
+        wherenotin2 = pw(notin_(F.anum,seq),[F])
 
         qspec=QuerySpec(roots=[F],where=wherein)
         qp = make_query_plan([F.anum],qspec)
@@ -2616,6 +2616,7 @@ class QueryExecutorTestCase(unittest.TestCase):
     # Test where clause with member operator
     #--------------------------------------------------------------------------
     def test_nonapi_QueryExecutor_contains_indexed(self):
+
         pw = process_where
         pob = process_orderby
         fjoh = fixed_join_order

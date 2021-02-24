@@ -20,7 +20,7 @@ from clorm.orm import RawField, IntegerField, StringField, ConstantField, \
 
 # Official Clorm API imports for the fact base components
 from clorm.orm import FactBase, desc, asc, not_, and_, or_, \
-    ph_, ph1_, ph2_, func, alias
+    ph_, ph1_, ph2_, func, alias, in_, notin_
 
 # Implementation imports
 
@@ -38,6 +38,7 @@ __all__ = [
     'QueryAPI1TestCase',
     'QueryAPI2TestCase',
     'SelectJoinTestCase',
+    'MembershipQueriesTestCase',
     ]
 
 #------------------------------------------------------------------------------
@@ -1127,7 +1128,7 @@ class QueryAPI2TestCase(unittest.TestCase):
         # Select everything
         q = factbase.query(F)
         r = q.all(); self.assertEqual(set(r),
-                                         set([F(1,"a"), F(2,"a"), F(3,"b")]))
+                                      set([F(1,"a"), F(2,"a"), F(3,"b")]))
 
         # A single where clause
         q = factbase.query(F).where(F.anum == 1)
@@ -1362,8 +1363,69 @@ class SelectJoinTestCase(unittest.TestCase):
         self.assertEqual(len(tmp["sal"]), 1)
 
 
+#------------------------------------------------------------------------------
+# Test that you can specify a sub-query as a membership sequence
+# ------------------------------------------------------------------------------
 
+class MembershipQueriesTestCase(unittest.TestCase):
+    def setUp(self):
+        class F(Predicate):
+            anum=IntegerField
+        self.F = F
 
+    #--------------------------------------------------------------------------
+    #  Test that basic membership queries
+    #--------------------------------------------------------------------------
+
+    def test_basic_membership(self):
+        F=self.F
+        f1=F(1) ; f3=F(3) ; f5=F(5) ; f7=F(7)
+        fb=FactBase([f1,f3,f5,f7])
+
+        # Basic query
+        query=fb.query(F).where(in_(F.anum, [1,3])).order_by(F.anum)
+        self.assertEqual(list(query.all()), [f1,f3])
+
+        # Basic query where we modify sequence after query declaration
+        seq = [1,3]
+        query=fb.query(F).where(in_(F.anum, seq)).order_by(F.anum)
+        self.assertEqual(list(query.all()), [f1,f3])
+        seq.append(5)
+        self.assertEqual(list(query.all()), [f1,f3,f5])
+
+        # A placeholder
+        query=fb.query(F).where(in_(F.anum, ph1_)).order_by(F.anum).bind([1,3])
+        self.assertEqual(list(query.all()), [f1,f3])
+
+    #--------------------------------------------------------------------------
+    #  Test that the fact comparators work
+    #--------------------------------------------------------------------------
+
+    def test_membership_subquery(self):
+        F=self.F
+        f1=F(1) ; f3=F(3) ; f5=F(5) ; f7=F(7)
+        fb=FactBase([f1,f3,f5,f7])
+
+        # A subquery with no placeholders
+        subquery=fb.query(F).where(F.anum <= 3).select(F.anum)
+        query=fb.query(F).where(in_(F.anum, subquery)).order_by(F.anum)
+        self.assertEqual(list(query.all()), [f1,f3])
+
+        # A subquery no placeholders
+        subquery=fb.query(F).where(F.anum <= ph1_).select(F.anum)
+        query=fb.query(F).where(in_(F.anum, subquery)).order_by(F.anum).bind(3)
+        self.assertEqual(list(query.all()), [f1,f3])
+
+        # Bind to a subquery but subquery doesn't have placeholders
+        subquery=fb.query(F).where(F.anum <= 3).select(F.anum)
+        query=fb.query(F).where(in_(F.anum, ph1_)).order_by(F.anum).bind(subquery)
+        self.assertEqual(list(query.all()), [f1,f3])
+
+        # Bind to a subquery which has placeholders so a second bind needed
+        subquery=fb.query(F).where(F.anum <= ph1_).select(F.anum)
+        query=fb.query(F).where(in_(F.anum, ph1_)).order_by(F.anum)\
+                                                  .bind(subquery).bind(3)
+        self.assertEqual(list(query.all()), [f1,f3])
 
 
 #------------------------------------------------------------------------------
