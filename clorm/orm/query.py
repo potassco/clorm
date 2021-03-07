@@ -1796,12 +1796,12 @@ def process_orderby(orderby_expressions, roots=[]):
 
 # ------------------------------------------------------------------------------
 # make_prejoin_pair(indexed_paths, clauses)
+#
+# Given a set of indexed paths and a set of clauses that refer to a single root
+# try to extract a preferred clause that can be used for indexing.
+#
 # - indexed_paths - a list of paths for which there is a factindex
 # - clauses - a clause block that can only refer to a single root
-#
-# Tries to extract a clause that references a single path that can be used for
-# indexing and returns a pair consisting of the (comparator, remainder) Note: we
-# can't deal with disjunctive clauses (future work)
 # ------------------------------------------------------------------------------
 def make_prejoin_pair(indexed_paths, clauseblock):
     def preference(cl):
@@ -1843,14 +1843,19 @@ def make_prejoin_pair(indexed_paths, clauseblock):
 # make_join_pair(joins, clauseblock)
 # - a list of join StandardComparators
 # - an existing clauseblock (or None)
+# - a list of orderby statements
 #
 # Takes a list of joins and picks the best one for indexing (based on their
-# operator preference). Returns a pair that is the chosen join and the rest of
-# the joins added to the input clauseblock.
+# operator preference and the orderby statements). Returns a pair that is the
+# chosen join and the rest of the joins added to the input clauseblock.
 # ------------------------------------------------------------------------------
-def make_join_pair(joins, clauseblock):
+def make_join_pair(joins, clauseblock, orderbys=[]):
+    opaths=set([hashable_path(ob.path) for ob in orderbys])
+    def num(sc):
+        return len(opaths & (set([hashable_path(p) for p in sc.paths])))
+
     if not joins: return (None,clauseblock)
-    joins = sorted(joins, key=lambda x : x.preference, reverse=True)
+    joins = sorted(joins, key=lambda x : (x.preference, num(x)), reverse=True)
     joinsc = joins[0]
     remainder = joins[1:]
     if remainder:
@@ -1981,18 +1986,18 @@ class JoinQueryPlan(object):
         input_signature = _paths(input_signature)
         root = path(root)
 
-        rootcbses, catchall = partition_clauses(clauses)
-        if not rootcbses:
+        rootcbs, catchall = partition_clauses(clauses)
+        if not rootcbs:
             (prejoincl,prejoincb) = (None,None)
-        elif len(rootcbses) == 1:
-            (prejoincl,prejoincb) = make_prejoin_pair(indexes, rootcbses[0])
+        elif len(rootcbs) == 1:
+            (prejoincl,prejoincb) = make_prejoin_pair(indexes, rootcbs[0])
             prejoincl = prejoincl.dealias() if prejoincl else None
             prejoincb = prejoincb.dealias() if prejoincb else None
 
         else:
             raise ValueError(("Internal bug: unexpected multiple single root "
                               "clauses '{}' when we expected only "
-                              "clauses for root {}").format(rootcbses,root))
+                              "clauses for root {}").format(rootcbs,root))
 
         (joinsc,postjoincb) = make_join_pair(joins, catchall)
 
@@ -2068,8 +2073,8 @@ class JoinQueryPlan(object):
         print("{}\tInput Signature: {}".format(pre,self._insig), file=file)
         print("{}\tRoot path: {}".format(pre,self._root), file=file)
         print("{}\tIndexes: {}".format(pre,self._indexes), file=file)
-        print("{}\tPrejoin key: {}".format(pre,self._prejoincl), file=file)
-        print("{}\tPrejoin clauses: {}".format(pre,self._prejoincb), file=file)
+        print("{}\tPrejoin keyed search: {}".format(pre,self._prejoincl), file=file)
+        print("{}\tPrejoin filter clauses: {}".format(pre,self._prejoincb), file=file)
         print("{}\tPrejoin order_by: {}".format(pre,self._prejoinobb), file=file)
         print("{}\tJoin key: {}".format(pre,self._joinsc), file=file)
         print("{}\tPost join clauses: {}".format(pre,self._postjoincb), file=file)
@@ -2267,7 +2272,10 @@ def merge_orderby_partitions(root_join_order, partitions):
 
 # ------------------------------------------------------------------------------
 # guaranteed to return a list the same size as the root_join_order.  The ideal
-# case is that the orderbys are in the same order as the root_join_order.
+# case is that the orderbys are in the same order as the root_join_order.  BUG
+# NOTE: This partitioning scheme is flawed. It only works in a special case
+# (when the join clause matches the ordering statement). See below for temporary
+# fix.
 # ------------------------------------------------------------------------------
 
 def partition_orderbys(root_join_order, orderbys=[]):
@@ -2275,6 +2283,30 @@ def partition_orderbys(root_join_order, orderbys=[]):
     partitions = remove_orderby_gaps(partitions)
     partitions = merge_orderby_partitions(root_join_order,partitions)
     return partitions
+
+
+# ------------------------------------------------------------------------------
+# Because of the logical bug generating valid sorts (what I was doing previously
+# only works for a special case), a temporary solution is to merge all
+# partitions into the lowest root with an orderby statement.
+# ------------------------------------------------------------------------------
+
+def partition_orderbys_simple(root_join_order, orderbys=[]):
+    partitions = [OrderByBlock([])]*len(root_join_order)
+
+    if not orderbys: return partitions
+    visited = set([hashable_path(ob.path.meta.root) for ob in orderbys])
+
+    # Loop through the root_join_order until all orderby statements have been
+    # visited.
+    for i,root in enumerate(root_join_order):
+        rp = hashable_path(root)
+        visited.discard(rp)
+        if not visited:
+            partitions[i] = OrderByBlock(orderbys)
+            return partitions
+    raise RuntimeError("Shouldn't reach here")
+
 
 #------------------------------------------------------------------------------
 # QuerySpec stores all the parameters needed to generate a query plan in one
@@ -2385,16 +2417,16 @@ def fix_query_spec(inspec):
 
 # ------------------------------------------------------------------------------
 # Takes a list of paths that have an index, then based on a
-# list of root paths and a list of joins, builds the queryplan.
+# list of root paths and a query specification, builds the queryplan.
 # ------------------------------------------------------------------------------
 
 def make_query_plan_preordered_roots(indexed_paths, root_join_order,
-                                     query_spec):
+                                     qspec):
 
-    query_spec = fix_query_spec(query_spec)
-    joins = query_spec.join
-    whereclauses = query_spec.where
-    orderbys = query_spec.order_by
+    qspec = fix_query_spec(qspec)
+    joins = qspec.join
+    whereclauses = qspec.where
+    orderbys = qspec.order_by
 
     joinset=set(joins)
     clauseset=set(whereclauses)
@@ -2404,7 +2436,8 @@ def make_query_plan_preordered_roots(indexed_paths, root_join_order,
     if not root_join_order:
         raise ValueError("Cannot make query plan with empty root join order")
 
-    orderbygroups = partition_orderbys(root_join_order, orderbys)
+#    orderbygroups = partition_orderbys(root_join_order, orderbys)
+    orderbygroups = partition_orderbys_simple(root_join_order, orderbys)
 
     # For a set of visited root paths and a set of comparator
     # statements return the subset of join statements that only reference paths
@@ -2422,10 +2455,14 @@ def make_query_plan_preordered_roots(indexed_paths, root_join_order,
     # comparator and clauses that only reference previous plans in the list.
     output=[]
     for idx,(root,rorderbys) in enumerate(zip(root_join_order,orderbygroups)):
+        if rorderbys: rorderbys = OrderByBlock(rorderbys)
         visited.add(hashable_path(root))
         rpjoins = visitedsubset(visited, joinset)
         rpclauses = visitedsubset(visited, clauseset)
-        if rorderbys: rorderbys = OrderByBlock(rorderbys)
+        if rpclauses: rpclauses = ClauseBlock(rpclauses)
+        joinsc, rpclauses = make_join_pair(rpjoins, rpclauses,rorderbys)
+        if not rpclauses: rpclauses = []
+        rpjoins = [joinsc] if joinsc else []
 
         output.append(JoinQueryPlan.from_specification(indexed_paths,
                                                        root_join_order[:idx],
@@ -2435,7 +2472,7 @@ def make_query_plan_preordered_roots(indexed_paths, root_join_order,
 
 # ------------------------------------------------------------------------------
 # Join-order heuristics. The heuristic is a function that takes a set of
-# indexes, and a query specification with a set of roots and join/where
+# indexes, and a query specification with a set of roots and join/where/order_by
 # expressions. It then returns an ordering over the roots that are used to
 # determine how the joins are built. To interpret the returned list of root
 # paths: the first element will be the outer loop query and the last will be the
