@@ -2131,7 +2131,6 @@ class QueryTestCase(unittest.TestCase):
         qspec = QuerySpec(roots=roots,join=[],where=where,order_by=orderby,joh=bjoh)
         qp = make_query_plan(indexes.keys(), qspec)
 
-        print("QP:\n{}\n".format(qp))
         out0 = make_prejoin_query_source(qp[0], factsets, indexes)()
         out1 = make_prejoin_query_source(qp[1], factsets, indexes)()
         self.assertEqual(set([F(1,"a"),F(1,"foo"),F(5,"a"),F(5,"foo")]),set(out0))
@@ -2563,9 +2562,6 @@ class QueryExecutorTestCase(unittest.TestCase):
                               order_by=order_by,joh=fjoh(F,G))
             qe = QueryExecutor(factmaps, qspec)
 
-#            (qplan,query) = qe._make_plan_and_query()
-#            print("QPLAN:\n{}\n".format(qplan))
-
             result = list(qe.all())
             expected = set([(F(1,"foo"),G(1,"a")), (F(1,"foo"),G(1,"foo")),
                             (F(5,"foo"),G(5,"a")), (F(5,"foo"),G(5,"foo"))])
@@ -2747,11 +2743,8 @@ class QueryExecutorTestCase(unittest.TestCase):
         qe = QueryExecutor(factmaps,qspec)
 
         (qplan, _) = qe._make_plan_and_query()
-        print("PLAN:\n{}\n".format(qplan))
         result = list(qe.all())
         expected = [gv12,gv11,gv21,gv22]
-        for r,e in zip(result,expected):
-            print("Expected {} => {}".format(e,r))
         self.assertEqual(expected,result)
 
     #--------------------------------------------------------------------------
