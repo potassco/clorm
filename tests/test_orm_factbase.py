@@ -80,7 +80,7 @@ class FactBaseTestCase(unittest.TestCase):
         Bfact = self._Bfact
         Cfact = self._Cfact
 
-        af1 = Afact(1,10,"bbb")
+        af1 = Afact(1,"10","bbb")
         bf1 = Bfact(1,"aaa", "bbb")
         cf1 = Cfact(1)
 
@@ -109,7 +109,7 @@ class FactBaseTestCase(unittest.TestCase):
         Bfact = self._Bfact
         Cfact = self._Cfact
 
-        af1 = Afact(1,10,"bbb")
+        af1 = Afact(1,"10","bbb")
         bf1 = Bfact(1,"aaa","bbb")
         cf1 = Cfact(1)
 
@@ -480,7 +480,7 @@ class QueryAPI1TestCase(unittest.TestCase):
     def test_api_select_factbase2(self):
         class Afact1(Predicate):
             num1=IntegerField()
-            num2=StringField()
+            num2=IntegerField()
             str1=StringField()
             class Meta: name = "afact"
 
@@ -960,7 +960,7 @@ class QueryAPI1TestCase(unittest.TestCase):
     def test_factbase_delete(self):
         class Afact(Predicate):
             num1=IntegerField()
-            num2=StringField()
+            num2=IntegerField()
             str1=StringField()
 
         f1 = Afact(1,1,"1")

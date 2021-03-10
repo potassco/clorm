@@ -7,9 +7,22 @@ from .support import check_errmsg
 
 import clingo as oclingo
 import clorm.clingo as cclingo
-#from clorm.clingo import *
-from clorm.clingo import Number, String, Function, parse_program, Control
-from clorm.clingo import _expand_assumptions
+
+if oclingo.__version__ >= "5.5.0":
+    from clingo.ast import parse_string
+    def add_program_string(ctrl, prgstr):
+        with oclingo.ast.ProgramBuilder(ctrl) as pb:
+            parse_string(prgstr, pb.add)
+else:
+    from clingo import parse_program
+    def add_program_string(ctrl, prgstr):
+        with ctrl.builder() as pb:
+            parse_program(prgstr, lambda stm: pb.add(stm))
+
+#from clorm.clingo import Number, String, Function, parse_program, Control
+from clorm.clingo import Number, String, Function, Control
+#from clingo.ast import parse_string
+from clorm.clingo import _expand_assumptions, control_add_facts
 
 from clorm import Predicate, IntegerField, StringField, FactBase,\
     SymbolPredicateUnifier, ph1_
@@ -17,11 +30,230 @@ from clorm import Predicate, IntegerField, StringField, FactBase,\
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
 
+
+class ClingoTestCase(unittest.TestCase):
+    def setUp(self):
+        pass
+
+    def tearDown(self):
+        pass
+
+
+    #--------------------------------------------------------------------------
+    # Basic test of connecting to clingo without any wrapping
+    #--------------------------------------------------------------------------
+    def test_basic_clingo_connection(self):
+        class F(Predicate):
+            anum = IntegerField
+
+        f1 = F(1) ; f2 = F(2)
+        prgstr = "{}.\n{}.\n".format(f1,f2)
+        ctrl = oclingo.Control()
+        add_program_string(ctrl, prgstr)
+
+        ctrl.ground([("base",[])])
+        model = None
+        with ctrl.solve(yield_=True) as sh:
+            for m in sh:
+                model=str(m)
+        self.assertEqual(model, "{} {}".format(f1,f2))
+
+    #--------------------------------------------------------------------------
+    # Basic test of adding facts into a control object
+    #--------------------------------------------------------------------------
+    def test_control_add_facts(self):
+        class F(Predicate):
+            anum = IntegerField
+
+        f1 = F(1) ; f2 = F(2)
+        ctrl = oclingo.Control()
+        control_add_facts(ctrl,[f1,f2])
+        ctrl.ground([("base",[])])
+        model = None
+        with ctrl.solve(yield_=True) as sh:
+            for m in sh:
+                model=str(m)
+        self.assertEqual(model, "{} {}".format(f1,f2))
+
+    #--------------------------------------------------------------------------
+    # Test processing clingo Model
+    #--------------------------------------------------------------------------
+    def test_control_model_integration(self):
+        spu=SymbolPredicateUnifier()
+        @spu.register
+        class Afact(Predicate):
+            num1=IntegerField()
+            num2=IntegerField()
+            str1=StringField()
+        @spu.register
+        class Bfact(Predicate):
+            num1=IntegerField()
+            str1=StringField()
+
+        af1 = Afact(1,10,"bbb")
+        af2 = Afact(2,20,"aaa")
+        af3 = Afact(3,20,"aaa")
+        bf1 = Bfact(1,"aaa")
+        bf2 = Bfact(2,"bbb")
+
+        fb1 = FactBase()
+        fb1.add([af1,af2,af3,bf1,bf2])
+
+        fb2 = None
+        def on_model(model):
+            nonlocal fb2
+            self.assertTrue(model.contains(af1))
+            self.assertTrue(model.contains(af1.raw))
+            self.assertTrue(model.model_.contains(af1.raw))
+            fb2 = model.facts(spu, atoms=True)
+
+            # Check that the known attributes behave the same as the real model
+            self.assertEqual(model.cost, model.model_.cost)
+            self.assertEqual(model.number, model.model_.number)
+            self.assertEqual(model.optimality_proven, model.model_.optimality_proven)
+            self.assertEqual(model.thread_id, model.model_.thread_id)
+            self.assertEqual(model.type, model.model_.type)
+
+            # Note: the SolveControl object returned is created dynamically on
+            # each call so will be different for both calls. So test that the
+            # symbolic_atoms property is the same.
+            sas1=set(model.context.symbolic_atoms)
+            sas2=set(model.model_.context.symbolic_atoms)
+            self.assertEqual(len(sas1),len(sas2))
+
+            # Test that clorm.clingo.Model produces the correct string
+            self.assertEqual(str(model), str(model.model_))
+
+            if oclingo.__version__ < "5.5.0":
+                self.assertEqual(repr(model), repr(model.model_))
+
+
+        # Use the orignal clingo.Control object so that we can test the wrapper call
+        ctrlX_ = oclingo.Control()
+        ctrl = cclingo.Control(control_ = ctrlX_)
+
+        ctrl.add_facts(fb1)
+        ctrl.ground([("base",[])])
+        ctrl.solve(on_model=on_model)
+
+        # Check that the known control attributes behave the same as the real control
+        cfg1=ctrl.configuration
+        cfg2=ctrl.control_.configuration
+
+        self.assertEqual(len(cfg1),len(cfg2))
+        self.assertEqual(set(cfg1.keys),set(cfg2.keys))
+        sas1=set(ctrl.symbolic_atoms)
+        sas2=set(ctrl.control_.symbolic_atoms)
+        self.assertEqual(len(sas1),len(sas2))
+        self.assertEqual(ctrl.is_conflicting, ctrl.control_.is_conflicting)
+        stat1=ctrl.statistics
+        stat2=ctrl.control_.statistics
+        self.assertEqual(len(stat1),len(stat2))
+        tas1=ctrl.theory_atoms
+        tas2=ctrl.control_.theory_atoms
+        self.assertEqual(len(list(tas1)),len(list(tas2)))
+
+        # _control_add_facts works with both a list of facts (either
+        # clorm.Predicate or clingo.Symbol instances) and a FactBase
+        ctrl2 = Control()
+        ctrl2.add_facts([af1,af2,af3.raw,bf1.raw,bf2])
+
+        safact1 = fb2.query(Afact).where(Afact.num1 == ph1_)
+        safact2 = fb2.query(Afact).where(Afact.num1 < ph1_)
+        self.assertEqual(safact1.bind(1).singleton(), af1)
+        self.assertEqual(safact1.bind(2).singleton(), af2)
+        self.assertEqual(safact1.bind(3).singleton(), af3)
+        self.assertEqual(set(list(safact2.bind(1).all())), set([]))
+        self.assertEqual(set(list(safact2.bind(2).all())), set([af1]))
+        self.assertEqual(set(list(safact2.bind(3).all())), set([af1,af2]))
+        self.assertEqual(fb2.query(Bfact).where(Bfact.str1 == "aaa").singleton(), bf1)
+        self.assertEqual(fb2.query(Bfact).where(Bfact.str1 == "bbb").singleton(), bf2)
+
+    #--------------------------------------------------------------------------
+    # Test the wrapping of control objects
+    #--------------------------------------------------------------------------
+    def test_control_and_model_wrapper(self):
+
+        # Test a control wrapper of a wrapper
+        ctrl0 = oclingo.Control()
+        ctrl1 = cclingo.Control(control_=ctrl0)
+        ctrl2 = cclingo.Control(control_=ctrl1)
+        ctrl2.ground([("base",[])])
+
+        with ctrl2.solve(yield_=True) as sh:
+            tmp = [m.facts(unifier=[],atoms=True) for m in sh]
+            self.assertEqual(len(tmp),1)
+            self.assertEqual(len(tmp[0]),0)
+
+        # Test a model wrapper
+        ctrl = oclingo.Control()
+        ctrl.ground([("base",[])])
+        with ctrl.solve(yield_=True) as sh:
+            for n,m_ in enumerate(sh):
+                self.assertEqual(n,0)
+                m=cclingo.Model(model=m_,unifier=[])
+                self.assertEqual(len(m.facts()),0)
+
+        # Test wrapping a bad object - missing attributes and functions
+
+        # Missing ground function
+        with self.assertRaises(AttributeError) as ctx:
+            class Bad(object):
+                def solve(self): pass
+            bad = Bad()
+            ctrl = cclingo.Control(control_=bad)
+        check_errmsg("'Bad' object has no attribute 'ground'", ctx)
+
+        # Missing solve function
+        with self.assertRaises(AttributeError) as ctx:
+            class Bad(object):
+                def ground(self): pass
+            bad = Bad()
+            ctrl = cclingo.Control(control_=bad)
+        check_errmsg("'Bad' object has no attribute 'solve'", ctx)
+
+        # Ground is an attribute but not a function
+        with self.assertRaises(AttributeError) as ctx:
+            class Bad(object):
+                def __init__(self): self.ground = 4
+                def solve(self): pass
+            bad = Bad()
+            ctrl = cclingo.Control(control_=bad)
+        check_errmsg(("Wrapped object of type '{}' does not have a "
+                      "function 'ground()'").format(type(bad)), ctx)
+
+        # Solve is an attribute but not a function
+        with self.assertRaises(AttributeError) as ctx:
+            class Bad(object):
+                def __init__(self): self.solve = 4
+                def ground(self): pass
+            bad = Bad()
+            ctrl = cclingo.Control(control_=bad)
+        check_errmsg(("Wrapped object of type '{}' does not have a "
+                      "function 'solve()'").format(type(bad)), ctx)
+
+
+        # Model wrapper with no "symbols" function or attribute
+        with self.assertRaises(AttributeError) as ctx:
+            class Bad(object):
+                def __init__(self): self.symbols=2
+            bad = Bad()
+            m=cclingo.Model(model=bad)
+        check_errmsg(("Wrapped object of type '{}' does not have a "
+                      "function 'symbols()'").format(type(bad)), ctx)
+
+        with self.assertRaises(AttributeError) as ctx:
+            class Bad(object):
+                def __init__(self): pass
+            bad = Bad()
+            m=cclingo.Model(model=bad)
+        check_errmsg("'Bad' object has no attribute 'symbols'", ctx)
+
 #------------------------------------------------------------------------------
 #
 #------------------------------------------------------------------------------
 
-class ClingoTestCase(unittest.TestCase):
+class Clingo54TestCase(unittest.TestCase):
     def setUp(self):
         pass
 
@@ -156,7 +388,8 @@ class ClingoTestCase(unittest.TestCase):
 
             # Test that clorm.clingo.Model produces the correct string
             self.assertEqual(str(model), str(model.model_))
-            self.assertEqual(repr(model), repr(model.model_))
+            if oclingo.__version__ < "5.5.0":
+                self.assertEqual(repr(model), repr(model.model_))
 
         # Use the orignal clingo.Control object so that we can test the wrapper call
         ctrlX_ = oclingo.Control()
@@ -393,7 +626,7 @@ class ClingoTestCase(unittest.TestCase):
         ctrl.add_facts([af1,af2])
         ctrl.ground([("base",[])])
         with ctrl.solve(yield_=True) as sh:
-            m=next(sh)
+            m=next(iter(sh))
             fb=m.facts(unifier=[Af],atoms=True,raise_on_empty=True)
             self.assertEqual(len(fb.facts()),2)
             fb=m.facts([Af],True,True,True,raise_on_empty=True)
@@ -463,8 +696,7 @@ class ClingoTestCase(unittest.TestCase):
         prgstr = """{ g(N) : f(N) } = 1."""
         f1 = Fact(1) ; f2 = Fact(2) ; f3 = Fact(3)
         ctrl = cclingo.Control(['-n 0'])
-        with ctrl.builder() as b:
-            oclingo.parse_program(prgstr, lambda stm: b.add(stm))
+        add_program_string(ctrl, prgstr)
         ctrl.add_facts([f1,f2,f3])
         ctrl.ground([("base",[])])
 
@@ -518,8 +750,7 @@ class ClingoTestCase(unittest.TestCase):
         f1 = F(1) ; f2 = F(2) ; f3 = F(3)
         g1 = G(1) ; g2 = G(2) ; g3 = G(3)
         ctrl = cclingo.Control(['-n 0'])
-        with ctrl.builder() as b:
-            oclingo.parse_program(prgstr, lambda stm: b.add(stm))
+        add_program_string(ctrl, prgstr)
         ctrl.add_facts([f1,f2,f3])
         ctrl.ground([("base",[])])
 
@@ -564,8 +795,7 @@ class ClingoTestCase(unittest.TestCase):
         f1 = F(1) ; f2 = F(2) ; f3 = F(3)
         g1 = G(1) ; g2 = G(2) ; g3 = G(3)
         ctrl = cclingo.Control(['-n 0'],unifier=[G])
-        with ctrl.builder() as b:
-            oclingo.parse_program(prgstr, lambda stm: b.add(stm))
+        add_program_string(ctrl, prgstr)
         ctrl.add_facts([f1,f2,f3])
         ctrl.ground([("base",[])])
 
@@ -578,7 +808,10 @@ class ClingoTestCase(unittest.TestCase):
             num_models += 1
 
         num_models=0
-        ctrl.solve(on_model=on_model, assumptions=None)
+        if oclingo.__version__ >= "5.5.0":
+            ctrl.solve(on_model=on_model, assumptions=[])
+        else:
+            ctrl.solve(on_model=on_model, assumptions=None)
         self.assertEqual(num_models, 6)
         num_models=0
         ctrl.solve(on_model=on_model)
@@ -791,8 +1024,7 @@ g(N) :- f(N)."""
         f1 = F(1) ; f2 = F(2) ; f3 = F(3)
         g1 = G(1) ; g2 = G(2) ; g3 = G(3)
         ctrl = cclingo.Control(unifier=[F,G])
-        with ctrl.builder() as b:
-            oclingo.parse_program(prgstr, lambda stm: b.add(stm))
+        add_program_string(ctrl, prgstr)
         ctrl.ground([("base",[])])
 
         # Assign external for a factbase

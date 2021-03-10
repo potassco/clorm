@@ -713,8 +713,8 @@ class ComparatorTestCase(unittest.TestCase):
 
         f1 = F(1,"ab",(-2,"abc"))
         f2 = F(-1,"ab",(2,"abc"))
-        g1 = G(1,2)
-        g2 = G(-1,4)
+        g1 = G(1,"2")
+        g2 = G(-1,"4")
         self.assertTrue(sat1((f1,g1)))
         self.assertEqual(sat1((f1,g1)),sat2((f1,g1)))
 
@@ -735,8 +735,8 @@ class ComparatorTestCase(unittest.TestCase):
 
         f1 = F(1,"ab",(-2,"abc"))
         f2 = F(-1,"ab",(2,"abc"))
-        g1 = G(1,4)
-        g2 = G(-1,4)
+        g1 = G(1,"4")
+        g2 = G(-1,"4")
 
         self.assertTrue(sat1((g1,f1)))
         self.assertTrue(sat2((g1,f1)))

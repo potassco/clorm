@@ -36,7 +36,7 @@ class LibDateTestCase(unittest.TestCase):
     def test_enumdate(self):
         rawstr = clingo.String("2017-05-16")
         rawnum = clingo.Number(1)
-        rawtuple = clingo.Tuple([rawnum, rawstr])
+        rawtuple = clingo.Function("",[rawnum, rawstr])
         ed = EnumDate(idx=1, date=datetime.date(2017,5,16))
 
         self.assertEqual(EnumDate.Field.pytocl(ed), rawtuple)

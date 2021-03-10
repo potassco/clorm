@@ -10,6 +10,8 @@ import operator
 import clingo
 import clorm.noclingo as noclingo
 
+clingo_version = clingo.__version__
+
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
 
@@ -39,6 +41,7 @@ class NoClingoTestCase(unittest.TestCase):
         self.assertTrue(str(clingo.SymbolType.Supremum), str(noclingo.SymbolType.Supremum))
         self.assertTrue(str(clingo.SymbolType.Infimum), str(noclingo.SymbolType.Infimum))
 
+        if clingo_version >= "5.5.0": return
         if clingo.SymbolType.Number < clingo.SymbolType.String:
             self.assertTrue(noclingo.SymbolType.Number < noclingo.SymbolType.String)
         else:
@@ -69,7 +72,7 @@ class NoClingoTestCase(unittest.TestCase):
     def test_string(self):
         nc = noclingo.String("atest")
         c =  clingo.String("atest")
-        self.assertEqual(nc.name, c.name)
+        self.assertEqual(nc.string, c.string)
         self.assertEqual(str(nc), str(c))
         self.assertEqual(nc.type, noclingo.SymbolType.String)
 

@@ -12,9 +12,10 @@ import io
 import sys
 import functools
 import itertools
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator, Generator
+from abc import ABCMeta
 from .orm import *
-from .util.wrapper import WrapperMetaClass, init_wrapper
+from .util.wrapper import WrapperMetaClass, init_wrapper, make_class_wrapper
 
 # I want to replace the original clingo - re-exporting everything in clingo
 # except replacing the class overides with my version: _class_overides = [
@@ -33,6 +34,34 @@ OControl=oclingo.Control
 from clingo import *
 __all__ = list([ k for k in oclingo.__dict__.keys() if k[0] != '_'])
 __version__ = oclingo.__version__
+
+
+if oclingo.__version__ >= "5.5.0":
+
+    from clingo.ast import parse_string
+
+    def control_add_facts(ctrl, facts):
+        with ctrl.backend() as bknd:
+            for f in facts:
+                raw=f.raw if isinstance(f,Predicate) else f
+                atm = bknd.add_atom(raw)
+                bknd.add_rule([atm])
+else:
+    from clingo import parse_program
+
+    def control_add_facts(ctrl, facts):
+        with ctrl.builder() as bldr:
+            line=1
+            for f in facts:
+                raw=f.raw if isinstance(f,Predicate) else f
+                floc = { "filename" : "<input>", "line" : line , "column" : 1 }
+                location = { "begin" : floc, "end" : floc }
+                r = ast.Rule(location,
+                             ast.Literal(location, ast.Sign.NoSign,
+                                         ast.SymbolicAtom(ast.Symbol(location,raw))),
+                             [])
+                bldr.add(r)
+                line += 1
 
 # ------------------------------------------------------------------------------
 # Helper function to smartly build a unifier if only a list of predicates have
@@ -59,7 +88,8 @@ def _check_is_func(obj,name):
 # Wrap clingo.Model and override some functions
 # ------------------------------------------------------------------------------
 
-class Model(OModel, metaclass=WrapperMetaClass):
+#class Model(OModel, metaclass=WrapperMetaClass):
+class ModelOverride(object):
     '''Provides access to a model during a solve call.
 
     Objects mustn't be created manually. Instead they are returned by
@@ -146,11 +176,39 @@ class Model(OModel, metaclass=WrapperMetaClass):
         return self._wrapped.contains(fact)
 
 
+Model = make_class_wrapper(OModel, ModelOverride)
+
 # ------------------------------------------------------------------------------
 # Wrap clingo.SolveHandle and override some functions
 # ------------------------------------------------------------------------------
 
-class SolveHandle(OSolveHandle, metaclass=WrapperMetaClass):
+class SolveHandleGenerator(Generator):
+    def __init__(self, gen, unifier):
+        self._gen = gen
+        self._unifier = unifier
+
+    def __iter__(self):
+        return self
+    def __next__(self):
+        model = next(self._gen)
+        if self._unifier:
+            return Model(model,unifier=self._unifier)
+        else:
+            return Model(model)
+
+    def throw(self,typ,val=None,tb=None):
+        self._gen.throw(typ,val,tb)
+    def send(self,value):
+        self._gen.send(value)
+    def close(self):
+        self._gen.close()
+    def __del__(self):
+        if oclingo.__version__ >= "5.5.0":
+            self._gen.__del__()
+
+
+class SolveHandleOverride(object):
+#class SolveHandle(OSolveHandle, metaclass=WrapperMetaClass):
     '''Handle for solve calls.
 
     Objects mustn't be created manually. Instead they are returned by
@@ -179,11 +237,7 @@ class SolveHandle(OSolveHandle, metaclass=WrapperMetaClass):
     #------------------------------------------------------------------------------
 
     def __iter__(self):
-        return self
-
-    def __next__(self):
-        if self._unifier: return Model(self._wrapped.__next__(),unifier=self._unifier)
-        else: return Model(self._wrapped.__next__())
+        return SolveHandleGenerator(iter(self._wrapped), self._unifier)
 
     def __enter__(self):
         self._wrapped.__enter__()
@@ -191,6 +245,11 @@ class SolveHandle(OSolveHandle, metaclass=WrapperMetaClass):
 
     def __exit__(self, exception_type, exception_value, traceback):
         self._wrapped.__exit__(exception_type,exception_value,traceback)
+        return None
+
+
+SolveHandle = make_class_wrapper(OSolveHandle, SolveHandleOverride)
+
 
 # ------------------------------------------------------------------------------
 # Wrap clingo.Control and override some functions
@@ -236,7 +295,10 @@ def _expand_assumptions(assumptions):
 # Control class
 # ------------------------------------------------------------------------------
 
-class Control(OControl, metaclass=WrapperMetaClass):
+
+
+class ControlOverride(object):
+#class Control(OControl, metaclass=WrapperMetaClass):
     '''Control object for the grounding/solving process.
 
     Behaves like ``clingo.Control`` but with modifications to deal with Clorm
@@ -308,33 +370,7 @@ class Control(OControl, metaclass=WrapperMetaClass):
           facts: a collection of ``clorm.Predicate`` or ``clingo.Symbol`` objects
 
         '''
-
-        # Facts are added by manually generating Abstract Syntax Tree (AST)
-        # elements for each fact and calling Control.add().
-        line = 1
-        with self._wrapped.builder() as bldr:
-            for f in facts:
-                raw=f.raw if isinstance(f,Predicate) else f
-                floc = { "filename" : "<input>", "line" : line , "column" : 1 }
-                location = { "begin" : floc, "end" : floc }
-                r = ast.Rule(location,
-                             ast.Literal(location, ast.Sign.NoSign,
-                                         ast.SymbolicAtom(ast.Symbol(location,raw))),
-                             [])
-                bldr.add(r)
-                line += 1
-        return
-
-#        # I THINK THE FOLLOWING IS ACTUALLY OK NOW - MAYBE THERE WERE SUBTLE ISSUES WITH
-#        # PREVIOUS VERSIONS OF CLINGO BUT THESE HAVE BEEN RESOLVED.
-#
-#        # DON'T USE BACKEND - COULD CAUSE UNEXPECTED INTERACTION BETWEEN GROUNDER AND SOLVER
-#        with self._wrapped.backend() as bknd:
-#            for f in facts:
-#                raw=f.raw if isinstance(f,Predicate) else f
-#                atm = bknd.add_atom(raw)
-#                bknd.add_rule([atm])
-#        return
+        control_add_facts(self._wrapped, facts)
 
     #------------------------------------------------------------------------------
     # Overide assign_external to deal with Predicate object and a Clingo Symbol
@@ -457,6 +493,12 @@ class Control(OControl, metaclass=WrapperMetaClass):
         else:
             return result
 
+
+    def __getattr__(self,attr):
+        return getattr(self._wrapped,attr)
+
+
+Control = make_class_wrapper(OControl, ControlOverride)
 
 #------------------------------------------------------------------------------
 # This is probably bad practice... Modify the original clingo docstrings so that

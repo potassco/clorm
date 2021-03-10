@@ -38,9 +38,18 @@ def symbol_encoder(s):
 
     if not isinstance(s, clingo.Symbol): _raise(s)
 
+    def stypestr(stype):
+        st2str = {
+            clingo.SymbolType.Infimum : "Infimum",
+            clingo.SymbolType.Supremum : "Supremum",
+            clingo.SymbolType.String : "String",
+            clingo.SymbolType.Number : "Number",
+            clingo.SymbolType.Function : "Function"}
+        return st2str[stype]
+
     # A clingo.Symbol object
     js = {}
-    js["clingo.SymbolType"] = str(s.type)
+    js["clingo.SymbolType"] = stypestr(s.type)
     if s.type == clingo.SymbolType.Infimum: return js
     if s.type == clingo.SymbolType.Supremum: return js
     if s.type == clingo.SymbolType.Number:
