@@ -146,10 +146,25 @@ class TypeCastSignature(object):
 
         @functools.wraps(fn)
         def wrapper(*args):
+            fname = fn.__name__
             if len(args) > len(self._insigs):
-                raise ValueError("Mis-matched arguments in call of clingo wrapper")
-            newargs = [ self._input(self._insigs[i], arg) for i,arg in enumerate(args) ]
-            return self._output(self._outsig, fn(*newargs))
+                raise TypeError(("{}() takes {} positional arguments but {} were "
+                                 "given").format(fname,len(self._insigs),len(args)))
+            try:
+                newargs = [ self._input(self._insigs[i], arg) for i,arg in enumerate(args) ]
+            except Exception as e:
+                message = "{}: converting input arguments for function '{}".format(e,fname)
+                raise type(e)(message) from None
+            try:
+                result=fn(*newargs)
+            except Exception as e:
+                message = "{}: raised by {}()".format(e,fname)
+                raise type(e)(message) from e
+            try:
+                return self._output(self._outsig,result)
+            except Exception as e:
+                raise type(e)("{} for output of {}()".format(e,fname)) from None
+
         return wrapper
 
 
@@ -164,10 +179,26 @@ class TypeCastSignature(object):
 
         @functools.wraps(fn)
         def wrapper(self_, *args):
+            fname = fn.__name__
             if len(args) > len(self._insigs):
-                raise ValueError("Mis-matched arguments in call of clingo wrapper")
-            newargs = [ self._input(self._insigs[i], arg) for i,arg in enumerate(args) ]
-            return self._output(self._outsig, fn(self_, *newargs))
+                raise TypeError(("{}() takes {} positional arguments but {} were "
+                                 "given").format(fname,len(self._insigs)+1,len(args)+1))
+            try:
+                newargs = [ self._input(self._insigs[i], arg) for i,arg in enumerate(args) ]
+            except Exception as e:
+                message = "{}: converting input arguments for function '{}".format(e,fname)
+                raise type(e)(message) from None
+
+            try:
+                result=fn(self_,*newargs)
+            except Exception as e:
+                message = "{}: raised by {}()".format(e,fname)
+                raise type(e)(message) from e
+            try:
+                return self._output(self._outsig,result)
+            except Exception as e:
+                raise type(e)("{} for output of {}()".format(e,fname)) from None
+
         return wrapper
 
     def __str__(self):
