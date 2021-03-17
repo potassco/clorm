@@ -15,6 +15,7 @@ import operator
 import collections
 from .support import check_errmsg
 
+import clingo
 from clingo import Control, Number, String, Function, SymbolType
 
 # Official Clorm API imports
@@ -292,9 +293,10 @@ class TypeCastSignatureTestCase(unittest.TestCase):
             test_sig1(Number(1),Number(2))
         check_errmsg("test_sig1() takes 1 positional arguments but 2 ", ctx)
 
-        with self.assertRaises(TypeError) as ctx:
-            test_sig1(Number(1))
-        check_errmsg("an integer is required for output of test_sig1()", ctx)
+        if clingo.__version__ >= "5.5.0":
+            with self.assertRaises(TypeError) as ctx:
+                test_sig1(Number(1))
+            check_errmsg("an integer is required for output of test_sig1()", ctx)
 
         with self.assertRaises(ValueError) as ctx:
             test_sig2(Number(1))
@@ -320,9 +322,10 @@ class TypeCastSignatureTestCase(unittest.TestCase):
             tmp.test_sig1(Number(1),Number(2))
         check_errmsg("test_sig1() takes 2 positional arguments but 3 ", ctx)
 
-        with self.assertRaises(TypeError) as ctx:
-            tmp.test_sig1(Number(1))
-        check_errmsg("an integer is required for output of test_sig1()", ctx)
+        if clingo.__version__ >= "5.5.0":
+            with self.assertRaises(TypeError) as ctx:
+                tmp.test_sig1(Number(1))
+            check_errmsg("an integer is required for output of test_sig1()", ctx)
 
         with self.assertRaises(ValueError) as ctx:
             tmp.test_sig2(Number(1))
