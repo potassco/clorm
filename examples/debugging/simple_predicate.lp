@@ -7,7 +7,7 @@
    max_bid(P,I,B) :- bid(P,I,B), max_num_bids(I), #false : bid(_,I,B2), B2 > B.
 
 #show.
-#script(python).
+#script(python)
 
 from clorm.clingo import Control
 from clorm import Predicate, ConstantField, IntegerField, simple_predicate, desc

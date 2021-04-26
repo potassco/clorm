@@ -14,7 +14,7 @@ holds(robotlocation(R,kitchen),T+1) :- time(T+1), holds(robotlocation(R,study),T
 
 holds(F,0) :- init(F).
 
-#script(python).
+#script(python)
 
 from clorm.clingo import Control
 from clorm import Predicate, ComplexTerm, ConstantField, IntegerField, combine_fields

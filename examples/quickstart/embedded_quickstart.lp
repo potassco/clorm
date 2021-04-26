@@ -16,7 +16,7 @@ working_driver(D) :- assignment(_,D,_).
 #minimize { T@1,D : assignment(_,D,T) }.
 
 
-#script(python).
+#script(python)
 
 from clorm.clingo import Control
 from clorm import Predicate, ConstantField, IntegerField, FactBase
