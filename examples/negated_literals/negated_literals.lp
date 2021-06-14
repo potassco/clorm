@@ -13,7 +13,7 @@
 
 c(-a(N)) :- -a(N).
 
-#script(python).
+#script(python)
 
 from clorm import IntegerField, Predicate
 from clorm.clingo import Control, Function, Number

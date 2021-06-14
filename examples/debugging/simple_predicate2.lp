@@ -1,5 +1,5 @@
 #show.
-#script(python).
+#script(python)
 
 from clorm.clingo import Control,Symbol
 from clorm import Predicate, ConstantField, IntegerField, simple_predicate, desc

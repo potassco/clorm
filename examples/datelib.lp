@@ -4,7 +4,7 @@
 % the middle dates.
 % ----------------------------------------------------------------------------------
 
-#script(python).
+#script(python)
 import datetime
 from clorm import IntegerField, Predicate, FactBase, ph1_
 from clorm.clingo import Control
@@ -39,7 +39,7 @@ end_date(D) :- date(D), not middle_date(D).
 
 #show.
 
-#script(python).
+#script(python)
 
 def on_model(model):
     solution = model.facts(atoms=True, raise_on_empty=True)

@@ -10,7 +10,7 @@ f(@addi(1,4)).
 g(@addi_alt(2,4)).
 h(@adds("ab","cd")).
 
-#script(python).
+#script(python)
 
 from clorm import IntegerField,StringField,ContextBuilder
 
@@ -40,3 +40,4 @@ def main(prg):
   prg.solve()
 
 #end.
+
