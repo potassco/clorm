@@ -1778,7 +1778,7 @@ def validate_orderby_expression(orderby_expressions, roots=[]):
         if isinstance(exp, OrderBy): path_ordering.append(exp)
         elif isinstance(exp, PredicatePath):
             path_ordering.append(asc(exp))
-        else: raise TypeError("Invalid 'order_by' expression: {}".format(exp))
+        else: raise ValueError("Invalid 'order_by' expression: {}".format(exp))
     obb = OrderByBlock(path_ordering)
 
     if  not obb.roots.issubset(hroots):

@@ -475,6 +475,29 @@ class QueryAPI1TestCase(unittest.TestCase):
         pass
 
     #--------------------------------------------------------------------------
+    #   Some additional legacy compatibility issues
+    #--------------------------------------------------------------------------
+    def test_api_select_additional(self):
+        class F(Predicate):
+            num1=IntegerField
+            str1=StringField
+
+        f1 = F(1,"1")
+        f2 = F(1,"3")
+        f3 = F(3,"3")
+        fb1 = FactBase([f1,f2,f3])
+
+        # Note: 1) the where clause can come after the order_by
+        # 2) get() returns a list not a generator (so test the len)
+        q = fb1.select(F).order_by(F.str1).where(F.num1 == 1).get()
+        self.assertEqual(len(q), 2)
+
+        # Multiple specifications of order by and where
+#        with self.assertRaises(ValueError) as ctx:
+#            self.assertEqual(set([f2]), set(q.get("b")))
+#        check_errmsg("Trying to bind value",ctx)
+
+    #--------------------------------------------------------------------------
     #   Test that the select works
     #--------------------------------------------------------------------------
     def test_api_select_factbase2(self):
@@ -1034,24 +1057,24 @@ class QueryAPI1TestCase(unittest.TestCase):
         fb = FactBase([f])
 
         # Making multiple calls to select where()
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(TypeError) as ctx:
             q = fb.delete(F).where(F.num1 == 1).where(F.num2 == 2)
         check_errmsg("Cannot specify 'where' multiple times",ctx)
 
         # Bad select where clauses
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(TypeError) as ctx:
             q = fb.delete(F).where()
         check_errmsg("Empty 'where' expression",ctx)
 
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(TypeError) as ctx:
             q = fb.delete(F).where(G.num1 == 1)
         check_errmsg("Invalid 'where' expression 'G.num1",ctx)
 
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(TypeError) as ctx:
             q = fb.delete(F).where(F.num1 == G.num1)
         check_errmsg("Invalid 'where' expression",ctx)
 
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(TypeError) as ctx:
             q = fb.delete(F).where(F.num1 == 1, G.num1 == 1)
         check_errmsg("Invalid 'where' expression",ctx)
 
@@ -1060,17 +1083,17 @@ class QueryAPI1TestCase(unittest.TestCase):
 #        check_errmsg("'int' object is not callable",ctx)
 
         # Bad delete where clause
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(TypeError) as ctx:
             q = fb.delete(F).where(G.num1 == 1).execute()
         check_errmsg("Invalid 'where' expression",ctx)
 
         # Making multiple calls to select order_by()
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(TypeError) as ctx:
             q = fb.select(F).order_by(F.num1).order_by(F.num2)
         check_errmsg("Cannot specify 'order_by' multiple times",ctx)
 
         # Bad select order_by clause
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(TypeError) as ctx:
             q = fb.select(F).order_by()
         check_errmsg("Empty 'order_by' expression",ctx)
 
@@ -1078,15 +1101,15 @@ class QueryAPI1TestCase(unittest.TestCase):
             q = fb.select(F).order_by(1)
         check_errmsg("Invalid 'order_by' expression",ctx)
 
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(TypeError) as ctx:
             q = fb.select(F).order_by(G.num1)
         check_errmsg("Invalid 'order_by' expression",ctx)
 
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(TypeError) as ctx:
             q = fb.select(F).order_by(F.num1,G.num1)
         check_errmsg("Invalid 'order_by' expression",ctx)
 
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(TypeError) as ctx:
             q = fb.select(F).order_by(F.num1,desc(G.num1))
         check_errmsg("Invalid 'order_by' expression",ctx)
 

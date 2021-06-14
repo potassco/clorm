@@ -673,29 +673,34 @@ class SelectImpl(Select):
     # Add an order_by expression
     #--------------------------------------------------------------------------
     def where(self, *expressions):
-        if self._qspec.order_by:
-            raise ValueError(("The 'where' condition must come before the "
-                             "'order_by' condition"))
-            raise ValueError("Cannot specify 'where' multiple times")
+        if self._qspec.where:
+            raise TypeError("Cannot specify 'where' multiple times")
         if not expressions:
-            raise ValueError("Empty 'where' expression")
-        elif len(expressions) == 1:
-            where = process_where(expressions[0],self._qspec.roots)
-        else:
-            where = process_where(and_(*expressions),self._qspec.roots)
-        nqspec = self._qspec.newp(where=where)
+            raise TypeError("Empty 'where' expression")
 
+        try:
+            if len(expressions) == 1:
+                where = process_where(expressions[0],self._qspec.roots)
+            else:
+                where = process_where(and_(*expressions),self._qspec.roots)
+            nqspec = self._qspec.newp(where=where)
+        except ValueError as e:
+            raise TypeError(str(e)) from None
         return SelectImpl(self._factbase,nqspec)
 
     #--------------------------------------------------------------------------
     # Add an order_by expression
     #--------------------------------------------------------------------------
     def order_by(self, *expressions):
+        if self._qspec.order_by:
+            raise TypeError("Cannot specify 'order_by' multiple times")
         if not expressions:
-            raise ValueError("Empty 'order_by' expression")
-        order_by=process_orderby(expressions,self._qspec.roots)
-        nqspec = self._qspec.newp(order_by=order_by)
-
+            raise TypeError("Empty 'order_by' expression")
+        try:
+            order_by=process_orderby(expressions,self._qspec.roots)
+            nqspec = self._qspec.newp(order_by=order_by)
+        except ValueError as e:
+            raise TypeError(str(e)) from None
         return SelectImpl(self._factbase,nqspec)
 
     #--------------------------------------------------------------------------
@@ -722,7 +727,7 @@ class SelectImpl(Select):
             qspec = self._qspec.bindp(*args, **kwargs)
 
         qe = QueryExecutor(self._factbase.factmaps, qspec)
-        return qe.all()
+        return list(qe.all())
 
     def get_unique(self, *args, **kwargs):
         qspec = self._qspec
