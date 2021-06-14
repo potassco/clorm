@@ -26,5 +26,6 @@ setup(
     license="MIT",
     url="https://github.com/potassco/clorm",
     packages=["clorm","clorm.orm","clorm.util","clorm.lib"],
+    install_requires=['clingo'],
     long_description=read("README.rst"),
 )
