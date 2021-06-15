@@ -1,0 +1,110 @@
+# do not edit the workflows, they are generated from this file
+pip:
+    pure: True
+    version: |
+        version = None
+        with open('clorm/__init__.py') as fh:
+            for line in fh:
+                m = match(r'''[ ]*__version__[ ]*=[ ]*['"]([0-9]+\.[0-9]+\.[0-9]+)(\.post[0-9]+)?['"]''', line)
+                if m is not None:
+                    version = m.group(1)
+    build_depends_release: |
+        python3 -m pip install --user clingo
+    build_depends_dev: |
+        python3 -m pip install --user --extra-index-url https://test.pypi.org/simple/ clingo-cffi
+
+conda:
+    package_name:
+        'clorm'
+    os: 
+        - 'ubuntu-latest'
+    channels_release:
+        - 'potassco'
+    channels_dev:
+        - 'potassco'
+        - 'potassco/label/dev'
+    version: |
+        version = None
+        with open('clorm/__init__.py') as fh:
+            for line in fh:
+                m = match(r'''[ ]*__version__[ ]*=[ ]*['"]([0-9]+\.[0-9]+\.[0-9]+)(\.post[0-9]+)?['"]''', line)
+                if m is not None:
+                    version = m.group(1)
+    meta:
+      url: https://github.com/potassco/{{ name }}/archive/v{{ version }}.tar.gz
+      git_url: https://github.com/potassco/{{ name }}.git
+      requirements:
+        host:
+          - python >=3.5
+          - pip
+          - clingo >=5.4.0
+        run:
+          - python >=3.5
+          - clingo >=5.4.0
+      build:
+        noarch: python
+        script: 'python -m pip install --no-deps --ignore-installed .'
+      about:
+        home: https://potassco.org/
+        license: MIT
+        license_family: MIT
+        license_file: LICENSE
+        summary: ORM interface for the Clingo ASP Solver
+        doc_url: https://clorm.readthedocs.io/en/latest/index.html
+        dev_url: https://github.com/potassco/{{ name }}
+
+ppa:
+    package_name:
+        'python3-clorm'
+    upstream_name:
+        'clorm'
+    initial_version:
+        '1.2.0'
+    initial_date:
+        'Sat, 15 Jun 2021 19:00:00 +0100'
+    contact_url:
+        'https://github.com/potassco/clorm/issues'
+    source_url:
+        'https://github.com/potassco/clorm'
+    version:
+        $(sed -n "/__version__[ ]*=/s/.*['\"]\([0-9]\+\.[0-9]\+\.[0-9]\+.*\)['\"].*/\1/p" ../../clorm/__init__.py)
+    build_depends:
+        - 'dh-python'
+        - 'python3-all'
+    create_depends:
+        - 'python3-clingo'
+    sync_patterns:
+        - 'clorm'
+        - 'setup.py'
+        - 'README.rst'
+        - 'LICENSE'
+    distributions:
+        focal:
+        bionic:
+            source:
+                Build-Depends: 'debhelper-compat (= 11), dh-python, python3-all, python3-setuptools, python3-clingo'
+    source:
+        Source: 'python3-clorm'
+        Section: 'devel'
+        Priority: 'optional'
+        Maintainer: 'Roland Kaminski <kaminski@cs.uni-potsdam.de>'
+        Build-Depends: 'debhelper-compat (= 12), dh-python, python3-all, python3-setuptools, python3-clingo'
+        Standards-Version: '4.4.1'
+        Homepage: 'https://potassco.org/'
+        Vcs-Browser: 'https://github.com/potassco/clorm'
+        Vcs-Git: 'https://github.com/potassco/clorm.git'
+    packages:
+        python3-clorm:
+            Architecture: 'any'
+            Depends: '${shlibs:Depends}, ${misc:Depends}, ${python3:Depends}'
+            Description: 'ORM interface for the Clingo ASP Solver.'
+    files:
+        docs: |
+            README.rst
+        py3dist-overrides: |
+            clingo python3-clingo
+        rules: |
+            #!/usr/bin/make -f
+            
+            %:
+            	dh $@ --with python3 --buildsystem=pybuild

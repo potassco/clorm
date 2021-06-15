@@ -1,0 +1,36 @@
+{% set name = 'clorm' %}
+{% set dev = not environ.get('BUILD_RELEASE', false) %}
+{% set version = environ.get('VERSION_NUMBER') %}
+{% set revision = environ.get('GITHUB_SHA', 'wip') %}
+{% set build = environ.get('BUILD_NUMBER', "0") %}
+
+package:
+  name: {{ name }}
+  version: {{ version }}
+
+source:
+  path: ../..
+
+requirements:
+  host:
+  - python >=3.5
+  - pip
+  - clingo >=5.4.0
+  run:
+  - python >=3.5
+  - clingo >=5.4.0
+
+build:
+  number: {{ build }}
+  noarch: python
+  script: python -m pip install --no-deps --ignore-installed .
+
+
+about:
+  home: https://potassco.org/
+  license: MIT
+  license_family: MIT
+  license_file: LICENSE
+  summary: ORM interface for the Clingo ASP Solver
+  doc_url: https://clorm.readthedocs.io/en/latest/index.html
+  dev_url: https://github.com/potassco/{{ name }}

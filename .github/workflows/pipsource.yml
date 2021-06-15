@@ -1,0 +1,60 @@
+name: Deploy pip source package (wip)
+
+on:
+  workflow_dispatch:
+    inputs:
+      wip:
+        description: 'Publish work in progress package.'
+        required: false
+        default: 'true'
+
+jobs:
+  build_packages:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Install prerequisites
+      run: |
+        sudo apt-get install python3 python3-pip
+        pip3 install --user --upgrade --force-reinstall pip
+        python3 -m pip install --user --upgrade setuptools wheel
+
+    - name: Install prerequisites (wip)
+      if: ${{ github.event.inputs.wip == 'true' }}
+      run: |
+        python3 -m pip install --user --extra-index-url https://test.pypi.org/simple/ clingo-cffi
+
+    - name: Install prerequisites (release)
+      if: ${{ github.event.inputs.wip == 'false' }}
+      run: |
+        python3 -m pip install --user clingo
+
+    - name: Checkout repo
+      uses: actions/checkout@v2
+      with:
+        submodules: recursive
+
+    - name: Build source package (wip)
+      if: ${{ github.event.inputs.wip == 'true' }}
+      run: python3 .github/pipsource.py
+
+    - name: Publish package to TestPyPI (wip)
+      if: ${{ github.event.inputs.wip == 'true' }}
+      uses: pypa/gh-action-pypi-publish@master
+      with:
+        user: __token__
+        password: ${{ secrets.PYPI_API_TOKEN }}
+        packages_dir: dist/
+        repository_url: https://test.pypi.org/legacy/
+
+    - name: Build source package (release)
+      if: ${{ github.event.inputs.wip == 'false' }}
+      run: python3 .github/pipsource.py --release
+
+    - name: Publish package to TestPyPI (release)
+      if: ${{ github.event.inputs.wip == 'false'}}
+      uses: pypa/gh-action-pypi-publish@master
+      with:
+        user: __token__
+        password: ${{ secrets.PYPI_API_TOKEN_RELEASE }}
+        packages_dir: dist/
