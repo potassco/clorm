@@ -37,9 +37,9 @@ case $1 in
         # .github/workflows/ppa-dev.yml
         dispatch 10452952 $wip $branch
         # .github/workflows/pipsource.yml
-        #dispatch 10452951 $wip $branch
+        dispatch 10452951 $wip $branch
         # .github/workflows/conda-dev.yml
-        #dispatch 10452953 $wip $branch
+        dispatch 10452953 $wip $branch
         ;;
     *)
         echo "usage: trigger {list,dev,release}"
