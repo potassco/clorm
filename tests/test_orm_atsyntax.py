@@ -407,6 +407,41 @@ class ContextBuilderTestCase(unittest.TestCase):
         self.assertEqual(ctx3.add2(n1,n2),n3)
         self.assertEqual(ctx3.add4(n1,n2),n3)
 
+        # Test the register function in decorator mode where the function
+        # returns a list.
+        cb4=ContextBuilder()
+
+        @cb4.register
+        def arange1(start: IF, end: IF) -> [IF]:
+            return list(range(start,end))
+        self.assertEqual(arange1(1,2),[1])
+
+        @cb4.register(IF,IF,[IF])
+        def arange2(start, end):
+            return list(range(start,end))
+        self.assertEqual(arange1(1,2),[1])
+
+        @cb4.register([IF])
+        def fixedrange():
+            return list(range(1,2))
+        self.assertEqual(fixedrange(),[1])
+
+        # Must sure we can register to return a list of tuples (bug issue #42)
+        @cb4.register([(IF,IF)])
+        def fixedrange2():
+            return [(1,1)]
+        self.assertEqual(fixedrange2(),[(1,1)])
+
+        @cb4.register_name("blah",[(IF,IF)])
+        def fixedrange3():
+            return [(1,1)]
+        self.assertEqual(fixedrange3(),[(1,1)])
+
+        ctx4=cb4.make_context()
+        self.assertEqual(ctx4.arange1(n1,n2),[n1])
+        self.assertEqual(ctx4.arange2(n1,n2),[n1])
+        self.assertEqual(ctx4.fixedrange(),[n1])
+
 
     def test_register_name(self):
         SF=StringField

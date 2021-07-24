@@ -47,7 +47,7 @@ class TypeCastSignature(object):
       sigs(\*sigs): A list of signature elements.
 
       - Inputs. Match the sub-elements [:-1] define the input signature while
-        the last element defines the output signature. Each input must be a a
+        the last element defines the output signature. Each input must be a
         RawField (or sub-class).
 
       - Output: Must be RawField (or sub-class) or a singleton list
@@ -86,11 +86,21 @@ class TypeCastSignature(object):
 
     @staticmethod
     def is_return_element(se):
-        """An output element must be a subclass of RawField or a singleton containing"""
+        """An output element must be an output field or a singleton iterable containing
+           an output fields; where an output field is a RawField sub-class or
+           tuple that recursively reduces to a RawField sub-class.
+        """
+        def _is_output_field(o):
+            if isinstance(o,tuple):
+                for i in o:
+                    if not _is_output_field(i): return False
+                return True
+            return inspect.isclass(o) and issubclass(o, RawField)
+
         if isinstance(se, cabc.Iterable):
             if len(se) != 1: return False
-            return TypeCastSignature._is_input_element(se[0])
-        return TypeCastSignature._is_input_element(se)
+            return _is_output_field(se[0])
+        return _is_output_field(se)
 
     def __init__(self, *sigs):
         def _validate_basic_sig(sig):
@@ -99,7 +109,6 @@ class TypeCastSignature(object):
                              "subclass".format(sig)))
 
         self._insigs = [ type(get_field_definition(s)) for s in sigs[:-1]]
-#        self._insigs = sigs[:-1]
         self._outsig = sigs[-1]
 
         # A tuple is a special case that we want to convert into a complex field
@@ -456,17 +465,21 @@ class ContextBuilder(object):
         # to use function annotations
         if len(args) == 0: return self._make_decorator()
 
-        # Called as a decorator with signature arguments
+        # If the last element is a valid @-syntax return value then we have a
+        # decorator with signature arguments.
         if TypeCastSignature.is_return_element(args[-1]):
             return self._make_decorator(None, *args)
 
-        # Called as a decorator or normal function with no signature arguments
+        # If we get here the function must have been called as a normal function
+        # (not a decorator) so the last element must be the function to wrap.
+        if not callable(args[-1]):
+            raise ValueError(("Failed to register @-syntax function as {} is not "
+                              "callable").format(args[-1]))
         if len(args) == 1:
             return self._make_decorator(None)(args[0])
-
-        # Called as a normal function with signature arguments
-        sigargs=args[:-1]
-        return self._make_decorator(None,*sigargs)(args[-1])
+        else:
+            sigargs=args[:-1]
+            return self._make_decorator(None,*sigargs)(args[-1])
 
     def register_name(self, func_name, *args):
         """Register a function with assigning it a new name witin the context.
@@ -487,17 +500,22 @@ class ContextBuilder(object):
         # to use function annotations
         if len(args) == 0: return self._make_decorator(func_name)
 
-        # Called as a decorator with signature arguments
+        # If the last element is a valid @-syntax return value then we have a
+        # decorator with signature arguments.
         if TypeCastSignature.is_return_element(args[-1]):
             return self._make_decorator(func_name, *args)
 
-        # Called as a normal function with no signature arguments so need to use
-        # function annotations
-        if len(args) == 1: return self._make_decorator(func_name)(args[0])
 
-        # Called as a normal function with signature arguments
-        sigargs=args[:-1]
-        return self._make_decorator(func_name,*sigargs)(args[-1])
+        # If we get here the function must have been called as a normal function
+        # (not a decorator) so the last element must be the function to wrap.
+        if not callable(args[-1]):
+            raise ValueError(("Failed to register @-syntax function as {} is not "
+                              "callable").format(args[-1]))
+        if len(args) == 1:
+            return self._make_decorator(func_name)(args[0])
+        else:
+            sigargs=args[:-1]
+            return self._make_decorator(func_name,*sigargs)(args[-1])
 
     def make_context(self, cls_name="Context"):
         """Return a context object that encapsulates the registered functions"""
