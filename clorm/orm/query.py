@@ -3243,7 +3243,7 @@ class QueryExecutor(object):
 
 
     # --------------------------------------------------------------------------
-    # Internal function generator for the query results
+    # Internal function generator for returning all results
     # --------------------------------------------------------------------------
     def _all(self):
         cache = set()
@@ -3257,6 +3257,9 @@ class QueryExecutor(object):
             else:
                 yield output
 
+    # --------------------------------------------------------------------------
+    # Internal function generator for returning all grouped results
+    # --------------------------------------------------------------------------
     def _group_by_all(self):
         def groupiter(group):
             cache = set()

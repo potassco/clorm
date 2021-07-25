@@ -2539,6 +2539,54 @@ class QueryExecutorTestCase(unittest.TestCase):
         expected = set([(1,),(5,)])
         self.assertEqual(expected, set(result))
 
+
+    #--------------------------------------------------------------------------
+    # Test query executor with a group_by query
+    #--------------------------------------------------------------------------
+    def test_nonapi_group_by(self):
+        class F(Predicate):
+            anum=IntegerField
+
+        class G(Predicate):
+            anum=IntegerField
+            astr=StringField
+            aval=IntegerField
+
+        factmaps = factmaps_dict([
+            G(1,"a",5),G(1,"b",4),G(2,"a",6),G(2,"b",7),G(3,"a",1),G(3,"b",8),
+            F(1),F(2)])
+
+        pw = process_where
+        pj = process_join
+        pob = process_orderby
+        bjoh = basic_join_order
+        bjoh = oppref_join_order
+        roots = [F,G]
+
+        joins1 = pj([F.anum == G.anum],roots)
+        orderbys = pob([G.astr,F.anum],roots)
+        groupbys= [G.astr]
+        qspec = QuerySpec(roots=roots,join=joins1,
+                          order_by=orderbys,group_by=groupbys,joh=bjoh)
+
+        qe = QueryExecutor(factmaps, qspec)
+        result = [(fn,set(fg)) for fn,fg in qe.all()]
+        expected = [("a",set([(F(1),G(1,"a",5)),
+                              (F(2),G(2,"a",6))])),
+                    ("b",set([(F(1),G(1,"b",4)),
+                              (F(2),G(2,"b",7))]))]
+        self.assertEqual(expected, result)
+
+        nqspec = qspec.newp(select=(G.aval,))
+        qe = QueryExecutor(factmaps, nqspec)
+
+        result = [(fn,set(fg)) for fn,fg in qe.all()]
+        expected = [("a",set([5,6])),
+                    ("b",set([4,7]))]
+        self.assertEqual(expected, result)
+
+
+
     #--------------------------------------------------------------------------
     # Test where clause with member operator
     #--------------------------------------------------------------------------
