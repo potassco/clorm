@@ -2257,6 +2257,23 @@ class QueryTestCase(unittest.TestCase):
                               (F(1,"foo"), G(1,"foo"))]))
 
 
+        # FIXUP
+        # A join key and a prejoin-sort where they are different keys and the
+        # sort is on the second predicate. Ignoring the indexes
+        join = pj([F.anum == G.anum],roots)
+#        where = pw((F.anum == 1) & (F.astr == "foo"),roots)
+        orderby = pob([G.astr,G.anum],roots)
+        qspec = QuerySpec(roots=roots,join=join,order_by=orderby,joh=bjoh)
+        qp = make_query_plan([], qspec)
+        inquery=make_first_join_query(qp[0], factsets, {})
+        query = make_chained_join_query(qp[1], inquery, factsets, {})()
+        result = list(query)
+        expected = [(F(1,"a"),G(1,"a")),(F(1,"foo"),G(1,"a")),
+                    (F(5,"a"),G(5,"a")),(F(5,"foo"),G(5,"a")),
+                    (F(1,"a"),G(1,"foo")),(F(1,"foo"),G(1,"foo")),
+                    (F(5,"a"),G(5,"foo")),(F(5,"foo"),G(5,"foo"))]
+        self.assertEqual(result,expected)
+
         # A join key and a post join-sort
         join = pj([F.astr == G.astr],roots)
         where = pw((F.anum == 1) & (F.astr == "foo"),roots)
@@ -2384,6 +2401,43 @@ class QueryTestCase(unittest.TestCase):
         with self.assertRaises(ValueError) as ctx:
             q1 = make_query(qp2, factsets, indexes)
         check_errmsg("Cannot execute an ungrounded query",ctx)
+
+    #--------------------------------------------------------------------------
+    # Test making a query containing a sorting based on an attribute of the
+    # second root predicate (where the join between the two predicates is
+    # through a different attribute).
+    # --------------------------------------------------------------------------
+    def test_nonapi_make_query_sort_order(self):
+        class F(Predicate):
+            anum=IntegerField
+
+        class G(Predicate):
+            anum=IntegerField
+            astr=StringField
+            aval=IntegerField
+
+        factsets = {}
+        factsets[G] = FactSet([G(1,"a",5),G(1,"b",4),G(2,"a",6),
+                               G(2,"b",7),G(3,"a",1),G(3,"b",8)])
+        factsets[F] = FactSet([F(1),F(2)])
+
+        pw = process_where
+        pj = process_join
+        pob = process_orderby
+        bjoh = basic_join_order
+        bjoh = oppref_join_order
+        roots = [F,G]
+
+        joins1 = pj([F.anum == G.anum],roots)
+        orderbys = pob([G.astr,G.anum],roots)
+        qspec = QuerySpec(roots=roots,join=joins1,
+                          order_by=orderbys,joh=bjoh)
+        qp = make_query_plan([], qspec)
+        query = make_query(qp, factsets, {})
+        result = list(query())
+        expected = [(F(1),G(1,"a",5)),(F(2),G(2,"a",6)),
+                    (F(1),G(1,"b",4)),(F(2),G(2,"b",7))]
+        self.assertEqual(expected, result)
 
 #------------------------------------------------------------------------------
 # Helper function for QueryExecutor testing
@@ -2565,7 +2619,9 @@ class QueryExecutorTestCase(unittest.TestCase):
 
         joins1 = pj([F.anum == G.anum],roots)
         orderbys = pob([G.astr,F.anum],roots)
-        groupbys= [G.astr]
+#        groupbys = pob([G.astr,F.anum],roots)
+        groupbys= pob([G.astr],roots)
+
         qspec = QuerySpec(roots=roots,join=joins1,
                           order_by=orderbys,group_by=groupbys,joh=bjoh)
 
@@ -2584,6 +2640,46 @@ class QueryExecutorTestCase(unittest.TestCase):
         expected = [("a",set([5,6])),
                     ("b",set([4,7]))]
         self.assertEqual(expected, result)
+
+    #--------------------------------------------------------------------------
+    # Test query executor with sorting based on an attribute of the second root
+    # predicate (where the join between the two predicates is through a
+    # different attribute).
+    # --------------------------------------------------------------------------
+    def test_nonapi_QueryExecutor_sort_order(self):
+        class F(Predicate):
+            anum=IntegerField
+
+        class G(Predicate):
+            anum=IntegerField
+            astr=StringField
+            aval=IntegerField
+
+        factmaps = factmaps_dict([
+            G(1,"a",5),G(1,"b",4),G(2,"a",6),G(2,"b",7),G(3,"a",1),G(3,"b",8),
+            F(1),F(2)])
+
+        pw = process_where
+        pj = process_join
+        pob = process_orderby
+        bjoh = basic_join_order
+        bjoh = oppref_join_order
+        roots = [F,G]
+
+        joins1 = pj([F.anum == G.anum],roots)
+        orderbys = pob([G.astr,G.anum],roots)
+        qspec = QuerySpec(roots=roots,join=joins1,
+                          order_by=orderbys,joh=bjoh)
+
+        qe = QueryExecutor(factmaps, qspec)
+
+        (qplan,query)=qe._make_plan_and_query()
+        result=list(qe.all())
+
+        expected = [(F(1),G(1,"a",5)),(F(2),G(2,"a",6)),
+                    (F(1),G(1,"b",4)),(F(2),G(2,"b",7))]
+        self.assertEqual(expected, result)
+
 
 
 

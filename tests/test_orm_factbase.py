@@ -1176,14 +1176,14 @@ class QueryAPI2TestCase(unittest.TestCase):
         r = q.all(); self.assertEqual(set(r), set([F(3,"b"),F(2,"a")]))
 
         # Group_by clause - default value
-        q = factbase.query(F).where(F.anum > 1).order_by(desc(F.anum)).group_by()
+        q = factbase.query(F).where(F.anum > 1).group_by(desc(F.anum))
         r = q.all()
         result = { k : list(g) for k,g in r }
         expected = { 3: [F(3,"b")], 2 : [F(2,"a")] }
         self.assertEqual(result,expected)
 
         # Group_by clause - explicit grouping value
-        q = factbase.query(F).where(F.anum > 1).order_by(desc(F.anum)).group_by(1)
+        q = factbase.query(F).where(F.anum > 1).group_by(desc(F.anum))
         r = q.all()
         result = { k : list(g) for k,g in r }
         expected = { 3: [F(3,"b")], 2 : [F(2,"a")] }
@@ -1191,14 +1191,14 @@ class QueryAPI2TestCase(unittest.TestCase):
 
         # Group_by clause and force tuple
         q = factbase.query(F).where(F.anum > 1)\
-            .tuple().order_by(desc(F.anum)).group_by(1)
+            .tuple().group_by(desc(F.anum))
         r = q.all()
         result = { k : list(g) for k,g in r }
         expected = { (3,): [(F(3,"b"),)], (2,) : [(F(2,"a"),)] }
         self.assertEqual(result,expected)
 
         # Group_by clause and count
-        q = factbase.query(F).where(F.anum > 1).order_by(desc(F.anum)).group_by()
+        q = factbase.query(F).where(F.anum > 1).group_by(desc(F.anum))
         r = q.count()
         result = { k : c for k,c in r }
         expected = { 3: 1, 2 : 1 }
@@ -1376,14 +1376,22 @@ class SelectJoinTestCase(unittest.TestCase):
                           F(jill.pid,dave.pid),
                           F(sal.pid,jane.pid)], results)
 
-        all_friends = all_friends.order_by(P.pid,PA.name).group_by(1)
-        tmp = { p : list(fs) for p,fs in all_friends.select(PA.name).all() }
+        all_friends_gb1 = all_friends.group_by(P.pid).order_by(PA.name)
+        tmp = { p : list(fs) for p,fs in all_friends_gb1.select(PA.name).all() }
         self.assertEqual(len(tmp), 5)
         self.assertEqual(len(tmp["bill"]), 1)
         self.assertEqual(len(tmp["dave"]), 2)
         self.assertEqual(len(tmp["jane"]), 1)
         self.assertEqual(len(tmp["jill"]), 1)
         self.assertEqual(len(tmp["sal"]), 1)
+
+        all_friends_gb2 = all_friends.group_by(P.postcode).order_by(PA.pid)
+        tmp = { pc : list(fs) for pc,fs in all_friends.select(PA.pid).all() }
+        self.assertEqual(len(tmp), 4)
+        self.assertEqual(tmp[2001], ["jill"])
+        self.assertEqual(len(tmp[2002]), ["jane"])
+        self.assertEqual(len(tmp[2003]), ["bob"])
+        self.assertEqual(len(tmp[2004]), ["bill","dave","sal"])
 
 
 #------------------------------------------------------------------------------

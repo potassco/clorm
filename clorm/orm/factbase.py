@@ -853,20 +853,12 @@ class QueryImpl(Query):
     #--------------------------------------------------------------------------
     # Add a group_by expression
     #--------------------------------------------------------------------------
-    def group_by(self, grouping=1):
-        self._check_join_called_first("order_by")
-        order_by = self._qspec.order_by
-        if order_by is None:
-            raise ValueError("'order_by' must be specified before 'group_by'")
-        if len(order_by) <= 0:
-            raise ValueError("The group_by value must be a positive integer")
-        if grouping > len(order_by):
-            raise ValueError(("The group_by size {} cannot be larger than the "
-                              "order_by() specification "
-                              "'{}'").format(grouping, order_by))
-
-        nqspec = self._qspec.newp(
-            group_by=[ob.path for ob in order_by[:grouping]])
+    def group_by(self, *expressions):
+        if not expressions:
+            nqspec = self._qspec.newp(group_by=None)   # raise exception
+        else:
+            nqspec = self._qspec.newp(
+                group_by=process_orderby(expressions,self._qspec.roots))
         return QueryImpl(self._factmaps, nqspec)
 
     #--------------------------------------------------------------------------

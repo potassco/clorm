@@ -2006,10 +2006,13 @@ class JoinQueryPlan(object):
         if orderbys:
             orderbys = OrderByBlock(orderbys)
             hroots = [ hashable_path(r) for r in orderbys.roots ]
-            if len(hroots) > 1 or hroots[0] != hashable_path(root):
-                postjoinobb = OrderByBlock(orderbys)
-            else:
-                prejoinobb = orderbys.dealias()
+            postjoinobb = OrderByBlock(orderbys)
+
+# BUG: NEED TO RETHINK BELOW - THE FOLLOWING ONLY WORKS IN SPECIAL CASES
+
+#       if len(hroots) > 1 or hroots[0] !=
+#            hashable_path(root): postjoinobb = OrderByBlock(orderbys) else:
+#            prejoinobb = orderbys.dealias()
 
         return cls(input_signature,root, indexes,
                    prejoincl,prejoincb,prejoinobb,
@@ -2327,6 +2330,7 @@ class QuerySpec(object):
                                   "values are not allowed").format(k))
         self._params = dict(kwargs)
 
+    # Return a new QuerySpec with added parameters
     def newp(self, **kwargs):
         if not kwargs: return self
         nparams = dict(self._params)
@@ -2338,6 +2342,7 @@ class QuerySpec(object):
             nparams[k] = v
         return QuerySpec(**nparams)
 
+    # Return a new QuerySpec with modified parameters
     def modp(self, **kwargs):
         if not kwargs: return self
         nparams = dict(self._params)
@@ -2347,6 +2352,16 @@ class QuerySpec(object):
             nparams[k] = v
         return QuerySpec(**nparams)
 
+    # Return a new QuerySpec with specified parameters deleted
+    def delp(self, keys=[]):
+        if not keys: return self
+        nparams = dict(self._params)
+        for k in keys: nparams.pop(k,None)
+        return QuerySpec(**nparams)
+
+    # Return the value of a parameter - behaves slightly differently to simply
+    # specify the parameter as an attribute because you can return a default
+    # value if the parameter is not set.
     def getp(self,name,default=None):
         return self._params.get(name,default)
 
@@ -2779,16 +2794,17 @@ def make_chained_join_query(jqp, inquery, factsets, factindexes):
         raise ValueError(("A non-first JoinQueryPlan must have a non-empty input "
                           "signature but '{}' found").format(jqp.input_signature))
 
-    pjob = jqp.prejoin_orderbys
+    prej_order = jqp.prejoin_orderbys
     jk   = jqp.join_key
     jc   = jqp.postjoin_clauses
-    job  = jqp.postjoin_orderbys
+    postj_order  = jqp.postjoin_orderbys
     predicate = jqp.root.meta.predicate
 
-    pjiqs = None
-    if jk and pjob: pjiqs = InQuerySorter(pjob)
+    prej_iqs = None
+    if jk and prej_order:
+        prej_iqs = InQuerySorter(prej_order)
 
-    # query_source will return a FactSet, FactIndex, or list
+    # query_source is a function that returns a FactSet, FactIndex, or list
     query_source = make_prejoin_query_source(jqp, factsets, factindexes)
 
     # Setup any join clauses
@@ -2805,7 +2821,7 @@ def make_chained_join_query(jqp, inquery, factsets, factindexes):
         for intuple in inquery():
             v, = align_query_input(intuple)
             result = list(fi.find(operator,v))
-            if pjob: pjiqs.listsort(result)
+            if prej_order: prej_iqs.listsort(result)
             for f in result:
                 out = tuple(intuple + (f,))
                 if jc_check(out): yield out
@@ -2820,9 +2836,9 @@ def make_chained_join_query(jqp, inquery, factsets, factindexes):
 
     if jk: unsorted_query=query_jk
     else: unsorted_query=query_no_jk
-    if not job: return unsorted_query
+    if not postj_order: return unsorted_query
 
-    jiqs = InQuerySorter(job,list(jqp.input_signature) + [jqp.root])
+    jiqs = InQuerySorter(postj_order,list(jqp.input_signature) + [jqp.root])
     def sorted_query():
         return iter(jiqs.sorted(unsorted_query()))
 
@@ -3234,6 +3250,11 @@ class QueryExecutor(object):
             where = where.fixed()
             qspec = self._qspec.modp(where=where)
 
+        # FIXUP: This is a hack - replace the order_by list with the group_by list
+        if self._qspec.group_by:
+            qspec = self._qspec.modp(order_by=self._qspec.group_by)
+            qspec = qspec.delp(["group_by"])
+
         (factsets,factindexes) = \
             QueryExecutor.get_factmap_data(self._factmaps, qspec)
         qplan = make_query_plan(factindexes.keys(), qspec)
@@ -3261,8 +3282,10 @@ class QueryExecutor(object):
     # Internal function generator for returning all grouped results
     # --------------------------------------------------------------------------
     def _group_by_all(self):
+        iqs=None
         def groupiter(group):
             cache = set()
+            if iqs: group=iqs.sorted(group)
             for input in group:
                 output = self._outputter(input)
                 if self._unwrap: output = output[0]
@@ -3273,10 +3296,13 @@ class QueryExecutor(object):
                 else:
                     yield output
 
+        if self._qspec.order_by:
+            iqs=InQuerySorter(OrderByBlock(self._qspec.order_by),
+                              self._qplan.output_signature)
         unwrapkey = len(self._qspec.group_by) == 1 and not self._qspec.tuple
 
         group_by_keyfunc = make_input_alignment_functor(
-            self._qplan.output_signature, self._qspec.group_by)
+            self._qplan.output_signature, self._qspec.group_by.paths)
         for k,g in itertools.groupby(self._query(), group_by_keyfunc):
             if unwrapkey: yield k[0], groupiter(g)
             else: yield k, groupiter(g)
