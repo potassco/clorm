@@ -29,7 +29,7 @@ def on_model(model):
     fb = model.facts(atoms=True)
 
     # Print the important parts
-    max_bid = fb.query(Max_Bid).singleton()
+    max_bid = fb.select(Max_Bid).get_unique()
     print("-------------------")
     print("Highest bid for item with the most bids\n")
     print("Bidder: {}".format(max_bid.bidder))

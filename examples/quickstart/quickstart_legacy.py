@@ -58,12 +58,12 @@ def main():
 
     # Do something with the solution - create a query so we can print out the
     # assignments for each driver.
-    query=solution.query(Assignment)\
-                  .where(Assignment.driver == ph1_)\
-                  .order_by(Assignment.time)
+
+    #    query=solution.select(Assignment).where(lambda x,o: x.driver == o)
+    query=solution.select(Assignment).where(Assignment.driver == ph1_).order_by(Assignment.time)
 
     for d in drivers:
-        assignments = list(query.bind(d.name).all())
+        assignments = query.get(d.name)
         if not assignments:
             print("Driver {} is not working today".format(d.name))
         else:

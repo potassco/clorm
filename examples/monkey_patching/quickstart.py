@@ -65,14 +65,15 @@ def main():
     # assignments for each driver.
 
     #    query=solution.select(Assignment).where(lambda x,o: x.driver == o)
-    query=solution.select(Assignment).where(Assignment.driver == ph1_).order_by(Assignment.time)
-
-    for d in drivers:
-        assignments = query.get(d.name)
+    query=solution.query(Driver,Assignment)\
+                  .join(Driver.name == Assignment.driver)\
+                  .group_by(Driver.name).order_by(Assignment.time).select(Assignment)
+    for d, aiter in query.all():
+        assignments = list(aiter)
         if not assignments:
-            print("Driver {} is not working today".format(d.name))
+            print("Driver {} is not working today".format(d))
         else:
-            print("Driver {} must deliver: ".format(d.name))
+            print("Driver {} must deliver: ".format(d))
             for a in assignments:
                 print("\t Item {} at time {}".format(a.item, a.time))
 

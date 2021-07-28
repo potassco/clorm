@@ -44,20 +44,20 @@ def on_model(model):
     print("All: {}".format(fb))
 
     # query for the positive A facts
-    q=fb.query(A).where(A.sign == True)
-    print("Positive A: {}".format(list(q.all())))
+    q=fb.select(A).where(A.sign == True)
+    print("Positive A: {}".format(q.get()))
 
     # query for the positive A facts
-    q=fb.query(A).where(A.sign == False)
-    print("Negative A: {}".format(list(q.all())))
+    q=fb.select(A).where(A.sign == False)
+    print("Negative A: {}".format(q.get()))
 
     # query for the all B_pos facts (which must be positive)
-    q=fb.query(B_pos)
-    print("Positive B: {}".format(list(q.all())))
+    q=fb.select(B_pos)
+    print("Positive B: {}".format(q.get()))
 
     # query for the C facts (which contain a )
-    q=fb.query(C)
-    print("C (negative terms): {}".format(list(q.all())))
+    q=fb.select(C)
+    print("C (negative terms): {}".format(q.get()))
     print("==================================\n")
 
 def main(ctrl_):

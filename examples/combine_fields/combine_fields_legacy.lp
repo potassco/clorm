@@ -68,11 +68,11 @@ def main(ctrl_):
         raise ValueError("No solution found")
 
     # Query the solution
-    query=solution.query(Time,Holds).join(Time.time == Holds.time)\
-                                    .group_by(Time.time).select(Holds.fluent)
-    for t,fiter in query.all():
-        print("Time: {}".format(t))
-        for f in fiter:
+    fquery = solution.select(Holds).where(Holds.time == ph1_)
+    for t in solution.select(Time).order_by(Time.time).get():
+        print("Time: {}".format(t.time))
+        for h in fquery.get(t.time):
+            f = h.fluent
             if isinstance(f,Light): print("\tLight is: {}".format(f.status))
             elif isinstance(f,RobotLocation): print("\tRobot {} is at {}".format(f.robot,f.location))
 #end.
