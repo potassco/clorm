@@ -808,13 +808,6 @@ class QueryImpl(Query):
             raise ValueError("'join' must be specified before '{}'".format(name))
 
     #--------------------------------------------------------------------------
-    # Overide the default heuristic
-    #--------------------------------------------------------------------------
-    def heuristic(self, join_order):
-        nqspec = self._qspec.newp(heuristic=True, joh=join_order)
-        return QueryImpl(self._factmaps, nqspec)
-
-    #--------------------------------------------------------------------------
     # Add a join expression
     #--------------------------------------------------------------------------
     def join(self, *expressions):
@@ -862,11 +855,13 @@ class QueryImpl(Query):
         return QueryImpl(self._factmaps, nqspec)
 
     #--------------------------------------------------------------------------
-    # The tuple flag
+    # Explicitly select the elements to output or delete
     #--------------------------------------------------------------------------
-    def tuple(self):
-        self._check_join_called_first("tuple")
-        nqspec = self._qspec.newp(tuple=True)
+    def select(self,*outsig):
+        self._check_join_called_first("select")
+        if not outsig:
+            raise ValueError("An empty 'select' signature is invalid")
+        nqspec = self._qspec.newp(select=outsig)
         return QueryImpl(self._factmaps, nqspec)
 
     #--------------------------------------------------------------------------
@@ -886,13 +881,18 @@ class QueryImpl(Query):
         return QueryImpl(self._factmaps, nqspec)
 
     #--------------------------------------------------------------------------
-    # Explicitly select the elements to output or delete
+    # The tuple flag
     #--------------------------------------------------------------------------
-    def select(self,*outsig):
-        self._check_join_called_first("select")
-        if not outsig:
-            raise ValueError("An empty 'select' signature is invalid")
-        nqspec = self._qspec.newp(select=outsig)
+    def tuple(self):
+        self._check_join_called_first("tuple")
+        nqspec = self._qspec.newp(tuple=True)
+        return QueryImpl(self._factmaps, nqspec)
+
+    #--------------------------------------------------------------------------
+    # Overide the default heuristic
+    #--------------------------------------------------------------------------
+    def heuristic(self, join_order):
+        nqspec = self._qspec.newp(heuristic=True, joh=join_order)
         return QueryImpl(self._factmaps, nqspec)
 
     #--------------------------------------------------------------------------
@@ -957,9 +957,7 @@ class QueryImpl(Query):
         if self._qspec.group_by:
             return group_by_generator()
         else:
-            count = 0
-            for _ in qe.all(): count += 1
-            return count
+            return sum(1 for _ in qe.all())
 
 
     #--------------------------------------------------------------------------

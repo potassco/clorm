@@ -2975,12 +2975,15 @@ class Query(abc.ABC):
                       .select(<paths>)
 
     Note that each of these _clause_ specifications is simply a chaining of
-    function calls that each return a modified copy of the query object
-    itself. This provides reusablity of the query components as you can start
-    with the specification of a base query and then build more restricted
-    queries from this base.
+    function calls that return a modified copy of the query object itself. This
+    provides reusablity of the query components as you can start with the
+    specification of a base query and then build multiple restricted queries
+    from this base.
 
-    A query specification can contain some other 
+    Note, the above are not the only options for a query. Some other query
+    modifies include: ``distinct()`` to return distinct elements, and ``bind()``
+    to bind the value of any placeholders in the ``where()`` clause to specific
+    values.
 
     A query is executed using a number of end-point functions. To iterate over
     all results of the query:
@@ -2988,26 +2991,14 @@ class Query(abc.ABC):
           ``query.all()``
 
     Alternatively, if there is at least one element then to return the first
-    result (or throw an exception if there are no results):
+    result only (throws an exception if there are no elements):
 
           ``query.first()``
-
-
 
     Or if there must be exactly one element (and to throw an exception
     otherwise):
 
           ``query.singleton()``
-
-
-    As a side note, if the query specification references only a
-    single predicate then instead of a singleton tuple containing a single fact
-    it will return the fact itself (although this default behaviour can also be
-    switched off).
-
-
-
-
 
     To count elements:
 
@@ -3018,39 +3009,6 @@ class Query(abc.ABC):
            ``query.delete()``
 
     """
-
-    #--------------------------------------------------------------------------
-    # Overide the default heuristic
-    #--------------------------------------------------------------------------
-    @abc.abstractmethod
-    def heuristic(self, join_order):
-        """Allows the query engine's query plan to be modified.
-
-        This is an advanced option that can be used if the query is not
-        performing as expected. For multi-predicate queries the order in which
-        the joins are performed can affect performance. By default the Query API
-        will try to optimise this join order based on the ``join`` expressions;
-        with predicates with more restricted joins being higher up in the join
-        order.
-
-        This join order can be controlled explicitly by the ``fixed_join_order``
-        heuristic function. Assuming predicate definitions ``F`` and ``G`` the
-        query:
-
-            ``from clorm import fixed_join_order
-
-              query=fb.query(F,G).heuristic(fixed_join_order(G,F)).join(...)``
-
-        forces the join order to first be the ``G`` predicate followed by the
-        ``F`` predicate.
-
-        Args:
-          join_order: the join order heuristic
-
-        Returns:
-          Returns the modified copy of the query.
-        """
-        pass
 
     #--------------------------------------------------------------------------
     # Add a join expression
@@ -3194,13 +3152,56 @@ class Query(abc.ABC):
         query is a filtering over the cross-product of the predicate
         instances. However, the specification of a projection can result in
         information being discarded and can therefore cause the projected query
-        results to no longer be distinct. To enforce uniqueness the ``distinct()``
-        flag can be specified. This essentially similiar to an ``SQL SELECT
-        DISTINCT ...`` statement.
+        results to no longer be distinct. To enforce uniqueness the
+        ``distinct()`` flag can be specified. Essentially this is the same as an
+        ``SQL SELECT DISTINCT ...`` statement.
 
+        Note: when ``select()`` is used with the ``delete()`` end-point the
+        ``select()`` signature must specify predicates and not parameter/fields
+        within the predicates.
 
         Args:
            output_signature: the signature that defines the projection.
+
+        Returns:
+          Returns the modified copy of the query.
+
+        """
+        pass
+
+    #--------------------------------------------------------------------------
+    # The distinct flag
+    #--------------------------------------------------------------------------
+    @abc.abstractmethod
+    def distinct(self):
+        """Return only distinct elements in the query.
+
+        This flag is only meaningful when combined with a ``select()`` clause
+        that removes distinguishing elements from the tuples.
+
+        Returns:
+          Returns the modified copy of the query.
+
+        """
+        pass
+
+    #--------------------------------------------------------------------------
+    # Ground - bind
+    #--------------------------------------------------------------------------
+    @abc.abstractmethod
+    def bind(self,*args,**kwargs):
+        """Bind placeholders to specific values.
+
+        If the ``where()`` clause has placeholders then these placeholders must
+        be bound to actual values before the query can be executed.
+
+        Args:
+          *args: positional arguments corresponding to positional placeholders
+          **kwargs: named arguments corresponding to named placeholders
+
+        Returns:
+          Returns the modified copy of the query.
+
         """
         pass
 
@@ -3208,60 +3209,143 @@ class Query(abc.ABC):
     # The tuple flag
     #--------------------------------------------------------------------------
     @abc.abstractmethod
-    def tuple(self): pass
+    def tuple(self):
+        """Force returning a tuple even for singleton elements.
+
+        In the general case the output signature of a query is a tuple;
+        consisting either of a tuple of facts or a tuple of parameters/fields if
+        a ``select`` projection has been specified.
+
+        However, if the output signature is a singleton tuple then by default
+        the API changes its behaviour and removes the tuple, returning only the
+        element itself. This typically provides a much more useful and intutive
+        interface. For example, if you want to perform a sum aggregation over
+        the results of a query, aggregating over the value of a specific
+        parameter/field, then specifying just that parameter in the ``select``
+        clause allows you to simply pass the query generator to the standard
+        Python ``sum()`` function without needing to perform a list
+        comprehension to extract the value to be aggregated.
+
+        If there is a case where this default behaviour is not wanted then
+        specifying the ``tuple()`` flag forces the query to always return a
+        tuple of elements even if the output signature is a singleton tuple.
+
+        Returns:
+          Returns the modified copy of the query.
+
+        """
+        pass
 
     #--------------------------------------------------------------------------
-    # The distinct flag
+    # Overide the default heuristic
     #--------------------------------------------------------------------------
     @abc.abstractmethod
-    def distinct(self): pass
+    def heuristic(self, join_order):
+        """Allows the query engine's query plan to be modified.
 
-    #--------------------------------------------------------------------------
-    # Ground - bind
-    #--------------------------------------------------------------------------
-    @abc.abstractmethod
-    def bind(self,*args,**kwargs): pass
+        This is an advanced option that can be used if the query is not
+        performing as expected. For multi-predicate queries the order in which
+        the joins are performed can affect performance. By default the Query API
+        will try to optimise this join order based on the ``join`` expressions;
+        with predicates with more restricted joins being higher up in the join
+        order.
+
+        This join order can be controlled explicitly by the ``fixed_join_order``
+        heuristic function. Assuming predicate definitions ``F`` and ``G`` the
+        query:
+
+            ``from clorm import fixed_join_order
+
+              query=fb.query(F,G).heuristic(fixed_join_order(G,F)).join(...)``
+
+        forces the join order to first be the ``G`` predicate followed by the
+        ``F`` predicate.
+
+        Args:
+          join_order: the join order heuristic
+
+        Returns:
+          Returns the modified copy of the query.
+        """
+        pass
 
     #--------------------------------------------------------------------------
     # End points that do something useful
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    # For the user to see what the query plan looks like
-    #--------------------------------------------------------------------------
-    @abc.abstractmethod
-    def query_plan(self,*args,**kwargs): pass
-
-    #--------------------------------------------------------------------------
-    # Internal API property
-    #--------------------------------------------------------------------------
-    @property
-    def qspec(self): pass
-
-    #--------------------------------------------------------------------------
     # Select to display all the output of the query
     # --------------------------------------------------------------------------
     @abc.abstractmethod
-    def all(self): pass
+    def all(self):
+        """Returns a generator that iteratively executes the query.
+
+        Note. This call doesn't execute the query itself. The query is executed
+        when iterating over the elements from the generator.
+
+        Returns:
+          Returns a generator that executes the query.
+
+        """
+        pass
 
     #--------------------------------------------------------------------------
     # Show the single element and throw an exception if there is more than one
     # --------------------------------------------------------------------------
     @abc.abstractmethod
-    def singleton(self): pass
+    def singleton(self):
+        """Return the single matching element.
+
+           An exception is thrown if there is not exactly one matching element
+           or a ``group_by()`` clause has been specified.
+
+        Returns:
+           Returns the single matching element (or throws an exception)
+
+        """
+        pass
 
     #--------------------------------------------------------------------------
     # Return the count of elements - Note: the behaviour of what is counted
     # changes if group_by() has been specified.
     # --------------------------------------------------------------------------
     @abc.abstractmethod
-    def count(self): pass
+    def count(self):
+        """Return the number of matching element.
+
+           Typically the number of elements consist of the number of tuples
+           produced by the cross-product of the predicates that match the
+           criteria of the ``join()`` and ``where()`` clauses.
+
+           However, if a ``select()`` projection and ``unique()`` flag is
+           specified then the ``count()`` will reflect the modified the number
+           of unique elements based on the projection of the query.
+
+           Furthermore, if a ``group_by()`` clause is specified then ``count()``
+           returns a generator that iterates over pairs where the first element
+           of the pair is the group identifier and the second element is the
+           number of matching elements within that group.
+
+        Returns:
+           Returns the number of matching elements
+
+        """
+        pass
 
     #--------------------------------------------------------------------------
     # Show the single element and throw an exception if there is more than one
     # --------------------------------------------------------------------------
     @abc.abstractmethod
     def first(self):
+        """Return the first matching element.
+
+           An exception is thrown if there are no one matching element or a
+           ``group_by()`` clause has been specified.
+
+        Returns:
+           Returns the first matching element (or throws an exception)
+
+        """
         pass
 
     #--------------------------------------------------------------------------
@@ -3269,7 +3353,51 @@ class Query(abc.ABC):
     #--------------------------------------------------------------------------
     @abc.abstractmethod
     def delete(self):
+        """Delete matching facts from the ``FactBase()``.
+
+        In the simple case of a query with no joins then ``delete()`` simply
+        deletes the matching facts. If there is a join then the matches consist
+        of tuples of facts. In this case ``delete()`` will remove all facts from
+        the tuple. This behaviour can be modified by using a ``select()``
+        projection clause that selects only specific predicates. Note: when
+        combined with ``select()`` the output signature must specify predicates
+        and not parameter/fields within predicates.
+
+           An exception is thrown if a ``group_by()`` clause has been specified.
+
+        Returns:
+           Returns the number of facts deleted.
+
+        """
         pass
+
+    #--------------------------------------------------------------------------
+    # For the user to see what the query plan looks like
+    #--------------------------------------------------------------------------
+    @abc.abstractmethod
+    def query_plan(self,*args,**kwargs):
+        """Return a query plan object outlining the query execution.
+
+        A query plan outlines the query will be executed; the order of table
+        joins, the searches based on indexing, and how the sorting is
+        performed. This is useful for debugging if the query is not behaving as
+        expected.
+
+        Currently, there is no fixed specification for the query plan
+        object. All the user can do is display it for reading and debugging
+        purposes.
+
+        Returns:
+           Returns a query plan object that can be stringified.
+
+        """
+        pass
+
+    #--------------------------------------------------------------------------
+    # Internal API property
+    #--------------------------------------------------------------------------
+    @property
+    def qspec(self): pass
 
 
 #------------------------------------------------------------------------------
@@ -3381,6 +3509,9 @@ class QueryExecutor(object):
     # --------------------------------------------------------------------------
 
     def all(self):
+        if self._qspec.distinct and not self._qspec.select:
+            raise ValueError("'distinct' flag requires a 'select' projection")
+
         (self._qplan,self._query) = self._make_plan_and_query()
 
         outsig = self._qspec.select
