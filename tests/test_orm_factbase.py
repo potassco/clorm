@@ -1210,7 +1210,7 @@ class QueryAPI2TestCase(unittest.TestCase):
         self.assertEqual(list(r), ['a','a','b'])
 
         # Projection and unique
-        q = factbase.query(F).order_by(F.astr).unique()
+        q = factbase.query(F).order_by(F.astr).distinct()
         r = q.select(F.astr).all()
         self.assertEqual(list(r), ['a','b'])
 
@@ -1219,7 +1219,7 @@ class QueryAPI2TestCase(unittest.TestCase):
         self.assertEqual(q.singleton(), F(3,"b"))
 
         # Singleton due to projection and unique
-        q = factbase.query(F).where(F.astr == "a").select(F.astr).unique()
+        q = factbase.query(F).where(F.astr == "a").select(F.astr).distinct()
         self.assertEqual(q.singleton(),"a")
 
     #--------------------------------------------------------------------------
@@ -1256,7 +1256,7 @@ class QueryAPI2TestCase(unittest.TestCase):
         # Count (with/without projection and unique)
         q = factbase.query(F).order_by(F.astr)
         r1 = q.count()
-        r2 = q.select(F.astr).unique().count()
+        r2 = q.select(F.astr).distinct().count()
         self.assertEqual(r1,3)
         self.assertEqual(r2,2)
 

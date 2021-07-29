@@ -870,11 +870,11 @@ class QueryImpl(Query):
         return QueryImpl(self._factmaps, nqspec)
 
     #--------------------------------------------------------------------------
-    # The unique flag
+    # The distinct flag
     #--------------------------------------------------------------------------
-    def unique(self):
-        self._check_join_called_first("unique")
-        nqspec = self._qspec.newp(unique=True)
+    def distinct(self):
+        self._check_join_called_first("distinct")
+        nqspec = self._qspec.newp(distinct=True)
         return QueryImpl(self._factmaps, nqspec)
 
     #--------------------------------------------------------------------------
@@ -963,7 +963,7 @@ class QueryImpl(Query):
 
 
     #--------------------------------------------------------------------------
-    # Show the single element and throw an exception if there is more than one
+    # Return the first element of the query
     # --------------------------------------------------------------------------
     def first(self):
         self._check_join_called_first("first")

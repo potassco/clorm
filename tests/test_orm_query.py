@@ -2579,8 +2579,8 @@ class QueryExecutorTestCase(unittest.TestCase):
         expected = set([(1,"Xfoo"),(5,"Xa"),(5,"Xfoo")])
         self.assertEqual(expected, set(result))
 
-        # Test output with filtered signature and uniqueness
-        nqspec = qspec.newp(select=(G.anum,),unique=True)
+        # Test output with filtered signature and distinctness
+        nqspec = qspec.newp(select=(G.anum,),distinct=True)
         qe = QueryExecutor(factmaps, nqspec)
         result = list(qe.all())
         expected = set([1,5])

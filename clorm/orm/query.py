@@ -2318,7 +2318,7 @@ def partition_orderbys_simple(root_join_order, orderbys=[]):
 
 class QuerySpec(object):
     allowed = [ "roots", "join", "where", "order_by",
-                "group_by", "tuple", "unique", "bind", "select",
+                "group_by", "tuple", "distinct", "bind", "select",
                 "heuristic", "joh" ]
 
     def __init__(self,**kwargs):
@@ -2398,7 +2398,7 @@ class QuerySpec(object):
         toadd["group_by"] = self._params.get("group_by",[])
         toadd["bind"] = self._params.get("bind",{})
         toadd["tuple"] = self._params.get("tuple",False)
-        toadd["unique"] = self._params.get("unique",False)
+        toadd["distinct"] = self._params.get("distinct",False)
         toadd["heuristic"] = self._params.get("heuristic",False)
         toadd["joh"] = self._params.get("joh",oppref_join_order)
 
@@ -2928,45 +2928,86 @@ class Query(abc.ABC):
     ``Query`` objects cannot be constructed directly.
 
     Instead a ``Query`` object is returned by the ``FactBase.query()`` function.
-    Queries can take a number of different forms but contain the components of a
-    fairly traditional SQL query.
+    Queries can take a number of different forms but contain many of the
+    components of a traditional SQL query; where the predicates of a
+    ``FactBase`` can be viewed as SQL tables.
 
-    The simples query must at least specify the predicate to search for:
+    The simplest query must at least specify the predicate(s) to search
+    for. This is specified as parameters to the ``FactBase.query()`` function:
 
-          ``query = fb.query(<predicate>)``
+          ``query = fb.query(<predicate>,...)``
 
-    If there are multiple predicates involved in the search then it must contain
-    a ``join()`` clause:
+    Relating this to a traditional SQL query, the ``query()`` clause can be
+    viewed as an SQL ``FROM`` specification.
 
-          ``query = fb.query(<predicates>).join(<expressions>)``
+    If there are multiple predicates involved in the search then the query must
+    also contain a ``join()`` clause to specify the predicates parameters/fields
+    to join.
 
-    A query can also contain a ``where`` clauses as well as ``order_by`` and
-    ``group_by`` components. It can also contain a ``select`` clause that
-    specifies a projection (or filtering) over the elements of the result tuple.
+          ``query = fb.query(<predicate>,<predicate>,..).join(<expressions>)``
+
+    A query can also contain ``where()`` clauses as well as ``order_by()`` and
+    ``group_by()`` components. Note, specifying a ``group_by()`` clause changes
+    the behaviour of the output of the query from iterating over individual
+    items to returning pairs where the first element of a pair is the group
+    identifier and the second element is an iterator over the matching elements
+    within that group.
+
+    The result of a query will consist of tuples, where each tuple contains the
+    facts matching the signature of predicates in the ``query()``
+    clause. Mathematically the tuples are the cross-product over instances of
+    the predicates, so each tuple will be distinct. However, returning tuples of
+    facts is often not the most convenient output format and instead you may
+    only be interested in specific parameters within each tuple of fact. To
+    provide the output in a more useful format a query can also contain a
+    ``select()`` clause that specifies a tuple of the parameters/fields to
+    return. Essentially, this specifies a _projection_ over the elements of the
+    result tuple.
+
+    Bringing together these clause elements of a query the form of a more
+    complex query would look like:
 
           ``query = fb.query(<predicates>)\
                       .join(<expressions>)\
                       .where(<expressions>)\
+                      .group_by(<ordering>)\
                       .order_by(<ordering>)\
-                      .group_by()``
+                      .select(<paths>)
 
-    Each of these sub-functions returns a modified copy of the query object
-    itself so provide reusability of query components.
+    Note that each of these _clause_ specifications is simply a chaining of
+    function calls that each return a modified copy of the query object
+    itself. This provides reusablity of the query components as you can start
+    with the specification of a base query and then build more restricted
+    queries from this base.
 
-    A query is executed using a number of functions. To iterate over all results
-    of the query:
+    A query specification can contain some other 
+
+    A query is executed using a number of end-point functions. To iterate over
+    all results of the query:
 
           ``query.all()``
 
     Alternatively, if there is at least one element then to return the first
     result (or throw an exception if there are no results):
 
-          ``query.all()``
+          ``query.first()``
+
+
 
     Or if there must be exactly one element (and to throw an exception
     otherwise):
 
           ``query.singleton()``
+
+
+    As a side note, if the query specification references only a
+    single predicate then instead of a singleton tuple containing a single fact
+    it will return the fact itself (although this default behaviour can also be
+    switched off).
+
+
+
+
 
     To count elements:
 
@@ -3099,7 +3140,7 @@ class Query(abc.ABC):
     #--------------------------------------------------------------------------
     @abc.abstractmethod
     def order_by(self, *expressions):
-        """Provide an ordering over the results.
+        """Specify an ordering over the results.
 
         Args:
           field_order: an ordering over fields
@@ -3114,19 +3155,52 @@ class Query(abc.ABC):
     # Add a group_by expression
     #--------------------------------------------------------------------------
     @abc.abstractmethod
-    def group_by(self, grouping=1):
-        """Provide grouping over ordered results.
+    def group_by(self, *expressions):
+        """Specify a grouping over the results.
 
-        If an ordering is specified with ``order_by`` then the results of the
-        query can be grouped. By default only the first element in the ordering
-        will be part of the group. This can be controlled up to the number of
-        orderings specified in the query.
+        The grouping specification is similar to an ordering specification but
+        it modifies the behaviour of the query to return a pair of elements,
+        where the first element of the pair is the group identifier (based on
+        the specification) and the second element is an iterator over the
+        matching elements.
 
-        Args: grouping: The number of elements to group by
+        When both a ``group_by()`` and ``order_by()`` clause is provided the
+        ``order_by()`` clause is used the sort the elements within each matching
+        group.
+
+        Args:
+          field_order: an ordering over fields to group by
 
         Returns:
           Returns the modified copy of the query.
 
+        """
+        pass
+
+    #--------------------------------------------------------------------------
+    # Specify a projection over the elements to output or delete
+    #--------------------------------------------------------------------------
+    @abc.abstractmethod
+    def select(self,*outsig):
+        """Provides a projection over the query result tuples.
+
+        Mathematically the result tuples of a query are the cross-product over
+        instances of the predicates. However, returning tuples of facts is often
+        not the most convenient output format and instead you may only be
+        interested in specific parameters/fields within each tuple of facts. The
+        ``select`` clause specifies a _projection_ over each query result tuple.
+
+        Note, each query result tuple is guaranteed to be distinct, since the
+        query is a filtering over the cross-product of the predicate
+        instances. However, the specification of a projection can result in
+        information being discarded and can therefore cause the projected query
+        results to no longer be distinct. To enforce uniqueness the ``distinct()``
+        flag can be specified. This essentially similiar to an ``SQL SELECT
+        DISTINCT ...`` statement.
+
+
+        Args:
+           output_signature: the signature that defines the projection.
         """
         pass
 
@@ -3137,22 +3211,16 @@ class Query(abc.ABC):
     def tuple(self): pass
 
     #--------------------------------------------------------------------------
-    # The unique flag
+    # The distinct flag
     #--------------------------------------------------------------------------
     @abc.abstractmethod
-    def unique(self): pass
+    def distinct(self): pass
 
     #--------------------------------------------------------------------------
     # Ground - bind
     #--------------------------------------------------------------------------
     @abc.abstractmethod
     def bind(self,*args,**kwargs): pass
-
-    #--------------------------------------------------------------------------
-    # Explicitly select the elements to output or delete
-    #--------------------------------------------------------------------------
-    @abc.abstractmethod
-    def select(self,*outsig): pass
 
     #--------------------------------------------------------------------------
     # End points that do something useful
@@ -3271,7 +3339,7 @@ class QueryExecutor(object):
         for input in self._query():
             output = self._outputter(input)
             if self._unwrap: output = output[0]
-            if self._unique:
+            if self._distinct:
                 if output not in cache:
                     cache.add(output)
                     yield output
@@ -3289,7 +3357,7 @@ class QueryExecutor(object):
             for input in group:
                 output = self._outputter(input)
                 if self._unwrap: output = output[0]
-                if self._unique:
+                if self._distinct:
                     if output not in cache:
                         cache.add(output)
                         yield output
@@ -3320,7 +3388,7 @@ class QueryExecutor(object):
 
         self._outputter = make_outputter(self._qplan.output_signature, outsig)
         self._unwrap = not self._qspec.tuple and len(outsig) == 1
-        self._unique = self._qspec.unique
+        self._distinct = self._qspec.distinct
 
         if len(self._qspec.group_by) > 0: return self._group_by_all()
         else: return self._all()
@@ -3333,8 +3401,8 @@ class QueryExecutor(object):
     def delete(self):
         if self._qspec.group_by:
             raise ValueError("'group_by' is incompatible with 'delete'")
-        if self._qspec.unique:
-            raise ValueError("'unique' is incompatible with 'delete'")
+        if self._qspec.distinct:
+            raise ValueError("'distinct' is incompatible with 'delete'")
         if self._qspec.tuple:
             raise ValueError("'tuple' is incompatible with 'delete'")
 
