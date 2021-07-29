@@ -106,7 +106,13 @@ pygments_style = None
 # -- Autodoc configuration ---------------------------------------------------
 
 autodoc_member_order = 'groupwise'
-autodoc_mock_imports = ["clingo"]
+
+autodoc_mock_imports = []
+try:
+    import clingo
+except ImportError:
+    autodoc_mock_import.append('clingo')
+#autodoc_mock_imports = ["clingo"]
 
 # -- Options for HTML output -------------------------------------------------
 

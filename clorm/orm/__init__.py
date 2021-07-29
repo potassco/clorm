@@ -21,6 +21,7 @@ __all__ = [
     'ContextBuilder',
     'TypeCastSignature',
     'Select',
+    'Delete',
     'Placeholder',
     'refine_field',
     'combine_fields',

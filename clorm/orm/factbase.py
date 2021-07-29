@@ -28,6 +28,7 @@ from .factcontainers import FactSet, FactIndex, FactMap, factset_equality
 __all__ = [
     'FactBase',
     'Select',
+    'Delete',
     ]
 
 #------------------------------------------------------------------------------
@@ -200,7 +201,18 @@ class FactBase(object):
     # Special FactBase member functions
     #--------------------------------------------------------------------------
     def select(self, root):
-        """Create a Select query for a predicate type."""
+        """Define a select query using the old Query API.
+
+        Eventually this interface will be deprecated as everything (and more)
+        can be done with the new Query API (see :func: `~FactBase.query`)
+
+        Args:
+           predicate: The predicate to query.
+
+        Returns:
+           Returns a Select query object for specifying a query.
+
+        """
         self._check_init()  # Check for delayed init
 
         roots = validate_root_paths([root])
@@ -223,7 +235,19 @@ class FactBase(object):
         return _Delete(self, QuerySpec(roots=roots))
 
     def query(self, *roots):
-        """Create a select/delete query using Query API v2."""
+        """Define a query using the new Query API.
+
+        The parameters consist of a predicates (or aliases) to query (like an
+        SQL FROM clause).
+
+        Args:
+           *predicates: predicate or predicate aliases
+
+        Returns:
+           Returns a Query object for specifying a query.
+
+        """
+
         self._check_init()  # Check for delayed init
 
         # Make sure there are factmaps for each referenced predicate type
@@ -624,6 +648,13 @@ class Select(abc.ABC):
         """Return all matching entries."""
         pass
 
+    def get_unique(self, *args, **kwargs):
+        """Return the unique matching entry (or raise an exception)"""
+        pass
+
+    def count(self, *args, **kwargs):
+        """Return the number of matches."""
+        pass
 
 #------------------------------------------------------------------------------
 # Delete is an interface to perform a query delete from a FactBase.
