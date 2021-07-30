@@ -2950,7 +2950,7 @@ class Query(abc.ABC):
     The query is typicaly executed by iterating over the generator returned by
     the :meth:`Query.all` end-point.
 
-    .. code-block::
+    .. code-block:: python
 
        from clorm import FactBase, Predicate, IntegerField, StringField
 
@@ -2976,7 +2976,7 @@ class Query(abc.ABC):
     also contain a :meth:`Query.join` clause to specify the predicates
     parameters/fields to join.
 
-    .. code-block::
+    .. code-block:: python
 
        q2 = fb.query(Option,Chosen).join(Option.oid == Chosen.oid)
 
@@ -2992,7 +2992,7 @@ class Query(abc.ABC):
     cross-product over instances of the predicates; where the subset is
     determined by the ``join`` clause.
 
-    .. code-block::
+    .. code-block:: python
 
        result = set(q2.all())
 
@@ -3006,7 +3006,7 @@ class Query(abc.ABC):
     default it is ordered in ascending order. However, this can be changed to
     descending order with the :func:`desc` function modifier.
 
-    .. code-block::
+    .. code-block:: python
 
        from clorm import desc
 
@@ -3031,7 +3031,7 @@ class Query(abc.ABC):
     the items to return. Essentially, this specifies a _projection_ over the
     elements of the result tuple.
 
-    .. code-block::
+    .. code-block:: python
 
        q4 = q3.select(Option)
 
@@ -3047,7 +3047,7 @@ class Query(abc.ABC):
     support aggregation functions, as you could do in SQL, so some additional
     Python code is required.
 
-    .. code-block::
+    .. code-block:: python
 
        q5 = q2.group_by(Option.cat).select(Option.cost)
 

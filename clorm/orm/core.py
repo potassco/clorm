@@ -341,36 +341,39 @@ class _PredicatePathMeta(type):
 class PredicatePath(object, metaclass=_PredicatePathMeta):
     '''PredicatePath implements the intuitive query syntax.
 
-    Every defined ``Predicate`` sub-class has a corresponding ``PredicatePath``
-    sub-class that mirrors its field definitions. This allows it to be used when
-    specifying the components of a query; such as the sign and the fields or
-    sub-fields of a predicate (eg., `Pred.sign`, `Pred.a.b` or `Pred.a[0]`).
+    Every defined :class:`Predicate` sub-class has a corresponding
+    :class:`PredicatePath` sub-class that mirrors its field definitions. This
+    allows it to be used when specifying the components of a query; such as the
+    sign and the fields or sub-fields of a predicate (eg., ``Pred.sign``,
+    ``Pred.a.b`` or ``Pred.a[0]``).
 
     When the API user refers to a field (or sign) of a Predicate sub-class they
-    are redirected to the corresponding ``PredicatePath`` object of that
+    are redirected to the corresponding :class:`PredicatePath` object of that
     predicate sub-class.
 
     While instances of this class (and sub-classes) are externally exposed
     through the API, users should not explicitly instantiate instances
     themselves.
 
-    PredicatePath subclasses provide attributes and indexed items for refering
-    to sub-paths. When a user specifies ``Pred.a.b.c`` the Predicate class
-    ``Pred`` seemlessly passes off to an associated ``PredicatePath`` object,
-    which then returns a path corresponding to the specifications.
+    Predicate path subclasses provide attributes and indexed items for refering
+    to sub-paths. When a user specifies ``Pred.a.b.c`` the :class:`Predicate`
+    sub-class ``Pred`` seemlessly passes off to an associated
+    :class:`PredicatePath` object, which then returns a path corresponding to
+    the specifications.
 
     Fields can be specified either by name through a chain of attributes or
-    using the overloaded ``__getitem__`` array function which allows for name or
-    positional argument specifications.
+    using the array indexes. This is implemented in the overloaded
+    ``__getitem__`` function which allows for name or positional argument
+    specifications.
 
-    The other important aspect of the ``PredicatePath`` is that it overloads the
-    boolean operators to return a comparison condition. This is what allows for
-    query specifications such as ``Pred.a.b == 2`` or ``Pred.a.b == ph1_``.
+    The most important aspect of a predicate path object is that it overloads
+    the boolean operators to return a comparison condition. This is what allows
+    for query specifications such as ``Pred.a.b == 2`` or ``Pred.a.b == ph1_``.
 
-    Because the name ``meta`` is a Clorm keyword and can't be used as a field
-    name it is used as a property referring to an internal class with functions
-    for use by the internals of the library. API users should not use this
-    property.
+    Finally, because the name ``meta`` is a Clorm keyword and can't be used as a
+    field name it is used as a property referring to an internal class with
+    functions for use by the internals of the library. API users should not use
+    this property.
 
     '''
 
@@ -667,12 +670,13 @@ class PredicatePath(object, metaclass=_PredicatePathMeta):
 # ------------------------------------------------------------------------------
 
 def path(arg,exception=True):
-    '''Returns the ``PredicatePath`` corresponding to some component.
+    '''Returns the :class:`PredicatePath` corresponding to some component.
 
     This function is useful for users for the special case of referring to the
-    ``PredicatePath`` corresponding to a ``Predicate`` object. For example to
-    specify a comparison in a query to match a specific instance to some
-    placeholder you need to reference the predicate using a path.
+    :class:`PredicatePath` that corresponding to a :class:`Predicate`
+    object. For example to specify a comparison in a query to match a specific
+    instance to some placeholder you need to reference the predicate using a
+    path.
 
     Example:
 
@@ -698,7 +702,7 @@ def path(arg,exception=True):
        other contexts.
 
     Returns:
-       Returns a ``PredicatePath`` object corresponding to the input
+       Returns a :class:`PredicatePath` object corresponding to the input
        specification.
 
     '''
@@ -715,7 +719,7 @@ def path(arg,exception=True):
 # ------------------------------------------------------------------------------
 
 def hashable_path(arg,exception=True):
-    '''Return a PredicatePath.Hashable instance for a path or Predicate sub-class.
+    '''Return a :class:`PredicatePath.Hashable` instance for a :class:`PredicatePath` or :clss:`Predicate` sub-class.
 
     A hashable path can be used in a set or dictionary key. If the argument is a
     path then returns the hashable version (the original path can be accessed
@@ -741,7 +745,7 @@ def hashable_path(arg,exception=True):
 # ------------------------------------------------------------------------------
 
 def alias(predicate, name=None):
-    '''Return an alias PredicatePath instance for a Predicate sub-class.
+    '''Return an alias :class:`PredicatePath` instance for a :class:`Predicate` sub-class.
 
     A predicate alias can be used to support self joins in queries. The alias
     has all the same fields (and sub-fields) as the "normal" path associated
@@ -771,7 +775,7 @@ def alias(predicate, name=None):
               print("Person {} => Friend {}".format(p,f))
 
     Returns:
-       Returns an alias ``PredicatePath`` for the predicate.
+       Returns an alias :class:`PredicatePath` for the predicate.
 
     '''
     if inspect.isclass(predicate) and issubclass(predicate, Predicate):
