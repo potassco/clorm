@@ -75,8 +75,6 @@ being an alias to this class.
 .. autofunction:: clorm.simple_predicate
 
 
-
-
 .. _api_factbase:
 
 Fact Bases and Queries
@@ -108,6 +106,55 @@ query mechanism for accessing elements.
    .. automethod:: where
 
    .. automethod:: execute
+
+
+.. autoclass:: clorm.Query
+
+   .. automethod:: join
+
+   .. automethod:: where
+
+   .. automethod:: order_by
+
+   .. automethod:: group_by
+
+   .. automethod:: select
+
+   .. automethod:: distinct
+
+   .. automethod:: bind
+
+   .. automethod:: tuple
+
+   .. automethod:: heuristic
+
+   .. automethod:: all
+
+   .. automethod:: singleton
+
+   .. automethod:: count
+
+   .. automethod:: first
+
+   .. automethod:: delete
+
+   .. automethod:: query_plan
+
+.. autoclass:: clorm.PredicatePath
+
+
+Query Support Functions
+-----------------------
+
+The following functions support the query specification.
+
+.. autofunction:: clorm.path
+
+.. autofunction:: clorm.alias
+
+
+
+
 
 .. _api_calling_python_from_asp:
 

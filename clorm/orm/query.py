@@ -2925,88 +2925,155 @@ def make_outputter(insig,outsig):
 class Query(abc.ABC):
     """An abstract class that defines the interface to the Clorm Query API v2.
 
+    .. note::
+
+       This new Query API replaces the old Select/Delete mechanism and offers
+       many more features than the old API, especially allowing joins similar to
+       an SQL join between tables.
+
+       This interface is complete and unlikely to change - however it is being
+       left open for the moment in case there is strong user feedback.
+
     ``Query`` objects cannot be constructed directly.
 
-    Instead a ``Query`` object is returned by the ``FactBase.query()`` function.
-    Queries can take a number of different forms but contain many of the
-    components of a traditional SQL query; where the predicates of a
-    ``FactBase`` can be viewed as SQL tables.
+    Instead a ``Query`` object is returned by the :meth:`FactBase.query`
+    function.  Queries can take a number of different forms but contain many of
+    the components of a traditional SQL query. A predicate definition (as
+    opposed to a predicate instance or fact) can be viewed as an SQL table and
+    the parameters of a predicate can be viewed as the fields of the table.
 
     The simplest query must at least specify the predicate(s) to search
-    for. This is specified as parameters to the ``FactBase.query()`` function:
+    for. This is specified as parameters to the :meth:`FactBase.query` function.
+    Relating this to a traditional SQL query, the ``query`` clause can be viewed
+    as an SQL ``FROM`` specification.
 
-          ``query = fb.query(<predicate>,...)``
+    The query is typicaly executed by iterating over the generator returned by
+    the :meth:`Query.all` end-point.
 
-    Relating this to a traditional SQL query, the ``query()`` clause can be
-    viewed as an SQL ``FROM`` specification.
+    .. code-block::
+
+       from clorm import FactBase, Predicate, IntegerField, StringField
+
+       class Option(Predicate):
+           oid = IntegerField
+           name = StringField
+           cost = IntegerField
+           cat = StringField
+
+       class Chosen(Predicate):
+           oid = IntegerField
+
+       fb=FactBase([Option(1,"Do A",200,"foo"),Option(2,"Do B",300,"bar"),
+                    Option(3,"Do C",400,"foo"),Option(4,"Do D",300,"bar"),
+                    Option(5,"Do E",200,"foo"),Option(6,"Do F",500,"bar"),
+                    Chosen(1),Chosen(3),Chosen(4),Chosen(6)])
+
+       q1 = fb.query(Chosen)     # Select all Chosen instances
+       result = set(q1.all())
+       assert result == set([Chosen(1),Chosen(3),Chosen(4),Chosen(6)])
 
     If there are multiple predicates involved in the search then the query must
-    also contain a ``join()`` clause to specify the predicates parameters/fields
-    to join.
+    also contain a :meth:`Query.join` clause to specify the predicates
+    parameters/fields to join.
 
-          ``query = fb.query(<predicate>,<predicate>,..).join(<expressions>)``
+    .. code-block::
 
-    A query can also contain ``where()`` clauses as well as ``order_by()`` and
-    ``group_by()`` components. Note, specifying a ``group_by()`` clause changes
-    the behaviour of the output of the query from iterating over individual
-    items to returning pairs where the first element of a pair is the group
-    identifier and the second element is an iterator over the matching elements
-    within that group.
+       q2 = fb.query(Option,Chosen).join(Option.oid == Chosen.oid)
 
-    The result of a query will consist of tuples, where each tuple contains the
-    facts matching the signature of predicates in the ``query()``
-    clause. Mathematically the tuples are the cross-product over instances of
-    the predicates, so each tuple will be distinct. However, returning tuples of
-    facts is often not the most convenient output format and instead you may
-    only be interested in specific parameters within each tuple of fact. To
-    provide the output in a more useful format a query can also contain a
-    ``select()`` clause that specifies a tuple of the parameters/fields to
-    return. Essentially, this specifies a _projection_ over the elements of the
-    result tuple.
+    .. note::
 
-    Bringing together these clause elements of a query the form of a more
-    complex query would look like:
+       As an aside, while a ``query`` clause typically consists of predicates,
+       it can also contain predicate *aliases* created through the :func:`alias`
+       function. This allows for queries with self joins to be specified.
 
-          ``query = fb.query(<predicates>)\
-                      .join(<expressions>)\
-                      .where(<expressions>)\
-                      .group_by(<ordering>)\
-                      .order_by(<ordering>)\
-                      .select(<paths>)
+    When a query contains multiple predicates the result will consist of tuples,
+    where each tuple contains the facts matching the signature of predicates in
+    the ``query`` clause. Mathematically the tuples are a subset of the
+    cross-product over instances of the predicates; where the subset is
+    determined by the ``join`` clause.
 
-    Note that each of these _clause_ specifications is simply a chaining of
-    function calls that return a modified copy of the query object itself. This
-    provides reusablity of the query components as you can start with the
-    specification of a base query and then build multiple restricted queries
-    from this base.
+    .. code-block::
 
-    Note, the above are not the only options for a query. Some other query
-    modifies include: ``distinct()`` to return distinct elements, and ``bind()``
-    to bind the value of any placeholders in the ``where()`` clause to specific
-    values.
+       result = set(q2.all())
 
-    A query is executed using a number of end-point functions. To iterate over
-    all results of the query:
+       assert result == set([(Option(1,"Do A",200,"foo"),Chosen(1)),
+                             (Option(3,"Do C",400,"foo"),Chosen(3)),
+                             (Option(4,"Do D",300,"bar"),Chosen(4)),
+                             (Option(6,"Do F",500,"bar"),Chosen(6))])
 
-          ``query.all()``
+    A query can also contain a ``where`` clause as well as an ``order_by``
+    clause. When the ``order_by`` clause contains a predicate path then by
+    default it is ordered in ascending order. However, this can be changed to
+    descending order with the :func:`desc` function modifier.
+
+    .. code-block::
+
+       from clorm import desc
+
+       q3 = q2.where(Option.cost > 200).order_by(desc(Option.cost))
+
+       result = list(q3.all())
+       assert result == [(Option(6,"Do F",500,"bar"),Chosen(6)),
+                         (Option(3,"Do C",400,"foo"),Chosen(3)),
+                         (Option(4,"Do D",300,"bar"),Chosen(4))]
+
+    The above code snippet highlights a feature of the query construction
+    process. Namely, that these query construction functions can be chained and
+    can also be used as the starting point for another query. Each construction
+    function returns a modified copy of its parent. So in this example query
+    ``q3`` is a modified version of query ``q2``.
+
+    Returning tuples of facts is often not the most convenient output format and
+    instead you may only be interested in specific predicates or parameters
+    within each fact tuple. For example, in this running example it is
+    unnecessary to return the ``Chosen`` facts. To provide the output in a more
+    useful format a query can also contain a ``select`` clause that specifies
+    the items to return. Essentially, this specifies a _projection_ over the
+    elements of the result tuple.
+
+    .. code-block::
+
+       q4 = q3.select(Option)
+
+       result = list(q4.all())
+       assert result == [Option(6,"Do F",500,"bar"),
+                         Option(3,"Do C",400,"foo"),
+                         Option(4,"Do D",300,"bar")]
+
+    A second mechanism for accessing the data in a more convenient format is to
+    use a ``group_by`` clause. In this example, we may want to aggregate all the
+    chosen options, for example to sum the costs, based on their membership of
+    the ``"foo"`` and ``"bar"`` categories. The Clorm query API doesn't directly
+    support aggregation functions, as you could do in SQL, so some additional
+    Python code is required.
+
+    .. code-block::
+
+       q5 = q2.group_by(Option.cat).select(Option.cost)
+
+       result = [(cat, sum(list(it))) for cat, it in q5.all()]
+       assert result == [("bar",800), ("foo", 600)]
+
+    The above are not the only options for a query. Some other query modifies
+    include: :meth:`Query.distinct` to return distinct elements, and
+    :meth:`Query.bind` to bind the value of any placeholders in the ``where``
+    clause to specific values.
+
+    A query is executed using a number of end-point functions. As already shown
+    the main end-point is :meth:`Query.all` to return a generator for iterating
+    over the results.
 
     Alternatively, if there is at least one element then to return the first
-    result only (throws an exception if there are no elements):
-
-          ``query.first()``
+    result only (throwing an exception only if there are no elements) use the
+    :meth:`Query.first` method.
 
     Or if there must be exactly one element (and to throw an exception
-    otherwise):
+    otherwise) use :meth:`Query.singleton`.
 
-          ``query.singleton()``
+    To count the elements of the result there is :meth:`Query.count`.
 
-    To count elements:
-
-           ``query.count()``
-
-    And finally to delete all matching facts from the underlying FactBase:
-
-           ``query.delete()``
+    Finally to delete all matching facts from the underlying FactBase use
+    :meth:`Query.delete`.
 
     """
 
@@ -3037,13 +3104,13 @@ class Query(abc.ABC):
         cross-product between ``F`` and ``H``.
 
         Finally, it is possible to perform self joins using the function
-        ``alias()`` that generates an alias for the predicate/table. For
+        ``alias`` that generates an alias for the predicate/table. For
         example:
 
-              ``from clorm import alias
+              ``from clorm import alias``
 
-                FA=alias(F)
-                query = fb.query(F,G,FA).join(F.anum == FA.anum,cross(F,G))``
+              ``FA=alias(F)``
+              ``query = fb.query(F,G,FA).join(F.anum == FA.anum,cross(F,G))``
 
         generates an inner join between ``F`` and itself, and a full
         cross-product between ``F`` and ``G``.
@@ -3122,8 +3189,8 @@ class Query(abc.ABC):
         the specification) and the second element is an iterator over the
         matching elements.
 
-        When both a ``group_by()`` and ``order_by()`` clause is provided the
-        ``order_by()`` clause is used the sort the elements within each matching
+        When both a ``group_by`` and ``order_by`` clause is provided the
+        ``order_by`` clause is used the sort the elements within each matching
         group.
 
         Args:
@@ -3153,12 +3220,12 @@ class Query(abc.ABC):
         instances. However, the specification of a projection can result in
         information being discarded and can therefore cause the projected query
         results to no longer be distinct. To enforce uniqueness the
-        ``distinct()`` flag can be specified. Essentially this is the same as an
-        ``SQL SELECT DISTINCT ...`` statement.
+        :meth:`Query.distinct` flag can be specified. Essentially this is the
+        same as an ``SQL SELECT DISTINCT ...`` statement.
 
-        Note: when ``select()`` is used with the ``delete()`` end-point the
-        ``select()`` signature must specify predicates and not parameter/fields
-        within the predicates.
+        Note: when :meth:`Query.select` is used with the :meth:`Query.delete`
+        end-point the `select` signature must specify predicates and not
+        parameter/fields within the predicates.
 
         Args:
            output_signature: the signature that defines the projection.
@@ -3176,8 +3243,8 @@ class Query(abc.ABC):
     def distinct(self):
         """Return only distinct elements in the query.
 
-        This flag is only meaningful when combined with a ``select()`` clause
-        that removes distinguishing elements from the tuples.
+        This flag is only meaningful when combined with a :meth:`Query.select`
+        clause that removes distinguishing elements from the tuples.
 
         Returns:
           Returns the modified copy of the query.
@@ -3192,8 +3259,8 @@ class Query(abc.ABC):
     def bind(self,*args,**kwargs):
         """Bind placeholders to specific values.
 
-        If the ``where()`` clause has placeholders then these placeholders must
-        be bound to actual values before the query can be executed.
+        If the ``where`` clause has placeholders then these placeholders must be
+        bound to actual values before the query can be executed.
 
         Args:
           *args: positional arguments corresponding to positional placeholders
@@ -3227,8 +3294,8 @@ class Query(abc.ABC):
         comprehension to extract the value to be aggregated.
 
         If there is a case where this default behaviour is not wanted then
-        specifying the ``tuple()`` flag forces the query to always return a
-        tuple of elements even if the output signature is a singleton tuple.
+        specifying the ``tuple`` flag forces the query to always return a tuple
+        of elements even if the output signature is a singleton tuple.
 
         Returns:
           Returns the modified copy of the query.
@@ -3254,9 +3321,9 @@ class Query(abc.ABC):
         heuristic function. Assuming predicate definitions ``F`` and ``G`` the
         query:
 
-            ``from clorm import fixed_join_order
+            ``from clorm import fixed_join_order``
 
-              query=fb.query(F,G).heuristic(fixed_join_order(G,F)).join(...)``
+            ``query=fb.query(F,G).heuristic(fixed_join_order(G,F)).join(...)``
 
         forces the join order to first be the ``G`` predicate followed by the
         ``F`` predicate.

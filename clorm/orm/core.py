@@ -32,6 +32,7 @@ __all__ = [
     'ConstantField',
     'SimpleField',
     'Predicate',
+    'PredicatePath',
     'ComplexTerm',
     'refine_field',
     'combine_fields',
@@ -340,34 +341,36 @@ class _PredicatePathMeta(type):
 class PredicatePath(object, metaclass=_PredicatePathMeta):
     '''PredicatePath implements the intuitive query syntax.
 
-    PredicatePath provides a specification for refer to elements of a fact; both
-    the sign as well as the fields and sub-fields of that fact (eg., Pred.sign,
-    Pred.a.b or Pred.a[0]).
+    Every defined ``Predicate`` sub-class has a corresponding ``PredicatePath``
+    sub-class that mirrors its field definitions. This allows it to be used when
+    specifying the components of a query; such as the sign and the fields or
+    sub-fields of a predicate (eg., `Pred.sign`, `Pred.a.b` or `Pred.a[0]`).
 
     When the API user refers to a field (or sign) of a Predicate sub-class they
-    are redirected to the corresponding PredicatePath object of that predicate
-    sub-class.
+    are redirected to the corresponding ``PredicatePath`` object of that
+    predicate sub-class.
 
     While instances of this class (and sub-classes) are externally exposed
     through the API, users should not explicitly instantiate instances
     themselves.
 
     PredicatePath subclasses provide attributes and indexed items for refering
-    to sub-paths. When a user specifies 'Pred.a.b.c' the Predicate class 'Pred'
-    seemslessly passes off to an associated PredicatePath object, which then
-    returns a path corresponding to the specifications.
+    to sub-paths. When a user specifies ``Pred.a.b.c`` the Predicate class
+    ``Pred`` seemlessly passes off to an associated ``PredicatePath`` object,
+    which then returns a path corresponding to the specifications.
 
     Fields can be specified either by name through a chain of attributes or
-    using the overloaded __getitem__ array function which allows for name or
+    using the overloaded ``__getitem__`` array function which allows for name or
     positional argument specifications.
 
-    The other important aspect of the PredicatePath is that it overloads the
+    The other important aspect of the ``PredicatePath`` is that it overloads the
     boolean operators to return a comparison condition. This is what allows for
-    query specifications such as 'Pred.a.b == 2' or 'Pred.a.b == ph1_'
+    query specifications such as ``Pred.a.b == 2`` or ``Pred.a.b == ph1_``.
 
-    Because the name 'meta' is a Clorm keyword and can't be used as a field name
-    it is used as a property referring to an internal class with functions for
-    use by the internals of the library. API users should not use this property.
+    Because the name ``meta`` is a Clorm keyword and can't be used as a field
+    name it is used as a property referring to an internal class with functions
+    for use by the internals of the library. API users should not use this
+    property.
 
     '''
 
@@ -656,15 +659,47 @@ class PredicatePath(object, metaclass=_PredicatePathMeta):
 # API function to return the PredicatePath for the predicate class itself. This
 # is the best way to support syntax such as "Pred == ph1_" in a query without
 # trying to do strange overloading of the class comparison operator.
+#
+# Will try to resolve the input cleverly so if input a predicate path will
+# simply return that path, if input a predicate subclass will return a path
+# corresponding to that path or if input a hashable path will return the
+# corresponding path object.
 # ------------------------------------------------------------------------------
 
 def path(arg,exception=True):
-    '''Return the predicate path (which is a path to some fact component)
+    '''Returns the ``PredicatePath`` corresponding to some component.
 
-    Will try to resolve the input cleverly so if input a predicate path will
-    simply return that path, if input a predicate subclass will return a path
-    corresponding to that path or if input a hashable path will return the
-    corresponding path object.
+    This function is useful for users for the special case of referring to the
+    ``PredicatePath`` corresponding to a ``Predicate`` object. For example to
+    specify a comparison in a query to match a specific instance to some
+    placeholder you need to reference the predicate using a path.
+
+    Example:
+
+    .. code-block:: python
+
+       from clorm import FactBase, Predicate, ConstantField, path
+
+       class F(Predicate):
+          a = ConstantField
+
+       fb = FactBase([F("foo"),F("bar")])
+
+       qBad=fb.query(F).where(F == F("bar"))    # This won't do what you expect
+
+       qGood=fb.query(F).where(path(F) == F("bar"))
+
+
+    .. note::
+
+       The technical reason for not supporting the more intuitive syntax above
+       is that it would require overloading the comparison operators of the
+       predicate class itself; which would break the behaviour of Python in many
+       other contexts.
+
+    Returns:
+       Returns a ``PredicatePath`` object corresponding to the input
+       specification.
 
     '''
     if isinstance(arg, PredicatePath): return arg
@@ -708,22 +743,35 @@ def hashable_path(arg,exception=True):
 def alias(predicate, name=None):
     '''Return an alias PredicatePath instance for a Predicate sub-class.
 
-    A predicate alias can be used to support joins in queries. The alias has all
-    the same fields (and sub-fields) as the "normal" path associated with the
-    predicate.
+    A predicate alias can be used to support self joins in queries. The alias
+    has all the same fields (and sub-fields) as the "normal" path associated
+    with the predicate.
+
+    For example, consider a simple (and not properly normalised) friend fact
+    base with a predicate that uniquely identifies people and friends, by a id
+    number, and you want to output the friend connections in an intuitive
+    manner.
 
     Example:
        .. code-block:: python
 
-           import clorm Predicate, ConstantField
+           from clorm import FactBase, Predicate, IntegerField, StringField, alias
 
            class F(Predicate):
-               a = ConstantField
-               b = ConstantField
+               pid = IntegerField
+               name = StringField
+               fid = IntegerField
 
-          X = alias(F)
-          print("field of predicate F: {}".format(F.a))
-          print("field of alias X: {}".format(X.a))
+          fb=FactBase([F(1,"Adam",3),F(2,"Betty",4),F(3,"Carol",1),F(4,"Dan",2)])
+
+          FA = alias(F)
+          q=fb.query(F,FA).join(F.pid == FA.fid).select(F.name,FA.name)
+
+          for p,f in q.all():
+              print("Person {} => Friend {}".format(p,f))
+
+    Returns:
+       Returns an alias ``PredicatePath`` for the predicate.
 
     '''
     if inspect.isclass(predicate) and issubclass(predicate, Predicate):

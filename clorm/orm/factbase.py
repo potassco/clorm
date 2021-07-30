@@ -203,8 +203,11 @@ class FactBase(object):
     def select(self, root):
         """Define a select query using the old Query API.
 
-        Eventually this interface will be deprecated as everything (and more)
-        can be done with the new Query API (see :func: `~FactBase.query`)
+        .. note::
+
+           This interface will eventually be deprecated when the new
+           :class:`Query API<Query>` is finalised. The entry point to this Query
+           API is through the :meth:`FactBase.query` method.
 
         Args:
            predicate: The predicate to query.
@@ -235,7 +238,7 @@ class FactBase(object):
         return _Delete(self, QuerySpec(roots=roots))
 
     def query(self, *roots):
-        """Define a query using the new Query API.
+        """Define a query using the new Query API :class:`Query`.
 
         The parameters consist of a predicates (or aliases) to query (like an
         SQL FROM clause).
@@ -584,20 +587,23 @@ class FactBase(object):
 # ------------------------------------------------------------------------------
 
 class Select(abc.ABC):
-    """An abstract class that defines the interface to a query object.
+    """An abstract class that defines the interface to original Query API.
 
-    ``Select`` query object cannot be constructed directly.
+    .. note::
 
-    Instead a ``Select`` object is returned as part of a specfication return
-    thed ``FactBase.select()`` function. Given a ``FactBase`` object ``fb``, a
-    specification is of the form:
+       This interface will eventually be deprecated when the new :class:`Query
+       API<Query>` is finalised.
+
+    ``Select`` query objects cannot be constructed directly. Instead a
+    ``Select`` object is returned by the :meth:`FactBase.select` function. Given
+    a ``FactBase`` object ``fb``, a specification is of the form:
 
           ``query = fb.select(<predicate>).where(<expression>).order_by(<ordering>)``
 
-    where ``<predicate>`` specifies the predicate type to search
-    for,``<expression>`` specifies the search criteria and ``<ordering>``
-    specifies a sort order when returning the results. The ``where()`` clause and
-    ``order_by()`` clause can be omitted.
+    where ``<predicate>`` specifies the predicate type to search for,
+    ``<expression>`` specifies the search criteria and ``<ordering>`` specifies
+    a sort order when returning the results. The ``where()`` and ``order_by()``
+    clauses are omitted when not required.
 
     """
 
@@ -661,19 +667,22 @@ class Select(abc.ABC):
 # ------------------------------------------------------------------------------
 
 class Delete(abc.ABC):
-    """An abstract class that defines the interface to a delete query object.
+    """An abstract class that defines the interface to a original delete query API.
 
-    ``Delete`` query object cannot be constructed directly.
+    .. note::
 
-    Instead a ``Delete`` object is returned as part of a specfication return
-    thed ``FactBase.delete()`` function. Given a ``FactBase`` object ``fb``, a
-    specification is of the form:
+       This interface will eventually be deprecated when the new :class:`Query
+       API<Query>` is finalised.
+
+    ``Delete`` query objects cannot be constructed directly. Instead a
+    ``Delete`` object is returned by the ``FactBase.delete()`` function. Given a
+    ``FactBase`` object ``fb``, a specification is of the form:
 
           ``query = fb.delete(<predicate>).where(<expression>)``
 
-    where ``<predicate>`` specifies the predicate type to search
-    for,``<expression>`` specifies the search criteria. The ``where()`` clause
-    can be omitted in which case all predicates of that type will be deleted.
+    where ``<predicate>`` specifies the predicate type to search for,
+    ``<expression>`` specifies the search criteria. The ``where()`` clause can
+    be omitted in which case all predicates of that type will be deleted.
 
     """
 
