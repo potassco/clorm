@@ -174,18 +174,32 @@ class FactBase(object):
     # Set member functions
     #--------------------------------------------------------------------------
     def add(self, arg):
+        """Add a single fact or a collection of facts.
+
+        Because a ``FactBase`` can only hold :class:`~Predicate` sub-class
+        instances this member function has been overloaded to take either a
+        single :class:`~Predicate` sub-class instance or a collection of
+        :class:`~Predicate` sub-class instances.
+
+        Args:
+          arg: a single fact or a collection of facts.
+
+        """
         self._check_init()  # Check for delayed init
         return self._add(arg)
 
     def remove(self, arg):
+        """Remove a fact from the fact base (raises an exception if no fact). """
         self._check_init()  # Check for delayed init
         return self._remove(arg, raise_on_missing=True)
 
     def discard(self, arg):
+        """Remove a fact from the fact base. """
         self._check_init()  # Check for delayed init
         return self._remove(arg, raise_on_missing=False)
 
     def pop(self):
+        """Pop an element from the FactBase. """
         self._check_init()  # Check for delayed init
         for pt, fm in self._factmaps.items():
             if fm: return fm.pop()

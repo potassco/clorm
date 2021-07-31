@@ -95,16 +95,17 @@ Defining the Data Model
 -----------------------
 
 The most important step is to define a *data model* that maps the Clingo
-predicates to Python classes. Clorm provides the ``Predicate`` and
-``ComplexTerm`` classes for this purpose (although, for this example only the
-``Predicate`` class is needed). These classes must be sub-classed; a
-``Predicate`` sub-class defines a direct mapping to an underlying ASP logical
-predicate. The parameters of the predicate are specified using a number of
-*field* classes. Fields can be thought of as *term definitions* as they define
-how a logical *term* is converted to, and from, a Python object. Clorm provides
-three standard field classes, ``ConstantField``, ``StringField``, and
-``IntegerField``, that correspond to the standard *logic programming* data types
-of constant, string, and integer.
+predicates to Python classes. Clorm provides the :class:`~clorm.Predicate` and
+:class:`~clorm.ComplexTerm` classes for this purpose (although, for this example
+only the :class:`~clorm.Predicate` class is needed). These classes must be
+sub-classed; a :class:`~clorm.Predicate` sub-class defines a direct mapping to
+an underlying ASP logical predicate. The parameters of the predicate are
+specified using a number of *field* classes. Fields can be thought of as *term
+definitions*, as they define how a logical *term* is converted to, and from, a
+Python object. Clorm provides three standard field classes,
+:class:`~clorm.ConstantField`, :class:`~clorm.StringField`, and
+:class:`~clorm.IntegerField`, that correspond to the standard *logic
+programming* data types of constant, string, and integer.
 
 .. code-block:: python
 
@@ -128,16 +129,17 @@ declared class name.
 programming notation for specifying the arity of a predicate or function). A
 predicate can contain zero or more fields.
 
-The number of fields in the ``Predicate`` declaration must match the predicate
-arity and the order in which they are declared must also match the position of
-each term in the ASP predicate.
+The number of fields in the :class:`~clorm.Predicate` declaration must match the
+predicate arity and the order in which they are declared must also match the
+position of each term in the ASP predicate.
 
-One thing to note here is that there is no ``Predicate`` sub-class that was
-defined corresponding to the ``working_driver/1`` predicate. Clorm does not
-require that *all* ASP predicates have a corresponding Python ``Predicate``
-sub-class. In this case ``working_driver/1`` is only of interest within the ASP
-program itself and is not used for defining the relevant inputs and outputs of
-the solver, so there is no need to define any Python interface.
+One thing to note here is that there is no :class:`~clorm.Predicate` sub-class
+that was defined corresponding to the ``working_driver/1`` predicate. Clorm does
+not require that *all* ASP predicates have a corresponding Python
+:class:`~clorm.Predicate` sub-class. In this case ``working_driver/1`` is only
+of interest within the ASP program itself and is not used for defining the
+relevant inputs and outputs of the solver, so there is no need to define any
+Python interface.
 
 Using the Data Model to Generate Solutions
 ------------------------------------------
@@ -147,19 +149,19 @@ are asserted to, or extract from, the ASP solver. In particular, it will be used
 to dynamically add the facts that make up a problem instance, and then to
 extract and print the *models* that correspond to solutions to the problem.
 
-First the Clingo ``Control`` object needs to be created and initialised, and the
-static problem domain encoding must be loaded.
+First, the :class:`~clorm.clingo.Control` object needs to be created and
+initialised, and the static problem domain encoding must be loaded.
 
 .. code-block:: python
 
     ctrl = Control(unifier=[Driver,Item,Assignment])
     ctrl.load("quickstart.lp")
 
-The ``clorm.clingo.Control`` object controls how the ASP solver is run. When the
-solver runs it generates *models*. These models constitute the solutions to the
-problem. Facts within a model are encoded as ``clingo.Symbol`` objects. The
-``unifier`` argument is important as it defines which symbols are turned into
-``Predicate`` instances.
+The :class:`~clorm.clingo.Control` object controls the operations of the ASP
+solver. When the solver runs it generates *models*. These models constitute the
+solutions to the problem. Facts within a model are encoded as ``clingo.Symbol``
+objects. The :class:`unifier<clorm.clingo.Control>` argument is important as it
+defines which symbols are turned into :class:`~clorm.Predicate` instances.
 
 For every symbol fact in the model, Clorm will successively attempt to *unify*
 (or match) the symbol against the predicates in the unifier list. When a match
@@ -170,8 +172,9 @@ Once the control object is created and the unifier predicates specified the
 static ASP program is loaded.
 
 Next we generate a problem instance by generating a lists of ``Driver`` and
-``Item`` objects. These items are added to a ``clorm.FactBase`` object, which is
-a specialised set-like container for storing facts (i.e., predicate instances).
+``Item`` objects. These items are added to a :class:`~clorm.FactBase` object,
+which is a specialised set-like container for storing facts (i.e., predicate
+instances).
 
 .. code-block:: python
 
@@ -221,41 +224,57 @@ case.
 
 The line ``solution = model.facts(atoms=True)`` extracts only instances of the
 predicates that were registered with the ``unifier`` parameter that was passed
-down through the ``Control`` object constructor. As mentioned earlier, any facts
-that fail to unify are ignored. In this case it ignores the ``working_driver/1``
-instances. The unified facts are stored and returned in a ``clingo.FactBase``
-object.
+down through the :class:`~clorm.clingo.Control` object constructor. As mentioned
+earlier, any facts that fail to unify are ignored. In this case it ignores the
+``working_driver/1`` instances. The unified facts are stored and returned in a
+:class:`~clorm.FactBase` object.
 
 Querying
 --------
 
+.. note::
+
+   As of Clorm 1.2.1 the new Query API should be the preferred query
+   mechanism. It provides all the functionality of the old query interface and
+   much more; including SQL-like joins between predicates and controlling how
+   the query results are presented.
+
 The final part of our Python program involves querying the solution to print out
-the relevant facts. To do this we call the ``FactBase.select()`` member function
-that returns a suitable query object.
+the relevant facts. In particular it would be useful to display all drivers and
+any jobs they have.  To do this we call the factbase's
+:meth:`~clorm.FactBase.query` member function that returns a suitable
+:class:`~clorm.Query` object.
+
+The query is defined in terms of a chaining over the member functions of a
+:class:`~clorm.Query` object. Each function call returns a modified copy of the
+:class:`~clorm.Query` object. This technique will be be familiar to users of
+Python ORM's such as SQLAlchemy or Peewee.
 
 .. code-block:: python
 
     from clorm import ph1_
 
-    query=solution.select(Assignment).where(Assignment.driver == ph1_).order_by(Assignment.time)
+    query=solution.query(Assignment)\
+                  .where(Assignment.driver == ph1_)\
+                  .order_by(Assignment.time)
 
-A Clorm query can be viewed as a simplified version of a traditional database
-query, and the function call syntax will be familiar to users of Python ORM's
-such as SQLAlchemy or Peewee.
 
-Here we want to find ``Assignment`` instances that match the ``driver`` field to
-a special placeholder object ``ph1_`` and to return the results sorted by the
-assignment time. The value of ``ph1_`` will be provided when the query is
-executed. Note: seperating query definition from query execution allows for a
-query to be re-used.
+The above query defines a search over the ``Assignment`` predicate to match the
+``driver`` field to a special placeholder object ``ph1_`` and to return the
+assignments for that driver sorted by the delivery time. The value of ``ph1_``
+will be provided when the query is executed.  The ``query`` clause here mirrors
+a traditional SQL ``FROM`` clause.
 
-In particular, we now iterate over the list of drivers and execute the query for
-each driver and print the result.
+We can now loop over the known drivers and execute the query for each
+driver. This is done by first *binding* the value of the placeholder ``ph1_`` to
+a specific value and calling the :meth:`~clorm.Query.all` method. This function
+returns a Python generator which is then used to execute and iterate over the
+results.
 
 .. code-block:: python
 
     for d in drivers:
-        assignments = query.get(d.name)
+        assignments = list(query.bind(d.name).all())
         if not assignments:
             print("Driver {} is not working today".format(d.name))
         else:
@@ -263,10 +282,11 @@ each driver and print the result.
             for a in assignments:
                 print("\t Item {} at time {}".format(a.item, a.time))
 
-Calling ``query.get(d.name)`` executes the query for the given driver. Because
-``d.name`` is the first parameter it matches against the placeholder ``ph1_`` in
-the query definition. Clorm has four predefined placeholders ``ph1_``,... ,
-``ph4_``, but more can be created using the ``ph_`` function.
+Calling ``query.bind(d.name)`` first creates a new query with the placeholder
+values assigned. Because ``d.name`` is the first parameter to the function call
+it matches against the placeholder ``ph1_``. Clorm has four predefined
+placeholders ``ph1_``,... , ``ph4_``, but more can be created using the ``ph_``
+function.
 
 Running this example produces the following results:
 
@@ -282,6 +302,70 @@ Running this example produces the following results:
              Item item2 at time 2
              Item item3 at time 3
     Driver michael is not working today
+
+Note, the Clorm Query API doesn't support SQL style outer joins. Therefore to
+view the items for all drivers, including those drivers with no assignments, it
+was simplest to execute a query for each driver. However, if we were happy to
+only specify the drivers with assignments then the problem could be formulated
+in terms of a query with a grouping modifier.
+
+.. code-block:: python
+
+    query=solution.query(Assignment)\
+                  .group_by(Assignment.driver)\
+                  .order_by(Assignment.time)\
+                  .select(Assignment.item,Assignment.time)
+
+    for dname, grpit in query.all():
+        print("Driver {} must deliver: ".format(dname))
+        for item,time in grpit:
+            print("\t Item {} at time {}".format(item, time))
+
+Here the :meth:`~clorm.Query.group_by` modifies the query generator output to
+return pairs of objects; where the first element of the pair consists of the
+elements specified by the ``group_by`` clause and the second element is an
+iterator over the matching elements for that group (here ordered by delivery
+time).
+
+It is also worth noting that the :meth:`~clorm.Query.select` projection operator
+performs a similar function to an SQL ``SELECT`` clause to modify the
+output. Here, instead of returning the assignment item itself, it returns the
+two relevant parameter values.
+
+Old Query API
+^^^^^^^^^^^^^
+
+For comparison the following shows the same example but using the old query API.
+
+.. code-block:: python
+
+    from clorm import ph1_
+
+    query=solution.select(Assignment)\
+                  .where(Assignment.driver == ph1_).order_by(Assignment.time)
+
+    for d in drivers:
+        assignments = query.get(d.name)
+        if not assignments:
+            print("Driver {} is not working today".format(d.name))
+        else:
+            print("Driver {} must deliver: ".format(d.name))
+            for a in assignments:
+                print("\t Item {} at time {}".format(a.item, a.time))
+
+
+The old interface starts with a :meth:`~clorm.FactBase.select` call to return a
+:class:`~clorm.Select` object. This specifies both the predicate to be queried
+and the output format of the query. Comparing this to the new query API the old
+interface only allows a single predicate to be queried and the output format is
+fixed and cannot be modified.
+
+Calling ``query.get(d.name)`` executes the query for the given driver as well as
+binding the placeholders. An important difference between the old and new
+interfaces is that the call to :meth:`Select.get()<clorm.Select.get>` executes
+the query and returns a list of the results. In contrast the call to
+:meth:`Query.all()<clorm.Query.all>` returns a generator and the query is
+executed by the generator during its iteration.
 
 Other Clorm Features
 --------------------
