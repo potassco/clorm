@@ -245,10 +245,20 @@ documentation for more details.
 Experimental Features
 ---------------------
 
-The following can change between Clorm minor versions.
+The following are experimental features and may be modified or removed
+completely from the library in future versions.
 
 JSON Encoding and Decoding
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. note::
+
+   Don't use these function.I think converting to/from JSON would be better
+   served by using a third-party library like `Pydantic
+   <https://pydantic-docs.helpmanual.io>`_. One option for the future would be
+   to look at ways of automatically generating Pydantic data models from Clorm
+   data models and offering convenience functions for converting between the
+   two.
 
 Clorm allows clingo.Symbols, Predicates, and FactBases to be translated to/from
 JSON.

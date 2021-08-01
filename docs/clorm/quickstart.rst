@@ -242,8 +242,8 @@ Querying
 The final part of our Python program involves querying the solution to print out
 the relevant facts. In particular it would be useful to display all drivers and
 any jobs they have.  To do this we call the factbase's
-:meth:`~clorm.FactBase.query` member function that returns a suitable
-:class:`~clorm.Query` object.
+:py:meth:`FactBase.query()<clorm.FactBase.query>` member function that
+returns a suitable :class:`~clorm.Query` object.
 
 The query is defined in terms of a chaining over the member functions of a
 :class:`~clorm.Query` object. Each function call returns a modified copy of the
@@ -267,9 +267,9 @@ a traditional SQL ``FROM`` clause.
 
 We can now loop over the known drivers and execute the query for each
 driver. This is done by first *binding* the value of the placeholder ``ph1_`` to
-a specific value and calling the :meth:`~clorm.Query.all` method. This function
-returns a Python generator which is then used to execute and iterate over the
-results.
+a specific value and calling the :py:meth:`Query.all()<clorm.Query.all>`
+method. This function returns a Python generator which is then used to execute
+and iterate over the results.
 
 .. code-block:: python
 
@@ -321,16 +321,16 @@ in terms of a query with a grouping modifier.
         for item,time in grpit:
             print("\t Item {} at time {}".format(item, time))
 
-Here the :meth:`~clorm.Query.group_by` modifies the query generator output to
-return pairs of objects; where the first element of the pair consists of the
-elements specified by the ``group_by`` clause and the second element is an
-iterator over the matching elements for that group (here ordered by delivery
-time).
+Here the :py:meth:`Query.group_by()<clorm.Query.group_by>` modifies the query
+generator output to return pairs of objects; where the first element of the pair
+consists of the elements specified by the ``group_by`` clause and the second
+element is an iterator over the matching elements for that group (here ordered
+by delivery time).
 
-It is also worth noting that the :meth:`~clorm.Query.select` projection operator
-performs a similar function to an SQL ``SELECT`` clause to modify the
-output. Here, instead of returning the assignment item itself, it returns the
-two relevant parameter values.
+It is also worth noting that the :py:meth:`Query.select()<clorm.Query.select>`
+projection operator performs a similar function to an SQL ``SELECT`` clause to
+modify the output. Here, instead of returning the assignment item itself, it
+returns the two relevant parameter values.
 
 Old Query API
 ^^^^^^^^^^^^^
@@ -354,7 +354,8 @@ For comparison the following shows the same example but using the old query API.
                 print("\t Item {} at time {}".format(a.item, a.time))
 
 
-The old interface starts with a :meth:`~clorm.FactBase.select` call to return a
+The old interface starts with a
+:py:meth:`FactBase.select()<clorm.FactBase.select>` call to return a
 :class:`~clorm.Select` object. This specifies both the predicate to be queried
 and the output format of the query. Comparing this to the new query API the old
 interface only allows a single predicate to be queried and the output format is
@@ -362,9 +363,9 @@ fixed and cannot be modified.
 
 Calling ``query.get(d.name)`` executes the query for the given driver as well as
 binding the placeholders. An important difference between the old and new
-interfaces is that the call to :meth:`Select.get()<clorm.Select.get>` executes
-the query and returns a list of the results. In contrast the call to
-:meth:`Query.all()<clorm.Query.all>` returns a generator and the query is
+interfaces is that the call to :py:meth:`Select.get()<clorm.Select.get>`
+executes the query and returns a list of the results. In contrast the call to
+:py:meth:`Query.all()<clorm.Query.all>` returns a generator and the query is
 executed by the generator during its iteration.
 
 Other Clorm Features
