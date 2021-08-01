@@ -107,11 +107,12 @@ pygments_style = None
 
 autodoc_member_order = 'groupwise'
 
-autodoc_mock_imports = []
-try:
-    import clingo
-except ImportError:
-    autodoc_mock_imports.append('clingo')
+import clingo
+#autodoc_mock_imports = []
+#try:
+#    import clingo
+#except ImportError:
+#    autodoc_mock_imports.append('clingo')
 #autodoc_mock_imports = ["clingo"]
 
 # -- Options for HTML output -------------------------------------------------

@@ -501,61 +501,6 @@ class ControlOverride(object):
 Control = make_class_wrapper(OControl, ControlOverride)
 
 #------------------------------------------------------------------------------
-# This is probably bad practice... Modify the original clingo docstrings so that
-# when I generate the autodoc with clingo being mocked it installs a reference
-# to the original clingo docs.
-#
-# UPDATE: I'm confused what the autodoc mocking is doing (or not doing). I'm
-# sure I had it working but now seems to be failing. Adding more hacks :(
-# ------------------------------------------------------------------------------
-
-if not OControl or not OModel or not OSolveHandle:
-    class OControl(object):
-        '''For more details see the Clingo API for `Control <https://potassco.org/clingo/python-api/current/clingo.html#Control>`_'''
-
-        def assign_external(self):
-            '''For more details see the Clingo API for `Control <https://potassco.org/clingo/python-api/current/clingo.html#Control>`_'''
-            pass
-        def release_external(self):
-            '''For more details see the Clingo API for `Control <https://potassco.org/clingo/python-api/current/clingo.html#Control>`_'''
-            pass
-        def solve(self):
-            '''For more details see the Clingo API for `Control <https://potassco.org/clingo/python-api/current/clingo.html#Control>`_'''
-            pass
-
-    class OModel(object):
-        '''For more details see the Clingo API for `Model <https://potassco.org/clingo/python-api/current/clingo.html#Model>`_'''
-
-        def contains(self):
-            '''For more details see the Clingo API for `Model <https://potassco.org/clingo/python-api/current/clingo.html#Model>`_'''
-            pass
-
-    class OSolveHandle(object):
-        '''For more details see the Clingo API for `SolveHandle <https://potassco.org/clingo/python-api/current/clingo.html#SolveHandle>`_'''
-        pass
-
-if OModel.__doc__ != "Used by autodoc_mock_imports.":
-    Control.__doc__ += OControl.__doc__
-    Control.assign_external.__doc__ += OControl.assign_external.__doc__
-    Control.release_external.__doc__ += OControl.release_external.__doc__
-    Control.solve.__doc__ += OControl.solve.__doc__
-    Model.__doc__ += OModel.__doc__
-    Model.contains.__doc__ += OModel.contains.__doc__
-    SolveHandle.__doc__ += OSolveHandle.__doc__
-else:
-    Control.__doc__ += "\n" + \
-        "    For more details see the Clingo API for " + \
-        '''`Control <https://potassco.org/clingo/python-api/current/clingo.html#Control>`_'''
-
-    Model.__doc__ += "\n" + \
-        "    For more details see the Clingo API for " + \
-        '''`Model <https://potassco.org/clingo/python-api/current/clingo.html#Model>`_'''
-    SolveHandle.__doc__ += "\n" + \
-        "    For more details see the Clingo API for " + \
-        '''`SolveHandle <https://potassco.org/clingo/python-api/current/clingo.html#SolveHandle>`_'''
-
-#print("MODEL DOCS:\n\n{}\n\n".format(Model.__doc__))
-#------------------------------------------------------------------------------
 # main
 #------------------------------------------------------------------------------
 if __name__ == "__main__":
