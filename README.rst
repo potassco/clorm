@@ -15,7 +15,7 @@ that makes it easier to refactor the python code as the ASP program evolves.
 
 The documentation is available online `here <https://clorm.readthedocs.io/>`_.
 
-Note: Clorm works with Python 3.5+ and Clingo 5.3+
+Note: Clorm works with Python 3.5+ and Clingo 5.4+
 
 Installation
 ------------
@@ -227,7 +227,9 @@ that returns a suitable ``Select`` object.
 
     from clorm import ph1_
 
-    query=solution.select(Assignment).where(Assignment.driver == ph1_).order_by(Assignment.time)
+    query=solution.query(Assignment)\
+                  .where(Assignment.driver == ph1_)\
+                  .order_by(Assignment.time)
 
 A Clorm query can be viewed as a simplified version of a traditional database
 query, and the function call syntax will be familiar to users of Python ORM's
@@ -245,7 +247,7 @@ each driver and print the result.
 .. code-block:: python
 
     for d in drivers:
-        assignments = query.get(d.name)
+        assignments = list(query.bind(d.name).all())
         if not assignments:
             print("Driver {} is not working today".format(d.name))
         else:
@@ -253,10 +255,10 @@ each driver and print the result.
             for a in assignments:
                 print("\t Item {} at time {}".format(a.item, a.time))
 
-Calling ``query.get(d.name)`` executes the query for the given driver. Because
-``d.name`` is the first parameter it matches against the placeholder ``ph1_`` in
-the query definition. Clorm has four predefined placeholders but more can be
-created using the ``ph_`` function.
+Calling ``query.bind(d.name)`` first creates a new query with the placeholder
+values assigned.  Because ``d.name`` is the first parameter it matches against
+the placeholder ``ph1_`` in the query definition. Clorm has four predefined
+placeholders but more can be created using the ``ph_`` function.
 
 Running this example produces the following results:
 
@@ -371,8 +373,8 @@ Clorm library. These include:
 
 Development
 -----------
-* Python version: Clorm was developed using Python 3.7 and has been tested with Python 3.6.
-* Clingo version: Clorm has been tested with Clingo version 5.3 and 5.4.
+* Python version: Clorm was developed using Python 3.9
+* Clingo version: Clorm has been tested with Clingo version 5.4 and 5.4.
 
 Ideas for the Future
 --------------------
