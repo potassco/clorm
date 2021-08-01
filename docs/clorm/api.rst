@@ -152,6 +152,21 @@ The following functions support the query specification.
 
 .. autofunction:: clorm.alias
 
+.. autofunction:: clorm.cross
+
+.. autofunction:: clorm.ph_
+
+.. autofunction:: clorm.not_
+
+.. autofunction:: clorm.and_
+
+.. autofunction:: clorm.or_
+
+.. autofunction:: clorm.in_
+
+.. autofunction:: clorm.notin_
+
+
 
 
 

@@ -245,7 +245,7 @@ def not_(*conditions):
     return QCondition(operator.not_,*conditions)
 
 def and_(*conditions):
-    '''Return the conjunction of two of more conditions'''
+    '''Return a the conjunction of two of more conditions'''
     return functools.reduce((lambda x,y: QCondition(operator.and_,x,y)),conditions)
 
 def or_(*conditions):
@@ -259,8 +259,10 @@ def cross(*args):
 
 # iterable membership operators
 def in_(path, seq):
+    '''Return a query operator to test membership  of an item in a collection'''
     return QCondition(operator.contains, seq, path)
 def notin_(path, seq):
+    '''Return a query operator to test non-membership  of an item in a collection'''
     return QCondition(notcontains, seq, path)
 
 #------------------------------------------------------------------------------

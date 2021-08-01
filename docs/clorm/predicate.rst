@@ -34,13 +34,14 @@ specifies that the address of the entity ``dave`` is ``"UNSW Sydney"`` and
    discuss later. Note, however that ASP does not support real number values.
 
 To provide a mapping that satisfies the above predicate we need to sub-class the
-``Predicate`` class and use the ``ConstantField`` and ``StringField``
-classes. These field classes, including the ``IntegerField``, are all
-sub-classes of the base ``RawField`` class.
+:class:`~clorm.Predicate` class and use the :class:`~clorm.ConstantField` and
+:class:`~clorm.StringField` classes. These field classes, including the
+:class:`~clorm.IntegerField`, are all sub-classes of the base
+:class:`~clorm.RawField` class.
 
 .. code-block:: python
 
-   from clorm import Predicate, ConstantField, StringField
+   from clorm import Predicate, ConstantField, StringField, IntegerField
 
    class Address(Predicate):
       entity = ConstantField
@@ -75,7 +76,8 @@ There are some things to note here:
   that the names of all predicate/complex-terms must begin with a lower-case
   letter and can contain only alphanumeric characters or underscore. Unless
   overriden, Clorm will automatically generate a predicate name for a
-  ``Predicate`` sub-class by transforming the class name based on some simple rules:
+  :class:`~clorm.Predicate` sub-class by transforming the class name based on
+  some simple rules:
 
   * If the first letter is a lower-case character then this is a valid predicate
     name so the name is left unchanged (e.g., ``myPredicate`` =>
@@ -102,14 +104,14 @@ There are some things to note here:
 
 * *Field names*: besides the Python keywords, Clorm also disallows the following
   reserved words: ``raw``, ``meta``, ``clone``, ``Field`` as these are used as
-  properties or functions of a ``Predicate`` object.
+  properties or functions of a :class:`~clorm.Predicate` object.
 
 * *Constant vs string*: In the above example ``"bob"`` and ``"Sydney uni"`` are
   both Python strings but because of the ``entity`` field is declared as a
-  ``ConstantField`` this ensures that the Python string ``"bob"`` is treated as
-  an ASP constant. Note, currently it is the users' responsibility to ensure
-  that the Python string passed to a constant term satisfies the syntactic
-  restriction.
+  :class:`~clorm.ConstantField` this ensures that the Python string ``"bob"`` is
+  treated as an ASP constant. Note, currently it is the users' responsibility to
+  ensure that the Python string passed to a constant term satisfies the
+  syntactic restriction.
 
 * The use of a *default value*: all term types support the specification of a
   default value.
@@ -137,8 +139,6 @@ Overriding the default predicate name requires declaring a ``Meta`` sub-class
 for the predicate definition.
 
 .. code-block:: python
-
-   from clorm import *
 
    class Address2(Predicate):
       entity = ConstantField
@@ -178,8 +178,6 @@ is straightforward:
 
 .. code-block:: python
 
-   from clorm import *
-
    class AUnary(Predicate):
        pass
 
@@ -203,20 +201,22 @@ predicate, such as:
 
     booking("2018-12-31", location("Sydney", "Australia")).
 
-The Clorm ``Predicate`` class definition is able to support the flexiblity
-required to deal with complex terms. A ``ComplexTerm`` class is introduced
-simply as an alias for the ``Predicate`` class.
+The Clorm :class:`~clorm.Predicate` class definition is able to support the
+flexiblity required to deal with complex terms. A :class:`~clorm.ComplexTerm`
+class is introduced simply as an alias for the :class:`~clorm.Predicate` class.
 
 .. code-block:: python
 
-   from clorm import Predicate, ComplexTerm, StringField
+   from clorm import ComplexTerm
 
    class Location(ComplexTerm):
       city = StringField
       country = StringField
 
-The definition for a complex term can be included within a new ``Predicate``
-definition by using the ``Field`` property of the ``ComplexTerm`` sub-class.
+The definition for a complex term can be included within a new
+:class:`~clorm.Predicate` definition by using the
+:py:meth:`ComplexTerm.Field<clorm.Predicate.Field>` property of the
+:class:`~clorm.ComplexTerm` sub-class.
 
 .. code-block:: python
 
@@ -224,10 +224,11 @@ definition by using the ``Field`` property of the ``ComplexTerm`` sub-class.
        date=StringField
        location=Location.Field
 
-This ``Field`` property returns a ``RawField`` sub-class that is generated
-automatically when the ``Predicate`` sub-class is defined. It provides the
-functions to automatically convert to, and from, the Predicate sub-class
-instances and the Clingo symbol objects.
+The :py:meth:`ComplexTerm.Field<clorm.Predicate.Field>` property returns a
+:class:`~clorm.RawField` sub-class that is generated automatically when the
+:class:`~clorm.Predicate` sub-class is defined. It provides the functions to
+automatically convert to, and from, the Predicate sub-class instances and the
+Clingo symbol objects.
 
 The predicate class containing complex terms can be instantiated in the obvious
 way:
@@ -353,8 +354,8 @@ setting a ``sign`` meta attribute declaration.
    % Unifying against raw Clingo positive and negative facts
    raws = [Function("p",Number(1)), Function("p",Number(1),positive=False)]
    fb = unify([P_pos,P_neg], raw)
-   assert fb.select(F_pos).get() == [pos_p]
-   assert fb.select(F_neg).get() == [neg_p]
+   assert pos_p in fb
+   assert neg_p in fb
 
 Field Definitions
 -----------------
@@ -363,30 +364,30 @@ Clorm provides a number of standard definitions that specify the mapping between
 Clingo's internal representation (some form of ``Clingo.Symbol``) to more
 natural Python representations.  ASP has three *simple terms*: *integer*,
 *string*, and *constant*, and Clorm provides three standard definition classes
-to provide a mapping to these fields: ``IntegerField``, ``StringField``, and
-``ConstantField``.
+to provide a mapping to these fields: :class:`~clorm.IntegerField`,
+:class:`~clorm.StringField`, and :class:`~clorm.ConstantField`.
 
-Clorm also provides a ``SimpleField`` class that can match to any simple
-term. This is useful when the parameter of a defined predicate can contain
-arbitrary simple term types. Clorm takes care of converting the ASP string,
-constant or integer to a Python string or integer object. Note that both ASP
-strings and constants are both converted to Python string objects.
+Clorm also provides a :class:`~clorm.SimpleField` class that can match to any
+simple term. This is useful when the parameter of a defined predicate can
+contain arbitrary simple term types. Clorm takes care of converting the ASP
+string, constant or integer to a Python string or integer object. Note that both
+ASP strings and constants are both converted to Python string objects.
 
 In order to convert from a Python string object to an ASP string or constant,
-``SimpleField`` uses a regular expression to determine if the string matches the
-pattern of a constant and treats it accordingly. For this reason ``SimpleField``
-should be used with care in order to ensure expected behaviour, and using the
-distinct field types is often preferable.
+:class:`~clorm.SimpleField` uses a regular expression to determine if the string
+matches the pattern of a constant and treats it accordingly. For this reason
+:class:`~clorm.SimpleField` should be used with care in order to ensure expected
+behaviour, and using the distinct field types is often preferable.
 
 .. note::
 
    It is worth highlighting that in the above predicate declarations, the field
    classes do not represent instances of the actual fields. For example, the
-   date string "2018-12-31" is not stored in a ``StringField`` object. Rather
-   the field classes provide the implementation of the functions that perform
-   the necessary data conversions. Instantiating a field class in a predicate
-   definition is only necessary to allow options to be specified, such as
-   default values or indexing.
+   date string "2018-12-31" is not stored in a :class:`~clorm.StringField`
+   object. Rather the field classes provide the implementation of the functions
+   that perform the necessary data conversions. Instantiating a field class in a
+   predicate definition is only necessary to allow options to be specified, such
+   as default values or indexing.
 
 Simple Term Definition Options
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -395,25 +396,27 @@ There are currently two options when specifying the Python fields for a
 predicate. We have already seen the ``default`` option, but there is also the
 ``index`` option.
 
-Specifying ``index = True`` can affect the behaviour when a ``FactBase``
-container objects are created. While the ``FactBase`` class will be discussed in
-greater detail in the next chapter, here we simply note that it is a convenience
-container for storing sets of facts. They can be thought of as mini-databases
-and have some indexing support for improved query performance.
+Specifying ``index = True`` can affect the behaviour when a
+:class:`~clorm.FactBase` container objects are created. While the
+:class:`~clorm.FactBase` class will be discussed in greater detail in the next
+chapter, here we simply note that it is a convenience container for storing sets
+of facts. They can be thought of as mini-databases and have some indexing
+support for improved query performance.
 
 Sub-classing Field Definitions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-All field classes inherit from a base class ``RawField`` and it's possible to
-define arbitrary data conversions by sub-classing ``RawField``. Clorm provides
-the standard sub-classes ``StringField``, ``ConstantField``, and
-``IntegerField``. Clorm also automatically generates an appropriate sub-class
-for every ``ComplexTerm`` definition.
+All field classes inherit from a base class :class:`~clorm.RawField` and it's
+possible to define arbitrary data conversions by sub-classing
+:class:`~clorm.RawField`. Clorm provides the standard sub-classes
+:class:`~clorm.StringField`, :class:`~clorm.ConstantField`, and
+:class:`~clorm.IntegerField`. Clorm also automatically generates an appropriate
+sub-class for every :class:`~clorm.ComplexTerm` definition.
 
-However, it is sometimes also useful to explicitly sub-class the ``RawField``
-class, or sub-class one of its sub-classes. By sub-classing a sub-class it is
-possible to form a *data conversion chain*. To understand why this is useful we
-consider an example of specifying a date field.
+However, it is sometimes also useful to explicitly sub-class the
+:class:`~clorm.RawField` class, or sub-class one of its sub-classes. By
+sub-classing a sub-class it is possible to form a *data conversion chain*. To
+understand why this is useful we consider an example of specifying a date field.
 
 Consider the example of an application that needs a date term for an event
 tracking application. From the Python code perspective it would be natural to
@@ -438,8 +441,8 @@ the 31st December 2018.
 
    booking("2018-12-31", "NYE party").
 
-Using Clorm this fact can be captured by the following Python ``Predicate``
-sub-class definition:
+Using Clorm this fact can be captured by the following Python
+:class:`~clorm.Predicate` sub-class definition:
 
 .. code-block:: python
 
@@ -449,9 +452,10 @@ sub-class definition:
       date = StringField
       description = StringField
 
-However, since we encoded the date as simply a ``StringField`` it is now up to
-the user of the ``Booking`` class to perform the necessary translations to and
-from a Python ``datetime.date`` objects when necessary. For example:
+However, since we encoded the date as simply a :class:`~clorm.StringField` it is
+now up to the user of the ``Booking`` class to perform the necessary
+translations to and from a Python ``datetime.date`` objects when necessary. For
+example:
 
 .. code-block:: python
 
@@ -475,11 +479,12 @@ remember to make the correct translation both in creating and reading the
 date. Furthermore the places in the code where these translations are made may
 be far apart, leading to potential problems when code needs to be refactored.
 
-The solution to this problem is to create a sub-class of ``RawField`` that
-performs the appropriate data conversion. However, sub-classing ``Rawfield``
-directly requires dealing with raw Clingo ``Symbol`` objects. A better
-alternative is to sub-class the ``StringField`` class so you need to only deal
-with the string to date conversion.
+The solution to this problem is to create a sub-class of
+:class:`~clorm.RawField` that performs the appropriate data conversion. However,
+sub-classing :class:`~clorm.Rawfield` directly requires dealing with raw Clingo
+``Symbol`` objects. A better alternative is to sub-class the
+:class:`~clorm.StringField` class so you need to only deal with the string to
+date conversion.
 
 .. code-block:: python
 
@@ -496,11 +501,11 @@ with the string to date conversion.
 
 The ``pytocl`` definition specifies the conversion that takes place in the
 direction of converting Python data to Clingo data, and ``cltopy`` handles the
-opposite direction. Because the ``DateField`` inherits from ``StringField``
-therefore the ``pytocl`` function must output a Python string object. In the
-opposite direction, ``cltopy`` must be passed a Python string object and
-performs the desired conversion, in this case producing a ``datetime.date``
-object.
+opposite direction. Because the :class:`~clorm.DateField` inherits from
+:class:`~clorm.StringField` therefore the ``pytocl`` function must output a
+Python string object. In the opposite direction, ``cltopy`` must be passed a
+Python string object and performs the desired conversion, in this case producing
+a ``datetime.date`` object.
 
 With the newly defined ``DateField`` the conversion functions are all captured
 within the one class definition and interacting with the objects can be done in
@@ -563,10 +568,11 @@ mistake):
 
    ck = Cooking1(dow="mnday",person="Bob")
 
-In order to avoid these errors it is necessary to subclass the ``ConstantField``
-in order to restrict the set of values to the desired set. Clorm provides a
-helper function ``refine_field`` for this use-case. It dynamically defines a new
-class that restricts the values of an existing field class.
+In order to avoid these errors it is necessary to subclass the
+:class:`~clorm.ConstantField` in order to restrict the set of values to the
+desired set. Clorm provides a helper function :py:func:`~clorm.refine_field` for
+this use-case. It dynamically defines a new class that restricts the values of
+an existing field class.
 
 .. code-block:: python
 
@@ -585,15 +591,15 @@ class that restricts the values of an existing field class.
 
 .. note::
 
-   The ``refine_field`` function can also be called with only two arguments,
-   rather than three, by ignoring the name for the generated class. In this case
-   an anonymously generated name will be used.
+   The :py:func:`~clorm.refine_field` function can also be called with only two
+   arguments, rather than three, by ignoring the name for the generated
+   class. In this case an anonymously generated name will be used.
 
-As well as explictly specifying the set of refinement values, ``refine_field``
-also provides a more general approach where a function/functor/lambda can be
-provided. This function must take a single input and return ``True`` if that
-value is valid for the field. For example, to define a field that accepts only
-positive integers:
+As well as explictly specifying the set of refinement values,
+:py:func:`~clorm.refine_field` also provides a more general approach where a
+function/functor/lambda can be provided. This function must take a single input
+and return ``True`` if that value is valid for the field. For example, to define
+a field that accepts only positive integers:
 
 .. code-block:: python
 
@@ -674,12 +680,12 @@ programs. For example:
 
    booking("2018-12-31", ("Sydney", "Australia)).
 
-For Clorm tuples are simply a ``ComplexTerm`` sub-class where the name of the
-corresponding predicate is empty. While this can be set using an ``is_tuple``
-property of the complex term's meta class, Clorm also provides specialised
-support using the more intuitive syntax of a Python tuple. For example, a
-predicate definition that unifies with the above fact can be defined simply
-(using the ``DateField`` defined earlier):
+For Clorm tuples are simply a :class:`~clorm.ComplexTerm` sub-class where the
+name of the corresponding predicate is empty. While this can be set using an
+``is_tuple`` property of the complex term's meta class, Clorm also provides
+specialised support using the more intuitive syntax of a Python tuple. For
+example, a predicate definition that unifies with the above fact can be defined
+simply (using the ``DateField`` defined earlier):
 
 .. code-block:: python
 
@@ -688,20 +694,21 @@ predicate definition that unifies with the above fact can be defined simply
        location=(StringField,StringField)
 
 Here the ``location`` field is defined as a pair of string fields, without
-having to explictly define a separate ``ComplexTerm`` sub-class that corresponds
-to this pair. To instantiate the ``Booking`` class a Python tuple can also be
-used for the values of ``location`` field. For example, the following creates a
-``Boooking`` instance corresponding to the ``booking/2`` fact above:
+having to explictly define a separate :class:`~clorm.ComplexTerm` sub-class that
+corresponds to this pair. To instantiate the ``Booking`` class a Python tuple
+can also be used for the values of ``location`` field. For example, the
+following creates a ``Boooking`` instance corresponding to the ``booking/2``
+fact above:
 
 .. code-block:: python
 
    bk = Booking(date=datetime.date(2018,12,31), location=("Sydney","Australia"))
 
 
-While it is unnecessary to define a seperate ``ComplexTerm`` sub-class
-corresponding to the tuple, internally this is in fact exactly what Clorm
-does. Clorm will transform the above definition into something similar to the
-following:
+While it is unnecessary to define a seperate :class:`~clorm.ComplexTerm`
+sub-class corresponding to the tuple, internally this is in fact exactly what
+Clorm does. Clorm will transform the above definition into something similar to
+the following:
 
 .. code-block:: python
 
@@ -715,9 +722,10 @@ following:
        date=DateField
        location=SomeAnonymousName.Field
 
-Here the ``ComplexTerm`` has an internal ``Meta`` class with the property
-``is_tuple`` set to ``True``. This means that the ``ComplexTerm`` will be
-treated as a tuple rather than a complex term with a function name.
+Here the :class:`~clorm.ComplexTerm` has an internal ``Meta`` class with the
+property ``is_tuple`` set to ``True``. This means that the
+:class:`~clorm.ComplexTerm` will be treated as a tuple rather than a complex
+term with a function name.
 
 One important difference between the implicitly defined and explicitly defined
 versions of a tuple is that the explicit version allows for field names to be
@@ -756,8 +764,8 @@ especially when all you need to do is print the predicate instances to the
 screen, possibly sorted in some order.
 
 Clorm solves this issue by providing a factory helper function
-``simple_predicate()`` that returns a ``Predicate`` sub-class that will map to
-any predicate instance with that name and arity.
+:py:func:`~clorm.simple_predicate` that returns a :class:`~clorm.Predicate`
+sub-class that will map to any predicate instance with that name and arity.
 
 For example this function could be used for the above booking example if we
 wanted to extract the ``booking/2`` facts from the model but didn't care about
@@ -769,7 +777,7 @@ ASP fact:
    booking("2018-12-31", ("Sydney", "Australia)).
 
 instead of the explicit ``Booking`` definition above we could use the
-``simple_predicate`` function:
+:py:func:`~clorm.simple_predicate` function:
 
 .. code-block:: python
 
@@ -800,10 +808,11 @@ The Clingo API uses ``clingo.Symbol`` objects for dealing with facts; and there
 are a number of functions for creating the appropriate type of symbol objects
 (i.e., ``clingo.Function()``, ``clingo.Number()``, ``clingo.String()``).
 
-In essence the Clorm ``Predicate`` and ``ComplexTerm`` classes simply provide a
-more convenient and intuitive way of constructing and dealing with these
-``clingo.Symbol`` objects. In fact the underlying symbols can be accessed using
-the ``raw`` property of a ``Predicate`` or ``ComplexTerm`` object.
+In essence the Clorm :class:`~clorm.Predicate` and :class:`~clorm.ComplexTerm`
+classes simply provide a more convenient and intuitive way of constructing and
+dealing with these ``clingo.Symbol`` objects. In fact the underlying symbols can
+be accessed using the ``raw`` property of a :class:`~clorm.Predicate` or
+:class:`~clorm.ComplexTerm` object.
 
 .. code-block:: python
 
@@ -811,8 +820,8 @@ the ``raw`` property of a ``Predicate`` or ``ComplexTerm`` object.
    from clingo import *   # Function, String
 
    class Address(Predicate):
-      entity = ConstantField()
-      details = StringField()
+      entity = ConstantField
+      details = StringField
 
    address = Address(entity="dave", details="UNSW Sydney")
 
@@ -820,8 +829,8 @@ the ``raw`` property of a ``Predicate`` or ``ComplexTerm`` object.
 
    assert address.raw == raw_address
 
-Clorm ``Predicate`` objects can also be constructed from the raw symbol
-objects. So assuming the above python code.
+Clorm :class:`~clorm.Predicate` objects can also be constructed from the raw
+symbol objects. So assuming the above python code.
 
 .. code-block:: python
 
@@ -829,9 +838,10 @@ objects. So assuming the above python code.
 
 .. note::
 
-   Not every raw symbol will *unify* with a given ``Predicate`` or
-   ``ComplexTerm`` class. If the raw constructor fails to unify a symbol with a
-   predicate definition then a ``ValueError`` exception will be raised.
+   Not every raw symbol will *unify* with a given :class:`~clorm.Predicate` or
+   :class:`~clorm.ComplexTerm` sub-class. If the raw constructor fails to unify
+   a symbol with a predicate definition then a ``ValueError`` exception will be
+   raised.
 
 Integrating Clingo Symbols into a Predicate Definition
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -839,7 +849,7 @@ Integrating Clingo Symbols into a Predicate Definition
 There are some cases when it might be convenient to combine the simplicity and
 the structure of the Clorm predicate interface with the flexibility of the
 underlying Clingo symbol API. For this case it is possible to use the
-``RawField`` base class itself.
+:class:`~clorm.RawField` base class itself.
 
 For example when modeling dynamic domains it is often useful to provide a
 predicate that defines what *fluents* are true at a given time point, but to
@@ -873,7 +883,7 @@ the fluents themselves as raw Clingo symbol objects.
       time = IntegerField
 
 Accessing the value of the ``fluent`` simply returns the raw Clingo symbol. Also
-the ``RawField`` has the useful property that it will unify with any
+the :class:`~clorm.RawField` has the useful property that it will unify with any
 ``Clingo.Symbol`` object and therefore can be used to capture both the
 ``light/1`` and ``robotlocation/2`` complex terms.
 
@@ -883,14 +893,15 @@ Combining Field Definitions
 
 The above example is useful for cases where you don't care about accessing the
 details of individual fluents and therefore it makes sense to simply treat them
-as a ``RawField`` complex term. However, the question naturally arises what to
+as a :class:`~clorm.RawField` complex term. However, the question naturally arises what to
 do if you do want more fine-grained access to these fluents.
 
 There are a few possible solutions to this problem, but one obvious answer is to
 use a field that combines together multiple fields. Such a combined field could
-be specified manually by explicitly defining a RawField sub-class. However, to
-simplify this process the ``combine_fields()`` factory function has been
-provided that will return such a combined RawField sub-class.
+be specified manually by explicitly defining a :class:`~clorm.RawField`
+sub-class. However, to simplify this process the
+:py:func:`~clorm.combine_fields` factory function has been provided that will
+return such a combined sub-class.
 
 With reference to the ASP code of the previous example we could add the
 following Python integration:
@@ -912,47 +923,15 @@ following Python integration:
       time = IntegerField
 
 
-The ``combine_fields()`` function takes two arguments; the first is an optional
-field name argument and the second is a list of the sub-fields to combine. Note:
-when trying to unify a value with a combined field the raw symbol values will be
-unified with the underlying field definitions in the order that they are listed
-in the call to ``combine_fields()``. This means that care needs to be taken if
-the raw symbol values could unify with multiple sub-fields; it will only unify
-with the first successful sub-field. In the above example this is not a problem
-as the two fluent field definitions do not overlap.
-
-.. code-block:: python
-
-    from clorm import ph1_
-
-    ctrl = Control(unifier=[True])
-    ctrl.ground([("base",[])])
-
-    solution=None
-    with ctrl.solve(yield_=True) as sh:
-        for m in sh:
-            solution=m.facts(atoms=True)
-            break
-    if not solution:
-        raise ValueError("No solution found")
-
-    fquery = solution.select(True).where(True.time == ph1_)
-    for h in fquery.get(0):
-            f = h.fluent
-            if isinstance(f,Light):
-                print("\tLight is: {}".format(f.status))
-            elif isinstance(f,RobotLocation):
-                print("\tRobot {} is at {}".format(f.robot,f.location))
-
-
-It should be noted that there is one disadvantage of using a combined field
-instead of ``RawField``. Clingo defines a total ordering over all Symbol
-objects. This means that it is always possible to specify an ``.order_by()``
-criteria if the term definition is for a ``RawField``. On the other hand Python
-does not define an ordering over all objects. For example trying to sort a list
-containing integers and strings will fail and throw an exception. In such cases
-where there is no Python ordering between converted values then a query
-specifying an ``.order_by()`` criteria will also throw an exception.
+The :py:func:`~clorm.combine_fields` function takes two arguments; the first is
+an optional field name argument and the second is a list of the sub-fields to
+combine. Note: when trying to unify a value with a combined field the raw symbol
+values will be unified with the underlying field definitions in the order that
+they are listed in the call to :py:func:`~clorm.combine_fields`. This means that
+care needs to be taken if the raw symbol values could unify with multiple
+sub-fields; it will only unify with the first successful sub-field. In the above
+example this is not a problem as the two fluent field definitions do not
+overlap.
 
 
 Dealing with Nested Lists
@@ -975,10 +954,10 @@ nevertheless when used with care can be very useful.
 
 Unfortunately, getting facts containing these sorts of nested lists into and out
 of Clingo can be very cumbersome. To help support this type of encoding Clorm
-provides the ``define_nested_list_field()`` function. This factory function
-takes an element field class, as well as an optional new class name, and returns
-a newly created ``RawField`` sub-class that can be used to convert to and from a
-list of elements of that field class.
+provides the :py:func:`~clorm.define_nested_list_field()` function. This factory
+function takes an element field class, as well as an optional new class name,
+and returns a newly created :class:`~clorm.RawField` sub-class that can be used
+to convert to and from a list of elements of that field class.
 
  .. code-block:: python
 
