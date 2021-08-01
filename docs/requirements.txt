@@ -1,1 +1,1 @@
-clingo==5.5
+clingo>=5.5.0
