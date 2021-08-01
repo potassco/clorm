@@ -501,8 +501,24 @@ class ControlOverride(object):
 Control = make_class_wrapper(OControl, ControlOverride)
 
 #------------------------------------------------------------------------------
+# This is probably bad practice... Modify the original clingo docstrings so that
+# when I generate the autodoc with clingo being mocked it installs a reference
+# to the original clingo docs.
+#
+# UPDATE: I'm confused what the autodoc mocking is doing (or not doing). I'm
+# sure I had it working but now seems to be failing. Adding more hacks :(
+# ------------------------------------------------------------------------------
+
+Control.__doc__ += OControl.__doc__
+Control.assign_external.__doc__ += OControl.assign_external.__doc__
+Control.release_external.__doc__ += OControl.release_external.__doc__
+Control.solve.__doc__ += OControl.solve.__doc__
+Model.__doc__ += OModel.__doc__
+Model.contains.__doc__ += OModel.contains.__doc__
+SolveHandle.__doc__ += OSolveHandle.__doc__
+
+#------------------------------------------------------------------------------
 # main
 #------------------------------------------------------------------------------
 if __name__ == "__main__":
     raise RuntimeError('Cannot run modules')
-
