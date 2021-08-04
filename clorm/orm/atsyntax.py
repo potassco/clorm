@@ -48,10 +48,10 @@ class TypeCastSignature(object):
 
       - Inputs. Match the sub-elements [:-1] define the input signature while
         the last element defines the output signature. Each input must be a
-        RawField (or sub-class).
+        BaseField (or sub-class).
 
-      - Output: Must be RawField (or sub-class) or a singleton list
-        containing a RawField (or sub-class).
+      - Output: Must be BaseField (or sub-class) or a singleton list
+        containing a BaseField (or sub-class).
 
    Example:
        .. code-block:: python
@@ -80,22 +80,22 @@ class TypeCastSignature(object):
 
     @staticmethod
     def _is_input_element(se):
-        """An input element must be a subclass of RawField (or an instance of a
-           subclass) or a tuple corresponding to a subclass of RawField"""
-        return inspect.isclass(se) and issubclass(se, RawField)
+        """An input element must be a subclass of BaseField (or an instance of a
+           subclass) or a tuple corresponding to a subclass of BaseField"""
+        return inspect.isclass(se) and issubclass(se, BaseField)
 
     @staticmethod
     def is_return_element(se):
         """An output element must be an output field or a singleton iterable containing
-           an output fields; where an output field is a RawField sub-class or
-           tuple that recursively reduces to a RawField sub-class.
+           an output fields; where an output field is a BaseField sub-class or
+           tuple that recursively reduces to a BaseField sub-class.
         """
         def _is_output_field(o):
             if isinstance(o,tuple):
                 for i in o:
                     if not _is_output_field(i): return False
                 return True
-            return inspect.isclass(o) and issubclass(o, RawField)
+            return inspect.isclass(o) and issubclass(o, BaseField)
 
         if isinstance(se, cabc.Iterable):
             if len(se) != 1: return False
@@ -105,7 +105,7 @@ class TypeCastSignature(object):
     def __init__(self, *sigs):
         def _validate_basic_sig(sig):
             if TypeCastSignature._is_input_element(sig): return True
-            raise TypeError(("TypeCastSignature element {} must be a RawField "
+            raise TypeError(("TypeCastSignature element {} must be a BaseField "
                              "subclass".format(sig)))
 
         self._insigs = [ type(get_field_definition(s)) for s in sigs[:-1]]
@@ -135,7 +135,7 @@ class TypeCastSignature(object):
 
     def _output(self, sig, arg):
         # Since signature already validated we can make assumptions
-        if inspect.isclass(sig) and issubclass(sig, RawField):
+        if inspect.isclass(sig) and issubclass(sig, BaseField):
             return sig.pytocl(arg)
 
         # Deal with a list
@@ -270,10 +270,10 @@ def make_function_asp_callable(*args):
 
       - Inputs. Match the sub-elements [:-1] define the input signature while
         the last element defines the output signature. Each input must be a a
-        RawField (or sub-class).
+        BaseField (or sub-class).
 
-      - Output: Must be RawField (or sub-class) or a singleton list
-        containing a RawField (or sub-class).
+      - Output: Must be BaseField (or sub-class) or a singleton list
+        containing a BaseField (or sub-class).
 
     If no arguments are provided then the function signature is derived from the
     function annotations. The function annotations must conform to the signature

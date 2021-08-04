@@ -14,7 +14,7 @@ from clingo import Control, Number, String, Function, SymbolType
 
 # Official Clorm API imports
 from clorm.orm import \
-    RawField, IntegerField, StringField, ConstantField, SimpleField,  \
+    BaseField, RawField, IntegerField, StringField, ConstantField, SimpleField,  \
     Predicate, ComplexTerm, path, hashable_path, FactBase
 
 # Official Clorm API imports
@@ -255,7 +255,7 @@ class UnifyTestCase(unittest.TestCase):
 
         # Define a class that converts strings but makes bad exceptions for any
         # other input
-        class TmpField(RawField):
+        class TmpField(BaseField):
             def cltopy(raw):
                 if raw.type == SymbolType.String:
                     return raw.string

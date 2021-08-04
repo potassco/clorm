@@ -19,7 +19,7 @@ import clingo
 from clingo import Control, Number, String, Function, SymbolType
 
 # Official Clorm API imports
-from clorm.orm import RawField, IntegerField, StringField, ConstantField, \
+from clorm.orm import IntegerField, StringField, ConstantField, \
     SimpleField,  Predicate, ComplexTerm
 
 # Official Clorm API imports

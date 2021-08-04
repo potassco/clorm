@@ -9,6 +9,7 @@ from .unifier import *
 from .atsyntax import *
 
 __all__ = [
+    'BaseField',
     'RawField',
     'IntegerField',
     'StringField',

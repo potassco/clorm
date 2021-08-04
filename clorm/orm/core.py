@@ -26,6 +26,7 @@ import re
 import uuid
 
 __all__ = [
+    'BaseField',
     'RawField',
     'IntegerField',
     'StringField',
@@ -511,7 +512,7 @@ class PredicatePath(object, metaclass=_PredicatePathMeta):
 
 
         #--------------------------------------------------------------------------
-        # get the RawField instance associated with this path. If the path is a
+        # get the BaseField instance associated with this path. If the path is a
         # root path or a sign path then it won't have an associated field so
         # will return None
         # --------------------------------------------------------------------------
@@ -827,24 +828,32 @@ def kwargs_check_keys(validkeys, inputkeys):
 
 
 #------------------------------------------------------------------------------
-# RawField class captures the definition of a logical term ("which we will call
+# BaseField class captures the definition of a logical term ("which we will call
 # a field") between python and clingo.
 # ------------------------------------------------------------------------------
-def _make_pytocl(fn):
-    def _pytocl(cls, v):
-        if cls._parentclass:
-            return cls._parentclass.pytocl(fn(v))
-        return fn(v)
-    return _pytocl
 
-def _make_cltopy(fn):
-    def _cltopy(cls, v):
-        if cls._parentclass:
-            return fn(cls._parentclass.cltopy(v))
-        return fn(v)
-    return _cltopy
+# Create the pytocl and cltopy class member functions. If their inherit directly
+# from BaseField then just return the result of the function. If they inherit
+# from a sub-class of BaseField then call the parents conversion function first.
+def _make_pytocl(parent, fn):
+    if parent == BaseField:
+        return lambda cls,v : fn(v)
+    else:
+        pfn = parent.pytocl
+        return lambda cls,v : pfn(fn(v))
 
-def _rfm_constructor(self, *args, **kwargs):
+def _make_cltopy(parent, fn):
+    if parent == BaseField:
+        return lambda cls,v : fn(v)
+    else:
+        pfn = parent.cltopy
+        return lambda cls,v : fn(pfn(v))
+
+
+def _basefield_class_constructor(self, *args, **kwargs):
+    raise TypeError(("BaseField must be sub-classed"))
+
+def _basefield_subclass_constructor(self, *args, **kwargs):
     # Check the match between positional and keyword arguments
     if "default" in kwargs and len(args) > 0:
         raise TypeError(("Field constructor got multiple values for "
@@ -884,26 +893,27 @@ def _rfm_constructor(self, *args, **kwargs):
             raise TypeError("Invalid default value \"{}\" for {}".format(
                 dval, type(self).__name__))
 
-class _RawFieldMeta(type):
+class _BaseFieldMeta(type):
     def __new__(meta, name, bases, dct):
+
+        if name == "BaseField":
+            dct["__init__"] = _basefield_class_constructor
+            dct["_parentclass"] = None
+            return super(_BaseFieldMeta, meta).__new__(meta, name, bases, dct)
 
         # Add a default initialiser if one is not already defined
         if "__init__" not in dct:
-            dct["__init__"] = _rfm_constructor
+            dct["__init__"] = _basefield_subclass_constructor
 
         dct["_fpb"] = _lateinit("{}._fpb".format(name))
-
-        if name == "RawField":
-            dct["_parentclass"] = None
-            return super(_RawFieldMeta, meta).__new__(meta, name, bases, dct)
 
         for key in [ "cltopy", "pytocl" ]:
             if key in dct and not callable(dct[key]):
                 raise AttributeError("Definition of {} is not callable".format(key))
 
-        parents = [ b for b in bases if issubclass(b, RawField)]
+        parents = [ b for b in bases if issubclass(b, BaseField)]
         if len(parents) == 0:
-            raise TypeError("Internal bug: number of RawField bases is 0!")
+            raise TypeError("Internal bug: number of BaseField bases is 0!")
         if len(parents) > 1:
             raise TypeError("Multiple class inheritence for field classes is forbidden")
         dct["_parentclass"] = parents[0]
@@ -919,12 +929,12 @@ class _RawFieldMeta(type):
             raise NotImplementedError(msg)
 
         if "cltopy" in dct:
-            dct["cltopy"] = classmethod(_make_cltopy(dct["cltopy"]))
+            dct["cltopy"] = classmethod(_make_cltopy(parents[0], dct["cltopy"]))
         else:
             dct["cltopy"] = classmethod(_raise_cltopy_nie)
 
         if "pytocl" in dct:
-            dct["pytocl"] = classmethod(_make_pytocl(dct["pytocl"]))
+            dct["pytocl"] = classmethod(_make_pytocl(parents[0], dct["pytocl"]))
         else:
             dct["pytocl"] = classmethod(_raise_pytocl_nie)
 
@@ -937,18 +947,18 @@ class _RawFieldMeta(type):
             dct["complex"] = _classproperty(lambda cls: None)
 #            dct["complex"] = _classproperty(None)
 
-        return super(_RawFieldMeta, meta).__new__(meta, name, bases, dct)
+        return super(_BaseFieldMeta, meta).__new__(meta, name, bases, dct)
 
     def __init__(cls, name, bases, dct):
 
-        return super(_RawFieldMeta, cls).__init__(name, bases, dct)
+        return super(_BaseFieldMeta, cls).__init__(name, bases, dct)
 
 #------------------------------------------------------------------------------
 # Field definitions. All fields have the functions: pytocl, cltopy,
 # and unifies, and the properties: default and has_default
 # ------------------------------------------------------------------------------
 
-class RawField(object, metaclass=_RawFieldMeta):
+class BaseField(object, metaclass=_BaseFieldMeta):
     """A class that represents a field that correspond to logical terms.
 
     A field is typically used as part of a ``ComplexTerm`` or ``Predicate``
@@ -957,13 +967,15 @@ class RawField(object, metaclass=_RawFieldMeta):
 
     It contains two class functions ``cltopy`` and ``pytocl`` that implement the
     translation from Clingo to Python and Python to Clingo respectively. For
-    ``RawField`` these functions simply pass the values straight though, however
-    ``RawField`` can be sub-classed to build a chain of
-    translations. ``StringField``, ``IntegerField``, and ``ConstantField`` are
-    predefined sub-classes that provide translations for the ASP simple terms;
-    *string*, *integer* and *constant*.
+    ``BaseField`` these functions are abstract. However ``BaseField`` can be
+    sub-classed to build a chain of translations. ``RawField``, ``StringField``,
+    ``IntegerField``, and ``ConstantField`` are predefined sub-classes that
+    provide translations. ``BaseField`` provides direct pass-through for the raw
+    clingo symbol object. ``StringField``, ``IntegerField``, and
+    ``ConstantField`` provide translations for the ASP simple terms; *string*,
+    *integer* and *constant*.
 
-    To sub-class RawField (or one of its sub-classes) simply specify ``cltopy``
+    To sub-class BaseField (or one of its sub-classes) simply specify ``cltopy``
     and ``pytocl`` functions that take an input and perform some translation to
     an output format.
 
@@ -985,10 +997,10 @@ class RawField(object, metaclass=_RawFieldMeta):
 
 
        Because ``DateField`` sub-classes ``StringField``, rather than
-       sub-classing ``RawField`` directly, it forms a longer data translation
+       sub-classing ``BaseField`` directly, it forms a longer data translation
        chain:
 
-         clingo symbol object -- RawField -- StringField -- DateField -- python date object
+         clingo symbol object -- BaseField -- StringField -- DateField -- python date object
 
        Here the ``DateField.cltopy`` is called at the end of the chain of
        translations, so it expects a Python string object as input and outputs a
@@ -1008,7 +1020,7 @@ class RawField(object, metaclass=_RawFieldMeta):
     """
 
     @classmethod
-    def cltopy(cls, v):
+    def cltopy(cls, v): #pass
         """Called when translating data from Clingo to Python"""
         return v
 
@@ -1042,7 +1054,7 @@ class RawField(object, metaclass=_RawFieldMeta):
 
         Note: 1) if a function was specified as the default then testing
         ``default`` will call this function and return the value, 2) if your
-        RawField sub-class allows a default value of ``None`` then you need to
+        BaseField sub-class allows a default value of ``None`` then you need to
         check the ``has_default`` property to distinguish between no default
         value and a ``None`` default value.
 
@@ -1057,10 +1069,17 @@ class RawField(object, metaclass=_RawFieldMeta):
         return self._index
 
 #------------------------------------------------------------------------------
-# StringField and IntegerField are simple sub-classes of RawField
+# RawField, StringField and IntegerField are simple sub-classes of BaseField
 #------------------------------------------------------------------------------
 
-class StringField(RawField):
+class RawField(BaseField):
+    """A field to pass through an arbitrary Clingo.Symbol."""
+
+    cltopy = lambda v: v
+    pytocl = lambda v: v
+
+
+class StringField(BaseField):
     """A field to convert between a Clingo.String object and a Python string."""
 
     def cltopy(raw):
@@ -1070,7 +1089,7 @@ class StringField(RawField):
 
     pytocl = lambda v: clingo.String(v)
 
-class IntegerField(RawField):
+class IntegerField(BaseField):
     """A field to convert between a Clingo.Number object and a Python integer."""
     def cltopy(raw):
         if raw.type != clingo.SymbolType.Number:
@@ -1092,7 +1111,7 @@ class IntegerField(RawField):
 # negated terms in general and negated constants in particular.
 # ------------------------------------------------------------------------------
 
-class ConstantField(RawField):
+class ConstantField(BaseField):
     """A field to convert between a simple ``Clingo.Function`` object and a Python
     string.
 
@@ -1121,7 +1140,7 @@ class ConstantField(RawField):
 # A SimpleField can handle any simple term (constant, string, integer).
 #------------------------------------------------------------------------------
 
-class SimpleField(RawField):
+class SimpleField(BaseField):
     """A class that represents a field corresponding to any simple term: *string*,
     *constant*, or *integer*.
 
@@ -1158,12 +1177,12 @@ class SimpleField(RawField):
             return clingo.String(value)
 
 #------------------------------------------------------------------------------
-# refine_field is a function that creates a sub-class of a RawField (or RawField
+# refine_field is a function that creates a sub-class of a BaseField (or BaseField
 # sub-class). It restricts the set of allowable values based on a functor or an
 # explicit set of values.
 # ------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
-# Helper function to define a sub-class of a RawField (or sub-class) that
+# Helper function to define a sub-class of a BaseField (or sub-class) that
 # restricts the allowable values.
 # ------------------------------------------------------------------------------
 
@@ -1204,7 +1223,7 @@ def _refine_field_collection(subclass_name, field_class, values):
 def refine_field(*args):
     """Factory function that returns a field sub-class with restricted values.
 
-    A helper factory function to define a sub-class of a RawField (or sub-class)
+    A helper factory function to define a sub-class of a BaseField (or sub-class)
     that restricts the allowable values. For example, if you have a constant in
     a predicate that is restricted to the days of the week ("monday", ...,
     "sunday"), you then want the Python code to respect that restriction and
@@ -1266,8 +1285,8 @@ def refine_field(*args):
     else:
         raise TypeError("refine_field() missing required positional arguments")
 
-    if not inspect.isclass(field_class) or not issubclass(field_class,RawField):
-        raise TypeError("{} is not a subclass of RawField".format(field_class))
+    if not inspect.isclass(field_class) or not issubclass(field_class,BaseField):
+        raise TypeError("{} is not a subclass of BaseField".format(field_class))
 
     if callable(values):
         return _refine_field_functor(subclass_name, field_class, values)
@@ -1277,16 +1296,16 @@ def refine_field(*args):
 
 
 #------------------------------------------------------------------------------
-# combine_fields is a function that creates a sub-class of RawField that
-# combines existing RawField subclasses. It is the mirror of the refine_field
+# combine_fields is a function that creates a sub-class of BaseField that
+# combines existing BaseField subclasses. It is the mirror of the refine_field
 # helper function.
 # ------------------------------------------------------------------------------
 
 def combine_fields(*args):
     """Factory function that returns a field sub-class that combines other fields
 
-    A helper factory function to define a sub-class of RawField that combines
-    other RawField subclasses. The subclass is defined such that it's
+    A helper factory function to define a sub-class of BaseField that combines
+    other BaseField subclasses. The subclass is defined such that it's
     ``pytocl()`` (respectively ``cltopy()``) function tries to return the value
     returned by the underlying sub-field's ``pytocl()`` ( (respectively
     ``cltopy()``) function. If the first sub-field fails then the second is
@@ -1311,7 +1330,7 @@ def combine_fields(*args):
     # Deal with the optional subclass name
     largs=len(args)
     if largs == 1:
-        subclass_name="AnonymousCombinedRawField"
+        subclass_name="AnonymousCombinedBaseField"
         fields=args[0]
     elif largs == 2:
         subclass_name=args[0]
@@ -1321,8 +1340,8 @@ def combine_fields(*args):
 
     # Must combine at least two fields otherwise it doesn't make sense
     for f in fields:
-        if not inspect.isclass(f) or not issubclass(f,RawField):
-            raise TypeError("{} is not RawField or a sub-class".format(f))
+        if not inspect.isclass(f) or not issubclass(f,BaseField):
+            raise TypeError("{} is not BaseField or a sub-class".format(f))
     if len(fields) < 2:
         raise TypeError("Must specify at least two fields to combine")
 
@@ -1343,17 +1362,17 @@ def combine_fields(*args):
                 pass
         raise TypeError("No combined cltopy() match for clingo symbol {}".format(r))
 
-    return type(subclass_name, (RawField,),
+    return type(subclass_name, (BaseField,),
                 { "pytocl": _pytocl,
                   "cltopy": _cltopy})
 
 #------------------------------------------------------------------------------
-# define_nested_list_field is a function that creates a sub-class of RawField that
+# define_nested_list_field is a function that creates a sub-class of BaseField that
 # deals with nested list encoded asp.
 # ------------------------------------------------------------------------------
 
 def define_nested_list_field(*args):
-    """Factory function that returns a RawField sub-class for nested lists
+    """Factory function that returns a BaseField sub-class for nested lists
 
     ASP doesn't have an explicit notion of a list, but sometimes it is useful to
     encode a list as a series of nested pairs (ie., a head-tail encoding) with
@@ -1364,9 +1383,9 @@ def define_nested_list_field(*args):
 
           (1,(2,(3,())))         % Encodes a list [1,2,3]
 
-    This function is a helper factory function to define a sub-class of RawField
+    This function is a helper factory function to define a sub-class of BaseField
     that deals with a nested list encoding consisting of elements of some other
-    RawField subclass.
+    BaseField subclass.
 
     Example:
        .. code-block:: python
@@ -1395,9 +1414,9 @@ def define_nested_list_field(*args):
     else:
         raise TypeError("define_nested_list_field() missing or invalid arguments")
 
-    # The element_field must be a RawField sub-class
-    if not inspect.isclass(efield) or not issubclass(efield,RawField):
-        raise TypeError("'{}' is not a RawField or a sub-class".format(efield))
+    # The element_field must be a BaseField sub-class
+    if not inspect.isclass(efield) or not issubclass(efield,BaseField):
+        raise TypeError("'{}' is not a BaseField or a sub-class".format(efield))
 
     def _pytocl(v):
         if isinstance(v,str) or not isinstance(v,cabc.Iterable):
@@ -1424,7 +1443,7 @@ def define_nested_list_field(*args):
             result = _get_next(result[1])
         return elements
 
-    return type(subclass_name, (RawField,),
+    return type(subclass_name, (BaseField,),
                 { "pytocl": _pytocl,
                   "cltopy": _cltopy})
 
@@ -1514,25 +1533,25 @@ class SignAccessor(object):
 
 #------------------------------------------------------------------------------
 # Helper function to cleverly handle a field definition. If the input is an
-# instance of a RawField then simply return the object. If it is a subclass of
-# RawField then return an instantiation of the object. If it is a tuple then
-# treat it as a recursive definition and return an instantiation of a
+# instance of a BaseField sub-class then simply return the object. If it is a
+# subclass of BaseField then return an instantiation of the object. If it is a
+# tuple then treat it as a recursive definition and return an instantiation of a
 # dynamically created complex-term corresponding to a tuple (with the class name
 # ClormAnonTuple).
 # ------------------------------------------------------------------------------
 
 def get_field_definition(defn):
     errmsg = ("Unrecognised field definition object '{}'. Expecting: "
-              "1) RawField (sub-)class, 2) RawField (sub-)class instance, "
+              "1) BaseField (sub-)class, 2) BaseField (sub-)class instance, "
               "3) a tuple containing a field definition")
 
-    # If we get a RawField (sub-)class then return an instance with default init
+    # If we get a BaseField (sub-)class then return an instance with default init
     if inspect.isclass(defn):
-        if not issubclass(defn,RawField): raise TypeError(errmsg.format(defn))
+        if not issubclass(defn,BaseField): raise TypeError(errmsg.format(defn))
         return defn()
 
-    # Simplest case of a RawField instance
-    if isinstance(defn,RawField): return defn
+    # Simplest case of a BaseField instance
+    if isinstance(defn,BaseField): return defn
 
     # Expecting a tuple and treat it as a recursive definition
     if not isinstance(defn, tuple): raise TypeError(errmsg.format(defn))
@@ -1904,12 +1923,12 @@ def _is_complexterm_declaration(name,obj):
     if not issubclass(obj,ComplexTerm): return False
     return obj.__name__ == name
 
-# Detect a class definition that is not a ComplexTerm subclass or RawField
+# Detect a class definition that is not a ComplexTerm subclass or BaseField
 # subclass or named 'Meta'
 def _is_bad_predicate_inner_class_declaration(name,obj):
     if not inspect.isclass(obj): return False
     if issubclass(obj,ComplexTerm): return False
-    if issubclass(obj,RawField): return False
+    if issubclass(obj,BaseField): return False
     if name == "Meta": return True
     return obj.__name__ == name
 
@@ -2004,8 +2023,8 @@ def _make_predicatedefn(class_name, dct):
     return PredicateDefn(name=pname,field_accessors=fas, anon=anon,sign=sign)
 
 # ------------------------------------------------------------------------------
-# Define a RawField sub-class that corresponds to a Predicate/ComplexTerm
-# sub-class. This RawField sub-class will convert to/from a complex-term
+# Define a BaseField sub-class that corresponds to a Predicate/ComplexTerm
+# sub-class. This BaseField sub-class will convert to/from a complex-term
 # instances and clingo symbol objects.
 # ------------------------------------------------------------------------------
 
@@ -2032,7 +2051,7 @@ def _define_field_for_predicate(cls):
     def _cltopy(v):
         return cls(raw=v)
 
-    field = type(field_name, (RawField,),
+    field = type(field_name, (BaseField,),
                  { "pytocl": _pytocl, "cltopy": _cltopy,
                    "complex": lambda self: cls})
     return field
@@ -2070,7 +2089,7 @@ class _PredicateMeta(type):
         if name == "Predicate":
             return super(_PredicateMeta, cls).__init__(name, bases, dct)
 
-        # Set a RawField sub-class that converts to/from cls instances
+        # Set a BaseField sub-class that converts to/from cls instances
         dct["_field"].assign(_define_field_for_predicate(cls))
 
         md = dct["_meta"]
@@ -2168,7 +2187,7 @@ class Predicate(object, metaclass=_PredicateMeta):
 
     @_classproperty
     def Field(cls):
-        """A RawField sub-class corresponding to a Field for this class."""
+        """A BaseField sub-class corresponding to a Field for this class."""
         return cls._field
 
     # Clone the object with some differences
@@ -2363,17 +2382,17 @@ class Predicate(object, metaclass=_PredicateMeta):
 ComplexTerm=Predicate
 
 #------------------------------------------------------------------------------
-# A function for defining Predicate sub-classes containing only RawField
+# A function for defining Predicate sub-classes containing only BaseField
 # parameters. Useful when debugging ASP code and you just want to use the class
 # for easy display/printing.
 # ------------------------------------------------------------------------------
 
 def simple_predicate(*args):
-    """Factory function to define a predicate with only RawField arguments.
+    """Factory function to define a predicate with only BaseField arguments.
 
     A helper factory function that takes a name and an arity and returns a
     predicate class that is suitable for unifying with predicate instances of
-    that name and arity. It's parameters are all specified as RawFields.
+    that name and arity. It's parameters are all specified as BaseFields.
 
     This function is useful for debugging ASP programs. There may be some
     auxillary predicates that you aren't interested in extracting their values

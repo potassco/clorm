@@ -1,5 +1,5 @@
 #------------------------------------------------------------------------------
-# Unit tests for Clorm ORM RawField, Predicates and associated functions and
+# Unit tests for Clorm ORM BaseField, Predicates and associated functions and
 # classes.
 
 # Note: I'm trying to clearly separate tests of the official Clorm API from
@@ -19,7 +19,7 @@ from clingo import Control, Number, String, Function, SymbolType
 
 # Official Clorm API imports
 from clorm.orm import \
-    RawField, IntegerField, StringField, ConstantField, SimpleField,  \
+    BaseField, RawField, IntegerField, StringField, ConstantField, SimpleField,  \
     Predicate, ComplexTerm, refine_field, combine_fields, \
     define_nested_list_field, simple_predicate, path, hashable_path, alias, \
     not_, and_, or_, cross, in_, notin_
@@ -42,7 +42,7 @@ __all__ = [
 
 
 #------------------------------------------------------------------------------
-# Test the RawField class and sub-classes and definining simple sub-classes
+# Test the BaseField class and sub-classes and definining simple sub-classes
 #------------------------------------------------------------------------------
 
 class FieldTestCase(unittest.TestCase):
@@ -121,7 +121,7 @@ class FieldTestCase(unittest.TestCase):
         self.assertTrue(fconst.unifies(csim2))
 
     #--------------------------------------------------------------------------
-    # Test user-defined RawField sub-classes as well as raising exceptions for
+    # Test user-defined BaseField sub-classes as well as raising exceptions for
     # badly defined fields.
     # --------------------------------------------------------------------------
     def test_api_user_defined_subclass(self):
@@ -384,9 +384,9 @@ class FieldTestCase(unittest.TestCase):
 
         # Make sure the basic class is setup
         defn=combine_fields([IntegerField,ConstantField])
-        self.assertTrue(issubclass(defn,RawField))
+        self.assertTrue(issubclass(defn,BaseField))
         defn=combine_fields("MixedField", [IntegerField,ConstantField])
-        self.assertTrue(issubclass(defn,RawField))
+        self.assertTrue(issubclass(defn,BaseField))
         self.assertEqual(defn.__name__,"MixedField")
 
         # Test some bad class setup
@@ -431,7 +431,7 @@ class FieldTestCase(unittest.TestCase):
 
         # If no class name is given then an anonymous name is assigned
         defn=combine_fields([IntegerField,ConstantField])
-        self.assertEqual(defn.__name__,"AnonymousCombinedRawField")
+        self.assertEqual(defn.__name__,"AnonymousCombinedBaseField")
 
     #--------------------------------------------------------------------------
     # Test defining a field that handles python lists/sequences as logic
@@ -520,7 +520,8 @@ class PredicateTestCase(unittest.TestCase):
         tmp = ConstantField()
         self.assertEqual(get_field_definition(tmp), tmp)
 
-        # A raw field subclass returns an instance of the subclass
+        # A BaseField subclass returns an instance of the subclass
+#        self.assertTrue(isinstance(get_field_definition(BaseField), BaseField))
         self.assertTrue(isinstance(get_field_definition(RawField), RawField))
         self.assertTrue(isinstance(get_field_definition(StringField), StringField))
 
@@ -537,7 +538,7 @@ class PredicateTestCase(unittest.TestCase):
 
         # A simple tuple definition
         td = get_field_definition((IntegerField(), ConstantField()))
-        self.assertTrue(isinstance(td,RawField))
+        self.assertTrue(isinstance(td,BaseField))
 
         # Test the positional and named argument access of result
         clob = Function("",[Number(1),Function("blah")])
@@ -961,12 +962,12 @@ class PredicateTestCase(unittest.TestCase):
 
         b2_field =  BlahBlah2.meta["b"]
         b2_complex = b2_field.defn.complex
-        self.assertTrue(issubclass(type(b2_field.defn), RawField))
+        self.assertTrue(issubclass(type(b2_field.defn), BaseField))
         self.assertEqual(len(b2_complex.meta), 2)
 
         b3_field =  BlahBlah2.meta["b"]
         b3_complex = b3_field.defn.complex
-        self.assertTrue(issubclass(type(b3_field.defn), RawField))
+        self.assertTrue(issubclass(type(b3_field.defn), BaseField))
         self.assertEqual(len(b3_complex.meta), 2)
 
         blahblah2_raw = Function("blahBlah2",
@@ -1101,7 +1102,7 @@ class PredicateInternalUnifyTestCase(unittest.TestCase):
             f=Fact(raw=func2)
 
     # --------------------------------------------------------------------------
-    # Test the RawField.unifies() function
+    # Test the BaseField.unifies() function
     # --------------------------------------------------------------------------
 
     def test_rawfield_unifies(self):
@@ -1112,7 +1113,7 @@ class PredicateInternalUnifyTestCase(unittest.TestCase):
         good=Function("fact",[String("astring")])
         bad=Function("fact",[Number(1)])
 
-        self.assertTrue(RawField.unifies(good))
+        self.assertTrue(BaseField.unifies(good))
         self.assertTrue(ConstantField.unifies(Function("fact",[])))
         self.assertFalse(ConstantField.unifies(String("fact")))
         self.assertTrue(Fact.Field.unifies(good))

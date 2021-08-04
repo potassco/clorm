@@ -15,7 +15,7 @@ from .support import check_errmsg
 from clingo import Control, Number, String, Function, SymbolType
 
 # Official Clorm API imports for the core complements
-from clorm.orm import RawField, IntegerField, StringField, ConstantField, \
+from clorm.orm import IntegerField, StringField, ConstantField, \
     Predicate, ComplexTerm, path, hashable_path, alias
 
 # Implementation imports
