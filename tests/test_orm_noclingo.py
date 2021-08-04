@@ -8,7 +8,7 @@ import datetime
 import calendar
 import operator
 import clingo
-import clorm.noclingo as noclingo
+import clorm.orm.noclingo as noclingo
 
 clingo_version = clingo.__version__
 

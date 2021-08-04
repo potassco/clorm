@@ -7,7 +7,6 @@ from clorm import monkey
 
 __all__ = [
     'ClingoPatchTestCase',
-    'NoClingoPatchTestCase'
     ]
 
 #------------------------------------------------------------------------------
@@ -64,30 +63,6 @@ class ClingoPatchTestCase(unittest.TestCase):
 
         s_a_all = fb2.query(Afact)
         self.assertEqual(set([a for a in s_a_all.all()]), set([af1,af2,af3]))
-
-
-class NoClingoPatchTestCase(unittest.TestCase):
-    def setUp(self):
-        monkey.noclingo_patch() # must call this before importing clingo
-
-    def tearDown(self):
-        monkey.noclingo_unpatch()
-        pass
-
-    #--------------------------------------------------------------------------
-    # Test processing clingo Model
-    #--------------------------------------------------------------------------
-    def test_noclingo(self):
-        from clingo import Control
-        import clingo
-        import clorm.noclingo as noclingo
-
-        self.assertEqual(clingo.String("blah"), noclingo.String("blah"))
-        self.assertEqual(clingo.Number(5), noclingo.Number(5))
-        with self.assertRaises(TypeError) as ctx:
-            instance = Control()
-        with self.assertRaises(TypeError) as ctx:
-            instance = clingo.Control()
 
 
 #------------------------------------------------------------------------------

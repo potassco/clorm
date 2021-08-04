@@ -5,7 +5,6 @@
 import sys
 import clingo as original_clingo
 from . import clingo as clorm_clingo
-from . import noclingo as clorm_noclingo
 
 original_control = original_clingo.Control
 
@@ -28,23 +27,6 @@ def patch():
 def unpatch():
     """Reverse the patching of clingo."""
     original_clingo.Control=original_control
-
-
-#------------------------------------------------------------------------------
-# Noclingo patching
-#------------------------------------------------------------------------------
-
-def noclingo_patch():
-    """Patches clingo by replacing it with noclingo.
-
-    noclingo is a pure python implementation of the clingo.Symbol object
-    interface.
-    """
-    sys.modules['clingo'] = __import__('clorm').noclingo
-
-def noclingo_unpatch():
-    """Reverse the patching of clingo with noclingo."""
-    del sys.modules['clingo']
 
 #------------------------------------------------------------------------------
 # main
