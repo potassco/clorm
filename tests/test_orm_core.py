@@ -1664,6 +1664,22 @@ class PredicateInternalUnifyTestCase(unittest.TestCase):
             good_fact_pred1.afun.aint = 3
 
 
+    #--------------------------------------------------------------------------
+    # Test that we are using slots so facts should not have a __dict__ and you
+    # should not be able to add arbitrary attributes.
+    # --------------------------------------------------------------------------
+    def test_using_slots_for_predicates(self):
+
+        class P(Predicate):
+            aint=IntegerField
+            astr=StringField
+
+        a=P(aint=1,astr="a")
+
+        with self.assertRaises(AttributeError) as ctx:
+            x=a.__dict__
+        with self.assertRaises(AttributeError) as ctx:
+            a.c="what"
 
 
 #------------------------------------------------------------------------------

@@ -2065,6 +2065,9 @@ class _PredicateMeta(type):
     # Allocate the new metaclass
     #--------------------------------------------------------------------------
     def __new__(meta, name, bases, dct):
+        # Make sure we use slots
+        dct["__slots__"] = ('_field_values','_raw', '_hash')
+
         if name == "Predicate":
             dct["_predicate"] = None
             dct["__init__"] = _predicate_base_constructor
