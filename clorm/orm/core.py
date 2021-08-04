@@ -1524,7 +1524,7 @@ class SignAccessor(object):
         if not isinstance(instance, self._parent_cls):
             raise TypeError(("sign {} doesn't match type "
                              "{}").format(self, type(instance).__name__))
-        return instance._raw.positive
+        return instance._sign
 
     def __set__(self, instance, value):
         raise AttributeError(("Cannot modify {}.sign: sign and field values "
@@ -1793,6 +1793,7 @@ def _predicate_init_by_raw(self, **kwargs):
         if raw.name != cls.meta.name: raise ValueError()
         if arity != cls.meta.arity: raise ValueError()
         if cls.meta.sign is not None and cls.meta.sign != raw.positive: raise ValueError()
+        self._sign = raw.positive
         self._field_values = tuple( f.defn.cltopy(raw.arguments[f.index]) \
                                      for f in self.meta )
     except (TypeError,ValueError):
@@ -1839,6 +1840,8 @@ def _predicate_init_by_keyword_values(self, **kwargs):
         if sign != self.meta.sign:
             raise ValueError(("Predicate {} is defined to only allow {} signed "
                               "instances").format(self.__class__, self.meta.sign))
+    # Assign the sign
+    self._sign = sign
 
     # Create the raw clingo.Symbol object
     self._raw = clingo.Function(self.meta.name, clingoargs, sign)
@@ -1865,6 +1868,9 @@ def _predicate_init_by_positional_values(self, *args, **kwargs):
     if self.meta.sign is not None and sign != self.meta.sign:
         raise ValueError(("Predicate {} is defined to only allow {} "
                           "instances").format(type(self).__name__, self.meta.sign))
+
+    # Assign the sign
+    self._sign = sign
 
     # Create the raw clingo.Symbol object
     self._raw = clingo.Function(self.meta.name, clingoargs, sign)
@@ -2066,7 +2072,7 @@ class _PredicateMeta(type):
     #--------------------------------------------------------------------------
     def __new__(meta, name, bases, dct):
         # Make sure we use slots
-        dct["__slots__"] = ('_field_values','_raw', '_hash')
+        dct["__slots__"] = ('_field_values','_sign', '_raw', '_hash')
 
         if name == "Predicate":
             dct["_predicate"] = None
