@@ -21,7 +21,7 @@ from clingo import Control, Number, String, Function, SymbolType
 from clorm.orm import \
     BaseField, RawField, IntegerField, StringField, ConstantField, SimpleField,  \
     Predicate, ComplexTerm, refine_field, combine_fields, \
-    define_nested_list_field, simple_predicate, path, hashable_path, alias, \
+    define_nested_seq_field, simple_predicate, path, hashable_path, alias, \
     not_, and_, or_, cross, in_, notin_
 
 # Implementation imports
@@ -438,8 +438,8 @@ class FieldTestCase(unittest.TestCase):
     # programming nested lists.
     # --------------------------------------------------------------------------
     def test_api_nested_list_field(self):
-        INLField = define_nested_list_field("INLField",IntegerField)
-        CNLField = define_nested_list_field(ConstantField)
+        INLField = define_nested_seq_field("INLField",IntegerField)
+        CNLField = define_nested_seq_field(ConstantField)
 
         empty_list = Function("",[])
         inl_1st = Function("",[Number(3),empty_list])
@@ -463,16 +463,16 @@ class FieldTestCase(unittest.TestCase):
         self.assertEqual(CNLField.pytocl(["a","b","c"]), cnl_3rd)
 
         # Test cltopy for INLField
-        self.assertEqual(INLField.cltopy(empty_list),[])
-        self.assertEqual(INLField.cltopy(inl_1st),[3])
-        self.assertEqual(INLField.cltopy(inl_2nd),[2,3])
-        self.assertEqual(INLField.cltopy(inl_3rd),[1,2,3])
+        self.assertEqual(INLField.cltopy(empty_list),())
+        self.assertEqual(INLField.cltopy(inl_1st),(3,))
+        self.assertEqual(INLField.cltopy(inl_2nd),(2,3))
+        self.assertEqual(INLField.cltopy(inl_3rd),(1,2,3))
 
         # Test cltopy for CNLField
-        self.assertEqual(CNLField.cltopy(empty_list),[])
-        self.assertEqual(CNLField.cltopy(cnl_1st),["c"])
-        self.assertEqual(CNLField.cltopy(cnl_2nd),["b","c"])
-        self.assertEqual(CNLField.cltopy(cnl_3rd),["a","b","c"])
+        self.assertEqual(CNLField.cltopy(empty_list),())
+        self.assertEqual(CNLField.cltopy(cnl_1st),("c",))
+        self.assertEqual(CNLField.cltopy(cnl_2nd),("b","c"))
+        self.assertEqual(CNLField.cltopy(cnl_3rd),("a","b","c"))
 
         # Test some failures
         with self.assertRaises(TypeError) as ctx:
@@ -485,17 +485,17 @@ class FieldTestCase(unittest.TestCase):
 
         with self.assertRaises(TypeError) as ctx:
             tmp = INLField.pytocl(1)
-        check_errmsg("'1' is not a collection",ctx)
+        check_errmsg("'1' is not a sequence",ctx)
 
         # Some badly defined fields
         with self.assertRaises(TypeError) as ctx:
-            tmp = define_nested_list_field("FG","FG")
+            tmp = define_nested_seq_field("FG","FG")
         check_errmsg("'FG' is not a ",ctx)
 
         # Some badly defined fields
         with self.assertRaises(TypeError) as ctx:
-            tmp = define_nested_list_field("FG", IntegerField,ConstantField)
-        check_errmsg("define_nested_list_field() missing or invalid",ctx)
+            tmp = define_nested_seq_field("FG", IntegerField,ConstantField)
+        check_errmsg("define_nested_seq_field() missing or invalid",ctx)
 
 #------------------------------------------------------------------------------
 # Test definition predicates/complex terms
@@ -801,10 +801,10 @@ class PredicateTestCase(unittest.TestCase):
         # Test declaration of predicates with a nested field
         class F(Predicate):
             a = IntegerField
-            b = define_nested_list_field(SimpleField)
+            b = define_nested_seq_field(SimpleField)
             c = IntegerField
 
-        f1 = F(101,[1,"b","G"],202)
+        f1 = F(101,(1,"b","G"),202)
         raw_3rd = Function("",[String("G"),Function("")])
         raw_2nd = Function("",[Function("b"),raw_3rd])
         raw_1st = Function("",[Number(1),raw_2nd])
@@ -813,10 +813,10 @@ class PredicateTestCase(unittest.TestCase):
         self.assertEqual(f1.raw, raw_f1)
         self.assertEqual(F(raw=raw_f1), f1)
 
-        self.assertEqual(str(F(101,[],202)), """f(101,(),202)""")
-        self.assertEqual(str(F(1,[1,2,3,4],2)),
+        self.assertEqual(str(F(101,tuple([]),202)), """f(101,(),202)""")
+        self.assertEqual(str(F(1,tuple([1,2,3,4]),2)),
                              """f(1,(1,(2,(3,(4,())))),2)""")
-        self.assertEqual(str(F(1,["A","b",3,4],2)),
+        self.assertEqual(str(F(1,tuple(["A","b",3,4]),2)),
                              """f(1,("A",(b,(3,(4,())))),2)""")
 
     #--------------------------------------------------------------------------

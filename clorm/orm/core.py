@@ -37,7 +37,7 @@ __all__ = [
     'ComplexTerm',
     'refine_field',
     'combine_fields',
-    'define_nested_list_field',
+    'define_nested_seq_field',
     'simple_predicate',
     'path',
     'hashable_path',
@@ -1367,31 +1367,34 @@ def combine_fields(*args):
                   "cltopy": _cltopy})
 
 #------------------------------------------------------------------------------
-# define_nested_list_field is a function that creates a sub-class of BaseField that
+# define_nested_seq_field is a function that creates a sub-class of BaseField that
 # deals with nested list encoded asp.
 # ------------------------------------------------------------------------------
 
-def define_nested_list_field(*args):
+def define_nested_seq_field(*args):
     """Factory function that returns a BaseField sub-class for nested lists
 
-    ASP doesn't have an explicit notion of a list, but sometimes it is useful to
-    encode a list as a series of nested pairs (ie., a head-tail encoding) with
-    an empty tuple indicating the end of the list.
+    ASP doesn't have an explicit notion of a sequence or list, but sometimes it
+    is useful to encode a sequence as a series of nested pairs (ie., a head-tail
+    encoding) with an empty tuple indicating the end of the sequence.
 
     Example:
        .. code-block:: prolog
 
-          (1,(2,(3,())))         % Encodes a list [1,2,3]
+          (1,(2,(3,())))         % Encodes a sequence (1,2,3)
 
-    This function is a helper factory function to define a sub-class of BaseField
-    that deals with a nested list encoding consisting of elements of some other
-    BaseField subclass.
+    This function is a helper factory function to define a sub-class of
+    BaseField that deals with a nested sequence encoding consisting of elements
+    of some other BaseField subclass.
+
+    Note: the fields of facts should be immutable. This means that you must
+    use a tuple and not a list object when creating the sequence.
 
     Example:
        .. code-block:: python
 
-          # Unifies against a nested list of constants
-          NestedListField = define_nested_list_field("NLField",ConstantField)
+          # Unifies against a nested sequence of constants
+          NestedSeqField = define_nested_seq_field("NLField",ConstantField)
 
     Only positional arguments are supported.
 
@@ -1399,20 +1402,20 @@ def define_nested_list_field(*args):
 
        subclass_name (optional): new sub-class name (anonymous if none specified).
 
-       element_definition: the field type for each list element
+       element_definition: the field type for each sequence element
 
     """
 
     # Deal with the optional subclass name
     largs=len(args)
     if largs == 1:
-        subclass_name="AnonymousNestedListField"
+        subclass_name="AnonymousNestedSeqField"
         efield=args[0]
     elif largs == 2:
         subclass_name=args[0]
         efield=args[1]
     else:
-        raise TypeError("define_nested_list_field() missing or invalid arguments")
+        raise TypeError("define_nested_seq_field() missing or invalid arguments")
 
     # The element_field must be a BaseField sub-class
     if not inspect.isclass(efield) or not issubclass(efield,BaseField):
@@ -1420,7 +1423,7 @@ def define_nested_list_field(*args):
 
     def _pytocl(v):
         if isinstance(v,str) or not isinstance(v,cabc.Iterable):
-            raise TypeError("'{}' is not a collection (list/seq/etc)".format(v))
+            raise TypeError("'{}' is not a sequence".format(v))
         nested=clingo.Function("",[])
         for ev in reversed(v):
             nested=clingo.Function("",[efield.pytocl(ev),nested])
@@ -1428,12 +1431,12 @@ def define_nested_list_field(*args):
 
     def _get_next(raw):
         if raw.type != clingo.SymbolType.Function or raw.name != "":
-            raise TypeError("'{}' is not a nested list".format(raw))
+            raise TypeError("'{}' is not a nested sequence".format(raw))
         rlen = len(raw.arguments)
         if rlen == 0: return None
         if rlen == 2: return raw.arguments
         else:
-            raise TypeError("'{}' is not a nested list".format(raw))
+            raise TypeError("'{}' is not a nested sequence".format(raw))
 
     def _cltopy(raw):
         elements=[]
@@ -1441,7 +1444,7 @@ def define_nested_list_field(*args):
         while result:
             elements.append(efield.cltopy(result[0]))
             result = _get_next(result[1])
-        return elements
+        return tuple(elements)
 
     return type(subclass_name, (BaseField,),
                 { "pytocl": _pytocl,
@@ -1803,7 +1806,7 @@ def _predicate_init_by_raw(self, **kwargs):
 # Construct a Predicate via the field keywords
 def _predicate_init_by_keyword_values(self, **kwargs):
     argnum=0
-    self._field_values = []
+    field_values = []
     clingoargs = []
     for f in self.meta:
         if f.name in kwargs:
@@ -1818,11 +1821,11 @@ def _predicate_init_by_keyword_values(self, **kwargs):
                              "default value)").format(f.name))
 
         # Set the value for the field
-        self._field_values.append(v)
+        field_values.append(v)
         clingoargs.append(f.defn.pytocl(v))
 
     # Turn it into a tuple
-    self._field_values = tuple(self._field_values)
+    self._field_values = tuple(field_values)
 
     # Calculate the sign of the literal and check that it matches the allowed values
     if "sign" in kwargs:
@@ -1888,8 +1891,9 @@ def _predicate_constructor(self, *args, **kwargs):
     else:
         _predicate_init_by_keyword_values(self, **kwargs)
 
-    if self.meta.is_tuple: self._hash = hash(tuple(self._field_values))
-    else: self._hash = hash(self._raw)
+    # Calculate the hash
+    if self.meta.is_tuple: self._hash = hash(self._field_values)
+    else: self._hash = hash((self.meta.name,self._field_values))
 
 
 def _predicate_base_constructor(self, *args, **kwargs):
@@ -2370,10 +2374,6 @@ class Predicate(object, metaclass=_PredicateMeta):
 
     def __hash__(self):
         return self._hash
-        if self.meta.is_tuple:
-            return hash(self._field_values)
-        else:
-            return hash(self._raw)
 
     def __str__(self):
         """Returns the Predicate as the string representation of the raw
