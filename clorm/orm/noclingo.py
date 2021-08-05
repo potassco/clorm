@@ -207,22 +207,9 @@ def Number(number):
 
 
 #--------------------------------------------------------------------------------
-# Replacement for clingo.Control that simply throws an exception when
-# instantiated.
+# Functions to convert between clingo.Symbol and noclingo.Symbol
 # --------------------------------------------------------------------------------
 
-class Control(object):
-    """A noclingo replacement for clingo.Control.
-
-    noclingo is a replacement for clingo that provides basic Symbol object
-    instatiation as pure python objects (rather than the C clingo external
-    library). The solver cannot be run using noclingo so noclingo.Control simply
-    raises a TypeError on instantiation.
-
-    """
-
-    def __init__(*args, **kwargs):
-        raise TypeError("noclingo.Control cannot be instantiated")
 
 #------------------------------------------------------------------------------
 # main

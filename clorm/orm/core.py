@@ -1847,7 +1847,7 @@ def _predicate_init_by_keyword_values(self, **kwargs):
     self._sign = sign
 
     # Create the raw clingo.Symbol object
-    self._raw = clingo.Function(self.meta.name, clingoargs, sign)
+    self._raw = None
 
 # Construct a Predicate using keyword arguments
 def _predicate_init_by_positional_values(self, *args, **kwargs):
@@ -1876,7 +1876,7 @@ def _predicate_init_by_positional_values(self, *args, **kwargs):
     self._sign = sign
 
     # Create the raw clingo.Symbol object
-    self._raw = clingo.Function(self.meta.name, clingoargs, sign)
+    self._raw = None
 
 # Constructor for every Predicate sub-class
 def _predicate_constructor(self, *args, **kwargs):
@@ -1891,9 +1891,9 @@ def _predicate_constructor(self, *args, **kwargs):
     else:
         _predicate_init_by_keyword_values(self, **kwargs)
 
-    # Calculate the hash
-    if self.meta.is_tuple: self._hash = hash(self._field_values)
-    else: self._hash = hash((self.meta.name,self._field_values))
+    # Force the hash to be calculated and cached.
+    self._hash = None
+    self.__hash__()
 
 
 def _predicate_base_constructor(self, *args, **kwargs):
@@ -2190,13 +2190,13 @@ class Predicate(object, metaclass=_PredicateMeta):
     @property
     def raw(self):
         """Returns the underlying clingo.Symbol object"""
-        return self._raw
+        if self._raw is None:
+            clingoargs=[]
+            for f,v in zip(self.meta, self._field_values):
+                clingoargs.append(f.defn.pytocl(v))
+            self._raw = clingo.Function(self.meta.name, clingoargs, self._sign)
 
-#    # Get the sign of the literal
-#    @property
-#    def sign(self):
-#        """Returns the sign of the predicate instance"""
-#        return self._raw.positive
+        return self._raw
 
     @_classproperty
     def Field(cls):
@@ -2298,7 +2298,9 @@ class Predicate(object, metaclass=_PredicateMeta):
     #--------------------------------------------------------------------------
     def __eq__(self, other):
         """Overloaded boolean operator."""
-        if isinstance(other, self.__class__): return self.raw == other.raw
+        if isinstance(other, self.__class__):
+            return self._field_values == other._field_values and \
+                self._sign == other._sign
         if self.meta.is_tuple:
             return self._field_values == other
         elif not isinstance(other, Predicate):
@@ -2314,20 +2316,13 @@ class Predicate(object, metaclass=_PredicateMeta):
     def __lt__(self, other):
         """Overloaded boolean operator."""
 
-        # If it is the same predicate class then compare individual fields
+        # If it is the same predicate class then compare the sign and fields
         if isinstance(other, self.__class__):
 
              # Negative literals are less than positive literals
-            if self.raw.positive != other.raw.positive:
-                return self.raw.positive < other.raw.positive
+            if self.sign != other.sign: return self.sign < other.sign
 
-            # compare each field in order
-            for idx in range(0,len(self._meta)):
-                selfv = self[idx]
-                otherv = other[idx]
-                if selfv == otherv: continue
-                return selfv < otherv
-            return False
+            return self._field_values < other._field_values
 
         # If different predicates then compare the raw value
         elif isinstance(other, Predicate):
@@ -2345,19 +2340,12 @@ class Predicate(object, metaclass=_PredicateMeta):
     def __gt__(self, other):
         """Overloaded boolean operator."""
 
-        # If it is the same predicate class then compare individual fields
+        # If it is the same predicate class then compare the sign and fields
         if isinstance(other, self.__class__):
             # Positive literals are greater than negative literals
-            if self.raw.positive != other.raw.positive:
-                return self.raw.positive > other.raw.positive
+            if self.sign != other.sign: return self.sign > other.sign
 
-            # compare each field in order
-            for idx in range(0,len(self._meta)):
-                selfv = self[idx]
-                otherv = other[idx]
-                if selfv == otherv: continue
-                return selfv > otherv
-            return False
+            return self._field_values > other._field_values
 
         # If different predicates then compare the raw value
         if not isinstance(other, Predicate):
@@ -2373,11 +2361,13 @@ class Predicate(object, metaclass=_PredicateMeta):
         return not result
 
     def __hash__(self):
+        if self._hash is None:
+            if self.meta.is_tuple: self._hash = hash(self._field_values)
+            else: self._hash = hash((self.meta.name,self._field_values))
         return self._hash
 
     def __str__(self):
-        """Returns the Predicate as the string representation of the raw
-        clingo.Symbol.
+        """Returns the Predicate as the string representation of an ASP fact.
         """
         return str(self.raw)
 
