@@ -9,6 +9,8 @@ import calendar
 import operator
 import clingo
 import clorm.orm.noclingo as noclingo
+from clorm.orm.noclingo import clingo_to_noclingo, noclingo_to_clingo, \
+    SymbolGeneratorType, get_symbol_generator
 
 clingo_version = clingo.__version__
 
@@ -41,7 +43,9 @@ class NoClingoTestCase(unittest.TestCase):
         self.assertTrue(str(clingo.SymbolType.Supremum), str(noclingo.SymbolType.Supremum))
         self.assertTrue(str(clingo.SymbolType.Infimum), str(noclingo.SymbolType.Infimum))
 
+        # Note: ordering comparision between SymbolTypes is not supported in 5.5.0+
         if clingo_version >= "5.5.0": return
+
         if clingo.SymbolType.Number < clingo.SymbolType.String:
             self.assertTrue(noclingo.SymbolType.Number < noclingo.SymbolType.String)
         else:
@@ -224,6 +228,103 @@ class NoClingoTestCase(unittest.TestCase):
     def test_clingo_noclingo_difference(self):
         self.assertNotEqual(clingo.String("blah"), noclingo.String("blah"))
         self.assertNotEqual(clingo.Number(5), noclingo.Number(5))
+
+
+    def test_clingo_to_noclingo(self):
+
+        # Converting the Infimum and Supremum
+        cli = clingo.Infimum
+        ncli = noclingo.Infimum
+        cls = clingo.Supremum
+        ncls = noclingo.Supremum
+
+        self.assertEqual(clingo_to_noclingo(cli),ncli)
+        self.assertEqual(clingo_to_noclingo(cls),ncls)
+        self.assertEqual(noclingo_to_clingo(ncli),cli)
+        self.assertEqual(noclingo_to_clingo(ncls),cls)
+
+        # Converting simple structures
+        cl1 = clingo.Function("const")
+        ncl1 = noclingo.Function("const")
+        cl2 = clingo.Number(3)
+        ncl2 = noclingo.Number(3)
+        cl3 = clingo.String("No")
+        ncl3 = noclingo.String("No")
+
+        self.assertEqual(clingo_to_noclingo(cl1),ncl1)
+        self.assertEqual(clingo_to_noclingo(cl2),ncl2)
+        self.assertEqual(clingo_to_noclingo(cl3),ncl3)
+        self.assertEqual(noclingo_to_clingo(ncl1),cl1)
+        self.assertEqual(noclingo_to_clingo(ncl2),cl2)
+        self.assertEqual(noclingo_to_clingo(ncl3),cl3)
+
+
+        # More complex function structures
+        cl4 = clingo.Function("",[cl1,cl2])
+        ncl4 = noclingo.Function("",[ncl1,ncl2])
+        self.assertEqual(clingo_to_noclingo(cl4),ncl4)
+        self.assertEqual(noclingo_to_clingo(ncl4),cl4)
+
+        cl5 = clingo.Function("f",[cl3,cl4,cl1],False)
+        ncl5 = noclingo.Function("f",[ncl3,ncl4,ncl1],False)
+        self.assertEqual(clingo_to_noclingo(cl5),ncl5)
+        self.assertEqual(noclingo_to_clingo(ncl5),cl5)
+
+
+    def test_symbol_generator(self):
+        csg = get_symbol_generator(SymbolGeneratorType.CLINGO)
+        ncsg = get_symbol_generator(SymbolGeneratorType.NOCLINGO)
+
+        self.assertEqual(csg.type,SymbolGeneratorType.CLINGO)
+        self.assertEqual(ncsg.type,SymbolGeneratorType.NOCLINGO)
+
+        cli = clingo.Infimum
+        cls = clingo.Supremum
+        cl1 = clingo.Function("const")
+        cl2 = clingo.Number(3)
+        cl3 = clingo.String("No")
+        cl4 = clingo.Function("",[cl1,cl2])
+        cl5 = clingo.Function("f",[cl3,cl4,cl1],False)
+
+        ncli = noclingo.Infimum
+        ncls = noclingo.Supremum
+        ncl1 = noclingo.Function("const")
+        ncl2 = noclingo.Number(3)
+        ncl3 = noclingo.String("No")
+        ncl4 = noclingo.Function("",[ncl1,ncl2])
+        ncl5 = noclingo.Function("f",[ncl3,ncl4,ncl1],False)
+
+        csg_cli = csg.Infimum
+        csg_cls = csg.Supremum
+        csg_cl1 = csg.Function("const")
+        csg_cl2 = csg.Number(3)
+        csg_cl3 = csg.String("No")
+        csg_cl4 = csg.Function("",[cl1,cl2])
+        csg_cl5 = csg.Function("f",[cl3,cl4,cl1],False)
+
+        ncsg_ncli = ncsg.Infimum
+        ncsg_ncls = ncsg.Supremum
+        ncsg_ncl1 = ncsg.Function("const")
+        ncsg_ncl2 = ncsg.Number(3)
+        ncsg_ncl3 = ncsg.String("No")
+        ncsg_ncl4 = ncsg.Function("",[ncsg_ncl1,ncsg_ncl2])
+        ncsg_ncl5 = ncsg.Function("f",[ncsg_ncl3,ncsg_ncl4,ncsg_ncl1],False)
+
+        self.assertEqual(cli,csg_cli)
+        self.assertEqual(cls,csg_cls)
+        self.assertEqual(cl1,csg_cl1)
+        self.assertEqual(cl2,csg_cl2)
+        self.assertEqual(cl3,csg_cl3)
+        self.assertEqual(cl4,csg_cl4)
+        self.assertEqual(cl5,csg_cl5)
+
+        self.assertEqual(ncli,ncsg_ncli)
+        self.assertEqual(ncls,ncsg_ncls)
+        self.assertEqual(ncl1,ncsg_ncl1)
+        self.assertEqual(ncl2,ncsg_ncl2)
+        self.assertEqual(ncl3,ncsg_ncl3)
+        self.assertEqual(ncl4,ncsg_ncl4)
+        self.assertEqual(ncl5,ncsg_ncl5)
 
 
 #------------------------------------------------------------------------------

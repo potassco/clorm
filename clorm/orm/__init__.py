@@ -2,6 +2,7 @@
 # Combine all the main aspects of the Clorm ORM into one unified export.
 # -----------------------------------------------------------------------------
 
+from .noclingo import *
 from .core import *
 from .factbase import *
 from .query import *
@@ -52,6 +53,10 @@ __all__ = [
     'basic_join_order',
     'oppref_join_order',
     'make_function_asp_callable',
-    'make_method_asp_callable'
+    'make_method_asp_callable',
+    'SymbolGeneratorType',
+    'clingo_to_noclingo',
+    'noclingo_to_clingo',
+    'get_symbol_generator'
     ]
 

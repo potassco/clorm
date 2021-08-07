@@ -7,6 +7,7 @@
 # --------------------------------------------------------------------------------
 import functools
 import enum
+import clingo
 
 __all__ = [
     'Function',
@@ -15,7 +16,10 @@ __all__ = [
     'Infimum',
     'Supremum',
     'SymbolType',
-    'Control'
+    'clingo_to_noclingo',
+    'noclingo_to_clingo',
+    'SymbolGeneratorType',
+    'get_symbol_generator'
 ]
 
 class SymbolType(enum.IntEnum):
@@ -56,7 +60,7 @@ class Symbol(object):
         self._stype = stype
         self._args = None
         self._value = None
-        self._sign = bool(sign)
+        self._sign = None
         if stype == SymbolType.Infimum:
             self._hash = hash(0)
         elif stype == SymbolType.Supremum:
@@ -68,13 +72,11 @@ class Symbol(object):
             self._value = str(value)
             self._hash = hash(self._value)
         elif stype == SymbolType.Function:
+            self._sign = bool(sign)
             self._value = str(value)
-            self._args = list(args)
-            self._hash = hash(self._value)
-            self._hash ^= hash(self._sign)
-            if self._args:
-                t = functools.reduce(lambda x,y: x ^ y, [ hash(a) for a in self._args ])
-                self._hash ^= t
+            self._args = tuple(args)
+            self._hash = hash((self._value,self._args,self._sign))
+
             if not self._value and not self._sign:
                 raise ValueError("Tuple symbol cannot have a negative sign")
         else:
@@ -205,10 +207,97 @@ def Number(number):
     return Symbol(SymbolType.Number,number)
 
 
-
 #--------------------------------------------------------------------------------
 # Functions to convert between clingo.Symbol and noclingo.Symbol
 # --------------------------------------------------------------------------------
+
+def clingo_to_noclingo(clsym):
+    if clsym.type == clingo.SymbolType.Infimum: return Infimum
+    elif clsym.type == clingo.SymbolType.Supremum: return Supremum
+    elif clsym.type == clingo.SymbolType.Number: return Number(clsym.number)
+    elif clsym.type == clingo.SymbolType.String: return String(clsym.string)
+    elif clsym.type != clingo.SymbolType.Function:
+        raise TypeError(("Symbol '{}' ({}) is not of type clingo.SymbolType."
+                         "Function").format(clsym,type(clsym)))
+
+    return Function(clsym.name,
+                    (clingo_to_noclingo(t) for t in clsym.arguments),
+                    clsym.positive)
+
+
+def noclingo_to_clingo(nclsym):
+    if nclsym.type == SymbolType.Infimum: return clingo.Infimum
+    elif nclsym.type == SymbolType.Supremum: return clingo.Supremum
+    elif nclsym.type == SymbolType.Number: return clingo.Number(nclsym.number)
+    elif nclsym.type == SymbolType.String: return clingo.String(nclsym.string)
+    elif nclsym.type != SymbolType.Function:
+        raise TypeError(("Symbol '{}' ({}) is not of type noclingo.SymbolType."
+                         "Function").format(nclsym,type(nclsym)))
+
+    return clingo.Function(nclsym.name,
+                    tuple(noclingo_to_clingo(t) for t in nclsym.arguments),
+                    nclsym.positive)
+
+#------------------------------------------------------------------------------
+# A mechanism to group together the symbol generator functions for clingo or
+# noclingo.
+# ------------------------------------------------------------------------------
+
+class SymbolGeneratorType(enum.IntEnum):
+    CLINGO=0
+    NOCLINGO=1
+
+class SymbolGenerator(object):
+    """Groups together the Symbol generators for clingo or noclingo.
+
+    noclingo is a mirror of the clingo ``Symbol`` class that creates a Python
+    only object. ``noclingo.Symbol`` objects can be used as a proxy for
+    ``clingo.Symbol`` in places where you don't need to pass the object to the
+    clingo solver. The advantage is that this object is not persistent
+    throughout the life time of the process.
+
+    The available member functions and properties are:
+
+    * ``Infimum``
+
+    * ``Supremum``
+
+    * ``String()``
+
+    * ``Number()``
+
+    * ``Function()``
+    """
+
+    def __init__(self, sgtype, **kwargs):
+        self._sgtype = sgtype
+        self._links = dict(kwargs)
+
+    @property
+    def type(self): return self._sgtype
+
+    def __getattr__(self, item):
+        return self._links[item]
+
+
+clingo_symbol_generator = SymbolGenerator(SymbolGeneratorType.CLINGO,
+                                          Function=clingo.Function,
+                                          String=clingo.String,
+                                          Number=clingo.Number,
+                                          Infimum=clingo.Infimum,
+                                          Supremum=clingo.Supremum)
+
+noclingo_symbol_generator = SymbolGenerator(SymbolGeneratorType.NOCLINGO,
+                                            Function=Function,
+                                            String=String,
+                                            Number=Number,
+                                            Infimum=Infimum,
+                                            Supremum=Supremum)
+
+def get_symbol_generator(sgtype):
+    if sgtype == SymbolGeneratorType.CLINGO: return clingo_symbol_generator
+    if sgtype == SymbolGeneratorType.NOCLINGO: return noclingo_symbol_generator
+    raise ValueError("Unknown SymbolGeneratorType {}".format(sgtype))
 
 
 #------------------------------------------------------------------------------
