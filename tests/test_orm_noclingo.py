@@ -10,7 +10,8 @@ import operator
 import clingo
 import clorm.orm.noclingo as noclingo
 from clorm.orm.noclingo import clingo_to_noclingo, noclingo_to_clingo, \
-    SymbolGeneratorType, get_symbol_generator
+    SymbolGeneratorType, get_symbol_generator, _get_symboltype, \
+    is_Number, is_String, is_Function, is_Supremum, is_Infimum
 
 clingo_version = clingo.__version__
 
@@ -269,6 +270,84 @@ class NoClingoTestCase(unittest.TestCase):
         ncl5 = noclingo.Function("f",[ncl3,ncl4,ncl1],False)
         self.assertEqual(clingo_to_noclingo(cl5),ncl5)
         self.assertEqual(noclingo_to_clingo(ncl5),cl5)
+
+
+    def test_get_symboltype(self):
+        cli = clingo.Infimum
+        cls = clingo.Supremum
+        cl1 = clingo.Function("const")
+        cl2 = clingo.Number(3)
+        cl3 = clingo.String("No")
+        cl4 = clingo.Function("",[cl1,cl2])
+
+        ncli = noclingo.Infimum
+        ncls = noclingo.Supremum
+        ncl1 = noclingo.Function("const")
+        ncl2 = noclingo.Number(3)
+        ncl3 = noclingo.String("No")
+        ncl4 = noclingo.Function("",[ncl1,ncl2])
+
+        self.assertEqual(_get_symboltype(cli),noclingo.SymbolType.Infimum)
+        self.assertEqual(_get_symboltype(cls),noclingo.SymbolType.Supremum)
+        self.assertEqual(_get_symboltype(cl1),noclingo.SymbolType.Function)
+        self.assertEqual(_get_symboltype(cl2),noclingo.SymbolType.Number)
+        self.assertEqual(_get_symboltype(cl3),noclingo.SymbolType.String)
+        self.assertEqual(_get_symboltype(cl4),noclingo.SymbolType.Function)
+
+        self.assertEqual(_get_symboltype(ncli),noclingo.SymbolType.Infimum)
+        self.assertEqual(_get_symboltype(ncls),noclingo.SymbolType.Supremum)
+        self.assertEqual(_get_symboltype(ncl1),noclingo.SymbolType.Function)
+        self.assertEqual(_get_symboltype(ncl2),noclingo.SymbolType.Number)
+        self.assertEqual(_get_symboltype(ncl3),noclingo.SymbolType.String)
+        self.assertEqual(_get_symboltype(ncl4),noclingo.SymbolType.Function)
+
+        self.assertNotEqual(_get_symboltype(cls),noclingo.SymbolType.Infimum)
+        self.assertNotEqual(_get_symboltype(cli),noclingo.SymbolType.Supremum)
+        self.assertNotEqual(_get_symboltype(cl2),noclingo.SymbolType.Function)
+        self.assertNotEqual(_get_symboltype(cl4),noclingo.SymbolType.Number)
+        self.assertNotEqual(_get_symboltype(cl4),noclingo.SymbolType.String)
+        self.assertNotEqual(_get_symboltype(cl3),noclingo.SymbolType.Function)
+
+        with self.assertRaises(TypeError) as ctx:
+            x=_get_symboltype(4)
+
+    def test_is_functions(self):
+        cli = clingo.Infimum
+        cls = clingo.Supremum
+        cl1 = clingo.Function("const")
+        cl2 = clingo.Number(3)
+        cl3 = clingo.String("No")
+        cl4 = clingo.Function("",[cl1,cl2])
+
+        ncli = noclingo.Infimum
+        ncls = noclingo.Supremum
+        ncl1 = noclingo.Function("const")
+        ncl2 = noclingo.Number(3)
+        ncl3 = noclingo.String("No")
+        ncl4 = noclingo.Function("",[ncl1,ncl2])
+
+        self.assertTrue(is_Infimum(cli))
+        self.assertTrue(is_Infimum(ncli))
+
+        self.assertTrue(is_Supremum(cls))
+        self.assertTrue(is_Supremum(ncls))
+
+        self.assertTrue(is_Number(cl2))
+        self.assertTrue(is_Number(ncl2))
+
+        self.assertTrue(is_String(cl3))
+        self.assertTrue(is_String(ncl3))
+
+        self.assertTrue(is_Function(cl4))
+        self.assertTrue(is_Function(ncl4))
+
+        self.assertFalse(is_Infimum(cls))
+        self.assertFalse(is_Supremum(cli))
+        self.assertFalse(is_Function(cli))
+        self.assertFalse(is_Number(cli))
+        self.assertFalse(is_String(cli))
+        self.assertFalse(is_Supremum(4))
+
 
 
     def test_symbol_generator(self):

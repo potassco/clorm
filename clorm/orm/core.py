@@ -25,6 +25,8 @@ import typing
 import re
 import uuid
 
+from . import noclingo
+
 __all__ = [
     'BaseField',
     'RawField',
@@ -1022,12 +1024,12 @@ class BaseField(object, metaclass=_BaseFieldMeta):
     @classmethod
     def cltopy(cls, v): #pass
         """Called when translating data from Clingo to Python"""
-        return v
+        raise NotImplementedError("BaseField.cltopy() must be overriden")
 
     @classmethod
     def pytocl(cls, v):
         """Called when translating data from Python to Clingo"""
-        return v
+        raise NotImplementedError("BaseField.pytocl() must be overriden")
 
     @classmethod
     def unifies(cls, v):
@@ -1069,8 +1071,15 @@ class BaseField(object, metaclass=_BaseFieldMeta):
         return self._index
 
 #------------------------------------------------------------------------------
-# RawField, StringField and IntegerField are simple sub-classes of BaseField
-#------------------------------------------------------------------------------
+# RawField is a sub-class of BaseField for storing Raw objects. A Raw object is
+# a wrapper around either a clingo.Symbol or noclingo.Symbol object.
+# ------------------------------------------------------------------------------
+
+class Raw(object):
+    def __init__(raw):
+        self._raw = raw
+        self._unraw = raw
+
 
 class RawField(BaseField):
     """A field to pass through an arbitrary Clingo.Symbol."""
@@ -1078,23 +1087,30 @@ class RawField(BaseField):
     cltopy = lambda v: v
     pytocl = lambda v: v
 
+#------------------------------------------------------------------------------
+# RawField, StringField and IntegerField are simple sub-classes of BaseField
+#------------------------------------------------------------------------------
 
 class StringField(BaseField):
     """A field to convert between a Clingo.String object and a Python string."""
 
     def cltopy(raw):
-        if raw.type != clingo.SymbolType.String:
-            raise TypeError("Object {0} is not a clingo.String symbol")
-        return raw.string
+        try:
+            return raw.string
+        except:
+            raise TypeError(("Object '{}' ({}) is not a String "
+                             "Symbol").format(raw, type(raw)))
 
     pytocl = lambda v: clingo.String(v)
 
 class IntegerField(BaseField):
     """A field to convert between a Clingo.Number object and a Python integer."""
     def cltopy(raw):
-        if raw.type != clingo.SymbolType.Number:
-            raise TypeError("Object {0} is not a clingo.Number symbol")
-        return raw.number
+        try:
+            return raw.number
+        except:
+            raise TypeError(("Object '{}' ({}) is not a Number "
+                             "Symbol").format(raw, type(raw)))
 
     pytocl = lambda v: clingo.Number(v)
 
@@ -1123,11 +1139,12 @@ class ConstantField(BaseField):
 
     """
     def cltopy(raw):
-        if   (raw.type != clingo.SymbolType.Function or
-              not raw.name or len(raw.arguments) != 0):
-            raise TypeError(("Clingo symbol object '{}' is not a unary Function "
-                             "symbol").format(raw))
-        return raw.name if raw.positive else "-{}".format(raw.name)
+        try:
+            if len(raw.arguments) != 0: raise TypeError("Empty list")
+            return raw.name if raw.positive else "-{}".format(raw.name)
+        except:
+            raise TypeError(("Object '{}' ({}) is not a unary Function "
+                             "Symbol").format(raw, type(raw)))
 
     def pytocl(v):
         if not isinstance(v,str):
@@ -1157,11 +1174,9 @@ class SimpleField(BaseField):
 
     """
     def cltopy(raw):
-        if raw.type == clingo.SymbolType.String:
-            return raw.string
-        elif raw.type == clingo.SymbolType.Number:
-            return raw.number
-        elif raw.type == clingo.SymbolType.Function:
+        if noclingo.is_String(raw): return raw.string
+        elif noclingo.is_Number(raw): return raw.number
+        elif noclingo.is_Function(raw):
             if len(raw.arguments) == 0 and raw.positive:
                 return raw.name
         raise TypeError("Not a simple term (string/constant/integer)")
@@ -1360,8 +1375,8 @@ def combine_fields(*args):
                 return f.cltopy(r)
             except (TypeError, ValueError):
                 pass
-        raise TypeError("No combined cltopy() match for clingo symbol {}".format(r))
-
+        raise TypeError("Object '{}' ({}) failed to unify with {}".format(
+            r,type(r),subclass_name))
     return type(subclass_name, (BaseField,),
                 { "pytocl": _pytocl,
                   "cltopy": _cltopy})
@@ -1430,7 +1445,7 @@ def define_nested_seq_field(*args):
         return nested
 
     def _get_next(raw):
-        if raw.type != clingo.SymbolType.Function or raw.name != "":
+        if not noclingo.is_Function(raw) or raw.name != "":
             raise TypeError("'{}' is not a nested sequence".format(raw))
         rlen = len(raw.arguments)
         if rlen == 0: return None
@@ -1791,7 +1806,7 @@ def _predicate_init_by_raw(self, **kwargs):
     self._raw = raw
     try:
         cls=type(self)
-        if raw.type != clingo.SymbolType.Function: raise ValueError()
+        if not noclingo.is_Function(raw): raise ValueError()
         arity=len(raw.arguments)
         if raw.name != cls.meta.name: raise ValueError()
         if arity != cls.meta.arity: raise ValueError()
@@ -2248,7 +2263,7 @@ class Predicate(object, metaclass=_PredicateMeta):
     # Predicate
     @classmethod
     def _unifies(cls, raw):
-        if raw.type != clingo.SymbolType.Function: return False
+        if not noclingo.is_Function(raw): return False
 
         if raw.name != cls.meta.name: return False
         if len(raw.arguments) != len(cls.meta): return False

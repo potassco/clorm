@@ -78,6 +78,18 @@ class FieldTestCase(unittest.TestCase):
         self.assertEqual(IntegerField.cltopy(symstr), 1)
         self.assertEqual(IntegerField.pytocl(1), symstr)
 
+        # Now some bad conversions
+        with self.assertRaises(TypeError) as ctx:
+            x=StringField.cltopy(Number(1))
+        check_errmsg("Object '1'",ctx)
+
+        with self.assertRaises(TypeError) as ctx:
+            x=IntegerField.cltopy(String("blah"))
+        check_errmsg("Object '\"blah\"'",ctx)
+
+        with self.assertRaises(TypeError) as ctx:
+            x=ConstantField.cltopy(Function("x",[Number(1)]))
+        check_errmsg("Object 'x(1)'",ctx)
 
     #--------------------------------------------------------------------------
     # Test that the simple field unify functions work as expected
@@ -119,6 +131,19 @@ class FieldTestCase(unittest.TestCase):
         self.assertTrue(fstr.unifies(cstr1))
         self.assertTrue(fconst.unifies(csim1))
         self.assertTrue(fconst.unifies(csim2))
+
+
+    def test_api_basefield_bad_instantiation(self):
+
+        num1 = 1
+        cnum1 = Number(num1)
+
+        with self.assertRaises(NotImplementedError) as ctx:
+            BaseField.pytocl(1)
+        check_errmsg("BaseField.pytocl() must be overriden",ctx)
+        with self.assertRaises(NotImplementedError) as ctx:
+            BaseField.cltopy(cnum1)
+        check_errmsg("BaseField.cltopy() must be overriden",ctx)
 
     #--------------------------------------------------------------------------
     # Test user-defined BaseField sub-classes as well as raising exceptions for
@@ -414,15 +439,15 @@ class FieldTestCase(unittest.TestCase):
         self.assertEqual(MF.cltopy(Function("aconst")),"aconst")
 
         # A bad value
-        with self.assertRaises(AttributeError) as ctx:
+        with self.assertRaises(TypeError) as ctx:
             t=MF.cltopy([])
-        check_errmsg("'list' object has no attribute 'type'",ctx)
+        check_errmsg("Object '[]' (<class 'list'>) failed to unify with MixedField",ctx)
         with self.assertRaises(TypeError) as ctx:
             t=MF.cltopy(String("blah"))
-        check_errmsg("No combined cltopy()",ctx)
+        check_errmsg("Object '\"blah\"'",ctx)
         with self.assertRaises(TypeError) as ctx:
             t=MF.cltopy(Function("blah",[Number(1)]))
-        check_errmsg("No combined cltopy()",ctx)
+        check_errmsg("Object 'blah(1)'",ctx)
 
     #--------------------------------------------------------------------------
     # Test some non-api aspects of combine field
@@ -477,7 +502,7 @@ class FieldTestCase(unittest.TestCase):
         # Test some failures
         with self.assertRaises(TypeError) as ctx:
             tmp = CNLField.cltopy(inl_1st)
-        check_errmsg("Clingo symbol object '3'",ctx)
+        check_errmsg("Object '3'",ctx)
 
         with self.assertRaises(TypeError) as ctx:
             tmp = INLField.pytocl([1,"b",3])
@@ -1102,7 +1127,7 @@ class PredicateInternalUnifyTestCase(unittest.TestCase):
             f=Fact(raw=func2)
 
     # --------------------------------------------------------------------------
-    # Test the BaseField.unifies() function
+    # Test unifies for Predicate.Field function
     # --------------------------------------------------------------------------
 
     def test_rawfield_unifies(self):
@@ -1113,7 +1138,7 @@ class PredicateInternalUnifyTestCase(unittest.TestCase):
         good=Function("fact",[String("astring")])
         bad=Function("fact",[Number(1)])
 
-        self.assertTrue(BaseField.unifies(good))
+        self.assertTrue(RawField.unifies(good))
         self.assertTrue(ConstantField.unifies(Function("fact",[])))
         self.assertFalse(ConstantField.unifies(String("fact")))
         self.assertTrue(Fact.Field.unifies(good))
