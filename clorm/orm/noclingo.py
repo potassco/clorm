@@ -23,7 +23,7 @@ __all__ = [
     'is_Supremum',
     'clingo_to_noclingo',
     'noclingo_to_clingo',
-    'SymbolGeneratorType',
+    'SymbolMode',
     'get_symbol_generator'
 ]
 
@@ -305,7 +305,7 @@ def is_Infimum(sym):
 # noclingo.
 # ------------------------------------------------------------------------------
 
-class SymbolGeneratorType(enum.IntEnum):
+class SymbolMode(enum.IntEnum):
     CLINGO=0
     NOCLINGO=1
 
@@ -331,35 +331,35 @@ class SymbolGenerator(object):
     * ``Function()``
     """
 
-    def __init__(self, sgtype, **kwargs):
-        self._sgtype = sgtype
+    def __init__(self, mode, **kwargs):
+        self._mode = mode
         self._links = dict(kwargs)
 
     @property
-    def type(self): return self._sgtype
+    def mode(self): return self._mode
 
     def __getattr__(self, item):
         return self._links[item]
 
 
-clingo_symbol_generator = SymbolGenerator(SymbolGeneratorType.CLINGO,
+clingo_symbol_generator = SymbolGenerator(SymbolMode.CLINGO,
                                           Function=clingo.Function,
                                           String=clingo.String,
                                           Number=clingo.Number,
                                           Infimum=clingo.Infimum,
                                           Supremum=clingo.Supremum)
 
-noclingo_symbol_generator = SymbolGenerator(SymbolGeneratorType.NOCLINGO,
+noclingo_symbol_generator = SymbolGenerator(SymbolMode.NOCLINGO,
                                             Function=Function,
                                             String=String,
                                             Number=Number,
                                             Infimum=Infimum,
                                             Supremum=Supremum)
 
-def get_symbol_generator(sgtype):
-    if sgtype == SymbolGeneratorType.CLINGO: return clingo_symbol_generator
-    if sgtype == SymbolGeneratorType.NOCLINGO: return noclingo_symbol_generator
-    raise ValueError("Unknown SymbolGeneratorType {}".format(sgtype))
+def get_symbol_generator(mode):
+    if mode == SymbolMode.CLINGO: return clingo_symbol_generator
+    if mode == SymbolMode.NOCLINGO: return noclingo_symbol_generator
+    raise ValueError("Unknown SymbolMode {}".format(mode))
 
 
 #------------------------------------------------------------------------------

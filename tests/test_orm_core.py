@@ -15,18 +15,21 @@ import operator
 import collections.abc as cabc
 from .support import check_errmsg
 
-from clingo import Control, Number, String, Function, SymbolType
-
+from clingo import Number, String, Function, SymbolType
 # Official Clorm API imports
 from clorm.orm import \
-    BaseField, RawField, IntegerField, StringField, ConstantField, SimpleField,  \
+    BaseField, Raw, RawField, IntegerField, StringField, ConstantField, SimpleField,  \
     Predicate, ComplexTerm, refine_field, combine_fields, \
     define_nested_seq_field, simple_predicate, path, hashable_path, alias, \
-    not_, and_, or_, cross, in_, notin_
+    not_, and_, or_, cross, in_, notin_, SymbolMode, set_symbol_mode, get_symbol_mode
 
 # Implementation imports
 from clorm.orm.core import get_field_definition, PredicatePath, \
     QCondition, trueall, falseall, notcontains
+
+import clingo
+import clorm.orm.noclingo as noclingo
+
 
 
 #------------------------------------------------------------------------------
@@ -176,6 +179,61 @@ class FieldTestCase(unittest.TestCase):
                 pass
 
     #--------------------------------------------------------------------------
+    # Test the behaviour of Raw object (which wraps clingo.Symbol and
+    # noclingo.Symbol).
+    # --------------------------------------------------------------------------
+    def test_api_raw_class(self):
+
+        cl1 = clingo.Number(1)
+        ncl1 = noclingo.Number(1)
+        cl3 = clingo.Number(3)
+        ncl3 = noclingo.Number(3)
+
+        r_cl1 = Raw(cl1)
+        r_ncl1 = Raw(ncl1)
+
+        self.assertEqual(cl1,r_cl1.clingo)
+        self.assertEqual(ncl1,r_ncl1.noclingo)
+        self.assertEqual(ncl1,r_cl1.noclingo)
+        self.assertEqual(cl1,r_ncl1.clingo)
+
+        self.assertEqual(str(cl1), str(r_cl1))
+        self.assertEqual(str(ncl1), str(r_ncl1))
+        self.assertEqual(str(r_cl1), str(r_ncl1))
+
+        self.assertTrue(Raw(cl1) < Raw(cl3))
+        self.assertTrue(Raw(cl1) <= Raw(cl1))
+        self.assertTrue(Raw(cl1) <= Raw(cl3))
+        self.assertTrue(Raw(cl3) > Raw(cl1))
+        self.assertTrue(Raw(cl3) >= Raw(cl3))
+        self.assertTrue(Raw(cl3) >= Raw(cl1))
+
+        set_symbol_mode(SymbolMode.NOCLINGO)
+        self.assertEqual(Raw(ncl1), Raw(cl1))
+        self.assertNotEqual(Raw(ncl1), Raw(cl3))
+        self.assertTrue(Raw(ncl1) < Raw(ncl3))
+        self.assertTrue(Raw(ncl1) <= Raw(ncl1))
+        self.assertTrue(Raw(ncl1) <= Raw(ncl3))
+        self.assertTrue(Raw(ncl3) > Raw(ncl1))
+        self.assertTrue(Raw(ncl3) >= Raw(ncl3))
+        self.assertTrue(Raw(ncl3) >= Raw(ncl1))
+        set_symbol_mode(SymbolMode.CLINGO)
+
+        self.assertTrue(Raw(cl1) < Raw(ncl3))
+        self.assertTrue(Raw(cl1) <= Raw(ncl1))
+        self.assertTrue(Raw(cl1) <= Raw(ncl3))
+        self.assertTrue(Raw(cl3) > Raw(ncl1))
+        self.assertTrue(Raw(cl3) >= Raw(ncl3))
+        self.assertTrue(Raw(cl3) >= Raw(ncl1))
+
+        self.assertTrue(Raw(ncl1) < Raw(cl3))
+        self.assertTrue(Raw(ncl1) <= Raw(cl1))
+        self.assertTrue(Raw(ncl1) <= Raw(cl3))
+        self.assertTrue(Raw(ncl3) > Raw(cl1))
+        self.assertTrue(Raw(ncl3) >= Raw(cl3))
+        self.assertTrue(Raw(ncl3) >= Raw(cl1))
+
+    #--------------------------------------------------------------------------
     # When instantiating a field a default value can be given. It can also take
     # a function/functor which will be called when the Field's default property
     # is queried.
@@ -189,13 +247,16 @@ class FieldTestCase(unittest.TestCase):
 
         # Note: we can distinguish between having no default value and a default
         # value of None
+
+        # The field returning a default of None.
         fld = RawField()
         self.assertEqual(fld.default, None)
         self.assertFalse(fld.has_default)
 
-        fld = RawField(default=None)
-        self.assertEqual(fld.default, None)
-        self.assertTrue(fld.has_default)
+         # NOTE: It doesn't make sense to have a RawField with a default of None
+#        fld = RawField(default=Raw)
+#        self.assertEqual(fld.default, None)
+#        self.assertTrue(fld.has_default)
 
         fld = IntegerField(default=5)
         self.assertEqual(fld.default, 5)
@@ -1496,10 +1557,10 @@ class PredicateInternalUnifyTestCase(unittest.TestCase):
         # Should unify
         ap3 = AnonPred3(raw=p3.raw)
         self.assertEqual(ap3.raw, p3.raw)
-        self.assertEqual(ap3.arg1, String("string1"))
-        self.assertEqual(ap3[0], String("string1"))
-        self.assertEqual(ap3.arg2, Number(10))
-        self.assertEqual(ap3[1], Number(10))
+        self.assertEqual(ap3.arg1.symbol, String("string1"))
+        self.assertEqual(ap3[0].symbol, String("string1"))
+        self.assertEqual(ap3.arg2.symbol, Number(10))
+        self.assertEqual(ap3[1].symbol, Number(10))
 
         # Mismatched arity so unify will fail
         with self.assertRaises(ValueError) as ctx:

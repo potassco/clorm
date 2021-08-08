@@ -10,7 +10,7 @@ import operator
 import clingo
 import clorm.orm.noclingo as noclingo
 from clorm.orm.noclingo import clingo_to_noclingo, noclingo_to_clingo, \
-    SymbolGeneratorType, get_symbol_generator, _get_symboltype, \
+    SymbolMode, get_symbol_generator, _get_symboltype, \
     is_Number, is_String, is_Function, is_Supremum, is_Infimum
 
 clingo_version = clingo.__version__
@@ -351,11 +351,11 @@ class NoClingoTestCase(unittest.TestCase):
 
 
     def test_symbol_generator(self):
-        csg = get_symbol_generator(SymbolGeneratorType.CLINGO)
-        ncsg = get_symbol_generator(SymbolGeneratorType.NOCLINGO)
+        csg = get_symbol_generator(SymbolMode.CLINGO)
+        ncsg = get_symbol_generator(SymbolMode.NOCLINGO)
 
-        self.assertEqual(csg.type,SymbolGeneratorType.CLINGO)
-        self.assertEqual(ncsg.type,SymbolGeneratorType.NOCLINGO)
+        self.assertEqual(csg.mode,SymbolMode.CLINGO)
+        self.assertEqual(ncsg.mode,SymbolMode.NOCLINGO)
 
         cli = clingo.Infimum
         cls = clingo.Supremum

@@ -11,6 +11,7 @@ from .atsyntax import *
 
 __all__ = [
     'BaseField',
+    'Raw',
     'RawField',
     'IntegerField',
     'StringField',
@@ -54,9 +55,10 @@ __all__ = [
     'oppref_join_order',
     'make_function_asp_callable',
     'make_method_asp_callable',
-    'SymbolGeneratorType',
+    'SymbolMode',
     'clingo_to_noclingo',
     'noclingo_to_clingo',
-    'get_symbol_generator'
+    'get_symbol_generator',
+    'symbols'
     ]
 

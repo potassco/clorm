@@ -28,7 +28,11 @@ import uuid
 from . import noclingo
 
 __all__ = [
+    'set_symbol_mode',
+    'get_symbol_mode',
+    'symbols',
     'BaseField',
+    'Raw',
     'RawField',
     'IntegerField',
     'StringField',
@@ -955,6 +959,35 @@ class _BaseFieldMeta(type):
 
         return super(_BaseFieldMeta, cls).__init__(name, bases, dct)
 
+
+#------------------------------------------------------------------------------
+# To deal with using Clorm in a long running processes we need to not use
+# clingo.Symbol objects (because they can't be freed). So we need to be able to
+# switch to using the mirror clorm.noclingo.Symbol objects. The idea is that a
+# main processes that creates problem instances and process models will use
+# Clorm objects which rely on noclingo.Symbol. But when these objects are passed
+# to solver sub-processes they will use switch to using clingo.Symbol objects.
+# So we introduce a global (per process) variable to switch between these two
+# modes. By default we deal with normal clingo.Symbols.
+#
+# symbols is a global variable that is accessible outside the package that
+# groups the symbol creation functions.
+# ------------------------------------------------------------------------------
+
+g_symbol_mode = noclingo.SymbolMode.CLINGO
+
+symbols = noclingo.get_symbol_generator(g_symbol_mode)
+
+def set_symbol_mode(sm):
+    global g_symbol_mode, symbols
+    if not isinstance(sm,noclingo.SymbolMode):
+        raise TypeError("Object '{}' ({}) is not a SymbolMode".format(sm,type(sm)))
+    g_symbol_mode = sm
+    symbols = noclingo.get_symbol_generator(g_symbol_mode)
+
+def get_symbol_mode():
+    return g_symbol_mode
+
 #------------------------------------------------------------------------------
 # Field definitions. All fields have the functions: pytocl, cltopy,
 # and unifies, and the properties: default and has_default
@@ -1071,21 +1104,99 @@ class BaseField(object, metaclass=_BaseFieldMeta):
         return self._index
 
 #------------------------------------------------------------------------------
-# RawField is a sub-class of BaseField for storing Raw objects. A Raw object is
-# a wrapper around either a clingo.Symbol or noclingo.Symbol object.
+# RawField is a sub-class of BaseField for storing clingo.Symbol or
+# noclingo.Symbol objects. The behaviour of Raw with respect to using
+# clingo.Symbol or noclingo.Symbol is modified by the global variable
+# g_symbol_mode.
 # ------------------------------------------------------------------------------
 
 class Raw(object):
-    def __init__(raw):
-        self._raw = raw
-        self._unraw = raw
+    def __init__(self,sym):
+        if isinstance(sym, clingo.Symbol):
+            self._raw = sym
+            self._noraw = None
+        elif isinstance(sym, noclingo.Symbol):
+            self._raw = None
+            self._noraw = sym
+        else:
+            raise TypeError("Object '{}' ({}) is not a Symbol".format(sym,type(sym)))
 
+    def __str__(self):
+        if g_symbol_mode == noclingo.SymbolMode.CLINGO:
+            return str(self.clingo)
+        return str(self.noclingo)
+
+    def __repr__(self):
+        return self.__str__()
+
+    def __hash__(self):
+        if g_symbol_mode == noclingo.SymbolMode.CLINGO:
+            return hash(self.clingo)
+        else:
+            return hash(self.noclingo)
+
+    def __eq__(self,other):
+        """Overloaded boolean operator."""
+        if not isinstance(other, Raw): return NotImplemented
+        if g_symbol_mode == noclingo.SymbolMode.CLINGO:
+            return self.clingo == other.clingo
+        return self.noclingo == other.noclingo
+
+    def __ne__(self,other):
+        """Overloaded boolean operator."""
+        result = self.__eq__(other)
+        if result is NotImplemented: return NotImplemented
+        return not result
+
+    def __gt__(self, other):
+        """Overloaded boolean operator."""
+        if not isinstance(other, Raw): return NotImplemented
+        if g_symbol_mode == noclingo.SymbolMode.CLINGO:
+            return self.clingo > other.clingo
+        return self.noclingo > other.noclingo
+
+    def __le__(self, other):
+        """Overloaded boolean operator."""
+        result = self.__gt__(other)
+        if result is NotImplemented: return NotImplemented
+        return not result
+
+    def __lt__(self, other):
+        """Overloaded boolean operator."""
+        if not isinstance(other, Raw): return NotImplemented
+        if g_symbol_mode == noclingo.SymbolMode.CLINGO:
+            return self.clingo < other.clingo
+        return self.noclingo < other.noclingo
+
+    def __ge__(self, other):
+        """Overloaded boolean operator."""
+        result = self.__lt__(other)
+        if result is NotImplemented: return NotImplemented
+        return not result
+
+    @property
+    def clingo(self):
+        if self._raw is None:
+            self._raw=noclingo.noclingo_to_clingo(self._noraw)
+        return self._raw
+
+    @property
+    def noclingo(self):
+        if self._noraw is None:
+            self._noraw=noclingo.clingo_to_noclingo(self._raw)
+        return self._noraw
+
+    @property
+    def symbol(self):
+        if g_symbol_mode == noclingo.SymbolMode.CLINGO:
+            return self.clingo
+        return self.noclingo
 
 class RawField(BaseField):
     """A field to pass through an arbitrary Clingo.Symbol."""
 
-    cltopy = lambda v: v
-    pytocl = lambda v: v
+    cltopy = lambda v: Raw(v)
+    pytocl = lambda v: v.symbol
 
 #------------------------------------------------------------------------------
 # RawField, StringField and IntegerField are simple sub-classes of BaseField
@@ -1101,7 +1212,7 @@ class StringField(BaseField):
             raise TypeError(("Object '{}' ({}) is not a String "
                              "Symbol").format(raw, type(raw)))
 
-    pytocl = lambda v: clingo.String(v)
+    pytocl = lambda v: symbols.String(v)
 
 class IntegerField(BaseField):
     """A field to convert between a Clingo.Number object and a Python integer."""
@@ -1112,7 +1223,7 @@ class IntegerField(BaseField):
             raise TypeError(("Object '{}' ({}) is not a Number "
                              "Symbol").format(raw, type(raw)))
 
-    pytocl = lambda v: clingo.Number(v)
+    pytocl = lambda v: symbols.Number(v)
 
 #------------------------------------------------------------------------------
 # ConstantField is more complex than basic string or integer because the value
@@ -1149,8 +1260,8 @@ class ConstantField(BaseField):
     def pytocl(v):
         if not isinstance(v,str):
             raise TypeError("Value '{}' is not a string".format(v))
-        if v.startswith('-'): return clingo.Function(v[1:],[],False)
-        return clingo.Function(v,[])
+        if v.startswith('-'): return symbols.Function(v[1:],[],False)
+        return symbols.Function(v,[])
 
 
 #------------------------------------------------------------------------------
@@ -1183,13 +1294,13 @@ class SimpleField(BaseField):
 
     def pytocl(value):
         if isinstance(value,int):
-            return clingo.Number(value)
+            return symbols.Number(value)
         elif not isinstance(value,str):
             raise TypeError("No translation to a simple term")
         if g_constant_term_regex.match(value):
-            return clingo.Function(value,[])
+            return symbols.Function(value,[])
         else:
-            return clingo.String(value)
+            return symbols.String(value)
 
 #------------------------------------------------------------------------------
 # refine_field is a function that creates a sub-class of a BaseField (or BaseField
@@ -1439,9 +1550,9 @@ def define_nested_seq_field(*args):
     def _pytocl(v):
         if isinstance(v,str) or not isinstance(v,cabc.Iterable):
             raise TypeError("'{}' is not a sequence".format(v))
-        nested=clingo.Function("",[])
+        nested=symbols.Function("",[])
         for ev in reversed(v):
-            nested=clingo.Function("",[efield.pytocl(ev),nested])
+            nested=symbols.Function("",[efield.pytocl(ev),nested])
         return nested
 
     def _get_next(raw):
@@ -2209,7 +2320,7 @@ class Predicate(object, metaclass=_PredicateMeta):
             clingoargs=[]
             for f,v in zip(self.meta, self._field_values):
                 clingoargs.append(f.defn.pytocl(v))
-            self._raw = clingo.Function(self.meta.name, clingoargs, self._sign)
+            self._raw = symbols.Function(self.meta.name, clingoargs, self._sign)
 
         return self._raw
 

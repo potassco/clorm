@@ -14,7 +14,7 @@ from clingo import Control, Number, String, Function, SymbolType
 
 # Official Clorm API imports
 from clorm.orm import \
-    BaseField, RawField, IntegerField, StringField, ConstantField, SimpleField,  \
+    BaseField, Raw, RawField, IntegerField, StringField, ConstantField, SimpleField,  \
     Predicate, ComplexTerm, path, hashable_path, FactBase
 
 # Official Clorm API imports
@@ -56,12 +56,12 @@ class UnifyTestCase(unittest.TestCase):
 
         self.assertTrue(Tmp._unifies(rt1))
         self.assertTrue(Tmp._unifies(rt2))
-        t1 = Tmp(1,raw1)
-        t2 = Tmp(1,raw2)
+        t1 = Tmp(1,Raw(raw1))
+        t2 = Tmp(1,Raw(raw2))
 
         self.assertEqual(set([f for f in unify([Tmp], [rt1,rt2])]),set([t1,t2]))
-        self.assertEqual(t1.r1, raw1)
-        self.assertEqual(t2.r1, raw2)
+        self.assertEqual(t1.r1.symbol, raw1)
+        self.assertEqual(t2.r1.symbol, raw2)
 
     #--------------------------------------------------------------------------
     #  Test a generator that takes n-1 Predicate types and a list of raw symbols
