@@ -14,6 +14,7 @@ import datetime
 import operator
 import collections.abc as cabc
 from .support import check_errmsg
+import pickle
 
 from clingo import Number, String, Function, SymbolType
 # Official Clorm API imports
@@ -21,7 +22,8 @@ from clorm.orm import \
     BaseField, Raw, RawField, IntegerField, StringField, ConstantField, SimpleField,  \
     Predicate, ComplexTerm, refine_field, combine_fields, \
     define_nested_seq_field, simple_predicate, path, hashable_path, alias, \
-    not_, and_, or_, cross, in_, notin_, SymbolMode, set_symbol_mode, get_symbol_mode
+    not_, and_, or_, cross, in_, notin_, SymbolMode, set_symbol_mode, get_symbol_mode, \
+    symbols
 
 # Implementation imports
 from clorm.orm.core import get_field_definition, PredicatePath, \
@@ -38,6 +40,7 @@ import clorm.orm.noclingo as noclingo
 __all__ = [
     'FieldTestCase',
     'PredicateTestCase',
+    'FactPicklingTestCase',
     'PredicateInternalUnifyTestCase',
     'PredicatePathTestCase',
     'QConditionTestCase',
@@ -232,6 +235,37 @@ class FieldTestCase(unittest.TestCase):
         self.assertTrue(Raw(ncl3) > Raw(cl1))
         self.assertTrue(Raw(ncl3) >= Raw(cl3))
         self.assertTrue(Raw(ncl3) >= Raw(cl1))
+
+    #--------------------------------------------------------------------------
+    # Test the behaviour of Raw object with pickling - it should always convert
+    # to a noclingo.Symbol object when pickling.
+    # --------------------------------------------------------------------------
+    def test_api_raw_pickling(self):
+
+        cln = clingo.Number(1)
+        cls = clingo.String("bar")
+        clf = clingo.Function("foo",[cln,cls])
+        ncln = noclingo.Number(1)
+        ncls = noclingo.String("bar")
+        nclf = noclingo.Function("foo",[ncln,ncls])
+
+        # Check that rawin uses raw/clingo while rawout uses noraw/noclingo.
+
+        # NOTE: This code examines the internal structure of a Raw object, so
+        # will need to change if the Raw implementation changes.
+        rawin = Raw(clf)
+        self.assertTrue(rawin._noraw is None)
+        self.assertEqual(rawin._raw, clf)
+        data = pickle.dumps(rawin)
+        rawout = pickle.loads(data)
+        self.assertTrue(rawout._raw is None)
+        self.assertEqual(rawout._noraw, nclf)
+
+        # This still evaluate as equal
+        self.assertEqual(rawin,rawout)
+        self.assertEqual(rawin.clingo,rawout.clingo)
+        self.assertEqual(rawin.noclingo,rawout.noclingo)
+        self.assertNotEqual(rawin.clingo,rawout.noclingo)
 
     #--------------------------------------------------------------------------
     # When instantiating a field a default value can be given. It can also take
@@ -1152,6 +1186,62 @@ class PredicateTestCase(unittest.TestCase):
             class Bad2(Ok1,Predicate):
                 pass
 
+#------------------------------------------------------------------------------
+# Test that the pickling of facts works. In particular we want to make sure that
+# the clingo.Symbol and cached hash is not pickled. Note: Pickling only works on
+# global classes.
+# ------------------------------------------------------------------------------
+class PickleF(Predicate):
+    aint=IntegerField
+    astr=StringField
+
+class PickleG(Predicate):
+    acplx=PickleF.Field
+    acomb=combine_fields("MField", [StringField,IntegerField])
+
+class PickleH(Predicate):
+    atuple=(ConstantField,IntegerField)
+
+PickleI = simple_predicate("I",1)
+
+class FactPicklingTestCase(unittest.TestCase):
+    def setUp(self): pass
+    def tearDown(self): pass
+
+    #--------------------------------------------------------------------------
+    # Note: these tests rely on internal fields so will have to change if the
+    # implementation changes.
+    # --------------------------------------------------------------------------
+    def test_basic_predicate_pickling(self):
+        f1out = PickleF(1,"a")
+        data = pickle.dumps(f1out)
+        f1in = pickle.loads(data)
+        self.assertTrue(f1in._raw is None)
+        self.assertTrue(f1in._hash is None)
+        self.assertEqual(f1in,f1out)
+        self.assertEqual(str(f1in),str(f1out))
+        self.assertEqual(hash(f1in),hash(f1out))
+        self.assertEqual(f1in.raw,f1out.raw)
+
+    def test_complex_predicate_pickling_global(self):
+        fout = PickleG(PickleF(1,"a"),"b")
+        data = pickle.dumps(fout)
+        fin = pickle.loads(data)
+        self.assertTrue(fin._raw is None)
+        self.assertTrue(fin._hash is None)
+        self.assertEqual(fin,fout)
+        self.assertEqual(str(fin),str(fout))
+        self.assertEqual(hash(fin),hash(fout))
+        self.assertEqual(fin.raw,fout.raw)
+
+    ##FIXUP - PickleH cannot be pickled because it relies on an internally
+    ##generated anonymous tuple class. Maybe there is a way around this using
+    ##the __reduce__() function.
+    def gtest_complex_predicate_pickling_local(self):
+        fout = PickleH(atuple=("b",2))
+
+        data = pickle.dumps(fout)
+        fin = pickle.loads(data)
 
 #------------------------------------------------------------------------------
 #

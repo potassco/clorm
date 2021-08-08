@@ -58,7 +58,8 @@ __all__ = [
     'SymbolMode',
     'clingo_to_noclingo',
     'noclingo_to_clingo',
-    'get_symbol_generator',
+    'set_symbol_mode',
+    'get_symbol_mode',
     'symbols'
     ]
 

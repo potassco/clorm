@@ -465,6 +465,10 @@ class FactBase(object):
         self.symmetric_difference_update(other)
         return self
 
+    def __getstate__(self):
+        self._check_init()
+        return self.__dict__
+
 
     #--------------------------------------------------------------------------
     # Set functions

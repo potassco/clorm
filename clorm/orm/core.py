@@ -1111,6 +1111,7 @@ class BaseField(object, metaclass=_BaseFieldMeta):
 # ------------------------------------------------------------------------------
 
 class Raw(object):
+    __slots__ = ("_raw","_noraw")
     def __init__(self,sym):
         if isinstance(sym, clingo.Symbol):
             self._raw = sym
@@ -1174,6 +1175,13 @@ class Raw(object):
         if result is NotImplemented: return NotImplemented
         return not result
 
+    def __getstate__(self):
+        return {'_noraw' : self.noclingo}
+
+    def __setstate__(self, newstate):
+        self._noraw = newstate["_noraw"]
+        self._raw = None
+
     @property
     def clingo(self):
         if self._raw is None:
@@ -1191,6 +1199,12 @@ class Raw(object):
         if g_symbol_mode == noclingo.SymbolMode.CLINGO:
             return self.clingo
         return self.noclingo
+
+
+#------------------------------------------------------------------------------
+# RawField will unify against any clingo.Symbol. From the Python side it exposes
+# a Raw object.
+# ------------------------------------------------------------------------------
 
 class RawField(BaseField):
     """A field to pass through an arbitrary Clingo.Symbol."""
@@ -2499,6 +2513,16 @@ class Predicate(object, metaclass=_PredicateMeta):
 
     def __repr__(self):
         return self.__str__()
+
+    def __getstate__(self):
+        return {'_field_values' : self._field_values,
+                '_sign' : self._sign}
+
+    def __setstate__(self, newstate):
+        self._field_values = newstate["_field_values"]
+        self._sign = newstate["_sign"]
+        self._raw = None
+        self._hash = None
 
 #------------------------------------------------------------------------------
 # Predicate and ComplexTerm are simply aliases for Predicate.

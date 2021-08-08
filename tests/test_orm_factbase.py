@@ -10,6 +10,7 @@
 
 import unittest
 import operator
+import pickle
 from .support import check_errmsg
 
 from clingo import Control, Number, String, Function, SymbolType
@@ -39,6 +40,7 @@ __all__ = [
     'QueryAPI2TestCase',
     'SelectJoinTestCase',
     'MembershipQueriesTestCase',
+    'FactBasePicklingTestCase',
     ]
 
 #------------------------------------------------------------------------------
@@ -1457,6 +1459,69 @@ class MembershipQueriesTestCase(unittest.TestCase):
         query=fb.query(F).where(in_(F.anum, ph1_)).order_by(F.anum)\
                                                   .bind(subquery).bind(3)
         self.assertEqual(list(query.all()), [f1,f3])
+
+
+
+#------------------------------------------------------------------------------
+# Test piclking and unpickling a FactBase and then performing a query on the
+# newly unpickled FactBase. Note: pickling requires global class declarations
+# ------------------------------------------------------------------------------
+
+class FBP_F(Predicate):
+    aint = IntegerField
+    astr = StringField
+
+class FactBasePicklingTestCase(unittest.TestCase):
+    def setUp(self):
+        pass
+
+    def tearDown(self):
+        pass
+
+    #--------------------------------------------------------------------------
+    #
+    #--------------------------------------------------------------------------
+    def test_factbase_pickling(self):
+
+        f1 = FBP_F(1,"a")
+        f2 = FBP_F(2,"a")
+        f3 = FBP_F(3,"b")
+
+        # Pickle a basic factbase
+        fb1=FactBase([f1,f2,f3])
+        data=pickle.dumps(fb1)
+        fb2=pickle.loads(data)
+        self.assertEqual(fb1,fb2)
+
+        # Pickle a factbase with lambda initialiser
+        fb1=FactBase(lambda : [f1,f2,f3])
+        data=pickle.dumps(fb1)
+        fb2=pickle.loads(data)
+        self.assertEqual(fb1,fb2)
+
+        # Pickle a factbase with an index
+        fb1=FactBase([f1,f2,f3],indexes=[FBP_F.astr])
+        data=pickle.dumps(fb1)
+        fb2=pickle.loads(data)
+        self.assertEqual(fb1,fb2)
+        self.assertEqual(fb1.indexes, fb2.indexes)
+
+    #--------------------------------------------------------------------------
+    #
+    #--------------------------------------------------------------------------
+    def test_pickled_factbase_querying(self):
+
+        f1 = FBP_F(1,"a")
+        f2 = FBP_F(2,"a")
+        f3 = FBP_F(3,"b")
+
+        # Pickle a factbase with an index
+        fb1=FactBase([f1,f2,f3],indexes=[FBP_F.astr])
+        data=pickle.dumps(fb1)
+        fb2=pickle.loads(data)
+
+        out=list(fb2.query(FBP_F).order_by(FBP_F.aint).all())
+        self.assertEqual(out,[f1,f2,f3])
 
 
 #------------------------------------------------------------------------------
