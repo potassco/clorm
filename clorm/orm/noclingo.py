@@ -59,6 +59,8 @@ class Symbol(object):
     Symbol objects to be released.
     """
 
+    __slots__=("_stype","_args","_value","_sign","_hash")
+
     def __init__(self, stype, value=None, args=[],sign=True):
         if not isinstance(stype, SymbolType):
             raise TypeError("{} is not a SymbolType".format(stype))
