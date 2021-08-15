@@ -2326,16 +2326,27 @@ class Predicate(object, metaclass=_PredicateMeta):
     # Properties and functions for Predicate
     #--------------------------------------------------------------------------
 
-    # Get the underlying clingo.Symbol object
+    # Get the Symbol object using the default symbol system
     @property
-    def raw(self):
-        """Returns the underlying clingo.Symbol object"""
+    def symbol(self):
+        """Returns the Symbol object corresponding to the fact.
+
+        The type of the object maybe either a clingo.Symbol or noclingo.Symbol.
+        """
         if self._raw is None:
             clingoargs=[]
             for f,v in zip(self.meta, self._field_values):
                 clingoargs.append(f.defn.pytocl(v))
             self._raw = symbols.Function(self.meta.name, clingoargs, self._sign)
+        return self._raw
 
+    # Get the underlying clingo.Symbol object
+    @property
+    def raw(self):
+        """Returns the underlying clingo.Symbol object"""
+        if self._raw is None: self.symbol
+        if isinstance(self._raw, noclingo.Symbol):
+            self._raw = noclingo.noclingo_to_clingo(self._raw)
         return self._raw
 
     @_classproperty
