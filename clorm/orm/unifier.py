@@ -49,7 +49,7 @@ def _unify(predicates, symbols):
         if not classes: continue
         for cls in classes:
             f = unify_single(cls,raw)
-            if f:
+            if f is not None:
                 yield f
                 break
 
