@@ -309,7 +309,11 @@ class FactBase(object):
                 if first: first=False
                 else: print("",file=out)
                 pm=fm.predicate.meta
-                print("% FactBase predicate: {}/{}".format(pm.name,pm.arity),file=out)
+                if pm.arity == 0:
+                    print("% Unary predicate: {}.".format(pm.name),file=out)
+                else:
+                    params=[str(fa.name) for fa in pm]
+                    print("% Predicate: {}({}).".format(pm.name,",".join(params)),file=out)
                 _format_asp_facts(fm.factset,out,width)
 
         data = out.getvalue()
