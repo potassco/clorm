@@ -437,33 +437,50 @@ class FactBaseTestCase(unittest.TestCase):
     # --------------------------------------------------------------------------
     def test_factbase_aspstr_width(self):
         class A(Predicate):
+            pass
+        class B(Predicate):
             n=IntegerField
         class C(Predicate):
+            n=IntegerField
             s=StringField
             class Meta: name="a_very_long_predicate_name_that_cause_wrapping_well"
 
         fb=FactBase()
-        afacts = [A(i) for i in range(0,10)]
-        bfacts = [C("A long parameter for wrapping {}".format(i)) for i in range(0,10)]
-        allfacts = afacts+bfacts
-        fb.add(afacts)
+        afacts = [A()]
+        bfacts = [B(i) for i in range(0,10)]
+        cfacts = [C(1,"A long parameter for wrapping {}".format(i)) for i in range(0,10)]
+        allfacts = afacts+bfacts+cfacts
 
+        fb.add(afacts)
         aspstr=fb.asp_str(width=30)
-        afactsstr="a(0). a(1). a(2). a(3). a(4).\na(5). a(6). a(7). a(8). a(9).\n"
+        afactsstr="a.\n"
         self.assertEqual(aspstr,afactsstr)
 
-        bfactsstr = "\n".join(["{}.".format(f) for f in bfacts]) + "\n"
+        fb=FactBase()
         fb.add(bfacts)
         aspstr=fb.asp_str(width=30)
-        self.assertEqual(aspstr,afactsstr+bfactsstr)
+        bfactsstr="b(0). b(1). b(2). b(3). b(4).\nb(5). b(6). b(7). b(8). b(9).\n"
+        self.assertEqual(aspstr,bfactsstr)
 
+        cfactsstr = "\n".join(["{}.".format(f) for f in cfacts]) + "\n"
+        fb.add(cfacts)
+        aspstr=fb.asp_str(width=30)
+        self.assertEqual(aspstr,bfactsstr+cfactsstr)
+
+        fb=FactBase(afacts)
         aspstr=fb.asp_str(width=30,commented=True)
-        afactspre="% FactBase predicate: a/1\n"
-        bfactspre="% FactBase predicate: {}/1\n".format(C.meta.name)
-        matchstr = afactspre+afactsstr + "\n" + bfactspre+bfactsstr
-        self.assertEqual(aspstr,matchstr)
+        afactspre="% Unary predicate: a.\n"
+        self.assertTrue(aspstr.startswith(afactspre))
 
+        fb=FactBase(bfacts)
+        aspstr=fb.asp_str(width=30,commented=True)
+        bfactspre="% Predicate: b(n).\n"
+        self.assertTrue(aspstr.startswith(bfactspre))
 
+        fb=FactBase(cfacts)
+        aspstr=fb.asp_str(width=30,commented=True)
+        cfactspre="% Predicate: {}(n,s).\n".format(C.meta.name)
+        self.assertTrue(aspstr.startswith(cfactspre))
 
 
 #------------------------------------------------------------------------------
