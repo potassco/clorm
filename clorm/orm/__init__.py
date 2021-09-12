@@ -31,6 +31,7 @@ __all__ = [
     'refine_field',
     'combine_fields',
     'define_nested_seq_field',
+    'define_enum_field',
     'simple_predicate',
     'unify',
     'path',
