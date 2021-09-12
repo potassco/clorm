@@ -1,7 +1,7 @@
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Unit tests for Clorm ORM RawField, Predicates and associated functions and
 # classes.
-
+#
 # Note: I'm trying to clearly separate tests of the official Clorm API from
 # tests of the internal implementation. Tests for the API have names
 # "test_api_XXX" while non-API tests are named "test_nonapi_XXX". This is still
@@ -12,6 +12,7 @@ import inspect
 import unittest
 import datetime
 import operator
+import enum
 import collections.abc as cabc
 from .support import check_errmsg
 
@@ -21,7 +22,8 @@ from clingo import Control, Number, String, Function, SymbolType
 from clorm.orm import \
     RawField, IntegerField, StringField, ConstantField, SimpleField,  \
     Predicate, ComplexTerm, refine_field, combine_fields, \
-    define_nested_list_field, simple_predicate, path, hashable_path, alias, \
+    define_nested_list_field, define_enum_field, \
+    simple_predicate, path, hashable_path, alias, \
     not_, and_, or_, cross, in_, notin_
 
 # Implementation imports
@@ -496,6 +498,76 @@ class FieldTestCase(unittest.TestCase):
         with self.assertRaises(TypeError) as ctx:
             tmp = define_nested_list_field("FG", IntegerField,ConstantField)
         check_errmsg("define_nested_list_field() missing or invalid",ctx)
+
+    #--------------------------------------------------------------------------
+    # Test define_enum_field
+    #--------------------------------------------------------------------------
+    def test_api_define_enum_field(self):
+        ef = define_enum_field
+
+        class ABC(str,enum.Enum):
+            A="a"
+            B="b"
+            C="c"
+
+        ABCField1 = ef("ABCField", ConstantField, ABC)
+        ABCField2 = ef(StringField, ABC)
+
+        # Make sure it works
+        c_a = Function("a",[])
+        c_b = Function("b",[])
+        c_c = Function("c",[])
+        c_d = Function("d",[])
+        s_a = String("a")
+        s_b = String("b")
+        s_c = String("c")
+        s_d = String("d")
+        n_1 = Number(1)
+
+        # Test the pytocl direction
+        self.assertEqual(ABCField1.pytocl(ABC.A), c_a)
+        self.assertEqual(ABCField1.pytocl(ABC.B), c_b)
+        self.assertEqual(ABCField1.pytocl(ABC.C), c_c)
+        self.assertEqual(ABCField2.pytocl(ABC.A), s_a)
+        self.assertEqual(ABCField2.pytocl(ABC.B), s_b)
+        self.assertEqual(ABCField2.pytocl(ABC.C), s_c)
+
+        # Test the cltopy direction
+        self.assertEqual(ABCField1.cltopy(c_a),ABC.A)
+        self.assertEqual(ABCField1.cltopy(c_b),ABC.B)
+        self.assertEqual(ABCField1.cltopy(c_c),ABC.C)
+        self.assertEqual(ABCField2.cltopy(s_a),ABC.A)
+        self.assertEqual(ABCField2.cltopy(s_b),ABC.B)
+        self.assertEqual(ABCField2.cltopy(s_c),ABC.C)
+
+        # Test some failures
+        with self.assertRaises(ValueError) as ctx:
+            tmp = ABCField1.cltopy(c_d)
+        check_errmsg("'d' is not a valid",ctx)
+
+        with self.assertRaises(TypeError) as ctx:
+            tmp = ABCField1.cltopy(s_a)
+        check_errmsg("Clingo symbol object '\"a\"'",ctx)
+
+        with self.assertRaises(TypeError) as ctx:
+            tmp = ABCField1.cltopy(n_1)
+        check_errmsg("Clingo symbol object '1'",ctx)
+
+        with self.assertRaises(AttributeError) as ctx:
+            tmp = ABCField1.pytocl("blah")
+        check_errmsg("'str' object has no attribute 'value'",ctx)
+
+        # Test object that behaves a bit like the enum
+        class Tmp:
+            def __init__(self,val): self._value = val
+            @property
+            def value(self): return self._value
+
+        self.assertEqual(ABCField1.pytocl(Tmp("a")), c_a)
+
+        with self.assertRaises(ValueError) as ctx:
+            tmp = ABCField1.pytocl(Tmp("d"))
+        check_errmsg("'d' is not a valid value of enum class 'ABC'",ctx)
 
 #------------------------------------------------------------------------------
 # Test definition predicates/complex terms

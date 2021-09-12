@@ -584,8 +584,10 @@ an existing field class.
       person = StringField
       class Meta: name = "cooking"
 
+   ok=Cooking2(dow="monday",person="Bob")
+
    try:
-      ck = Cooking2(dow="mnday",person="Bob")  # raises a TypeError exception
+      bad = Cooking2(dow="mnday",person="Bob")  # raises a TypeError exception
    except TypeError:
       print("Caught exception")
 
@@ -604,6 +606,31 @@ a field that accepts only positive integers:
 .. code-block:: python
 
    PosIntField = refine_field("PosIntField", NumberField, lambda x : x >= 0)
+
+An alternative to using :py:func:`~clorm.refine_field` to restrict the allowable
+values is to an explicitly specified set is to use
+:py:func:`~clorm.define_enum_field`. This function allows Clorm to be used with
+standard Python Enum classes. So, the day-of-week example could be rewritten to
+use an Enum class:
+
+.. code-block:: python
+
+   import enum
+   class DOW(str,enum.Enum):
+       SUNDAY="sunday"
+       MONDAY="monday"
+       TUESDAY="tuesday"
+       WEDNESDAY="wednesday"
+       THURSDAY="thursday"
+       FRIDAY="friday"
+       SATURDAY="saturday"
+
+   class Cooking3(Predicate):
+       dow = define_enum_field("DowField",ConstantField,DOW)
+       person = StringField
+       class Meta: name = "cooking"
+
+   ok = Cooking3(dow=DOW.MONDAY,person="Bob")
 
 Finally, it should be highlighted that this mechanism for defining a field
 restriction works not just for validating the inputs into an ASP program. It can

@@ -37,6 +37,7 @@ __all__ = [
     'refine_field',
     'combine_fields',
     'define_nested_list_field',
+    'define_enum_field',
     'simple_predicate',
     'path',
     'hashable_path',
@@ -1427,6 +1428,69 @@ def define_nested_list_field(*args):
     return type(subclass_name, (RawField,),
                 { "pytocl": _pytocl,
                   "cltopy": _cltopy})
+
+#------------------------------------------------------------------------------
+# define_nested_list_field is a function that creates a sub-class of RawField that
+# deals with nested list encoded asp.
+# ------------------------------------------------------------------------------
+
+def define_enum_field(*args):
+    """Factory function that returns a RawField sub-class for an Enum
+
+    Enums are part of the standard library since Python 3.4. This method
+    provides an alternative to using refine_field() to provide a restricted set
+    of allowable values.
+
+    Example:
+       .. code-block:: python
+
+          class IO(str,Enum):
+              IN="in"
+              OUT="out"
+
+          # A field that unifies against ASP constants "in" and "out"
+          IOField = define_enum_field(ConstantField,IO)
+
+    Only positional arguments are supported.
+
+    Args:
+
+       subclass_name (optional): new sub-class name (anonymous if none specified).
+
+       field_class: the field that is being sub-classed
+
+       enum_class: the Enum class
+
+    """
+    largs = len(args)
+    if largs == 2:
+        field_class = args[0]
+        enum_class = args[1]
+        subclass_name = field_class.__name__ + "_Restriction"
+    elif largs == 3:
+        subclass_name = args[0]
+        field_class = args[1]
+        enum_class = args[2]
+    else:
+        raise TypeError("define_enum_field() missing required positional arguments")
+
+    if not inspect.isclass(field_class) or not issubclass(field_class,RawField):
+        raise TypeError("{} is not a subclass of RawField".format(field_class))
+
+    if not inspect.isclass(enum_class) or not issubclass(enum_class,enum.Enum):
+        raise TypeError("{} is not a subclass of enum.Enum".format(enum_class))
+
+    values = set(i.value for i in enum_class)
+    def _pytocl(py):
+        val=py.value
+        if val not in values:
+            raise ValueError(("'{}' is not a valid value of enum class "
+                              "'{}'").format(val,enum_class.__name__))
+        return val
+
+    return type(subclass_name, (field_class,),
+                { "pytocl": _pytocl,
+                  "cltopy": lambda cl: enum_class(cl)})
 
 #------------------------------------------------------------------------------
 # FieldAccessor - a Python descriptor (similar to a property) to access the

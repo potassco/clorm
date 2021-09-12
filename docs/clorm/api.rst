@@ -28,6 +28,8 @@ more intuitive Python objects.
 
 .. autofunction:: clorm.refine_field
 
+.. autofunction:: clorm.define_enum_field
+
 .. autofunction:: clorm.combine_fields
 
 .. autofunction:: clorm.define_nested_list_field
