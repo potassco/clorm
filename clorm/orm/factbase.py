@@ -3,6 +3,7 @@
 # specifically for storing facts (Predicate instances).
 # ------------------------------------------------------------------------------
 
+import sys
 import io
 import operator
 import collections
@@ -36,8 +37,9 @@ __all__ = [
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-# Support function for printing ASP facts
-#------------------------------------------------------------------------------
+# Support function for printing ASP facts: Note: _trim_docstring() is taken from
+# PEP 257 (modified for Python 3): https://www.python.org/dev/peps/pep-0257/
+# ------------------------------------------------------------------------------
 
 def _format_asp_facts(iterator,output,width):
     tmp1=""
@@ -49,6 +51,39 @@ def _format_asp_facts(iterator,output,width):
         else:
             tmp1 = tmp1 + " " + fstr if tmp1 else fstr
     if tmp1: print(tmp1,file=output)
+
+def _trim_docstring(docstring):
+    if not docstring:
+        return ''
+    # Convert tabs to spaces (following the normal Python rules)
+    # and split into a list of lines:
+    lines = docstring.expandtabs().splitlines()
+    # Determine minimum indentation (first line doesn't count):
+    indent = sys.maxsize
+    for line in lines[1:]:
+        stripped = line.lstrip()
+        if stripped:
+            indent = min(indent, len(line) - len(stripped))
+    # Remove indentation (first line is special):
+    trimmed = [lines[0].strip()]
+    if indent < sys.maxsize:
+        for line in lines[1:]:
+            trimmed.append(line[indent:].rstrip())
+    # Strip off trailing and leading blank lines:
+    while trimmed and not trimmed[-1]:
+        trimmed.pop()
+    while trimmed and not trimmed[0]:
+        trimmed.pop(0)
+    # Return a single string:
+    return '\n'.join(trimmed)
+
+def _format_docstring(docstring,output):
+    if not docstring: return
+    tmp=_trim_docstring(docstring)
+    tmpstr = "".join("%     " + l for l in tmp.splitlines(True))
+    if tmpstr:
+        print("% Description:",file=output)
+        print(tmpstr,file=output)
 
 #------------------------------------------------------------------------------
 # A FactBase consisting of facts of different types
@@ -309,11 +344,16 @@ class FactBase(object):
                 if first: first=False
                 else: print("",file=out)
                 pm=fm.predicate.meta
+                br="\n%     " if fm.predicate.__doc__ else " "
                 if pm.arity == 0:
-                    print("% Unary predicate: {}.".format(pm.name),file=out)
+                    print("% Unary predicate signature:{}{}".format(
+                        br,pm.name),file=out)
                 else:
                     params=[str(fa.name) for fa in pm]
-                    print("% Predicate: {}({}).".format(pm.name,",".join(params)),file=out)
+                    print("% Predicate signature:{}{}({})".format(
+                        br,pm.name,",".join(params)),file=out)
+                if fm.predicate.__doc__:
+                    _format_docstring(fm.predicate.__doc__,out)
                 _format_asp_facts(fm.factset,out,width)
 
         data = out.getvalue()
