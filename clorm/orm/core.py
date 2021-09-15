@@ -1366,7 +1366,7 @@ def _refine_field_collection(subclass_name, field_class, values):
                 { "pytocl": _test_value,
                   "cltopy": _test_value})
 
-def refine_field(*args):
+def refine_field(field_class,values,*,name=None):
     """Factory function that returns a field sub-class with restricted values.
 
     A helper factory function to define a sub-class of a BaseField (or sub-class)
@@ -1380,22 +1380,21 @@ def refine_field(*args):
     Example:
        .. code-block:: python
 
-           WorkDayField = refine_field("WorkDayField", ConstantField,
+           WorkDayField = refine_field(ConstantField,
               ["monday", "tuesday", "wednesday", "thursday", "friday"])
 
           class WorksOn(Predicate):
               employee = ConstantField()
               workday = WorkdDayField()
 
-    Instead of a passing a list of values the last parameter can also be a
-    function/functor. If the last parameter is callable then it is treated as a
+    Instead of a passing a list of values the second parameter can also be a
+    function/functor. If is parameter is callable then it is treated as a
     function that takes a field value and returns true if it is a valid value.
 
     Example:
        .. code-block:: python
 
-           PosIntField = refine_field("PosIntField", NumberField,
-              lambda x : x >= 0)
+           PosIntField = refine_field(NumberField,lambda x : x >= 0)
 
     The function must be called using positional arguments with either 2 or 3
     arguments. For the 3 argument case a class name is specified for the name of
@@ -1412,13 +1411,26 @@ def refine_field(*args):
 
     Args:
 
-       subclass_name (optional): new sub-class name (anonymous if none specified).
-
        field_class: the field that is being sub-classed
 
        values|functor: a list of values or a functor to determine validity
 
+       subclass_name (optional keyword only): new sub-class name (anonymously generated if none specified).
+
+
+
     """
+    subclass_name = name if name else field_class.__name__ + "_Restriction"
+
+    if not inspect.isclass(field_class) or not issubclass(field_class,BaseField):
+        raise TypeError("{} is not a subclass of BaseField".format(field_class))
+
+    if callable(values):
+        return _refine_field_functor(subclass_name, field_class, values)
+    else:
+        return _refine_field_collection(subclass_name, field_class, values)
+
+def old(*args):
     largs = len(args)
     if largs == 2:
         field_class = args[0]

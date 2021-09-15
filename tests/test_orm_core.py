@@ -401,7 +401,7 @@ class FieldTestCase(unittest.TestCase):
     def test_api_refine_field_by_values(self):
         rf = refine_field
 
-        ABCField = rf("ABCField", ConstantField, ["a","b","c"])
+        ABCField = rf(ConstantField, ["a","b","c"],name="ABCField")
 
         # Make sure it works
         r_a = Function("a",[])
@@ -458,7 +458,7 @@ class FieldTestCase(unittest.TestCase):
         with self.assertRaises(TypeError) as ctx:
             ABCField3 = rf(["a","b","c"])
         with self.assertRaises(TypeError) as ctx:
-            ABCField4 = rf("ABCField", ConstantField, ["a","b","c"], 1)
+            ABCField4 = rf(ConstantField, ["a","b","c"], 1,name="ABCField")
 
 
     #--------------------------------------------------------------------------
@@ -468,7 +468,7 @@ class FieldTestCase(unittest.TestCase):
         rf = refine_field
 
         # A good restriction
-        PosIntField = rf("PosIntField", IntegerField, lambda x: x >= 0)
+        PosIntField = rf(IntegerField, lambda x: x >= 0,name="PosIntField")
 
         # Make sure it works
         r_neg1 = Number(-1)
