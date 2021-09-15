@@ -78,9 +78,12 @@ def _trim_docstring(docstring):
     return '\n'.join(trimmed)
 
 def _format_docstring(docstring,output):
+    if not docstring: return
     tmp=_trim_docstring(docstring)
-    tmpstr = "".join("% " + l for l in tmp.splitlines(True))
-    if tmpstr: print(tmpstr,file=output)
+    tmpstr = "".join("%     " + l for l in tmp.splitlines(True))
+    if tmpstr:
+        print("% Description:",file=output)
+        print(tmpstr,file=output)
 
 #------------------------------------------------------------------------------
 # A FactBase consisting of facts of different types
@@ -341,12 +344,14 @@ class FactBase(object):
                 if first: first=False
                 else: print("",file=out)
                 pm=fm.predicate.meta
+                br="\n%     " if fm.predicate.__doc__ else " "
                 if pm.arity == 0:
-                    print("% Unary predicate signature: {}.".format(pm.name),file=out)
+                    print("% Unary predicate signature:{}{}".format(
+                        br,pm.name),file=out)
                 else:
                     params=[str(fa.name) for fa in pm]
-                    print("% Predicate signature: {}({}).".format(
-                        pm.name,",".join(params)),file=out)
+                    print("% Predicate signature:{}{}({})".format(
+                        br,pm.name,",".join(params)),file=out)
                 if fm.predicate.__doc__:
                     _format_docstring(fm.predicate.__doc__,out)
                 _format_asp_facts(fm.factset,out,width)
