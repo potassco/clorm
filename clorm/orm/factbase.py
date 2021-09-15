@@ -77,10 +77,16 @@ def _trim_docstring(docstring):
     # Return a single string:
     return '\n'.join(trimmed)
 
+def _endstrip(string):
+    if not string: return
+    nl=string[-1]=='\n'
+    tmp=string.rstrip()
+    return tmp + '\n' if nl else tmp
+
 def _format_docstring(docstring,output):
     if not docstring: return
     tmp=_trim_docstring(docstring)
-    tmpstr = "".join("%     " + l for l in tmp.splitlines(True))
+    tmpstr = "".join(_endstrip("%     " + l) for l in tmp.splitlines(True))
     if tmpstr:
         print("% Description:",file=output)
         print(tmpstr,file=output)
