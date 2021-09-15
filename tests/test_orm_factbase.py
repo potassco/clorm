@@ -439,6 +439,9 @@ class FactBaseTestCase(unittest.TestCase):
         class A(Predicate):
             pass
         class B(Predicate):
+            '''B is a predicate.
+
+               n - an integer field.'''
             n=IntegerField
         class C(Predicate):
             n=IntegerField
@@ -469,17 +472,19 @@ class FactBaseTestCase(unittest.TestCase):
 
         fb=FactBase(afacts)
         aspstr=fb.asp_str(width=30,commented=True)
-        afactspre="% Unary predicate: a.\n"
+        afactspre="% Unary predicate signature: a.\n"
         self.assertTrue(aspstr.startswith(afactspre))
 
         fb=FactBase(bfacts)
         aspstr=fb.asp_str(width=30,commented=True)
-        bfactspre="% Predicate: b(n).\n"
-        self.assertTrue(aspstr.startswith(bfactspre))
+        lines=aspstr.splitlines(True)
+        self.assertEqual(lines[0],"% Predicate signature: b(n).\n")
+        self.assertEqual(lines[1],"% B is a predicate.\n")
+        self.assertEqual(lines[3],"% n - an integer field.\n")
 
         fb=FactBase(cfacts)
         aspstr=fb.asp_str(width=30,commented=True)
-        cfactspre="% Predicate: {}(n,s).\n".format(C.meta.name)
+        cfactspre="% Predicate signature: {}(n,s).\n".format(C.meta.name)
         self.assertTrue(aspstr.startswith(cfactspre))
 
 
