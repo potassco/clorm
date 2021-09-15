@@ -482,6 +482,7 @@ class FactBaseTestCase(unittest.TestCase):
         self.assertEqual(lines[1],"%     b(n)\n")
         self.assertEqual(lines[2],"% Description:\n")
         self.assertEqual(lines[3],"%     B is a predicate.\n")
+        self.assertEqual(lines[4],"%\n")
         self.assertEqual(lines[5],"%     n - an integer field.\n")
 
         fb=FactBase(cfacts)
