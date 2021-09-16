@@ -37,7 +37,7 @@ class RobotLocation(ComplexTerm):
     location=ConstantField
     class Meta: name = "robotlocation"
 
-FluentField=combine_fields("FluentField",[Light.Field,RobotLocation.Field])
+FluentField=combine_fields([Light.Field,RobotLocation.Field])
 
 class Init(Predicate):
     fluent=FluentField
