@@ -22,7 +22,7 @@ from clingo import Number, String, Function, SymbolType
 from clorm.orm import \
     BaseField, Raw, RawField, IntegerField, StringField, ConstantField, SimpleField,  \
     Predicate, ComplexTerm, refine_field, combine_fields, \
-    define_nested_seq_field, define_enum_field, \
+    define_nested_list_field, define_enum_field, \
     simple_predicate, path, hashable_path, alias, \
     not_, and_, or_, cross, in_, notin_, \
     SymbolMode, set_symbol_mode, get_symbol_mode, symbols
@@ -560,8 +560,8 @@ class FieldTestCase(unittest.TestCase):
     # programming nested lists.
     # --------------------------------------------------------------------------
     def test_api_nested_list_field(self):
-        INLField = define_nested_seq_field(IntegerField,name="INLField")
-        CNLField = define_nested_seq_field(ConstantField)
+        INLField = define_nested_list_field(IntegerField,name="INLField")
+        CNLField = define_nested_list_field(ConstantField)
 
         empty_list = Function("",[])
         inl_1st = Function("",[Number(3),empty_list])
@@ -611,9 +611,52 @@ class FieldTestCase(unittest.TestCase):
 
         # Some badly defined fields
         with self.assertRaises(TypeError) as ctx:
-            tmp = define_nested_seq_field("FG",name="FG")
+            tmp = define_nested_list_field("FG",name="FG")
         check_errmsg("'FG' is not a ",ctx)
 
+    #--------------------------------------------------------------------------
+    # Test the different variants for defining a nested list encoding of the
+    # Python sequence (1,2,3)
+    # --------------------------------------------------------------------------
+    def test_api_nested_list_field_alt(self):
+
+        INLField1 = define_nested_list_field(IntegerField)
+        INLField2 = define_nested_list_field(IntegerField,reverse=True)
+        INLField3 = define_nested_list_field(IntegerField,headlist=False)
+        INLField4 = define_nested_list_field(IntegerField,headlist=False,reverse=True)
+        empty = Function("",[])
+
+        # The head-list, non-reverse (standard) encoding (1,(2,(3,())))
+        l1_a = Function("",[Number(3),empty])
+        l1_b = Function("",[Number(2),l1_a])
+        l1 = Function("",[Number(1),l1_b])
+        self.assertEqual(str(l1),"(1,(2,(3,())))")
+        self.assertEqual(INLField1.pytocl((1,2,3)),l1)
+        self.assertEqual(INLField1.cltopy(l1),(1,2,3))
+
+        # The head-list, reverse encoding (3,(2,(1,())))
+        l2_a = Function("",[Number(1),empty])
+        l2_b = Function("",[Number(2),l2_a])
+        l2 = Function("",[Number(3),l2_b])
+        self.assertEqual(str(l2),"(3,(2,(1,())))")
+        self.assertEqual(INLField2.pytocl((1,2,3)),l2)
+        self.assertEqual(INLField2.cltopy(l2),(1,2,3))
+
+        # The list-tail, non-reverse (standard) encoding ((((),1),2),3)
+        l3_a = Function("",[empty,Number(1)])
+        l3_b = Function("",[l3_a,Number(2)])
+        l3 = Function("",[l3_b,Number(3)])
+        self.assertEqual(str(l3),"((((),1),2),3)")
+        self.assertEqual(INLField3.pytocl((1,2,3)),l3)
+        self.assertEqual(INLField3.cltopy(l3),(1,2,3))
+
+        # The list-tail, non-reverse (standard) encoding ((((),3),2),1)
+        l4_a = Function("",[empty,Number(3)])
+        l4_b = Function("",[l4_a,Number(2)])
+        l4 = Function("",[l4_b,Number(1)])
+        self.assertEqual(str(l4),"((((),3),2),1)")
+        self.assertEqual(INLField4.pytocl((1,2,3)),l4)
+        self.assertEqual(INLField4.cltopy(l4),(1,2,3))
 
     #--------------------------------------------------------------------------
     # Test define_enum_field
@@ -989,7 +1032,7 @@ class PredicateTestCase(unittest.TestCase):
         # Test declaration of predicates with a nested field
         class F(Predicate):
             a = IntegerField
-            b = define_nested_seq_field(SimpleField)
+            b = define_nested_list_field(SimpleField)
             c = IntegerField
 
         f1 = F(101,(1,"b","G"),202)

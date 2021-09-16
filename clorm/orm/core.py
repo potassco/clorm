@@ -43,7 +43,7 @@ __all__ = [
     'ComplexTerm',
     'refine_field',
     'combine_fields',
-    'define_nested_seq_field',
+    'define_nested_list_field',
     'define_enum_field',
     'simple_predicate',
     'path',
@@ -1491,25 +1491,60 @@ def combine_fields(fields,*,name=None):
                   "cltopy": _cltopy})
 
 #------------------------------------------------------------------------------
-# define_nested_seq_field is a function that creates a sub-class of BaseField that
+# define_nested_list_field is a function that creates a sub-class of BaseField that
 # deals with nested list encoded asp.
 # ------------------------------------------------------------------------------
 
-def define_nested_seq_field(element_field,*,name=None):
+def define_nested_list_field(element_field,*,headlist=True,reverse=False,name=None):
     """Factory function that returns a BaseField sub-class for nested lists
 
-    ASP doesn't have an explicit notion of a sequence or list, but sometimes it
-    is useful to encode a sequence as a series of nested pairs (ie., a head-tail
-    encoding) with an empty tuple indicating the end of the sequence.
-
-    Example:
-       .. code-block:: prolog
-
-          (1,(2,(3,())))         % Encodes a sequence (1,2,3)
-
     This function is a helper factory function to define a sub-class of
-    BaseField that deals with a nested sequence encoding consisting of elements
-    of some other BaseField subclass.
+    BaseField that can covert a list of elements to/from ASP.
+
+    ASP doesn't have an explicit notion of a sequence or list, but sometimes it
+    is useful to encode a list as a series of nested pairs. There are two basic
+    ways to do this, with each way having two sub-forms:
+
+    (head,list) - the list is encoded recursively with a first head element and
+                  a second element representing the remainder of the list. The
+                  end of the list is indicated by an empty tuple.
+
+                  Example:
+
+                  .. code-block:: prolog
+
+                       (1,(2,(3,())))         % Encodes a sequence (1,2,3)
+
+                  The sub-form is for the list to be treated as reversed in the
+                  ASP encoding.
+
+                  Example:
+
+                  .. code-block:: prolog
+
+                       (3,(2,(1,())))         % Encodes a sequence (1,2,3)
+
+    (list,tail) - the list is encoded recursively as a sub-list first element
+    and a second tail element. The empty sub-list is indicated by an empty
+    tuple.
+
+                  Example:
+
+                  .. code-block:: prolog
+
+                       ((((),1),2),3)         % Encodes a sequence (1,2,3)
+
+                  Again the sub-form version is to reverse the list.
+
+                  .. code-block:: prolog
+
+                       ((((),3),2),1)         % Encodes a sequence (1,2,3)
+
+
+    The choice of nested list encodings will depend on how it is used within the
+    ASP code. However, the head-list-pair approach in non-reverse order is also
+    used in `lisp` and `prolog` so for this reason it is set as the default
+    approach here.
 
     Note: the fields of facts should be immutable. This means that you must
     use a tuple and not a list object when creating the sequence.
@@ -1518,7 +1553,7 @@ def define_nested_seq_field(element_field,*,name=None):
        .. code-block:: python
 
           # Unifies against a nested sequence of constants
-          NestedSeqField = define_nested_seq_field("NLField",ConstantField)
+          NestedListField = define_nested_list_field(ConstantField,name="NLField")
 
     Positional args:
 
@@ -1528,6 +1563,10 @@ def define_nested_seq_field(element_field,*,name=None):
 
        name: name for new class (default: anonymously generated).
 
+       headlist: use head-list encoding (default: True)
+
+       reverse: use the reverse order for the list (default: False)
+
     """
     subclass_name = name if name else "AnonymousNestedSeqField"
     efield = element_field
@@ -1536,24 +1575,29 @@ def define_nested_seq_field(element_field,*,name=None):
     if not inspect.isclass(efield) or not issubclass(efield,BaseField):
         raise TypeError("'{}' is not a BaseField or a sub-class".format(efield))
 
-    def _pytocl(v):
+    # Support function - to check input values
+    def _checkpy(v):
         if isinstance(v,str) or not isinstance(v,cabc.Iterable):
             raise TypeError("'{}' is not a sequence".format(v))
+    def _checkcl(func):
+        if not noclingo.is_Function(func) or func.name != "":
+            raise TypeError("'{}' is not a nested sequence".format(func))
+    def _get_next(func):
+        _checkcl(func)
+        rlen = len(func.arguments)
+        if rlen == 0: return None
+        if rlen == 2: return func.arguments
+        else:
+            raise TypeError("'{}' is not a nested sequence".format(func))
+
+    # (head,list) standard mode
+    def _headlist_pytocl(v):
+        _checkpy(v)
         nested=symbols.Function("",[])
         for ev in reversed(v):
             nested=symbols.Function("",[efield.pytocl(ev),nested])
         return nested
-
-    def _get_next(raw):
-        if not noclingo.is_Function(raw) or raw.name != "":
-            raise TypeError("'{}' is not a nested sequence".format(raw))
-        rlen = len(raw.arguments)
-        if rlen == 0: return None
-        if rlen == 2: return raw.arguments
-        else:
-            raise TypeError("'{}' is not a nested sequence".format(raw))
-
-    def _cltopy(raw):
+    def _headlist_cltopy(raw):
         elements=[]
         result = _get_next(raw)
         while result:
@@ -1561,9 +1605,68 @@ def define_nested_seq_field(element_field,*,name=None):
             result = _get_next(result[1])
         return tuple(elements)
 
-    return type(subclass_name, (BaseField,),
-                { "pytocl": _pytocl,
-                  "cltopy": _cltopy})
+    # (head,list) reverse
+    def _headlist_pytocl_reverse(v):
+        _checkpy(v)
+        nested=symbols.Function("",[])
+        for ev in v:
+            nested=symbols.Function("",[efield.pytocl(ev),nested])
+        return nested
+    def _headlist_cltopy_reverse(raw):
+        elements=[]
+        result = _get_next(raw)
+        while result:
+            elements.append(efield.cltopy(result[0]))
+            result = _get_next(result[1])
+        return tuple(reversed(elements))
+
+    # (head,list) standard mode
+    def _listtail_pytocl(v):
+        _checkpy(v)
+        nested=symbols.Function("",[])
+        for ev in v:
+            nested=symbols.Function("",[nested,efield.pytocl(ev)])
+        return nested
+    def _listtail_cltopy(raw):
+        elements=[]
+        result = _get_next(raw)
+        while result:
+            elements.append(efield.cltopy(result[1]))
+            result = _get_next(result[0])
+        return tuple(reversed(elements))
+
+    # (head,list) reverse
+    def _listtail_pytocl_reverse(v):
+        _checkpy(v)
+        nested=symbols.Function("",[])
+        for ev in reversed(v):
+            nested=symbols.Function("",[nested,efield.pytocl(ev)])
+        return nested
+    def _listtail_cltopy_reverse(raw):
+        elements=[]
+        result = _get_next(raw)
+        while result:
+            elements.append(efield.cltopy(result[1]))
+            result = _get_next(result[0])
+        return tuple(elements)
+
+    if headlist and not reverse:
+        newclass=type(subclass_name, (BaseField,),
+                      { "pytocl": _headlist_pytocl,
+                        "cltopy": _headlist_cltopy})
+    elif headlist and reverse:
+        newclass=type(subclass_name, (BaseField,),
+                      { "pytocl": _headlist_pytocl_reverse,
+                        "cltopy": _headlist_cltopy_reverse})
+    elif not headlist and not reverse:
+        newclass=type(subclass_name, (BaseField,),
+                      { "pytocl": _listtail_pytocl,
+                        "cltopy": _listtail_cltopy})
+    else:
+        newclass=type(subclass_name, (BaseField,),
+                      { "pytocl": _listtail_pytocl_reverse,
+                        "cltopy": _listtail_cltopy_reverse})
+    return newclass
 
 #------------------------------------------------------------------------------
 # define_nested_list_field is a function that creates a sub-class of RawField that
