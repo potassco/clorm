@@ -1729,7 +1729,7 @@ class PredicateInternalUnifyTestCase(unittest.TestCase):
 
 
         # Define predicate with a class name
-        AnonPred4 = simple_predicate("AnonPred4", "predicate",3)
+        AnonPred4 = simple_predicate("predicate",3,name="AnonPred4")
 
         # Should unify
         ap4 = AnonPred4(raw=p3.raw)

@@ -1415,9 +1415,7 @@ def refine_field(field_class,values,*,name=None):
 
     Optional keyword-only arguments:
 
-       subclass_name: new sub-class name (default: anonymously generated).
-
-
+       name: name for new class (default: anonymously generated).
 
     """
     subclass_name = name if name else field_class.__name__ + "_Restriction"
@@ -1459,7 +1457,7 @@ def combine_fields(fields,*,name=None):
 
     Optional keyword-only arguments:
 
-       subclass_name: new sub-class name (default: anonymously generated).
+       name: name for new class (default: anonymously generated).
 
     """
     subclass_name = name if name else "AnonymousCombinedBaseField"
@@ -1528,7 +1526,7 @@ def define_nested_seq_field(element_field,*,name=None):
 
     Optional keyword-only arguments:
 
-       subclass_name: new sub-class name (default: anonymously generated).
+       name: name for new class (default: anonymously generated).
 
     """
     subclass_name = name if name else "AnonymousNestedSeqField"
@@ -1589,15 +1587,15 @@ def define_enum_field(parent_field,enum_class,*,name=None):
           # A field that unifies against ASP constants "in" and "out"
           IOField = define_enum_field(ConstantField,IO)
 
-    Only positional arguments are supported.
-
-    Args:
-
-       subclass_name (optional): new sub-class name (anonymous if none specified).
+    Positional argument:
 
        field_class: the field that is being sub-classed
 
        enum_class: the Enum class
+
+    Optional keyword-only arguments:
+
+       name: name for new class (default: anonymously generated).
 
     """
     subclass_name = name if name else parent_field.__name__ + "_Restriction"
@@ -2577,7 +2575,7 @@ ComplexTerm=Predicate
 # for easy display/printing.
 # ------------------------------------------------------------------------------
 
-def simple_predicate(*args):
+def simple_predicate(predicate_name,arity,*,name=None,module=None):
     """Factory function to define a predicate with only BaseField arguments.
 
     A helper factory function that takes a name and an arity and returns a
@@ -2593,30 +2591,27 @@ def simple_predicate(*args):
     the new predicate. For the 2 argument case an anonymous predicate class name
     is automatically generated.
 
-    Args:
-       optional subclass_name: new sub-class name (anonymous if none specified).
-       name: the name of the predicate to match against
-       arity: the arity for the predicate
+    Positional argument:
+
+       predicate_name: the name of the ASP predicate to match against
+
+       arity: the arity for the ASP predicate
+
+    Optional keyword-only arguments:
+
+       name: name for new class (default: anonymously generated).
 
     """
-    largs = len(args)
-    if largs == 2:
-        subclass_name = "ClormAnonPredicate"
-        name = args[0]
-        arity = args[1]
-    elif largs == 3:
-        subclass_name = args[0]
-        name = args[1]
-        arity = args[2]
-    else:
-        raise TypeError("simple_predicate() missing required positional arguments")
+    subclass_name = name if name else "AnonSimplePredicate"
 
     # Use an OrderedDict to ensure the correct order of the field arguments
     proto = collections.OrderedDict([("arg{}".format(i+1), RawField())
                                      for i in range(0,arity)])
     proto['Meta'] = type("Meta", (object,),
-                         {"name" : name, "is_tuple" : False, "_anon" : True})
-    return type("ClormAnonPredicate", (Predicate,), proto)
+                         {"name" : predicate_name,
+                          "is_tuple" : False, "_anon" : True})
+    newclass = type(subclass_name, (Predicate,), proto)
+    return newclass
 
 
 
