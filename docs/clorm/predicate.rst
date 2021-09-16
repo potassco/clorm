@@ -576,7 +576,7 @@ an existing field class.
 
 .. code-block:: python
 
-   DowField = refine_field("DowField", ConstantField,
+   DowField = refine_field(ConstantField,
       ["sunday","monday","tuesday","wednesday","thursday","friday","saturday"])
 
    class Cooking2(Predicate):
@@ -605,7 +605,7 @@ a field that accepts only positive integers:
 
 .. code-block:: python
 
-   PosIntField = refine_field("PosIntField", NumberField, lambda x : x >= 0)
+   PosIntField = refine_field(NumberField, lambda x : x >= 0)
 
 An alternative to using :py:func:`~clorm.refine_field` to restrict the allowable
 values is to an explicitly specified set is to use
@@ -642,9 +642,9 @@ from the weekday cooks.
 
 .. code-block:: python
 
-   WeekendField = refine_field("WeekendField", ConstantField,
+   WeekendField = refine_field(ConstantField,
       ["sunday","saturday"])
-   WeekdayField = refine_field("WeekdayField", ConstantField,
+   WeekdayField = refine_field(ConstantField,
       ["monday","tuesday","wednesday","thursday","friday"])
 
    class WeekendCooking(Predicate):
@@ -946,7 +946,7 @@ following Python integration:
       class Meta: name = "robotlocation"
 
    class True(Predicate):
-      fluent = combine_fields("FluentField",[Light,RobotLocation])
+      fluent = combine_fields([Light,RobotLocation])
       time = IntegerField
 
 
@@ -991,7 +991,7 @@ to convert to and from a list of elements of that field class.
    from clorm import Predicate, ConstantField, SimpleField, \
       define_nested_list_field
 
-   SNLField=define_nested_list("SNLField",SimpleField)
+   SNLField=define_nested_list(SimpleField)
 
    class P(Predicate):
       param=ConstantField

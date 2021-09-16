@@ -1506,8 +1506,8 @@ def define_nested_list_field(element_field,*,headlist=True,reverse=False,name=No
     ways to do this, with each way having two sub-forms:
 
     (head,list) - the list is encoded recursively with a first head element and
-                  a second element representing the remainder of the list. The
-                  end of the list is indicated by an empty tuple.
+    a second element representing the remainder of the list. The end of the list
+    is indicated by an empty tuple.
 
                   Example:
 
