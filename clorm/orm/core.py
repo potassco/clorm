@@ -1407,15 +1407,15 @@ def refine_field(field_class,values,*,name=None):
            WorkDayField = refine_field(ConstantField,
               ["monday", "tuesday", "wednesday", "thursday", "friday"])
 
-    Only positional arguments are supported.
-
-    Args:
+    Positional argument:
 
        field_class: the field that is being sub-classed
 
        values|functor: a list of values or a functor to determine validity
 
-       subclass_name (optional keyword only): new sub-class name (anonymously generated if none specified).
+    Optional keyword-only arguments:
+
+       subclass_name: new sub-class name (default: anonymously generated).
 
 
 
@@ -1430,28 +1430,6 @@ def refine_field(field_class,values,*,name=None):
     else:
         return _refine_field_collection(subclass_name, field_class, values)
 
-def old(*args):
-    largs = len(args)
-    if largs == 2:
-        field_class = args[0]
-        values = args[1]
-        subclass_name = field_class.__name__ + "_Restriction"
-    elif largs == 3:
-        subclass_name = args[0]
-        field_class = args[1]
-        values = args[2]
-    else:
-        raise TypeError("refine_field() missing required positional arguments")
-
-    if not inspect.isclass(field_class) or not issubclass(field_class,BaseField):
-        raise TypeError("{} is not a subclass of BaseField".format(field_class))
-
-    if callable(values):
-        return _refine_field_functor(subclass_name, field_class, values)
-    else:
-        return _refine_field_collection(subclass_name, field_class, values)
-
-
 
 #------------------------------------------------------------------------------
 # combine_fields is a function that creates a sub-class of BaseField that
@@ -1459,7 +1437,7 @@ def old(*args):
 # helper function.
 # ------------------------------------------------------------------------------
 
-def combine_fields(*args):
+def combine_fields(fields,*,name=None):
     """Factory function that returns a field sub-class that combines other fields
 
     A helper factory function to define a sub-class of BaseField that combines
@@ -1473,28 +1451,18 @@ def combine_fields(*args):
     Example:
        .. code-block:: python
 
-          MixedField = combine_fields("MixedField",[ConstantField,IntegerField])
+          MixedField = combine_fields([ConstantField,IntegerField])
 
-    Only positional arguments are supported.
-
-    Args:
-
-       subclass_name (optional): new sub-class name (anonymous if none specified).
+    Positional args:
 
        field_subclasses: the fields to combine
 
-    """
+    Optional keyword-only arguments:
 
-    # Deal with the optional subclass name
-    largs=len(args)
-    if largs == 1:
-        subclass_name="AnonymousCombinedBaseField"
-        fields=args[0]
-    elif largs == 2:
-        subclass_name=args[0]
-        fields=args[1]
-    else:
-        raise TypeError("combine_fields() missing or invalid arguments")
+       subclass_name: new sub-class name (default: anonymously generated).
+
+    """
+    subclass_name = name if name else "AnonymousCombinedBaseField"
 
     # Must combine at least two fields otherwise it doesn't make sense
     for f in fields:
@@ -1529,7 +1497,7 @@ def combine_fields(*args):
 # deals with nested list encoded asp.
 # ------------------------------------------------------------------------------
 
-def define_nested_seq_field(*args):
+def define_nested_seq_field(element_field,*,name=None):
     """Factory function that returns a BaseField sub-class for nested lists
 
     ASP doesn't have an explicit notion of a sequence or list, but sometimes it
@@ -1554,26 +1522,17 @@ def define_nested_seq_field(*args):
           # Unifies against a nested sequence of constants
           NestedSeqField = define_nested_seq_field("NLField",ConstantField)
 
-    Only positional arguments are supported.
+    Positional args:
 
-    Args:
+       element_field: the field type for each sequence element
 
-       subclass_name (optional): new sub-class name (anonymous if none specified).
+    Optional keyword-only arguments:
 
-       element_definition: the field type for each sequence element
+       subclass_name: new sub-class name (default: anonymously generated).
 
     """
-
-    # Deal with the optional subclass name
-    largs=len(args)
-    if largs == 1:
-        subclass_name="AnonymousNestedSeqField"
-        efield=args[0]
-    elif largs == 2:
-        subclass_name=args[0]
-        efield=args[1]
-    else:
-        raise TypeError("define_nested_seq_field() missing or invalid arguments")
+    subclass_name = name if name else "AnonymousNestedSeqField"
+    efield = element_field
 
     # The element_field must be a BaseField sub-class
     if not inspect.isclass(efield) or not issubclass(efield,BaseField):
@@ -1613,7 +1572,7 @@ def define_nested_seq_field(*args):
 # deals with nested list encoded asp.
 # ------------------------------------------------------------------------------
 
-def define_enum_field(*args):
+def define_enum_field(parent_field,enum_class,*,name=None):
     """Factory function that returns a BaseField sub-class for an Enum
 
     Enums are part of the standard library since Python 3.4. This method
@@ -1641,20 +1600,10 @@ def define_enum_field(*args):
        enum_class: the Enum class
 
     """
-    largs = len(args)
-    if largs == 2:
-        field_class = args[0]
-        enum_class = args[1]
-        subclass_name = field_class.__name__ + "_Restriction"
-    elif largs == 3:
-        subclass_name = args[0]
-        field_class = args[1]
-        enum_class = args[2]
-    else:
-        raise TypeError("define_enum_field() missing required positional arguments")
+    subclass_name = name if name else parent_field.__name__ + "_Restriction"
 
-    if not inspect.isclass(field_class) or not issubclass(field_class,BaseField):
-        raise TypeError("{} is not a subclass of BaseField".format(field_class))
+    if not inspect.isclass(parent_field) or not issubclass(parent_field,BaseField):
+        raise TypeError("{} is not a subclass of BaseField".format(parent_field))
 
     if not inspect.isclass(enum_class) or not issubclass(enum_class,enum.Enum):
         raise TypeError("{} is not a subclass of enum.Enum".format(enum_class))
@@ -1667,7 +1616,7 @@ def define_enum_field(*args):
                               "'{}'").format(val,enum_class.__name__))
         return val
 
-    return type(subclass_name, (field_class,),
+    return type(subclass_name, (parent_field,),
                 { "pytocl": _pytocl,
                   "cltopy": lambda cl: enum_class(cl)})
 

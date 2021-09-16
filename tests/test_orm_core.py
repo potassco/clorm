@@ -507,7 +507,7 @@ class FieldTestCase(unittest.TestCase):
         # Make sure the basic class is setup
         defn=combine_fields([IntegerField,ConstantField])
         self.assertTrue(issubclass(defn,BaseField))
-        defn=combine_fields("MixedField", [IntegerField,ConstantField])
+        defn=combine_fields([IntegerField,ConstantField],name="MixedField")
         self.assertTrue(issubclass(defn,BaseField))
         self.assertEqual(defn.__name__,"MixedField")
 
@@ -520,7 +520,7 @@ class FieldTestCase(unittest.TestCase):
             defn=combine_fields("a","b")
 
         # Test the pytocl and cltopy functions for combined Integer-Constant
-        MF=combine_fields("MixedField", [IntegerField,ConstantField])
+        MF=combine_fields([IntegerField,ConstantField],name="MixedField")
 
         # Test pytocl
         self.assertEqual(MF.pytocl(10), Number(10))
@@ -560,7 +560,7 @@ class FieldTestCase(unittest.TestCase):
     # programming nested lists.
     # --------------------------------------------------------------------------
     def test_api_nested_list_field(self):
-        INLField = define_nested_seq_field("INLField",IntegerField)
+        INLField = define_nested_seq_field(IntegerField,name="INLField")
         CNLField = define_nested_seq_field(ConstantField)
 
         empty_list = Function("",[])
@@ -611,13 +611,9 @@ class FieldTestCase(unittest.TestCase):
 
         # Some badly defined fields
         with self.assertRaises(TypeError) as ctx:
-            tmp = define_nested_seq_field("FG","FG")
+            tmp = define_nested_seq_field("FG",name="FG")
         check_errmsg("'FG' is not a ",ctx)
 
-        # Some badly defined fields
-        with self.assertRaises(TypeError) as ctx:
-            tmp = define_nested_seq_field("FG", IntegerField,ConstantField)
-        check_errmsg("define_nested_seq_field() missing or invalid",ctx)
 
     #--------------------------------------------------------------------------
     # Test define_enum_field
@@ -630,8 +626,8 @@ class FieldTestCase(unittest.TestCase):
             B="b"
             C="c"
 
-        ABCField1 = ef("ABCField", ConstantField, ABC)
-        ABCField2 = ef(StringField, ABC)
+        ABCField1 = ef(ConstantField,ABC,name="ABCField")
+        ABCField2 = ef(StringField,ABC)
 
         # Make sure it works
         c_a = Function("a",[])
@@ -1269,7 +1265,7 @@ class PickleF(Predicate):
 
 class PickleG(Predicate):
     acplx=PickleF.Field
-    acomb=combine_fields("MField", [StringField,IntegerField])
+    acomb=combine_fields([StringField,IntegerField],name="MField")
 
 class PickleH(Predicate):
     atuple=(ConstantField,IntegerField)
