@@ -475,21 +475,25 @@ class FactBaseTestCase(unittest.TestCase):
         fb=FactBase(afacts)
         aspstr=fb.asp_str(width=30,commented=True)
         lines=aspstr.splitlines(True)
-        self.assertEqual(lines[0],"% Unary predicate signature: a\n")
+        self.assertTrue(lines[0].startswith("% ------"))
+        self.assertEqual(lines[1],"% Unary predicate signature:\n")
+        self.assertEqual(lines[2],"%     a\n")
 
         fb=FactBase(bfacts)
         aspstr=fb.asp_str(width=30,commented=True)
         lines=aspstr.splitlines(True)
-        self.assertEqual(lines[0],"% Predicate signature:\n")
-        self.assertEqual(lines[1],"%     b(n)\n")
-        self.assertEqual(lines[2],"% Description:\n")
-        self.assertEqual(lines[3],"%     B is a predicate.\n")
-        self.assertEqual(lines[4],"%\n")
-        self.assertEqual(lines[5],"%     n - an integer field.\n")
+        self.assertTrue(lines[0].startswith("% ------"))
+        self.assertEqual(lines[1],"% Predicate signature:\n")
+        self.assertEqual(lines[2],"%     b(n)\n")
+        self.assertEqual(lines[3],"% Description:\n")
+        self.assertEqual(lines[4],"%     B is a predicate.\n")
+        self.assertEqual(lines[5],"%\n")
+        self.assertEqual(lines[6],"%     n - an integer field.\n")
 
+        return
         fb=FactBase(cfacts)
         aspstr=fb.asp_str(width=30,commented=True)
-        cfactspre="% Predicate signature: {}(n,s)\n".format(C.meta.name)
+        cfactspre="% Predicate signature:\n%     {}(n,s)\n".format(C.meta.name)
         self.assertTrue(aspstr.startswith(cfactspre))
 
 

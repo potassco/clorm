@@ -91,6 +91,32 @@ def _format_docstring(docstring,output):
         print("% Description:",file=output)
         print(tmpstr,file=output)
 
+def _maxwidth(lines):
+    return max([len(l) for l in lines])
+
+def _format_commented(fm,out):
+    pm = fm.predicate.meta
+    docstring = _trim_docstring(fm.predicate.__doc__) \
+        if fm.predicate.__doc__ else ""
+    indent = "    "
+    if pm.arity == 0:
+        lines = [ "Unary predicate signature:", indent + pm.name ]
+    else:
+        params=[str(fa.name) for fa in pm]
+        lines = [ "Predicate signature:",
+                  indent + "{}({})".format(pm.name, ",".join(params)) ]
+    if docstring:
+        lines.append("Description:")
+        for l in docstring.splitlines():lines.append(indent + l)
+    bar = "-" * _maxwidth(lines)
+    lines.insert(0,bar)
+    lines.append(bar)
+    for l in lines:
+        tmp = l.rstrip()
+        if tmp: print("% {}".format(tmp),file=out)
+        else: print("%",file=out)
+    return
+
 #------------------------------------------------------------------------------
 # A FactBase consisting of facts of different types
 #------------------------------------------------------------------------------
@@ -349,17 +375,7 @@ class FactBase(object):
             for fm in self._factmaps.values():
                 if first: first=False
                 else: print("",file=out)
-                pm=fm.predicate.meta
-                br="\n%     " if fm.predicate.__doc__ else " "
-                if pm.arity == 0:
-                    print("% Unary predicate signature:{}{}".format(
-                        br,pm.name),file=out)
-                else:
-                    params=[str(fa.name) for fa in pm]
-                    print("% Predicate signature:{}{}({})".format(
-                        br,pm.name,",".join(params)),file=out)
-                if fm.predicate.__doc__:
-                    _format_docstring(fm.predicate.__doc__,out)
+                _format_commented(fm,out)
                 _format_asp_facts(fm.factset,out,width)
 
         data = out.getvalue()
