@@ -200,68 +200,6 @@ def func(paths, func):
 # all it simply returns the object itself.
 # ------------------------------------------------------------------------------
 
-
-# ------------------------------------------------------------------------------
-# A comparator is either a standard comparator (with a known comparison
-# operator) or made with an arbitrary function.
-# ------------------------------------------------------------------------------
-
-
-class Comparator(abc.ABC):
-
-    @abc.abstractmethod
-    def ground(self,*args,**kwargs): pass
-
-    @abc.abstractmethod
-    def fixed(self): pass
-
-    @abc.abstractmethod
-    def negate(self): pass
-
-    @abc.abstractmethod
-    def dealias(self): pass
-
-    @abc.abstractmethod
-    def make_callable(self, root_signature): pass
-
-    @property
-    @abc.abstractmethod
-    def form(self): pass
-
-    @property
-    @abc.abstractmethod
-    def paths(self): pass
-
-    @property
-    @abc.abstractmethod
-    def placeholders(self): pass
-
-    @property
-    @abc.abstractmethod
-    def roots(self): pass
-
-    @property
-    @abc.abstractmethod
-    def executable(self):
-        """Return whether the Comparator is query executable
-
-        This will be the case either if the comparator has no Placeholders or if
-        the Placeholders have a default value. Because of the default values it
-        doesn't make sense to test if for the Comparator is ground.
-
-        """
-        pass
-
-    @abc.abstractmethod
-    def __eq__(self, other): pass
-
-    @abc.abstractmethod
-    def __ne__(self, other): pass
-
-    @abc.abstractmethod
-    def __hash__(self): pass
-
-
 # ------------------------------------------------------------------------------
 # Support function returns True if all the elements of the list are root paths
 # ------------------------------------------------------------------------------
@@ -415,8 +353,8 @@ def join_comparison_op(qcond):
     paths = set(map(lambda x: hashable_path(x), paths))
     roots = set(map(lambda x: hashable_path(path(x).meta.root), paths))
     if len(roots) != 2:
-        raise ValueError(("A join specification must have "
-                          "exactly two root paths: '{}'").format(qcond))
+        raise ValueError(("Invalid join expression '{}'. A join expression must join "
+                          "paths with two distinct predicate roots").format(qcond))
 
     if qcond.operator == trueall:
         if paths != roots:
@@ -1517,7 +1455,13 @@ def normalise_where_expression(qcond):
 #  ------------------------------------------------------------------------------
 
 def process_where(where_expression, roots=[]):
-    where = validate_where_expression(where_expression,roots)
+    def _prevalidate(w):
+        if isinstance(w,QCondition): return w
+        if isinstance(w,Comparator): return w
+        if callable(w) and not isinstance(w,PredicatePath): return w
+        raise TypeError("'{}' is not a valid query 'where' expression".format(w))
+
+    where = validate_where_expression(_prevalidate(where_expression),roots)
     return normalise_where_expression(where)
 
 # ------------------------------------------------------------------------------
@@ -1649,6 +1593,12 @@ def validate_join_expression(qconds, roots):
 #  ------------------------------------------------------------------------------
 
 def process_join(join_expression, roots=[]):
+    def _prevalidate():
+        for j in join_expression:
+            if not isinstance(j,QCondition):
+                raise TypeError("'{}' ({}) is not a valid 'join' in '{}'".format(
+                    j,type(j),join_expression))
+    _prevalidate()
     return validate_join_expression(join_expression,roots)
 
 

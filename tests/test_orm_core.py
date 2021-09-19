@@ -29,12 +29,10 @@ from clorm.orm import \
 
 # Implementation imports
 from clorm.orm.core import get_field_definition, PredicatePath, \
-    QCondition, trueall, falseall, notcontains
+    QCondition, trueall, notcontains
 
 import clingo
 import clorm.orm.noclingo as noclingo
-
-
 
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
@@ -48,6 +46,13 @@ __all__ = [
     'QConditionTestCase',
     ]
 
+
+#------------------------------------------------------------------------------
+#
+#------------------------------------------------------------------------------
+
+def hpaths(paths):
+    return [ hashable_path(path) for path in paths ]
 
 #------------------------------------------------------------------------------
 # Test the BaseField class and sub-classes and definining simple sub-classes
@@ -1133,11 +1138,12 @@ class PredicateTestCase(unittest.TestCase):
             c = (IntegerField(), ConstantField())
 
         # Test the Predicate class
-        self.assertEqual(Blah.a, Blah[0])
-        self.assertEqual(Blah.b, Blah[1])
-        self.assertEqual(Blah.c, Blah[2])
+        self.assertTrue(Blah.a is Blah[0])
+        self.assertTrue(Blah.b is Blah[1])
+        self.assertTrue(Blah.c is Blah[2])
         for idx,f in enumerate(Blah.meta):
-            self.assertEqual(f,Blah[idx])
+            tmp=f.__get__(None)
+            self.assertTrue(tmp is Blah[idx])
 
         # Test an instance
         b = Blah(a=1,b="asd", c=(1,"dfd"))
@@ -2098,8 +2104,8 @@ class PredicatePathTestCase(unittest.TestCase):
 
         self.assertTrue(isinstance(path(F), PredicatePath))
         self.assertEqual(path(F).meta.predicate, F)
-        self.assertEqual(path(F), path(path(F)))
-        self.assertEqual(path(hashable_path(F)), path(F))
+        self.assertEqual(hashable_path(path(F)), hashable_path(path(path(F))))
+        self.assertEqual(hashable_path(path(hashable_path(F))), hashable_path(path(F)))
         self.assertEqual(hashable_path(F), F.meta.path.meta.hashable)
         self.assertEqual(hashable_path(F.meta.path), F.meta.path.meta.hashable)
         self.assertEqual(hashable_path(F.meta.path.meta.hashable),
@@ -2309,17 +2315,16 @@ class QConditionTestCase(unittest.TestCase):
         F=self.F
 
         # Good creation
-        self.assertTrue(QCondition(operator.and_,2,1))
-        self.assertTrue(QCondition(operator.or_,2,1))
-        self.assertTrue(QCondition(operator.not_,2))
-        self.assertTrue(QCondition(operator.eq,2,1))
-        self.assertTrue(QCondition(operator.ne,2,1))
-        self.assertTrue(QCondition(operator.lt,2,1))
-        self.assertTrue(QCondition(operator.le,2,1))
-        self.assertTrue(QCondition(operator.gt,2,1))
-        self.assertTrue(QCondition(operator.ge,2,1))
-        self.assertTrue(QCondition(trueall,2,1))
-
+        self.assertTrue(QCondition(operator.and_,F.anum==1,F.astr==2) is not None)
+        self.assertTrue(QCondition(operator.or_,F.anum==1,F.astr==2) is not None)
+        self.assertTrue(QCondition(operator.not_,F.anum==1) is not None)
+        self.assertTrue(QCondition(operator.eq,F.anum,1) is not None)
+        self.assertTrue(QCondition(operator.ne,F.anum,1) is not None)
+        self.assertTrue(QCondition(operator.lt,F.anum,1) is not None)
+        self.assertTrue(QCondition(operator.le,F.anum,1) is not None)
+        self.assertTrue(QCondition(operator.gt,F.anum,1) is not None)
+        self.assertTrue(QCondition(operator.ge,F.anum,1) is not None)
+        self.assertTrue(QCondition(trueall,F.anum,F.astr) is not None)
 
         # Bad creation - wrong number of args or unknown operator
         with self.assertRaises(ValueError) as ctx:
@@ -2343,6 +2348,29 @@ class QConditionTestCase(unittest.TestCase):
         with self.assertRaises(ValueError) as ctx:
             QCondition(lambda: True,3)
 
+        # Bad creation - bad argument type
+        with self.assertRaises(TypeError) as ctx:
+            QCondition(operator.and_,2,1)
+        with self.assertRaises(TypeError) as ctx:
+            QCondition(operator.and_,2,1)
+        with self.assertRaises(TypeError) as ctx:
+            QCondition(operator.not_,2)
+        with self.assertRaises(TypeError) as ctx:
+            QCondition(operator.eq,1,1)
+        with self.assertRaises(TypeError) as ctx:
+            QCondition(operator.ne,2,1)
+        with self.assertRaises(TypeError) as ctx:
+            QCondition(operator.lt,1,2)
+        with self.assertRaises(TypeError) as ctx:
+            QCondition(operator.le,1,2)
+        with self.assertRaises(TypeError) as ctx:
+            QCondition(operator.gt,2,1)
+        with self.assertRaises(TypeError) as ctx:
+            QCondition(operator.ge,2,1)
+        with self.assertRaises(TypeError) as ctx:
+            QCondition(trueall,2,1)
+
+        
     #--------------------------------------------------------------------------
     # Test that the explicit and implicit (operator overload) creates the same
     # thing
@@ -2370,12 +2398,12 @@ class QConditionTestCase(unittest.TestCase):
     def test_nonapi_args_and_operator_access(self):
         F=self.F
 
-        qc = QCondition(operator.and_,2,1)
-        self.assertEqual(qc.args, (2,1))
+        qc = QCondition(operator.and_,F.anum==1,F.astr==2)
+        self.assertEqual(qc.args, (F.anum==1,F.astr==2))
         self.assertEqual(qc.operator, operator.and_)
 
-        qc = QCondition(operator.not_,2)
-        self.assertEqual(qc.args, (2,))
+        qc = QCondition(operator.not_,F.anum==1)
+        self.assertEqual(qc.args, (F.anum==1,))
         self.assertEqual(qc.operator, operator.not_)
 
     # -------------------------------------------------------------------------
@@ -2456,7 +2484,6 @@ class QConditionTestCase(unittest.TestCase):
         F=self.F
 
         self.assertTrue(trueall(1,2))
-        self.assertFalse(falseall(3,4))
         self.assertTrue(notcontains([1,2,3],4))
         self.assertFalse(notcontains([1,2,3],3))
 

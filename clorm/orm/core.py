@@ -11,6 +11,7 @@
 #import logging
 #import os
 import io
+import abc
 import contextlib
 import inspect
 import operator
@@ -28,6 +29,7 @@ import uuid
 from . import noclingo
 
 __all__ = [
+    'Comparator',
     'set_symbol_mode',
     'get_symbol_mode',
     'symbols',
@@ -95,6 +97,67 @@ class _lateinit(object):
     def __get__(self, instance, owner):
         return self._value
 
+# ------------------------------------------------------------------------------
+# A comparator is used for defining queries. If is either a standard comparator
+# (with a known comparison operator) or made with an arbitrary function.
+# ------------------------------------------------------------------------------
+
+class Comparator(abc.ABC):
+
+    @abc.abstractmethod
+    def ground(self,*args,**kwargs): pass
+
+    @abc.abstractmethod
+    def fixed(self): pass
+
+    @abc.abstractmethod
+    def negate(self): pass
+
+    @abc.abstractmethod
+    def dealias(self): pass
+
+    @abc.abstractmethod
+    def make_callable(self, root_signature): pass
+
+    @property
+    @abc.abstractmethod
+    def form(self): pass
+
+    @property
+    @abc.abstractmethod
+    def paths(self): pass
+
+    @property
+    @abc.abstractmethod
+    def placeholders(self): pass
+
+    @property
+    @abc.abstractmethod
+    def roots(self): pass
+
+    @property
+    @abc.abstractmethod
+    def executable(self):
+        """Return whether the Comparator is query executable
+
+        This will be the case either if the comparator has no Placeholders or if
+        the Placeholders have a default value. Because of the default values it
+        doesn't make sense to test if for the Comparator is ground.
+
+        """
+        pass
+
+    @abc.abstractmethod
+    def __eq__(self, other): pass
+
+    @abc.abstractmethod
+    def __ne__(self, other): pass
+
+    @abc.abstractmethod
+    def __hash__(self): pass
+
+
+
 #------------------------------------------------------------------------------
 # Define the conditional ('where' clause) elements of a query.
 #
@@ -137,6 +200,12 @@ def _wqc(a):
     except:
         return str(_wsce(a))
 
+# ------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
+# ------------------------------------------------------------------------------
+#
+# ------------------------------------------------------------------------------
 
 class QCondition(object):
     class Form(enum.Enum):
@@ -179,16 +248,46 @@ class QCondition(object):
             2, Form.INFIX, lambda seq,obj: "{} not in {}".format(path(obj),seq))
     }
 
-    def __init__(self, operator, *args):
-        opsig = QCondition.operators.get(operator,None)
+    def __init__(self, op, *args):
+        def _validate_qc(qc):
+            if isinstance(qc,QCondition): return qc
+            if isinstance(qc,Comparator): return qc
+            if callable(qc) and not isinstance(qc,PredicatePath): return qc
+            errstr=self.__str__()
+            raise TypeError(("'{}' is not a valid query sub-expression in "
+                             "'{}'").format(qc,errstr))
+        def _validate_path(p):
+            try:
+                if isinstance(path(p),PredicatePath): return p
+            except:
+                pass
+            errstr=self.__str__()
+            raise TypeError(("'{}' is not a valid query path expression in"
+                             "'{}'").format(p,errstr))
+
+        def _is_bool_op():
+            return bool(op in [ operator.and_, operator.or_, operator.not_ ])
+        def _is_comparator_op():
+            return bool(op in [ operator.eq, operator.ne, operator.lt,
+                                operator.le, operator.gt, operator.ge ])
+        def _is_cross_op():
+            return bool(op == trueall)
+
+        opsig = QCondition.operators.get(op,None)
         if not opsig:
-            raise ValueError("Unsupported operator {}".format(operator))
+            raise ValueError("Unsupported operator {}".format(op))
         if len(args) != opsig.arity:
             raise ValueError(("Operator {} expecting {} arguments but got "
-                              "{}").format(operator, opsig.arity, len(args)))
+                              "{}").format(op, opsig.arity, len(args)))
 
-        self._operator = operator
+        self._operator = op
         self._args = tuple(args)
+        if _is_bool_op():
+            for qc in self._args: _validate_qc(qc)
+        if _is_cross_op():
+            for p in self._args: _validate_path(p)
+        if _is_comparator_op(): _validate_path(self._args[0])
+
 
     @property
     def form(self):
@@ -228,6 +327,11 @@ class QCondition(object):
         result = self.__eq__(other)
         if result is NotImplemented: return NotImplemented
         return not result
+
+    def __bool__(self):
+        raise ValueError(("Invalid boolean test of query expression \'{}\'. "
+                         "If you want to express complex queries use '&',"
+                         "'|','~' instead of 'and','or','not'.").format(self))
 
     def __str__(self):
         opsig = QCondition.operators[self._operator]
@@ -653,6 +757,27 @@ class PredicatePath(object, metaclass=_PredicatePathMeta):
         return QCondition(operator.gt, self, other)
     def __ge__(self, other):
         return QCondition(operator.ge, self, other)
+
+    #--------------------------------------------------------------------------
+    # Overload the bitwise operators to catch user-mistakes
+    #--------------------------------------------------------------------------
+    def _bitwiseerr(self,op,ot=None):
+        estr="{} {} {}".format(self,op,ot) if ot else "{}{}".format(op,self)
+
+        raise ValueError(("Invalid use of '{}' operator in clorm expression '{}'. "
+                          "It could be an operator precedence issue and you need "
+                          "'(...)' surrounding your expression").format(op,estr))
+
+    def __and__(self,other):
+        self._bitwiseerr('&',other)
+    def __or__(self,other):
+        self._bitwiseerr('|',other)
+    def __rand__(self,other):
+        self._bitwiseerr('&',other)
+    def __ror__(self,other):
+        self._bitwiseerr('|',other)
+    def __invert__(self):
+        self._bitwiseerr('~')
 
     #--------------------------------------------------------------------------
     # String representation

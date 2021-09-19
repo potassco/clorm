@@ -71,6 +71,9 @@ __all__ = [
 #
 #------------------------------------------------------------------------------
 
+def hpaths(paths):
+    return [ hashable_path(path) for path in paths ]
+
 #------------------------------------------------------------------------------
 # Test functions for Placeholder sub-classes
 # ------------------------------------------------------------------------------
@@ -222,17 +225,19 @@ class QQConditionTestCase(unittest.TestCase):
         af2 = F(1,"aaa",(3,"bbb"))
 
         # Some other query conditions that can't be defined with the nice syntax
-        c1 = QCondition(operator.eq, 2, F.anum)
-        self.assertEqual(str(c1), "2 == F.anum")
+        # - these are forbidden
+        #        c1 = QCondition(operator.eq, 2, F.anum)
+        #        self.assertEqual(str(c1), "2 == F.anum")
 
-        c1 = QCondition(operator.eq,2,2)
-        self.assertEqual(str(c1), "2 == 2")
+        #        c1 = QCondition(operator.eq,2,2)
+        #        self.assertEqual(str(c1), "2 == 2")
+
+        #c1 = QCondition(operator.eq,2,1)
+        #self.assertEqual(str(c1), "2 == 1")
 
         c1 = F.anum == F.anum
         self.assertEqual(str(c1), "F.anum == F.anum")
 
-        c1 = QCondition(operator.eq,2,1)
-        self.assertEqual(str(c1), "2 == 1")
 
         f = lambda x : x.anum == 2
 
@@ -244,7 +249,6 @@ class QQConditionTestCase(unittest.TestCase):
 
         # Test that simplifying a complex works as expected
         c1 = and_(F.anum == 1, F.astr == ph1_)
-        c2 = and_(F.anum == 1, F.astr == ph1_, True)
         c3 = and_(F.anum == 1, F.anum == F.anum, F.astr == ph1_)
 
         c1 = ((F.anum == 1) & (F.astr == ph1_)) | ~(F.atuple == ph2_)
@@ -254,6 +258,13 @@ class QQConditionTestCase(unittest.TestCase):
 
         c1 = or_(F.anum == 1, F.anum != F.anum, F.astr == ph1_)
         c2 = or_(F.anum == 1, F.astr == ph1_)
+
+
+        # We can now detect this as problematic
+        with self.assertRaises(TypeError) as ctx:
+            c2 = and_(F.anum == 1, F.astr == ph1_, True)
+        check_errmsg("'True' is not a valid query sub-expression", ctx)
+
 
     #-------------------------------------------------------------------------
     # Since we want to use the condition to model joins (such as using __mult__
@@ -1155,8 +1166,10 @@ class JoinExpressionTestCase(unittest.TestCase):
         vje = validate_join_expression
         joins = vje([F.anum == G.anum],[F,G])
         self.assertEqual(joins,[SC(operator.eq, [F.anum,G.anum])])
-        self.assertEqual(SC(operator.eq, [F.anum,G.anum]).paths, (F.anum,G.anum))
-        self.assertEqual(SC(operator.eq, [F.anum,G.anum]).roots, (path(F),path(G)))
+        self.assertEqual(set(hpaths(SC(operator.eq, [F.anum,G.anum]).paths)),
+                         set(hpaths([F.anum,G.anum])))
+        self.assertEqual(set(hpaths(SC(operator.eq, [F.anum,G.anum]).roots)),
+                         set(hpaths([path(F),path(G)])))
         self.assertEqual(hash(SC(operator.eq, [F.anum,G.anum])),
                          hash(SC(operator.eq, [F.anum,G.anum])))
 
@@ -1191,12 +1204,12 @@ class JoinExpressionTestCase(unittest.TestCase):
         # Only a single path
         with self.assertRaises(ValueError) as ctx:
             vje([F.anum <= 1],[F,G])
-        check_errmsg("A join specification must have", ctx)
+        check_errmsg("Invalid join expression 'F.anum <= 1'", ctx)
 
         # Indentical argument
         with self.assertRaises(ValueError) as ctx:
             vje([F.anum == F.anum],[F,G])
-        check_errmsg("A join specification must have", ctx)
+        check_errmsg("Invalid join expression 'F.anum == F.anum'", ctx)
 
         # Bad cross-product specification
         with self.assertRaises(ValueError) as ctx:
@@ -2762,7 +2775,7 @@ class QueryExecutorTestCase(unittest.TestCase):
         f1=F(1,"a") ; f3=F(3,"a") ; f5=F(5,"a") ; f7=F(7,"a") ; f9=F(9,"a")
         factmaps = factmaps_dict([f1,f3,f5,f7,f9], [F.anum])
         self.assertEqual(len(factmaps),1)
-        self.assertEqual(list(factmaps[F].path2factindex.keys()), [F.anum])
+        self.assertEqual(list(factmaps[F].path2factindex.keys()), hpaths([F.anum]))
 
         roots = (F,)
         order_by = pob([F.anum],roots)

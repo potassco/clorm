@@ -31,6 +31,13 @@ __all__ = [
 #
 #------------------------------------------------------------------------------
 
+def hpaths(paths):
+    return [ hashable_path(path) for path in paths ]
+
+#------------------------------------------------------------------------------
+#
+#------------------------------------------------------------------------------
+
 class UnifyTestCase(unittest.TestCase):
     def setUp(self):
         pass
@@ -355,8 +362,9 @@ class UnifyTestCase(unittest.TestCase):
         self.assertEqual(spu1.predicates, (Afact,Bfact))
         self.assertEqual(spu2.predicates, (Afact,))
         self.assertEqual(spu3.predicates, (Afact,))
-        self.assertEqual(spu1.indexes, (Afact.num1,Afact.num1))
-        self.assertEqual(spu2.indexes, (Afact.num1,))
+        self.assertEqual(set(hpaths(spu1.indexes)),
+                         set(hpaths([Afact.num1,Bfact.num1])))
+        self.assertEqual(hpaths(spu2.indexes), hpaths([Afact.num1]))
         self.assertEqual(spu3.indexes, ())
 
     #--------------------------------------------------------------------------

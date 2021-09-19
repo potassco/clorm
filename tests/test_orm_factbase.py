@@ -47,6 +47,9 @@ __all__ = [
 #
 #------------------------------------------------------------------------------
 
+def hpaths(paths):
+    return [ hashable_path(path) for path in paths ]
+
 #------------------------------------------------------------------------------
 # Test the FactBase
 #------------------------------------------------------------------------------
@@ -398,9 +401,9 @@ class FactBaseTestCase(unittest.TestCase):
         self.assertEqual(fb2, fb3)
 
         # But the indexes can be different
-        self.assertEqual(list(fb1.indexes), list(Afact.meta.indexes))
-        self.assertEqual(list(fb2.indexes), [])
-        self.assertEqual(list(fb3.indexes), list(fb1.indexes))
+        self.assertEqual(set(hpaths(fb1.indexes)), set(hpaths(Afact.meta.indexes)))
+        self.assertEqual(set(hpaths(fb2.indexes)), set([]))
+        self.assertEqual(set(hpaths(fb3.indexes)), set(hpaths(fb1.indexes)))
 
 
     #--------------------------------------------------------------------------
@@ -1336,8 +1339,8 @@ class QueryAPI2TestCase(unittest.TestCase):
         q = factbase.query(G,F).heuristic(fixed_join_order(G,F))\
                                .join(F.anum == G.anum)
         qplan = q.query_plan()
-        self.assertEqual(qplan[0].root,G)
-        self.assertEqual(qplan[1].root,F)
+        self.assertEqual(hashable_path(qplan[0].root),hashable_path(G))
+        self.assertEqual(hashable_path(qplan[1].root),hashable_path(F))
         self.assertEqual(set(q.all()),
                          set([(G(1,"c"), F(1,"a")),
                               (G(2,"d"), F(2,"a"))]))
@@ -1346,8 +1349,8 @@ class QueryAPI2TestCase(unittest.TestCase):
         q = factbase.query(G,F).heuristic(fixed_join_order(F,G))\
                                .join(F.anum == G.anum)
         qplan = q.query_plan()
-        self.assertEqual(qplan[0].root,F)
-        self.assertEqual(qplan[1].root,G)
+        self.assertEqual(hashable_path(qplan[0].root),hashable_path(F))
+        self.assertEqual(hashable_path(qplan[1].root),hashable_path(G))
         self.assertEqual(set(q.all()),
                          set([(G(1,"c"), F(1,"a")),
                               (G(2,"d"), F(2,"a"))]))
@@ -1511,7 +1514,7 @@ class FactBasePicklingTestCase(unittest.TestCase):
     #
     #--------------------------------------------------------------------------
     def test_factbase_pickling(self):
-
+        
         f1 = FBP_F(1,"a")
         f2 = FBP_F(2,"a")
         f3 = FBP_F(3,"b")
@@ -1533,8 +1536,8 @@ class FactBasePicklingTestCase(unittest.TestCase):
         data=pickle.dumps(fb1)
         fb2=pickle.loads(data)
         self.assertEqual(fb1,fb2)
-        self.assertEqual(fb1.indexes, fb2.indexes)
-
+        self.assertEqual(hpaths(fb1.indexes), hpaths(fb2.indexes))
+        
     #--------------------------------------------------------------------------
     #
     #--------------------------------------------------------------------------
