@@ -956,12 +956,27 @@ class QueryImpl(Query):
         return QueryImpl(self._factmaps, nqspec)
 
     #--------------------------------------------------------------------------
+    # Add an orderered() flag
+    #--------------------------------------------------------------------------
+    def ordered(self, *expressions):
+        self._check_join_called_first("ordered")
+        if self._qspec.getp("order_by",None) is not None:
+            raise ValueError(("Invalid query 'ordered' declaration conflicts "
+                              "with previous 'order_by' declaration"))
+        nqspec = self._qspec.newp(ordered=True)
+        return QueryImpl(self._factmaps, nqspec)
+
+    #--------------------------------------------------------------------------
     # Add an order_by expression
     #--------------------------------------------------------------------------
     def order_by(self, *expressions):
         self._check_join_called_first("order_by")
         if not expressions:
             nqspec = self._qspec.newp(order_by=None)   # raise exception
+        elif self._qspec.getp("ordered",False):
+            raise ValueError(("Invalid query 'order_by' declaration '{}' "
+                              "conflicts with previous 'ordered' "
+                              "declaration").format(expressions))
         else:
             nqspec = self._qspec.newp(
                 order_by=process_orderby(expressions,self._qspec.roots))

@@ -1648,10 +1648,10 @@ class OrderBy(object):
 # is a PredicatePath. The ascending order function is provided for completeness
 # since the order_by parameter will treat a path as ascending order by default.
 # ------------------------------------------------------------------------------
-def desc(path):
-    return OrderBy(path,asc=False)
-def asc(path):
-    return OrderBy(path,asc=True)
+def desc(pth):
+    return OrderBy(path(pth),asc=False)
+def asc(pth):
+    return OrderBy(path(pth),asc=True)
 
 # ------------------------------------------------------------------------------
 # OrderByBlock groups together an ordering of OrderBy statements
@@ -1728,6 +1728,8 @@ def validate_orderby_expression(orderby_expressions, roots=[]):
         if isinstance(exp, OrderBy): path_ordering.append(exp)
         elif isinstance(exp, PredicatePath):
             path_ordering.append(asc(exp))
+        elif inspect.isclass(exp) and issubclass(exp, Predicate):
+            path_ordering.append(asc(path(exp)))
         else: raise ValueError("Invalid 'order_by' expression: {}".format(exp))
     obb = OrderByBlock(path_ordering)
 
@@ -1743,6 +1745,13 @@ def validate_orderby_expression(orderby_expressions, roots=[]):
 def process_orderby(orderby_expressions, roots=[]):
     return validate_orderby_expression(orderby_expressions,roots)
 
+# ------------------------------------------------------------------------------
+# Return an OrderByBlock for an ordered flag
+# ------------------------------------------------------------------------------
+
+def process_ordered(roots):
+    ordering=[asc(r) for r in roots]
+    return OrderByBlock(ordering)
 
 # ------------------------------------------------------------------------------
 # make_prejoin_pair(indexed_paths, clauses)
@@ -2267,7 +2276,7 @@ def partition_orderbys_simple(root_join_order, orderbys=[]):
 # ------------------------------------------------------------------------------
 
 class QuerySpec(object):
-    allowed = [ "roots", "join", "where", "order_by",
+    allowed = [ "roots", "join", "where", "order_by", "ordered",
                 "group_by", "tuple", "distinct", "bind", "select",
                 "heuristic", "joh" ]
 
@@ -3111,6 +3120,22 @@ class Query(abc.ABC):
         pass
 
     #--------------------------------------------------------------------------
+    # Add an ordered expresison
+    #--------------------------------------------------------------------------
+    @abc.abstractmethod
+    def ordered(self, *expressions):
+        """Specify the natural/default ordering over results.
+
+        Given a query over predicates 'P1...PN', the 'ordered()' flag provides a
+        convenient way of specifying 'order_by(asc(P1),...,asc(PN))'.
+
+        Returns:
+          Returns the modified copy of the query.
+
+        """
+        pass
+
+    #--------------------------------------------------------------------------
     # Add an order_by expression
     #--------------------------------------------------------------------------
     @abc.abstractmethod
@@ -3456,17 +3481,23 @@ class QueryExecutor(object):
         where = self._qspec.where
         if where and not where.executable:
             placeholders = where.placeholders
-            raise ValueError(("Placeholders '{}' must be bound to values before "
-                              "executing the query").format(placeholders))
+            phstr=",".join("'{}'".format(ph) for ph in placeholders)
+            raise ValueError(("Placeholders {} must be bound to values before "
+                              "executing the query").format(phstr))
         qspec = self._qspec
-        if where:
-            where = where.fixed()
-            qspec = self._qspec.modp(where=where)
 
-        # FIXUP: This is a hack - replace the order_by list with the group_by list
-        if self._qspec.group_by:
-            qspec = self._qspec.modp(order_by=self._qspec.group_by)
+        # FIXUP: This is hacky - if there is a group_by clause replace the
+        # order_by list with the group_by list and later when sorting the for
+        # each group the order_by list will be used.
+
+        if where:
+            qspec = qspec.modp(where=where.fixed())
+
+        if qspec.group_by:
+            qspec = qspec.modp(order_by=self._qspec.group_by)
             qspec = qspec.delp(["group_by"])
+        elif qspec.ordered:
+            qspec = qspec.modp(order_by=process_ordered(qspec.roots))
 
         (factsets,factindexes) = \
             QueryExecutor.get_factmap_data(self._factmaps, qspec)
@@ -3509,13 +3540,17 @@ class QueryExecutor(object):
                 else:
                     yield output
 
-        if self._qspec.order_by:
-            iqs=InQuerySorter(OrderByBlock(self._qspec.order_by),
+        qspec = self._qspec
+        if qspec.ordered:
+            qspec = qspec.modp(order_by=process_ordered(qspec.roots))
+
+        if qspec.order_by:
+            iqs=InQuerySorter(OrderByBlock(qspec.order_by),
                               self._qplan.output_signature)
-        unwrapkey = len(self._qspec.group_by) == 1 and not self._qspec.tuple
+        unwrapkey = len(qspec.group_by) == 1 and not qspec.tuple
 
         group_by_keyfunc = make_input_alignment_functor(
-            self._qplan.output_signature, self._qspec.group_by.paths)
+            self._qplan.output_signature, qspec.group_by.paths)
         for k,g in itertools.groupby(self._query(), group_by_keyfunc):
             if unwrapkey: yield k[0], groupiter(g)
             else: yield k, groupiter(g)

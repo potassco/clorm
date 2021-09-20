@@ -1355,6 +1355,19 @@ class QueryAPI2TestCase(unittest.TestCase):
                          set([(G(1,"c"), F(1,"a")),
                               (G(2,"d"), F(2,"a"))]))
 
+    #--------------------------------------------------------------------------
+    #   Complex query with ordered flag
+    #--------------------------------------------------------------------------
+    def test_api_complex_query_join_ordered(self):
+        F = self.F
+        G = self.G
+        fb = self.factbase
+
+        # Select everything with an equality join
+        q = fb.query(G,F).join(F.anum == G.anum).ordered()
+        expected = [(G(1,"c"),F(1,"a")),(G(2,"d"),F(2,"a"))]
+        self.assertEqual(list(q.all()),expected)
+
 #------------------------------------------------------------------------------
 # Tests for additional V2 select and delete statements
 #------------------------------------------------------------------------------

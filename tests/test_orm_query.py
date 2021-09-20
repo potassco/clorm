@@ -1248,6 +1248,18 @@ class OrderByTestCase(unittest.TestCase):
         self.G = G
 
     # ------------------------------------------------------------------------------
+    # test the asc() and desc() functions produce valid specifications
+    # ------------------------------------------------------------------------------
+    def test_api_asc_desc(self):
+        F=self.F
+
+        self.assertEqual(asc(F.anum), OrderBy(path(F.anum),True))
+        self.assertEqual(desc(F.anum), OrderBy(path(F.anum),False))
+        self.assertEqual(asc(path(F)), OrderBy(path(F),True))
+        self.assertEqual(desc(path(F)), OrderBy(path(F),False))
+        self.assertEqual(asc(F), OrderBy(path(F),True))
+
+    # ------------------------------------------------------------------------------
     # Test OrderBy
     # ------------------------------------------------------------------------------
     def test_nonapi_OrderBy_1d(self):
@@ -1315,6 +1327,12 @@ class OrderByTestCase(unittest.TestCase):
         obb2 = OrderByBlock([OrderBy(F.anum,True),OrderBy(G.anum,True),
                              OrderBy(FA.anum,False)])
         self.assertEqual(obb1,obb2)
+
+        # An order_by expression can also be a simple Predicate class
+        Fpc = path(F).meta.predicate
+        obb3 = vobe([Fpc],[Fpc])
+        obb4 = OrderByBlock([OrderBy(path(F),True)])
+        self.assertEqual(obb3,obb4)
 
         # Missing some roots
         with self.assertRaises(ValueError) as ctx:
@@ -2654,6 +2672,46 @@ class QueryExecutorTestCase(unittest.TestCase):
                     ("b",set([4,7]))]
         self.assertEqual(expected, result)
 
+
+        # Test a group_by with a 'where' with a placeholder and bind
+        where = pw(F.anum == ph1_, roots)
+        qspec = QuerySpec(roots=roots,join=joins1,where=where,
+                          order_by=orderbys,group_by=groupbys,joh=bjoh)
+        bqspec = qspec.bindp(1)
+        qe = QueryExecutor(factmaps, bqspec)
+        result = [(fn,set(fg)) for fn,fg in qe.all()]
+        expected = [("a",set([(F(1),G(1,"a",5))])),
+                    ("b",set([(F(1),G(1,"b",4))]))]
+        self.assertEqual(expected, result)
+
+        # Test a group_by with a 'where' that has an 'in_()'
+        where = pw(in_(F.anum,[1,3]), roots)
+        qspec = QuerySpec(roots=roots,join=joins1,where=where,
+                          order_by=orderbys,group_by=groupbys,joh=bjoh)
+
+        qe = QueryExecutor(factmaps, qspec)
+        result = [(fn,set(fg)) for fn,fg in qe.all()]
+        expected = [("a",set([(F(1),G(1,"a",5))])),
+                    ("b",set([(F(1),G(1,"b",4))]))]
+        self.assertEqual(expected, result)
+
+        # Test a group_by where the is also an 'ordered'
+        qspec = QuerySpec(roots=roots,join=joins1,
+                          ordered=True,group_by=groupbys,joh=bjoh)
+
+        factmaps = factmaps_dict([
+            G(1,"a",5),G(1,"b",4),G(1,"b",3),
+            G(2,"a",8),G(2,"b",7),G(2,"b",5),
+            F(1),F(2)])
+
+        qe = QueryExecutor(factmaps, qspec)
+        result = [(fn,list(fg)) for fn,fg in qe.all()]
+        expected = [("a",[(F(1),G(1,"a",5)), (F(2),G(2,"a",8))]),
+                    ("b",[(F(1),G(1,"b",3)), (F(1),G(1,"b",4)),
+                          (F(2),G(2,"b",5)),(F(2),G(2,"b",7))])]
+        self.assertEqual(expected, result)
+
+
     #--------------------------------------------------------------------------
     # Test query executor with sorting based on an attribute of the second root
     # predicate (where the join between the two predicates is through a
@@ -2693,7 +2751,15 @@ class QueryExecutorTestCase(unittest.TestCase):
                     (F(1),G(1,"b",4)),(F(2),G(2,"b",7))]
         self.assertEqual(expected, result)
 
-
+        # Alternative using the natural sort order specified by ordered()
+        qspec = QuerySpec(roots=roots,join=joins1,
+                          ordered=True,joh=bjoh)
+        qe = QueryExecutor(factmaps, qspec)
+        (qplan,query)=qe._make_plan_and_query()
+        result=list(qe.all())
+        expected = [(F(1),G(1,"a",5)),(F(1),G(1,"b",4)),
+                    (F(2),G(2,"a",6)),(F(2),G(2,"b",7))]
+        self.assertEqual(expected, result)
 
 
     #--------------------------------------------------------------------------
@@ -2714,7 +2780,7 @@ class QueryExecutorTestCase(unittest.TestCase):
             order_by = pob([G.anum,G.astr],roots)
 
             # F.astr in ["foo"] - force F to be the first join
-            where = pw((in_(F.astr,("foo",))),roots)
+            where = pw(in_(F.astr,("foo",)),roots)
             qspec = QuerySpec(roots=roots, join=join, where=where,
                               order_by=order_by,joh=fjoh(F,G))
             qe = QueryExecutor(factmaps, qspec)
@@ -2734,7 +2800,7 @@ class QueryExecutorTestCase(unittest.TestCase):
             self.assertEqual(expected, set(result))
 
             # F.astr not in ["foo"] - force F to be the first join
-            where = pw((notin_(F.astr,["foo"])),roots)
+            where = pw(notin_(F.astr,["foo"]),roots)
             qspec = QuerySpec(roots=roots, join=join, where=where,
                               order_by=order_by,joh=fjoh(F,G))
             qe = QueryExecutor(factmaps, qspec)
@@ -2744,7 +2810,7 @@ class QueryExecutorTestCase(unittest.TestCase):
             self.assertEqual(expected, set(result))
 
             # F.astr not in ["foo"] - force F to be the second join
-            where = pw((notin_(F.astr,["foo"])),roots)
+            where = pw(notin_(F.astr,["foo"]),roots)
             qspec = QuerySpec(roots=roots, join=join, where=where,
                               order_by=order_by,joh=fjoh(G,F))
             qe = QueryExecutor(factmaps, qspec)
@@ -2783,22 +2849,9 @@ class QueryExecutorTestCase(unittest.TestCase):
         qspec = QuerySpec(roots=roots, where=where,order_by=order_by)
         qe = QueryExecutor(factmaps, qspec)
 
-        return
         # Test output with no options
         result = list(qe.all())
         self.assertEqual(result,[f1])
-        return
-
-        where = pw((notin_(F.astr,["foo"])),roots)
-        qspec = QuerySpec(roots=roots, join=join, where=where,
-                          order_by=order_by,joh=fjoh(F,G))
-        qe = QueryExecutor(factmaps, qspec)
-
-        # Test output with no options
-        result = list(qe.all())
-        expected = set([(F(1,"a"),G(1,"a")), (F(1,"a"),G(1,"foo")),
-                        (F(5,"a"),G(5,"a")), (F(5,"a"),G(5,"foo"))])
-        self.assertEqual(expected, set(result))
 
 
     #--------------------------------------------------------------------------
