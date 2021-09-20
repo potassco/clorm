@@ -27,6 +27,8 @@ from .core import notcontains, PredicatePath, \
 
 from ..util import OrderedSet as FactSet
 
+from ..util import OrderedSet
+
 #FactSet=set                                # The Python standard set class. Note
                                            # fails some unit tests because I'm
                                            # testing for the ordering.
@@ -67,7 +69,7 @@ class FactIndex(object):
             self._attrgetter = self._path.meta.attrgetter
             self._predicate = self._path.meta.predicate
             self._keylist = []
-            self._key2values = {}
+            self._key2values = collections.OrderedDict()
         except:
             raise TypeError("{} is not a valid PredicatePath object".format(path))
 
@@ -80,8 +82,9 @@ class FactIndex(object):
             raise TypeError("{} is not a {}".format(fact, self._predicate))
         key = self._attrgetter(fact)
 
-        # Index the fact by the key
-        if key not in self._key2values: self._key2values[key] = set()
+        # Index the fact by the key - Note: using OrderedSet to preserve
+        # insertion order for repeatability
+        if key not in self._key2values: self._key2values[key] = OrderedSet()
         self._key2values[key].add(fact)
 
         # Maintain the sorted list of keys
@@ -116,7 +119,7 @@ class FactIndex(object):
 
     def clear(self):
         self._keylist = []
-        self._key2values = {}
+        self._key2values = collections.OrderedDict()
 
     @property
     def keys(self): return self._keylist
@@ -283,7 +286,7 @@ class FactMap(object):
 
         self._ptype = ptype
         self._factset = FactSet()
-        self._path2factindex = {}
+        self._path2factindex = collections.OrderedDict()
         self._factindexes = []
 
         # Validate the paths to be indexed
@@ -388,8 +391,8 @@ class FactMap(object):
             self.discard(f)
 
     def symmetric_difference_update(self, other):
-        to_remove=set()
-        to_add=set()
+        to_remove=OrderedSet()
+        to_add=OrderedSet()
         for f in self._factset:
             if f in _fm_iterable(other): to_remove.add(f)
         for f in _fm_iterable(other):
