@@ -32,7 +32,8 @@ OSolveHandle=oclingo.SolveHandle
 OControl=oclingo.Control
 
 from clingo import *
-__all__ = list([ k for k in oclingo.__dict__.keys() if k[0] != '_'])
+inherited = list([ k for k in oclingo.__dict__.keys() if k[0] != '_'])
+__all__ = inherited + ['control_add_facts','symbolic_atoms_to_facts']
 __version__ = oclingo.__version__
 
 
@@ -62,6 +63,37 @@ else:
                              [])
                 bldr.add(r)
                 line += 1
+
+
+# ------------------------------------------------------------------------------
+# Function to take a SymbolicAtoms object and extract facts from it
+# ------------------------------------------------------------------------------
+
+def symbolic_atoms_to_facts(sym_atoms, predicates, *,
+                            facts_only=False, factbase=None):
+    if factbase is None: factbase=FactBase()
+
+    def group_predicates():
+        groups = {}
+        for pcls in predicates:
+            groups.setdefault((pcls.meta.name,pcls.meta.arity),[]).append(pcls)
+        return groups
+
+    def single(cls,sym):
+        try:
+            factbase.add(cls._unify(sym))
+            return True
+        except ValueError:
+            return False
+
+    groups = group_predicates()
+    for (name,arity), mpredicates in groups.items():
+        for symatom in itertools.chain(sym_atoms.by_signature(name,arity,True),
+                                       sym_atoms.by_signature(name,arity,False)):
+            if facts_only and not symatom.is_fact: continue
+            for pcls in mpredicates:
+                if single(pcls,symatom.symbol): continue
+    return factbase
 
 # ------------------------------------------------------------------------------
 # Helper function to smartly build a unifier if only a list of predicates have

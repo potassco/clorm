@@ -22,10 +22,19 @@ else:
 #from clorm.clingo import Number, String, Function, parse_program, Control
 from clorm.clingo import Number, String, Function, Control
 #from clingo.ast import parse_string
-from clorm.clingo import _expand_assumptions, control_add_facts
+from clorm.clingo import _expand_assumptions, control_add_facts, \
+    symbolic_atoms_to_facts
 
 from clorm import Predicate, IntegerField, StringField, FactBase,\
     SymbolPredicateUnifier, ph1_
+
+#------------------------------------------------------------------------------
+#------------------------------------------------------------------------------
+
+__all__ = [
+    'ClingoTestCase',
+    'ClingoSubProcessTestCase'
+    ]
 
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
@@ -1076,6 +1085,58 @@ g(N) :- f(N)."""
             m = list(sh)[0]
             fb = m.facts(atoms=True)
             self.assertEqual(fb,FactBase())
+
+#------------------------------------------------------------------------------
+#
+#------------------------------------------------------------------------------
+import multiprocessing as mp
+
+class XP(Predicate):
+    x=IntegerField
+class XQ(Predicate):
+    x=IntegerField
+class XQ2(Predicate):
+    x=StringField
+    class Meta: name="xq"
+
+def symbolic_atoms_to_facts_test1(q,facts_only):
+    prgstr="""xq(1). xq("a"). 1 { xp(1);xp(2) }2."""
+    ctrl=cclingo.Control()
+    add_program_string(ctrl,prgstr)
+    ctrl.ground([("base",[])])
+    fb=symbolic_atoms_to_facts(ctrl.symbolic_atoms,[XP,XQ,XQ2],
+                               facts_only=facts_only)
+    q.put(fb)
+
+class ClingoSubProcessTestCase(unittest.TestCase):
+    def setUp(self):
+        pass
+
+    def tearDown(self):
+        pass
+
+    #--------------------------------------------------------------------------
+    # Basic test of connecting to clingo without any wrapping
+    #--------------------------------------------------------------------------
+    def test_symbolic_atoms_to_facts(self):
+        fb1_expected=FactBase([XP(1),XP(2),XQ(1),XQ2("a")])
+        fb2_expected=FactBase([XQ(1),XQ2("a")])
+
+        # Return all ground atoms
+        q=mp.Queue()
+        p=mp.Process(target=symbolic_atoms_to_facts_test1,args=(q,False))
+        p.start()
+        fb1_result=q.get()
+        p.join()
+        self.assertEqual(fb1_result,fb1_expected)
+
+        # Return only fact atoms
+        q=mp.Queue()
+        p=mp.Process(target=symbolic_atoms_to_facts_test1,args=(q,True))
+        p.start()
+        fb2_result=q.get()
+        p.join()
+        self.assertEqual(fb2_result,fb2_expected)
 
 #------------------------------------------------------------------------------
 # main
