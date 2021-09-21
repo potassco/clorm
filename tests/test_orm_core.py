@@ -94,15 +94,15 @@ class FieldTestCase(unittest.TestCase):
         # Now some bad conversions
         with self.assertRaises(TypeError) as ctx:
             x=StringField.cltopy(Number(1))
-        check_errmsg("Object '1'",ctx)
+        check_errmsg("Symbol '1'",ctx)
 
         with self.assertRaises(TypeError) as ctx:
             x=IntegerField.cltopy(String("blah"))
-        check_errmsg("Object '\"blah\"'",ctx)
+        check_errmsg("Symbol '\"blah\"'",ctx)
 
         with self.assertRaises(TypeError) as ctx:
             x=ConstantField.cltopy(Function("x",[Number(1)]))
-        check_errmsg("Symbol 'x(1)' (SymbolType.Function)",ctx)
+        check_errmsg("Symbol 'x(1)'",ctx)
 
     #--------------------------------------------------------------------------
     # Test that the simple field unify functions work as expected
@@ -604,7 +604,7 @@ class FieldTestCase(unittest.TestCase):
         # Test some failures
         with self.assertRaises(TypeError) as ctx:
             tmp = CNLField.cltopy(inl_1st)
-        check_errmsg("Symbol '3' (SymbolType.Number)",ctx)
+        check_errmsg("Symbol '3' ",ctx)
 
         with self.assertRaises(TypeError) as ctx:
             tmp = INLField.pytocl([1,"b",3])
@@ -711,11 +711,11 @@ class FieldTestCase(unittest.TestCase):
 
         with self.assertRaises(TypeError) as ctx:
             tmp = ABCField1.cltopy(s_a)
-        check_errmsg("Symbol '\"a\"' (SymbolType.String)",ctx)
+        check_errmsg("Symbol '\"a\"' ",ctx)
 
         with self.assertRaises(TypeError) as ctx:
             tmp = ABCField1.cltopy(n_1)
-        check_errmsg("Symbol '1' (SymbolType.Number)",ctx)
+        check_errmsg("Symbol '1' ",ctx)
 
         with self.assertRaises(AttributeError) as ctx:
             tmp = ABCField1.pytocl("blah")

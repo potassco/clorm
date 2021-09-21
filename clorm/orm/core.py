@@ -1346,22 +1346,25 @@ class StringField(BaseField):
     """A field to convert between a Clingo.String object and a Python string."""
 
     def cltopy(raw):
-        try:
-            return raw.string
-        except:
+        if not hasattr(raw,'type'):
             raise TypeError(("Object '{}' ({}) is not a String "
-                             "Symbol").format(raw, type(raw)))
-
+                            "Symbol").format(raw,type(raw)))
+        if raw.type != symbols.SymbolType.String:
+            raise TypeError(("Symbol '{}' ({}) is not a String "
+                            "Symbol").format(raw,raw.type))
+        return raw.string
     pytocl = lambda v: symbols.String(v)
 
 class IntegerField(BaseField):
     """A field to convert between a Clingo.Number object and a Python integer."""
     def cltopy(raw):
-        try:
-            return raw.number
-        except:
+        if not hasattr(raw,'type'):
             raise TypeError(("Object '{}' ({}) is not a Number "
-                             "Symbol").format(raw, type(raw)))
+                            "Symbol").format(raw,type(raw)))
+        if raw.type != symbols.SymbolType.Number:
+            raise TypeError(("Symbol '{}' ({}) is not a Number "
+                            "Symbol").format(raw,raw.type))
+        return raw.number
 
     pytocl = lambda v: symbols.Number(v)
 
@@ -1390,17 +1393,13 @@ class ConstantField(BaseField):
 
     """
     def cltopy(raw):
-        try:
-            if len(raw.arguments) != 0: raise TypeError("Empty list")
-            return raw.name if raw.positive else "-{}".format(raw.name)
-        except:
-            try:
-                msg=("Symbol '{}' ({}) is not a unary Function "
-                     "Symbol").format(raw, raw.type)
-            except:
-                msg=("Object '{}' ({}) is not a unary Function "
-                                 "Symbol").format(raw, type(raw))
-            raise TypeError(msg)
+        if not hasattr(raw,'type'):
+            raise TypeError(("Object '{}' ({}) is not a unary Function "
+                            "Symbol").format(raw,type(raw)))
+        if raw.type != symbols.SymbolType.Function or len(raw.arguments) != 0:
+            raise TypeError(("Symbol '{}' ({}) is not a unary Function "
+                            "Symbol").format(raw,raw.type))
+        return raw.name if raw.positive else "-{}".format(raw.name)
 
     def pytocl(v):
         if not isinstance(v,str):

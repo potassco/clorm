@@ -349,14 +349,16 @@ clingo_symbol_generator = SymbolGenerator(SymbolMode.CLINGO,
                                           String=clingo.String,
                                           Number=clingo.Number,
                                           Infimum=clingo.Infimum,
-                                          Supremum=clingo.Supremum)
+                                          Supremum=clingo.Supremum,
+                                          SymbolType=clingo.SymbolType)
 
 noclingo_symbol_generator = SymbolGenerator(SymbolMode.NOCLINGO,
                                             Function=Function,
                                             String=String,
                                             Number=Number,
                                             Infimum=Infimum,
-                                            Supremum=Supremum)
+                                            Supremum=Supremum,
+                                            SymbolType=SymbolType)
 
 def get_symbol_generator(mode):
     if mode == SymbolMode.CLINGO: return clingo_symbol_generator
