@@ -5,7 +5,7 @@ from .test_orm_core import *
 from .test_orm_factcontainers import *
 from .test_orm_factbase import *
 from .test_orm_query import *
-from .test_orm_unifier import *
+from .test_orm_symbols_facts import *
 from .test_orm_atsyntax import *
 from .test_orm_noclingo import *
 from .test_clingo import *

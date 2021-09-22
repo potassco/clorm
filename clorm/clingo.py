@@ -32,68 +32,8 @@ OSolveHandle=oclingo.SolveHandle
 OControl=oclingo.Control
 
 from clingo import *
-inherited = list([ k for k in oclingo.__dict__.keys() if k[0] != '_'])
-__all__ = inherited + ['control_add_facts','symbolic_atoms_to_facts']
+__all__ = list([ k for k in oclingo.__dict__.keys() if k[0] != '_'])
 __version__ = oclingo.__version__
-
-
-if oclingo.__version__ >= "5.5.0":
-
-    from clingo.ast import parse_string
-
-    def control_add_facts(ctrl, facts):
-        with ctrl.backend() as bknd:
-            for f in facts:
-                raw=f.raw if isinstance(f,Predicate) else f
-                atm = bknd.add_atom(raw)
-                bknd.add_rule([atm])
-else:
-    from clingo import parse_program
-
-    def control_add_facts(ctrl, facts):
-        with ctrl.builder() as bldr:
-            line=1
-            for f in facts:
-                raw=f.raw if isinstance(f,Predicate) else f
-                floc = { "filename" : "<input>", "line" : line , "column" : 1 }
-                location = { "begin" : floc, "end" : floc }
-                r = ast.Rule(location,
-                             ast.Literal(location, ast.Sign.NoSign,
-                                         ast.SymbolicAtom(ast.Symbol(location,raw))),
-                             [])
-                bldr.add(r)
-                line += 1
-
-
-# ------------------------------------------------------------------------------
-# Function to take a SymbolicAtoms object and extract facts from it
-# ------------------------------------------------------------------------------
-
-def symbolic_atoms_to_facts(sym_atoms, predicates, *,
-                            facts_only=False, factbase=None):
-    if factbase is None: factbase=FactBase()
-
-    def group_predicates():
-        groups = {}
-        for pcls in predicates:
-            groups.setdefault((pcls.meta.name,pcls.meta.arity),[]).append(pcls)
-        return groups
-
-    def single(cls,sym):
-        try:
-            factbase.add(cls._unify(sym))
-            return True
-        except ValueError:
-            return False
-
-    groups = group_predicates()
-    for (name,arity), mpredicates in groups.items():
-        for symatom in itertools.chain(sym_atoms.by_signature(name,arity,True),
-                                       sym_atoms.by_signature(name,arity,False)):
-            if facts_only and not symatom.is_fact: continue
-            for pcls in mpredicates:
-                if single(pcls,symatom.symbol): continue
-    return factbase
 
 # ------------------------------------------------------------------------------
 # Helper function to smartly build a unifier if only a list of predicates have

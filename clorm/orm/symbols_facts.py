@@ -1,9 +1,16 @@
 # -----------------------------------------------------------------------------
-# Clorm ORM SymbolPredicateUnifier and unify function implementation. The
-# provides the feature to get a list of raw clingo symbol objects and turn them
-# into a FactBase.
+# Functions and classes to help with converting symbols to facts and
+# vice-versa. This includes the unification process of unifying a set of symbols
+# to matching predicate signatures as well as more high-level tasks such as
+# asserting a set of facts into the solver (ie. clingo backend)
+#
+# Also includes SymbolPredicateUnifier and unify function
+# implementation. Although should refactor SymbolPredicateUnifier to something
+# less heavy handed.
 # ------------------------------------------------------------------------------
 
+import itertools
+import clingo
 from .core import *
 from .factbase import *
 from .core import get_field_definition, PredicatePath, kwargs_check_keys
@@ -11,7 +18,9 @@ from .core import get_field_definition, PredicatePath, kwargs_check_keys
 
 __all__ = [
     'SymbolPredicateUnifier',
-    'unify'
+    'unify',
+    'control_add_facts',
+    'symbolic_atoms_to_facts'
     ]
 
 #------------------------------------------------------------------------------
@@ -166,7 +175,93 @@ def unify(unifier,symbols,ordered=False):
         return unifier.unify(symbols)
 
 #------------------------------------------------------------------------------
+# Function to add a collection of facts to the solver backend
 #------------------------------------------------------------------------------
+
+if clingo.__version__ >= "5.5.0":
+
+    from clingo.ast import parse_string
+
+    def control_add_facts(ctrl, facts):
+        with ctrl.backend() as bknd:
+            for f in facts:
+                raw=f.raw if isinstance(f,Predicate) else f
+                atm = bknd.add_atom(raw)
+                bknd.add_rule([atm])
+else:
+    from clingo import parse_program
+
+    def control_add_facts(ctrl, facts):
+        with ctrl.builder() as bldr:
+            line=1
+            for f in facts:
+                raw=f.raw if isinstance(f,Predicate) else f
+                floc = { "filename" : "<input>", "line" : line , "column" : 1 }
+                location = { "begin" : floc, "end" : floc }
+                r = ast.Rule(location,
+                             ast.Literal(location, ast.Sign.NoSign,
+                                         ast.SymbolicAtom(ast.Symbol(location,raw))),
+                             [])
+                bldr.add(r)
+                line += 1
+
+control_add_facts.__doc__ = '''Assert a collection of facts to the solver
+
+    Provides a flexible approach to asserting facts to the solver. The facts can
+    be either `clingo.Symbol` objects or clorm facts and can be in any type of
+    be in any collection (including a `clorm.FactBase`).
+
+    Args:
+        ctrl: a `clingo.Control` object
+        facts: the collection of facts to be asserted into the solver
+'''
+
+# ------------------------------------------------------------------------------
+# Function to take a SymbolicAtoms object and extract facts from it
+# ------------------------------------------------------------------------------
+
+def symbolic_atoms_to_facts(symbolic_atoms, unifier, *,
+                            facts_only=False, factbase=None):
+    '''Extract `clorm.FactBase` from `clingo.SymbolicAtoms`
+
+    A `clingo.SymbolicAtoms` object is returned from the
+    `clingo.Control.symbolic_atoms` property. This property is a view into the
+    internal atoms within the solver and can be examined at anytime
+    (ie. before/after the grounding/solving). Some of the atoms are trivially
+    true (as determined by the grounder) while others may only be true in some
+    models.
+
+    Args:
+        symbolic_atoms: a `clingo.SymbolicAtoms` object
+        unifier: a list of Clorm Predicate sub-classes to unify against
+        facts_only (default False): return facts only or include contingent literals
+        factbase (default None): add to existing FactBase or return a new FactBase
+    '''
+
+    if factbase is None: factbase=FactBase()
+
+    def group_predicates():
+        groups = {}
+        for pcls in unifier:
+            groups.setdefault((pcls.meta.name,pcls.meta.arity),[]).append(pcls)
+        return groups
+
+    def single(cls,sym):
+        try:
+            factbase.add(cls._unify(sym))
+            return True
+        except ValueError:
+            return False
+
+    groups = group_predicates()
+    for (name,arity), mpredicates in groups.items():
+        for symatom in itertools.chain(
+                symbolic_atoms.by_signature(name,arity,True),
+                symbolic_atoms.by_signature(name,arity,False)):
+            if facts_only and not symatom.is_fact: continue
+            for pcls in mpredicates:
+                if single(pcls,symatom.symbol): continue
+    return factbase
 
 #------------------------------------------------------------------------------
 # main

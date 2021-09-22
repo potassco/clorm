@@ -206,7 +206,16 @@ methods that are called by ASP using the @-syntax.
 Integration with the Solver
 ---------------------------
 
-To simplify the interaction with the Clingo solver, Clorm provides a ``clingo``
+Clorm provides some helper functions to get clorm facts into and out of the
+solver (ie a `clingo.Control` object).
+
+.. autofunction:: clorm.control_add_facts
+
+.. autofunction:: clorm.symbolic_atoms_to_facts
+
+.. autofunction:: clorm.unify
+
+To further simplify the interaction with the solver, Clorm provides a ``clingo``
 replacement module that offers better integration with Clorm facts and fact
 bases. This module simply wraps and extends a few key Clingo classes.
 

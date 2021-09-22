@@ -6,7 +6,7 @@ from .noclingo import *
 from .core import *
 from .factbase import *
 from .query import *
-from .unifier import *
+from .symbols_facts import *
 from .atsyntax import *
 
 __all__ = [
@@ -61,6 +61,8 @@ __all__ = [
     'noclingo_to_clingo',
     'set_symbol_mode',
     'get_symbol_mode',
-    'symbols'
+    'symbols',
+    'control_add_facts',
+    'symbolic_atoms_to_facts'
     ]
 

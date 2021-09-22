@@ -8,7 +8,7 @@
 # ------------------------------------------------------------------------------
 
 import unittest
-from .support import check_errmsg
+from .support import check_errmsg, add_program_string
 
 from clingo import Control, Number, String, Function, SymbolType
 
@@ -18,13 +18,15 @@ from clorm.orm import \
     Predicate, ComplexTerm, path, hashable_path, FactBase
 
 # Official Clorm API imports
-from clorm.orm import SymbolPredicateUnifier, unify
+from clorm.orm import SymbolPredicateUnifier, unify, \
+    control_add_facts, symbolic_atoms_to_facts
 
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
 
 __all__ = [
-    'UnifyTestCase'
+    'UnifyTestCase',
+    'ClingoControlConvTestCase'
     ]
 
 #------------------------------------------------------------------------------
@@ -478,6 +480,79 @@ class UnifyTestCase(unittest.TestCase):
         s = fb.query(Bfact).where(Bfact.num1 == 1)
         self.assertEqual(s.get_unique(), bf1)
 
+
+#------------------------------------------------------------------------------
+# Functions that facilitate interactions with clingo.Control. Note: uses
+# multiprocessing library to make sure that we avoid the solver not being able
+# to release symbols between runs.
+# ------------------------------------------------------------------------------
+
+import multiprocessing as mp
+
+class XP(Predicate):
+    x=IntegerField
+class XQ(Predicate):
+    x=IntegerField
+class XQ2(Predicate):
+    x=StringField
+    class Meta: name="xq"
+
+def symbolic_atoms_to_facts_test1(q,facts_only):
+    prgstr="""xq(1). xq("a"). 1 { xp(1);xp(2) }2."""
+    ctrl=Control()
+    add_program_string(ctrl,prgstr)
+    ctrl.ground([("base",[])])
+    fb=symbolic_atoms_to_facts(ctrl.symbolic_atoms,[XP,XQ,XQ2],
+                               facts_only=facts_only)
+    q.put(fb)
+
+
+class ClingoControlConvTestCase(unittest.TestCase):
+    def setUp(self):
+        pass
+
+    def tearDown(self):
+        pass
+
+    #--------------------------------------------------------------------------
+    # Basic test of adding facts into a control object
+    #--------------------------------------------------------------------------
+    def test_control_add_facts(self):
+        class F(Predicate):
+            anum = IntegerField
+
+        f1 = F(1) ; f2 = F(2)
+        ctrl = Control()
+        control_add_facts(ctrl,[f1,f2])
+        ctrl.ground([("base",[])])
+        model = None
+        with ctrl.solve(yield_=True) as sh:
+            for m in sh:
+                model=str(m)
+        self.assertEqual(model, "{} {}".format(f1,f2))
+
+    #--------------------------------------------------------------------------
+    # Test converting Control.symbolic_atoms to a factbase
+    #--------------------------------------------------------------------------
+    def test_symbolic_atoms_to_facts(self):
+        fb1_expected=FactBase([XP(1),XP(2),XQ(1),XQ2("a")])
+        fb2_expected=FactBase([XQ(1),XQ2("a")])
+
+        # Return all ground atoms
+        q=mp.Queue()
+        p=mp.Process(target=symbolic_atoms_to_facts_test1,args=(q,False))
+        p.start()
+        fb1_result=q.get()
+        p.join()
+        self.assertEqual(fb1_result,fb1_expected)
+
+        # Return only fact atoms
+        q=mp.Queue()
+        p=mp.Process(target=symbolic_atoms_to_facts_test1,args=(q,True))
+        p.start()
+        fb2_result=q.get()
+        p.join()
+        self.assertEqual(fb2_result,fb2_expected)
 
 #------------------------------------------------------------------------------
 # main
