@@ -190,6 +190,7 @@ if clingo.__version__ >= "5.5.0":
                 bknd.add_rule([atm])
 else:
     from clingo import parse_program
+    from clingo import ast
 
     def control_add_facts(ctrl, facts):
         with ctrl.builder() as bldr:
