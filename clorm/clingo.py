@@ -31,6 +31,11 @@ OModel=oclingo.Model
 OSolveHandle=oclingo.SolveHandle
 OControl=oclingo.Control
 
+if oclingo.__version__ >= "5.5.0":
+    from clingo.ast import parse_string
+else:
+    from clingo import parse_program
+
 from clingo import *
 __all__ = list([ k for k in oclingo.__dict__.keys() if k[0] != '_'])
 __version__ = oclingo.__version__

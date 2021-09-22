@@ -180,8 +180,6 @@ def unify(unifier,symbols,ordered=False):
 
 if clingo.__version__ >= "5.5.0":
 
-    from clingo.ast import parse_string
-
     def control_add_facts(ctrl, facts):
         with ctrl.backend() as bknd:
             for f in facts:
@@ -189,8 +187,7 @@ if clingo.__version__ >= "5.5.0":
                 atm = bknd.add_atom(raw)
                 bknd.add_rule([atm])
 else:
-    from clingo import parse_program
-    from clingo import ast
+    import clingo.ast as ast
 
     def control_add_facts(ctrl, facts):
         with ctrl.builder() as bldr:
