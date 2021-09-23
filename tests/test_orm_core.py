@@ -19,7 +19,7 @@ import pickle
 
 from clingo import Number, String, Function, SymbolType
 # Official Clorm API imports
-from clorm.orm import \
+from clorm import \
     BaseField, Raw, RawField, IntegerField, StringField, ConstantField, SimpleField,  \
     Predicate, ComplexTerm, refine_field, combine_fields, \
     define_flat_list_field, define_nested_list_field, define_enum_field, \

@@ -30,6 +30,7 @@ __all__ = [
     'Placeholder',
     'refine_field',
     'combine_fields',
+    'define_flat_list_field',
     'define_nested_list_field',
     'define_enum_field',
     'simple_predicate',
