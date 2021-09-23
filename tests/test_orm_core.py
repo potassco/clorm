@@ -22,7 +22,7 @@ from clingo import Number, String, Function, SymbolType
 from clorm.orm import \
     BaseField, Raw, RawField, IntegerField, StringField, ConstantField, SimpleField,  \
     Predicate, ComplexTerm, refine_field, combine_fields, \
-    define_nested_list_field, define_enum_field, \
+    define_flat_list_field, define_nested_list_field, define_enum_field, \
     simple_predicate, path, hashable_path, alias, \
     not_, and_, or_, cross, in_, notin_, \
     SymbolMode, set_symbol_mode, get_symbol_mode, symbols
@@ -618,6 +618,42 @@ class FieldTestCase(unittest.TestCase):
         with self.assertRaises(TypeError) as ctx:
             tmp = define_nested_list_field("FG",name="FG")
         check_errmsg("'FG' is not a ",ctx)
+
+    #--------------------------------------------------------------------------
+    # Test defining a field that handles python lists/sequences as a tuple of
+    # arbitrary length.
+    # --------------------------------------------------------------------------
+    def test_api_flat_list_field(self):
+        ILField = define_flat_list_field(IntegerField,name="INLField")
+        CLField = define_flat_list_field(ConstantField)
+
+        il1 = Function("",[Number(1),Number(2),Number(3)])
+        il2 = Function("",[Number(1),Number(2),Number(3),Number(4)])
+        cl = Function("",[Function("a"),Function("b"),Function("c")])
+
+        # Test pytocl
+        self.assertEqual(ILField.pytocl((1,2,3)),il1)
+        self.assertEqual(ILField.pytocl((1,2,3,4)),il2)
+        self.assertEqual(CLField.pytocl(("a","b","c")),cl)
+
+        # Test cltopy
+        self.assertEqual(ILField.cltopy(il1), (1,2,3))
+        self.assertEqual(ILField.cltopy(il2), (1,2,3,4))
+        self.assertEqual(CLField.cltopy(cl), ("a","b","c"))
+
+        # Test some failures
+        with self.assertRaises(TypeError) as ctx:
+            tmp = ILField.pytocl(("a","b","c"))
+        check_errmsg("an integer is required",ctx)
+
+        with self.assertRaises(TypeError) as ctx:
+            tmp = CLField.pytocl((1,2,3))
+        check_errmsg("Value '1' is not a string",ctx)
+
+        with self.assertRaises(TypeError) as ctx:
+            tmp = CLField.pytocl(1)
+        check_errmsg("'1' is not a sequence",ctx)
+
 
     #--------------------------------------------------------------------------
     # Test the different variants for defining a nested list encoding of the

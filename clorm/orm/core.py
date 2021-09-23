@@ -45,6 +45,7 @@ __all__ = [
     'ComplexTerm',
     'refine_field',
     'combine_fields',
+    'define_flat_list_field',
     'define_nested_list_field',
     'define_enum_field',
     'simple_predicate',
@@ -1613,6 +1614,69 @@ def combine_fields(fields,*,name=None):
     return type(subclass_name, (BaseField,),
                 { "pytocl": _pytocl,
                   "cltopy": _cltopy})
+
+
+#------------------------------------------------------------------------------
+# define_flat_list_field is a function that creates a sub-class of BaseField that
+# deals with a list/tuple encoded and an asp basic tuple.
+# ------------------------------------------------------------------------------
+
+def define_flat_list_field(element_field,*,name=None):
+    """Factory function that returns a BaseField sub-class for flat lists
+
+    This function is a helper factory function to define a sub-class of
+    BaseField to can covert a list/tuple of elements to and from arbitrary
+    length ASP tuples.
+
+    Note: this is different to defining a fixed-length tuple in Clorm as a
+    sub-class of `clorm.Predicate`. The elements of a predicate can be can be
+    part of a query search. In contrast the variable length tuple defined by
+    this function provide a more straightforward mapping but doesn't allow for
+    individual elements of the tuple to be referenced in a query.
+
+    Example:
+
+       .. code-block:: python
+
+          # Unifies against a flat sequence of constants
+          FlatListField = define_flat_list_field(ConstantField)
+
+    Positional args:
+
+       element_field: the field type for each sequence element
+
+    Optional keyword-only arguments:
+
+       name: name for new class (default: anonymously generated).
+
+    """
+    subclass_name = name if name else "AnonymousFlatSeqField"
+    efield = element_field
+
+    # The element_field must be a BaseField sub-class
+    if not inspect.isclass(efield) or not issubclass(efield,BaseField):
+        raise TypeError("'{}' is not a BaseField or a sub-class".format(efield))
+
+    def _checkpy(v):
+        if isinstance(v,str) or not isinstance(v,cabc.Iterable):
+            raise TypeError("'{}' is not a sequence".format(v))
+    def _checkcl(func):
+        if not noclingo.is_Function(func) or func.name != "":
+            raise TypeError("'{}' is not an clingo.Symbol tuple".format(func))
+
+    def _pytocl(pylist):
+        _checkpy(pylist)
+        cllist=[ efield.pytocl(e) for e in pylist ]
+        return symbols.Function("",cllist)
+    def _cltopy(sym):
+        _checkcl(sym)
+        return tuple([ efield.cltopy(e) for e in sym.arguments ])
+
+    newclass=type(subclass_name, (BaseField,),
+                  { "pytocl": _pytocl,
+                    "cltopy": _cltopy})
+    return newclass
+
 
 #------------------------------------------------------------------------------
 # define_nested_list_field is a function that creates a sub-class of BaseField that
