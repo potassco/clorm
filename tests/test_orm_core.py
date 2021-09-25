@@ -829,7 +829,7 @@ class PredicateTestCase(unittest.TestCase):
     # --------------------------------------------------------------------------
     def test_simple_predicate_defn(self):
 
-        # A simple unary predicate definition
+        # A simple nullary predicate definition
         class P(Predicate):
             pass
         self.assertEqual(P.meta.arity,0)
@@ -867,21 +867,21 @@ class PredicateTestCase(unittest.TestCase):
         inp2 = Function("implicitlyNamedPredicate",[Number(2)])
         self.assertEqual(inp1.raw, inp2)
 
-        # Test declaration of a unary predicate
-        class UnaryPredicate(Predicate):
-            class Meta: name = "unary"
+        # Test declaration of a nullary predicate
+        class NullaryPredicate(Predicate):
+            class Meta: name = "nullary"
 
-        self.assertEqual(UnaryPredicate.meta.parent, UnaryPredicate)
+        self.assertEqual(NullaryPredicate.meta.parent, NullaryPredicate)
 
-        up1 = UnaryPredicate()
-        up2 = Function("unary",[])
+        up1 = NullaryPredicate()
+        up2 = Function("nullary",[])
         self.assertEqual(up1.raw, up2)
 
         # Test the class properties; when access from the class and the object.
-        self.assertEqual(up1.meta.name, "unary")
-        self.assertEqual(UnaryPredicate.meta.name, "unary")
+        self.assertEqual(up1.meta.name, "nullary")
+        self.assertEqual(NullaryPredicate.meta.name, "nullary")
         self.assertEqual(len(up1.meta), 0)
-        self.assertEqual(len(UnaryPredicate.meta), 0)
+        self.assertEqual(len(NullaryPredicate.meta), 0)
 
     #--------------------------------------------------------------------------
     # Test where there is a value missing or the parameter name is incorrect

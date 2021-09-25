@@ -132,13 +132,13 @@ class UnifyTestCase(unittest.TestCase):
         self.assertEqual(g1, [af1_1,af2_1,bf_1])
 
     #--------------------------------------------------------------------------
-    #  Test unification with unary predicates
+    #  Test unification with nullary predicates
     #  --------------------------------------------------------------------------
-    def test_unify_unary(self):
+    def test_unify_nullary(self):
         raws = [
             Function("afact",[Number(1),String("test")]),
-            Function("unary1",[]),
-            Function("unary2",[]),
+            Function("nullary1",[]),
+            Function("nullary2",[]),
             Function("afact",[Number(2),String("test")]),
             ]
 
@@ -147,20 +147,20 @@ class UnifyTestCase(unittest.TestCase):
             astr=StringField()
             class Meta: name = "afact"
 
-        class Unary1(Predicate):
-            class Meta: name = "unary1"
+        class Nullary1(Predicate):
+            class Meta: name = "nullary1"
 
-        class Unary2(Predicate):
-            class Meta: name = "unary2"
+        class Nullary2(Predicate):
+            class Meta: name = "nullary2"
 
         af_1=Afact(anum=1,astr="test")
         af_2=Afact(anum=2,astr="test")
-        u_1=Unary1()
-        u_2=Unary2()
+        u_1=Nullary1()
+        u_2=Nullary2()
 
-        self.assertEqual(list(unify([Unary1],raws)),[u_1])
-        self.assertEqual(list(unify([Unary2],raws)),[u_2])
-        self.assertEqual(set(unify([Afact,Unary1,Unary2],raws)),
+        self.assertEqual(list(unify([Nullary1],raws)),[u_1])
+        self.assertEqual(list(unify([Nullary2],raws)),[u_2])
+        self.assertEqual(set(unify([Afact,Nullary1,Nullary2],raws)),
                              set([af_1,af_2,u_1,u_2]))
 
     #--------------------------------------------------------------------------

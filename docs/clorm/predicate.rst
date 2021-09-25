@@ -169,26 +169,26 @@ will produce the following matching ASP facts:
    address(dave, "UNSW Sydney").
    address(dave, "UNSW Sydney", "AUSTRALIA").
 
-Unary Predicates
-----------------
+Nullary Predicates
+------------------
 
-A unary predicate is a predicate with no parameters and is also a legitimate and
+A nullary predicate is a predicate with no parameters and is also a legitimate and
 reasonable thing to see in an ASP program. Defining a corresponding Python class
 is straightforward:
 
 .. code-block:: python
 
-   class AUnary(Predicate):
+   class ANullary(Predicate):
        pass
 
-   fact = AUnary()
+   fact = ANullary()
 
-The important thing to note here is that every instantiation of ``AUnary``
+The important thing to note here is that every instantiation of ``ANullary``
 will correspond to the same ASP fact:
 
 .. code-block:: prolog
 
-    aUnary.
+    aNullary.
 
 Complex Terms
 -------------

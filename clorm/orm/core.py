@@ -1372,7 +1372,7 @@ class IntegerField(BaseField):
 #------------------------------------------------------------------------------
 # ConstantField is more complex than basic string or integer because the value
 # can be negated. A heavy handed way to deal with this would be to create a
-# unary ComplexTerm subclass for every constant string value. But this is an
+# nullary ComplexTerm subclass for every constant string value. But this is an
 # expensive way of dealing with the boundary case of negated constants that will
 # be used rarely (I've never seen it used in the wild).
 #
@@ -1395,10 +1395,10 @@ class ConstantField(BaseField):
     """
     def cltopy(raw):
         if not hasattr(raw,'type'):
-            raise TypeError(("Object '{}' ({}) is not a unary Function "
+            raise TypeError(("Object '{}' ({}) is not a nullary Function "
                             "Symbol").format(raw,type(raw)))
         if raw.type != symbols.SymbolType.Function or len(raw.arguments) != 0:
-            raise TypeError(("Symbol '{}' ({}) is not a unary Function "
+            raise TypeError(("Symbol '{}' ({}) is not a nullary Function "
                             "Symbol").format(raw,raw.type))
         return raw.name if raw.positive else "-{}".format(raw.name)
 
