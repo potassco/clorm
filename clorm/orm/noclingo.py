@@ -21,6 +21,7 @@ __all__ = [
     'is_String',
     'is_Infimum',
     'is_Supremum',
+    'is_Symbol',
     'clingo_to_noclingo',
     'noclingo_to_clingo',
     'SymbolMode',
@@ -301,6 +302,12 @@ def is_Infimum(sym):
     except:
         return False
 
+def is_Symbol(sym):
+    try:
+        stype = _get_symboltype(sym)
+        return True
+    except:
+        return False
 
 #------------------------------------------------------------------------------
 # A mechanism to group together the symbol generator functions for clingo or

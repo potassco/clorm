@@ -1,6 +1,6 @@
 from .orm import *
 
-__version__ = "1.3.1dev5"
+__version__ = "1.3.1dev6"
 __author__ = "David Rajaratnam"
 __email__ = "daver@gemarex.com.au"
 __copyright__ = "Copyright (c) 2018 David Rajaratnam"

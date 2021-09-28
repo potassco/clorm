@@ -29,6 +29,7 @@ import uuid
 from . import noclingo
 
 __all__ = [
+    'ClormError',
     'Comparator',
     'set_symbol_mode',
     'get_symbol_mode',
@@ -97,6 +98,14 @@ class _lateinit(object):
 
     def __get__(self, instance, owner):
         return self._value
+
+
+# ------------------------------------------------------------------------------
+# A base exception class for clorm
+# ------------------------------------------------------------------------------
+
+class ClormError(Exception):
+    pass
 
 # ------------------------------------------------------------------------------
 # A comparator is used for defining queries. If is either a standard comparator

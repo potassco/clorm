@@ -11,7 +11,9 @@
 
 import itertools
 import clingo
+import clingo.ast as clast
 from .core import *
+from .noclingo import is_Function, is_Number
 from .factbase import *
 from .core import get_field_definition, PredicatePath, kwargs_check_keys
 
@@ -20,7 +22,11 @@ __all__ = [
     'SymbolPredicateUnifier',
     'unify',
     'control_add_facts',
-    'symbolic_atoms_to_facts'
+    'symbolic_atoms_to_facts',
+    'parse_fact_string',
+    'parse_fact_files',
+    'UnifierNoMatchError',
+    'FactParserError'
     ]
 
 #------------------------------------------------------------------------------
@@ -28,7 +34,61 @@ __all__ = [
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
+# Clorm exception subclasses
 #------------------------------------------------------------------------------
+
+class UnifierNoMatchError(ClormError):
+    def __init__(self,message,symbol,predicates):
+        super().__init__(message)
+        self._symbol=symbol
+        self._predicates=predicates
+    @property
+    def symbol(self): return self._symbol
+    @property
+    def predicates(self): return self._predicates
+
+class FactParserError(ClormError):
+    def __init__(self,message):
+        super().__init__(message)
+
+#------------------------------------------------------------------------------
+# A unifier takes a list of predicates to unify against (order matters) and a
+# set of raw clingo symbols against this list.
+# ------------------------------------------------------------------------------
+
+class Unifier(object):
+    def __init__(self,predicates=[]):
+        self._predicates=tuple(predicates)
+        self._pgroups = {}
+        self._add_predicates(predicates)
+
+    def _add_predicates(self,predicates=[]):
+        for p in predicates:
+            self._pgroups.setdefault((p.meta.name,p.meta.arity),[]).append(p)
+
+    def add_predicate(self,predicate):
+        self._add_predicates([predicates])
+
+    def unify_symbol(self,sym,*,raise_nomatch=False):
+        mpredicates = self._pgroups.get((sym.name,len(sym.arguments)),[])
+        for pred in mpredicates:
+            try:
+                return pred._unify(sym)
+            except ValueError:
+                pass
+        if raise_nomatch:
+            raise UnifierNoMatchError(
+                f"Cannot unify symbol '{sym}' to predicates in {self._predicates}",
+                sym, self._predicates)
+        return None
+
+    def unify(self,symbols,*,factbase=None,raise_nomatch=False):
+        fb=FactBase() if factbase is None else factbase
+        for sym in symbols:
+            f=self.unify_symbol(sym,raise_nomatch=raise_nomatch)
+            if f is not None: fb.add(f)
+
+        return fb
 
 #------------------------------------------------------------------------------
 # A fact generator that takes a list of predicates to unify against (order
@@ -260,6 +320,143 @@ def symbolic_atoms_to_facts(symbolic_atoms, unifier, *,
             for pcls in mpredicates:
                 if single(pcls,symatom.symbol): continue
     return factbase
+
+
+#------------------------------------------------------------------------------
+# parse a string containing ASP facts into a factbase
+#------------------------------------------------------------------------------
+
+def _t2d(t):
+    return { k : v for k,v in t }
+
+def _negate(s):
+    if is_Number(s):
+        return symbols.Number(s.number*-1)
+    if is_Function(s):
+        return symbols.Function(s.name,s.arguments,not s.positive)
+    raise FactParserError(f"'{s}' cannot be negated")
+
+class _ASTVisitor(object):
+    def __init__(self,unifier,*,factbase=None,
+                 raise_nomatch=False,raise_nonfact=False):
+        self._stack = []
+        self._location=None
+        self._unifier = unifier
+        self._fb = FactBase() if factbase is None else factbase
+        self._raise_nomatch=raise_nomatch
+        self._raise_nonfact=raise_nonfact
+
+    def _err(self,msg):
+        if self._raise_nonfact:
+            raise FactParserError(f"{msg}: {self._location}")
+        return None
+
+    def symbolic_term(self,x):
+        items=_t2d(x.items())
+        self._location=items['location']
+        symbol=items['symbol']
+        self._stack.append(symbol)
+
+    def unary_operation(self,x):
+        items=_t2d(x.items())
+        self._location=items['location']
+        otype=items['operator_type']
+        if otype != clast.UnaryOperator.Minus:
+            return self._err(f"Unexpected non minus unary operator")
+        argument=items['argument']
+        self.term(argument)
+        self._stack.append(_negate(self._stack.pop()))
+
+    def function(self,x):
+        items=_t2d(x.items())
+        self._location=items['location']
+        name=items['name']
+        arguments=items['arguments']
+        external=items['external']
+
+        for a in arguments: self.term(a)
+        args=self._stack[-1*len(arguments):]
+        del self._stack[-1*len(arguments):]
+        self._stack.append(symbols.Function(name,args))
+
+    def term(self,x):
+        if x.ast_type == clast.ASTType.SymbolicTerm:
+            self.symbolic_term(x)
+        elif x.ast_type == clast.ASTType.UnaryOperation:
+            self.unary_operation(x)
+        elif x.ast_type == clast.ASTType.Function:
+            self.function(x)
+        else:
+            return self._err(f"{x} ({x.ast_type}) is not a supported fact")
+
+    def head(self,x):
+        if x.ast_type != clast.ASTType.Literal:
+            return self._err(f"{x} is not a literal")
+        hitems=_t2d(x.items())
+        self._location=hitems['location']
+        sign=hitems['sign']
+        atom=hitems['atom']
+
+        aitems=_t2d(atom.items())
+        if 'symbol' not in aitems:
+            return self._err(f"{atom} is not a symbol")
+        self.term(aitems['symbol'])
+
+    def rule(self,x):
+        items=_t2d(x.items())
+        self._location=items['location']
+
+        if items['body']: return self._err(f"Rule '{x}' is not a fact")
+        self.head(items['head'])
+
+    def stmt(self,ast):
+        if ast.ast_type != clast.ASTType.Rule: return None
+        self.rule(ast)
+
+    def facts(self):
+        return self._unifier.unify(self._stack,factbase=self._fb,
+                                   raise_nomatch=self._raise_nomatch)
+
+#------------------------------------------------------------------------------
+# Parse ASP facts from a string or files into a factbase
+#------------------------------------------------------------------------------
+
+def parse_fact_string(aspstr,unifier,*,factbase=None,
+                      raise_nomatch=False,raise_nonfact=False):
+    '''Parse a string of ASP facts into a FactBase
+
+    Args:
+      aspstr: a asp string containing fact
+      factbase: if no factbase is specified then create a new one
+      unifier: a list of clorm.Predicate classes to unify against
+      raise_nomatch: raise UnifierNoMatchError if a fact that cannot unify
+      raise_nonfact: raise FactParserError on any non-fact (eg. complex rules)
+    '''
+
+    v=_ASTVisitor(unifier=Unifier(unifier),factbase=factbase,
+                  raise_nomatch=raise_nomatch,raise_nonfact=raise_nonfact)
+
+    clast.parse_string(aspstr,v.stmt)
+    return v.facts()
+
+def parse_fact_files(files,unifier,*,factbase=None,
+                     raise_nomatch=False,raise_nonfact=False):
+    '''Parse the facts from a list of files into a FactBase
+
+    Args:
+      aspstr: a asp string containing fact
+      factbase: if no factbase is specified then create a new one
+      unifier: a list of clorm.Predicate classes to unify against
+      raise_nomatch: raise UnifierNoMatchError if a fact that cannot unify
+      raise_nonfact: raise FactParserError on any non-fact (eg. complex rules)
+    '''
+
+    v=_ASTVisitor(unifier=Unifier(unifier),factbase=factbase,
+                  raise_nomatch=raise_nomatch,raise_nonfact=raise_nonfact)
+
+    clast.parse_files(files,v.stmt)
+    return v.facts()
+
 
 #------------------------------------------------------------------------------
 # main

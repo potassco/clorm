@@ -10,6 +10,9 @@ from .symbols_facts import *
 from .atsyntax import *
 
 __all__ = [
+    'ClormError',
+    'UnifierNoMatchError',
+    'FactParserError',
     'BaseField',
     'Raw',
     'RawField',
@@ -64,6 +67,8 @@ __all__ = [
     'get_symbol_mode',
     'symbols',
     'control_add_facts',
-    'symbolic_atoms_to_facts'
+    'symbolic_atoms_to_facts',
+    'parse_fact_string',
+    'parse_fact_files'
     ]
 

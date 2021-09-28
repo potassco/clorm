@@ -89,6 +89,21 @@ query mechanism for accessing elements.
 .. autoclass:: clorm.FactBase
    :members:
 
+A ``FactBase`` can generate formatted ASP facts using the function
+:py:meth:`FactBase.add()<clorm.FactBase.add>`. This string of facts can be
+passed to the solver or written to a file to be read. Mirroring this
+functionality an ASP string or file containing facts can also be read directly
+into a ``FactBase`` (without the indirect process of having to create a
+``clingo.Control`` object).
+
+.. autofunction:: clorm.parse_fact_string
+
+.. autofunction:: clorm.parse_fact_files
+
+One of the more important features of a ``FactBase`` is its ability to be
+queried. There are a number of classes and functions to support the
+specification of fact base queries.
+
 .. autoclass:: clorm.Placeholder
 
 .. autoclass:: clorm.Select
@@ -214,6 +229,7 @@ solver (ie a `clingo.Control` object).
 .. autofunction:: clorm.symbolic_atoms_to_facts
 
 .. autofunction:: clorm.unify
+
 
 To further simplify the interaction with the solver, Clorm provides a ``clingo``
 replacement module that offers better integration with Clorm facts and fact

@@ -7,7 +7,8 @@
 # to be completed.
 # ------------------------------------------------------------------------------
 
-import unittest
+import unittest,os
+import tempfile
 from .support import check_errmsg, add_program_string
 
 from clingo import Control, Number, String, Function, SymbolType
@@ -18,15 +19,18 @@ from clorm.orm import \
     Predicate, ComplexTerm, path, hashable_path, FactBase
 
 # Official Clorm API imports
-from clorm.orm import SymbolPredicateUnifier, unify, \
-    control_add_facts, symbolic_atoms_to_facts
+from clorm import SymbolPredicateUnifier, unify, \
+    control_add_facts, symbolic_atoms_to_facts, \
+    parse_fact_string, parse_fact_files, \
+    UnifierNoMatchError, FactParserError
 
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
 
 __all__ = [
     'UnifyTestCase',
-    'ClingoControlConvTestCase'
+    'ClingoControlConvTestCase',
+    'ParseTestCase'
     ]
 
 #------------------------------------------------------------------------------
@@ -553,6 +557,77 @@ class ClingoControlConvTestCase(unittest.TestCase):
         fb2_result=q.get()
         p.join()
         self.assertEqual(fb2_result,fb2_expected)
+
+
+#------------------------------------------------------------------------------
+# Test of functions involve with parsing asp ground facts to clorm facts
+#------------------------------------------------------------------------------
+
+class ParseTestCase(unittest.TestCase):
+    def setUp(self):
+        pass
+
+    def tearDown(self):
+        pass
+
+    #--------------------------------------------------------------------------
+    #
+    #--------------------------------------------------------------------------
+    def test_parse_facts(self):
+        class P(Predicate):
+            '''A P predicate'''
+            x=IntegerField
+            y=StringField
+
+        class Q(Predicate):
+            '''A Q predicate'''
+            x=ConstantField
+            y=P.Field
+
+        asp1="""p(1,"home\\""). -p(-2,"blah").\n"""
+        asp2=asp1  + """q(X,Y) :- p(X,Y)."""
+
+        fb_p=FactBase([P(1,"home\""),P(-2,"blah",sign=False)])
+        fb_in=FactBase([P(1,"home\""),
+                        Q("abc",P(3,"H ome")),
+                        Q("z",P(-1,"One more string")),
+                        P(-2,"blah",sign=False)])
+
+        # Match a basic string with a rule
+        fb_out = parse_fact_string(asp2,unifier=[P,Q])
+        self.assertEqual(fb_p,fb_out)
+
+        # All inputs and outputs match
+        fb_out = parse_fact_string(fb_in.asp_str(),unifier=[P,Q])
+        self.assertEqual(fb_in,fb_out)
+
+        # Match only the p/2 facts
+        fb_out = parse_fact_string(fb_in.asp_str(),unifier=[P])
+        self.assertEqual(fb_p,fb_out)
+
+        # Match with comments
+        fb_out = parse_fact_string(fb_in.asp_str(commented=True),unifier=[P,Q])
+        self.assertEqual(fb_in,fb_out)
+
+        # Error on ununified facts
+        with self.assertRaises(UnifierNoMatchError) as ctx:
+            fb_out = parse_fact_string(fb_in.asp_str(),unifier=[P],
+                                       raise_nomatch=True)
+        check_errmsg("Cannot unify symbol 'q(abc",ctx)
+
+        # Error on nonfact
+        with self.assertRaises(FactParserError) as ctx:
+            fb_out = parse_fact_string(asp2,unifier=[P],
+                                       raise_nonfact=True)
+        check_errmsg("Rule 'q(X,Y)",ctx)
+
+        # Try the fact files parser
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            fname=os.path.join(tmpdirname,"asp.lp")
+            with open(fname, "w+") as f:
+                f.write(fb_in.asp_str(commented=True))
+            fb_out=parse_fact_files([fname],unifier=[P,Q])
+            self.assertEqual(fb_in,fb_out)
 
 #------------------------------------------------------------------------------
 # main
