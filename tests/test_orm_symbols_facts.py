@@ -22,7 +22,7 @@ from clorm.orm import \
 from clorm import SymbolPredicateUnifier, unify, \
     control_add_facts, symbolic_atoms_to_facts, \
     parse_fact_string, parse_fact_files, \
-    UnifierNoMatchError, FactParserError
+    UnifierNoMatchError, FactParserError, define_nested_list_field
 
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
@@ -573,7 +573,7 @@ class ParseTestCase(unittest.TestCase):
     #--------------------------------------------------------------------------
     #
     #--------------------------------------------------------------------------
-    def test_parse_facts(self):
+    def _test_parse_facts(self):
         class P(Predicate):
             '''A P predicate'''
             x=IntegerField
@@ -628,6 +628,20 @@ class ParseTestCase(unittest.TestCase):
                 f.write(fb_in.asp_str(commented=True))
             fb_out=parse_fact_files([fname],unifier=[P,Q])
             self.assertEqual(fb_in,fb_out)
+
+    #--------------------------------------------------------------------------
+    # Test parsing some nested facts
+    #--------------------------------------------------------------------------
+    def test_parse_nested_facts(self):
+        class P(Predicate):
+            x=IntegerField
+            y=define_nested_list_field(ConstantField)
+
+        fb_in = FactBase([P(x=1,y=tuple(["a","b","c"]))])
+        aspstr = fb_in.asp_str()
+        fb_out = parse_fact_string(aspstr,unifier=[P],raise_nomatch=True)
+        self.assertEqual(fb_in,fb_out)
+
 
 #------------------------------------------------------------------------------
 # main

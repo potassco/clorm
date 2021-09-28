@@ -374,10 +374,14 @@ class _ASTVisitor(object):
         arguments=items['arguments']
         external=items['external']
 
-        for a in arguments: self.term(a)
-        args=self._stack[-1*len(arguments):]
-        del self._stack[-1*len(arguments):]
-        self._stack.append(symbols.Function(name,args))
+        if arguments:
+            for a in arguments: self.term(a)
+            args=self._stack[-1*len(arguments):]
+            del self._stack[-1*len(arguments):]
+        else:
+            args=[]
+        tmp=symbols.Function(name,args)
+        self._stack.append(tmp)
 
     def term(self,x):
         if x.ast_type == clast.ASTType.SymbolicTerm:
