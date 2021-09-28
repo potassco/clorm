@@ -430,10 +430,10 @@ def parse_fact_string(aspstr,unifier,*,factbase=None,
     '''Parse a string of ASP facts into a FactBase
 
     Args:
-      aspstr: a asp string containing fact
+      aspstr: an ASP string containing the facts
       factbase: if no factbase is specified then create a new one
       unifier: a list of clorm.Predicate classes to unify against
-      raise_nomatch: raise UnifierNoMatchError if a fact that cannot unify
+      raise_nomatch: raise UnifierNoMatchError on a fact that cannot unify
       raise_nonfact: raise FactParserError on any non-fact (eg. complex rules)
     '''
 
@@ -448,10 +448,10 @@ def parse_fact_files(files,unifier,*,factbase=None,
     '''Parse the facts from a list of files into a FactBase
 
     Args:
-      aspstr: a asp string containing fact
+      files: a list of ASP files containing the facts
       factbase: if no factbase is specified then create a new one
       unifier: a list of clorm.Predicate classes to unify against
-      raise_nomatch: raise UnifierNoMatchError if a fact that cannot unify
+      raise_nomatch: raise UnifierNoMatchError on a fact that cannot unify
       raise_nonfact: raise FactParserError on any non-fact (eg. complex rules)
     '''
 
