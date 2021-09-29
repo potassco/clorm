@@ -13,9 +13,10 @@ import itertools
 import clingo
 import clingo.ast as clast
 from .core import *
-from .noclingo import is_Function, is_Number
+from .noclingo import is_Function, is_Number, SymbolMode
 from .factbase import *
-from .core import get_field_definition, PredicatePath, kwargs_check_keys
+from .core import get_field_definition, PredicatePath, kwargs_check_keys, \
+    get_symbol_mode
 
 
 __all__ = [
@@ -26,7 +27,7 @@ __all__ = [
     'parse_fact_string',
     'parse_fact_files',
     'UnifierNoMatchError',
-    'FactParserError'
+    'NonFactError'
     ]
 
 #------------------------------------------------------------------------------
@@ -47,7 +48,7 @@ class UnifierNoMatchError(ClormError):
     @property
     def predicates(self): return self._predicates
 
-class FactParserError(ClormError):
+class NonFactError(ClormError):
     def __init__(self,message):
         super().__init__(message)
 
@@ -334,7 +335,7 @@ def _negate(s):
         return symbols.Number(s.number*-1)
     if is_Function(s):
         return symbols.Function(s.name,s.arguments,not s.positive)
-    raise FactParserError(f"'{s}' cannot be negated")
+    raise NonFactError(f"'{s}' cannot be negated in a simple fact")
 
 class _ASTVisitor(object):
     def __init__(self,unifier,*,factbase=None,
@@ -345,10 +346,11 @@ class _ASTVisitor(object):
         self._fb = FactBase() if factbase is None else factbase
         self._raise_nomatch=raise_nomatch
         self._raise_nonfact=raise_nonfact
+        self._stmtstr = ""
 
     def _err(self,msg):
         if self._raise_nonfact:
-            raise FactParserError(f"{msg}: {self._location}")
+            raise NonFactError(f"{msg} in '{self._stmtstr}' {self._location}")
         return None
 
     def symbolic_term(self,x):
@@ -362,7 +364,7 @@ class _ASTVisitor(object):
         self._location=items['location']
         otype=items['operator_type']
         if otype != clast.UnaryOperator.Minus:
-            return self._err(f"Unexpected non minus unary operator")
+            return self._err(f"Unexpected non minus unary operator in simple fact")
         argument=items['argument']
         self.term(argument)
         self._stack.append(_negate(self._stack.pop()))
@@ -374,6 +376,8 @@ class _ASTVisitor(object):
         arguments=items['arguments']
         external=items['external']
 
+        if external:
+            return self._err(f"'{x}' is an external function")
         if arguments:
             for a in arguments: self.term(a)
             args=self._stack[-1*len(arguments):]
@@ -391,11 +395,15 @@ class _ASTVisitor(object):
         elif x.ast_type == clast.ASTType.Function:
             self.function(x)
         else:
-            return self._err(f"{x} ({x.ast_type}) is not a supported fact")
+            return self._err(f"'{x}' ({x.ast_type}) is not a simple fact")
 
     def head(self,x):
+        if x.ast_type == clast.ASTType.Disjunction:
+            return self._err(f"Disjunction '{x}' is not a simple fact")
+        if x.ast_type == clast.ASTType.Aggregate:
+            return self._err(f"Aggregate '{x}' is not a simple fact")
         if x.ast_type != clast.ASTType.Literal:
-            return self._err(f"{x} is not a literal")
+            return self._err(f"'{x}' is not a simple fact literal")
         hitems=_t2d(x.items())
         self._location=hitems['location']
         sign=hitems['sign']
@@ -403,7 +411,7 @@ class _ASTVisitor(object):
 
         aitems=_t2d(atom.items())
         if 'symbol' not in aitems:
-            return self._err(f"{atom} is not a symbol")
+            return self._err(f"'{atom}' is not a symbol")
         self.term(aitems['symbol'])
 
     def rule(self,x):
@@ -414,6 +422,7 @@ class _ASTVisitor(object):
         self.head(items['head'])
 
     def stmt(self,ast):
+        self._stmtstr = str(ast)
         if ast.ast_type != clast.ASTType.Rule: return None
         self.rule(ast)
 
@@ -429,13 +438,26 @@ def parse_fact_string(aspstr,unifier,*,factbase=None,
                       raise_nomatch=False,raise_nonfact=False):
     '''Parse a string of ASP facts into a FactBase
 
+    Facts must be of a simple form that can correspond to clorm predicate
+    instances. Rules that are NOT simple facts include: any rule with a body, a
+    disjunctive fact, a choice rule, a theory atom, a literal with an external
+    @-function reference, a literal that requires some mathematical calculation
+    (eg., "p(1+1).")
+
+    NOTE: Currently, this function is not safe when running in NOCLINGO mode and
+    will raise a NotImplementedError if called.
+
     Args:
       aspstr: an ASP string containing the facts
       factbase: if no factbase is specified then create a new one
       unifier: a list of clorm.Predicate classes to unify against
       raise_nomatch: raise UnifierNoMatchError on a fact that cannot unify
-      raise_nonfact: raise FactParserError on any non-fact (eg. complex rules)
+      raise_nonfact: raise NonFactError on any non simple fact (eg. complex rules)
+
     '''
+
+    if get_symbol_mode() == SymbolMode.NOCLINGO:
+        raise NotImplementedError("Function not supported in NOCLINGO mode")
 
     v=_ASTVisitor(unifier=Unifier(unifier),factbase=factbase,
                   raise_nomatch=raise_nomatch,raise_nonfact=raise_nonfact)
@@ -447,13 +469,25 @@ def parse_fact_files(files,unifier,*,factbase=None,
                      raise_nomatch=False,raise_nonfact=False):
     '''Parse the facts from a list of files into a FactBase
 
+    Facts must be of a simple form that can correspond to clorm predicate
+    instances. Rules that are NOT simple facts include: any rule with a body, a
+    disjunctive fact, a choice rule, a theory atom, a literal with an external
+    @-function reference, a literal that requires some mathematical calculation
+    (eg., "p(1+1).")
+
+    NOTE: Currently, this function is not safe when running in NOCLINGO mode and
+    will raise a NotImplementedError if called.
+
     Args:
       files: a list of ASP files containing the facts
       factbase: if no factbase is specified then create a new one
       unifier: a list of clorm.Predicate classes to unify against
       raise_nomatch: raise UnifierNoMatchError on a fact that cannot unify
-      raise_nonfact: raise FactParserError on any non-fact (eg. complex rules)
+      raise_nonfact: raise NonFactError on any non simple fact (eg. complex rules)
     '''
+
+    if get_symbol_mode() == SymbolMode.NOCLINGO:
+        raise NotImplementedError("Function not supported in NOCLINGO mode")
 
     v=_ASTVisitor(unifier=Unifier(unifier),factbase=factbase,
                   raise_nomatch=raise_nomatch,raise_nonfact=raise_nonfact)

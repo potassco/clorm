@@ -12,7 +12,7 @@ from .atsyntax import *
 __all__ = [
     'ClormError',
     'UnifierNoMatchError',
-    'FactParserError',
+    'NonFactError',
     'BaseField',
     'Raw',
     'RawField',

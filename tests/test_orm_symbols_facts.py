@@ -22,7 +22,7 @@ from clorm.orm import \
 from clorm import SymbolPredicateUnifier, unify, \
     control_add_facts, symbolic_atoms_to_facts, \
     parse_fact_string, parse_fact_files, \
-    UnifierNoMatchError, FactParserError, define_nested_list_field
+    UnifierNoMatchError, NonFactError, define_nested_list_field
 
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
@@ -573,7 +573,7 @@ class ParseTestCase(unittest.TestCase):
     #--------------------------------------------------------------------------
     #
     #--------------------------------------------------------------------------
-    def _test_parse_facts(self):
+    def test_parse_facts(self):
         class P(Predicate):
             '''A P predicate'''
             x=IntegerField
@@ -616,7 +616,7 @@ class ParseTestCase(unittest.TestCase):
         check_errmsg("Cannot unify symbol 'q(abc",ctx)
 
         # Error on nonfact
-        with self.assertRaises(FactParserError) as ctx:
+        with self.assertRaises(NonFactError) as ctx:
             fb_out = parse_fact_string(asp2,unifier=[P],
                                        raise_nonfact=True)
         check_errmsg("Rule 'q(X,Y)",ctx)
@@ -641,6 +641,41 @@ class ParseTestCase(unittest.TestCase):
         aspstr = fb_in.asp_str()
         fb_out = parse_fact_string(aspstr,unifier=[P],raise_nomatch=True)
         self.assertEqual(fb_in,fb_out)
+
+    #--------------------------------------------------------------------------
+    # Parsing non simple facts to raise NonFactError. Non simple facts include:
+    # - a term with @-function call (this needs a Control object for grounding)
+    # - a disjunctive fact
+    # - a choice rule
+    # --------------------------------------------------------------------------
+    def test_parse_non_simple_facts(self):
+        class P(Predicate):
+            '''A P predicate'''
+            x=IntegerField
+
+        # Using an external function
+        asp="""p(@func(1))."""
+        with self.assertRaises(NonFactError) as ctx:
+            fb_out = parse_fact_string(asp,unifier=[P],raise_nonfact=True)
+        check_errmsg("'@func(1)' is an external function in 'p(@func(1)).'",ctx)
+
+        # A choice rule
+        asp="""{ p(2); p(3) }."""
+        with self.assertRaises(NonFactError) as ctx:
+            fb_out = parse_fact_string(asp,unifier=[P],raise_nonfact=True)
+        check_errmsg("Aggregate '{ p(2); p(3) }'",ctx)
+
+        # A disjunctive fact
+        asp="""p(2); p(3)."""
+        with self.assertRaises(NonFactError) as ctx:
+            fb_out = parse_fact_string(asp,unifier=[P],raise_nonfact=True)
+        check_errmsg("Disjunction 'p(2); p(3)'",ctx)
+
+        # A theory atom - let the general non-fact literal catch this
+        asp="""&diff{p(2)}."""
+        with self.assertRaises(NonFactError) as ctx:
+            fb_out = parse_fact_string(asp,unifier=[P],raise_nonfact=True)
+        check_errmsg("'&diff { p(2) }'",ctx)
 
 
 #------------------------------------------------------------------------------
