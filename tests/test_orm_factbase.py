@@ -1368,6 +1368,20 @@ class QueryAPI2TestCase(unittest.TestCase):
         expected = [(G(1,"c"),F(1,"a")),(G(2,"d"),F(2,"a"))]
         self.assertEqual(list(q.all()),expected)
 
+
+    #--------------------------------------------------------------------------
+    #   Improve error message for bad join statement
+    #--------------------------------------------------------------------------
+    def test_api_complex_query_join_ordered(self):
+        F = self.F
+        G = self.G
+        fb = self.factbase
+
+        # Select everything with an equality join
+        with self.assertRaises(ValueError) as ctx:
+            tmp=list(fb.query(F,G).all())
+        check_errmsg("A query over multiple predicates is incomplete",ctx)
+
 #------------------------------------------------------------------------------
 # Tests for additional V2 select and delete statements
 #------------------------------------------------------------------------------

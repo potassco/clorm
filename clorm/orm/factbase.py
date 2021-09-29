@@ -927,9 +927,12 @@ class QueryImpl(Query):
     #--------------------------------------------------------------------------
     # Internal function to test whether a function has been called and add it
     #--------------------------------------------------------------------------
-    def _check_join_called_first(self, name):
-        if self._qspec.join is None and len(self._qspec.roots) > 1:
-            raise ValueError("'join' must be specified before '{}'".format(name))
+    def _check_join_called_first(self, name,endpoint=False):
+        if self._qspec.join is not None or len(self._qspec.roots) == 1: return
+        if endpoint:
+            raise ValueError(("A query over multiple predicates is incomplete without "
+                              "'join' clauses connecting these predicates"))
+        raise ValueError("A 'join' clause must be specified before '{}'".format(name))
 
     #--------------------------------------------------------------------------
     # Add a join expression
@@ -1060,7 +1063,7 @@ class QueryImpl(Query):
     # Select to display all the output of the query
     # --------------------------------------------------------------------------
     def all(self):
-        self._check_join_called_first("all")
+        self._check_join_called_first("all",endpoint=True)
 
         qe = QueryExecutor(self._factmaps, self._qspec)
         return qe.all()
@@ -1069,7 +1072,7 @@ class QueryImpl(Query):
     # Show the single element and throw an exception if there is more than one
     # --------------------------------------------------------------------------
     def singleton(self):
-        self._check_join_called_first("singleton")
+        self._check_join_called_first("singleton",endpoint=True)
 
         qe = QueryExecutor(self._factmaps, self._qspec)
         found = None
@@ -1082,7 +1085,7 @@ class QueryImpl(Query):
     # Return the count of elements - Note: the behaviour of what is counted
     # changes if group_by() has been specified.
     # --------------------------------------------------------------------------
-    def count(self):
+    def count(self,endpoint=True):
         self._check_join_called_first("count")
 
         qe = QueryExecutor(self._factmaps, self._qspec)
@@ -1102,7 +1105,7 @@ class QueryImpl(Query):
     #--------------------------------------------------------------------------
     # Return the first element of the query
     # --------------------------------------------------------------------------
-    def first(self):
+    def first(self,endpoint=True):
         self._check_join_called_first("first")
 
         qe = QueryExecutor(self._factmaps, self._qspec)
@@ -1111,7 +1114,7 @@ class QueryImpl(Query):
     #--------------------------------------------------------------------------
     # Delete a selection of fact
     #--------------------------------------------------------------------------
-    def delete(self):
+    def delete(self,endpoint=True):
         self._check_join_called_first("delete")
 
         qe = QueryExecutor(self._factmaps, self._qspec)
