@@ -1310,6 +1310,25 @@ class QueryAPI2TestCase(unittest.TestCase):
         q = factbase.query(F).where(F.astr == "a").select(F.astr).distinct()
         self.assertEqual(q.singleton(),"a")
 
+        # Singleton failure due to no matches
+        q = factbase.query(F).where(F.astr == "z")
+        with self.assertRaises(ValueError) as ctx:
+            x = q.singleton()
+        check_errmsg("Query has no matching elements",ctx)
+
+        # Singleton failure due to too many matches
+        q = factbase.query(F)
+        with self.assertRaises(ValueError) as ctx:
+            x = q.singleton()
+        check_errmsg("Query returned more than a single element",ctx)
+
+        # first() failure due to no matches
+        q = factbase.query(F).where(F.astr == "z")
+        with self.assertRaises(ValueError) as ctx:
+            x = q.first()
+        check_errmsg("Query has no matching elements",ctx)
+
+
     #--------------------------------------------------------------------------
     #   Test bad calls to selecting on a single table
     #--------------------------------------------------------------------------

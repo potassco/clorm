@@ -1076,18 +1076,21 @@ class QueryImpl(Query):
         self._check_join_called_first("singleton",endpoint=True)
 
         qe = QueryExecutor(self._factmaps, self._qspec)
-        found = None
+        count = 0
         for out in qe.all():
-            if found: raise ValueError("Query returned more than a single element")
-            found = out
-        return found
+            count += 1
+            if count > 1:
+                raise ValueError("Query returned more than a single element")
+        if count == 0:
+            raise ValueError("Query has no matching elements")
+        return out
 
     #--------------------------------------------------------------------------
     # Return the count of elements - Note: the behaviour of what is counted
     # changes if group_by() has been specified.
     # --------------------------------------------------------------------------
-    def count(self,endpoint=True):
-        self._check_join_called_first("count")
+    def count(self):
+        self._check_join_called_first("count",endpoint=True)
 
         qe = QueryExecutor(self._factmaps, self._qspec)
 
@@ -1106,17 +1109,20 @@ class QueryImpl(Query):
     #--------------------------------------------------------------------------
     # Return the first element of the query
     # --------------------------------------------------------------------------
-    def first(self,endpoint=True):
-        self._check_join_called_first("first")
+    def first(self):
+        self._check_join_called_first("first",endpoint=True)
 
         qe = QueryExecutor(self._factmaps, self._qspec)
-        return next(iter(qe.all()))
+
+        for out in qe.all():
+            return out
+        raise ValueError("Query has no matching elements")
 
     #--------------------------------------------------------------------------
     # Delete a selection of fact
     #--------------------------------------------------------------------------
-    def delete(self,endpoint=True):
-        self._check_join_called_first("delete")
+    def delete(self):
+        self._check_join_called_first("delete",endpoint=True)
 
         qe = QueryExecutor(self._factmaps, self._qspec)
         return qe.delete()
