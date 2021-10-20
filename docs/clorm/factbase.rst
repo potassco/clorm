@@ -104,10 +104,11 @@ Continuing the running example above the
 
 The queries are defined by chaining over the member functions of a
 :class:`~clorm.Query` object. Each function call returns a modified copy of the
-:class:`~clorm.Query` object. Here the ``where`` clause is implemented as a
-member function :py:meth:`Query.where()<clorm.Query.where>` which returns a
-modified copy of itself. This chaining technique will be be familiar to users of
-Python ORM's such as SQLAlchemy or Peewee.
+:class:`~clorm.Query` object. Here the member function
+:py:meth:`Query.where()<clorm.Query.where>` returns a modified copy of
+itself. This chaining technique will be be familiar to users of Python ORM's
+such as SQLAlchemy or Peewee, where it is used as a generator for SQL
+statements.
 
 A query object needs to be executed in order to return the search results. There
 are number of end-points that can be used to execute the search. The
@@ -197,8 +198,9 @@ Projections
 
 Returning tuples of facts may not be convenient and a more usable output format
 may be desired. In such a case it is possible to specify a
-:py:meth:`Query.select()<clorm.Query.select>` clause to provide the *projection*
-of the results. This is much like the use of the SQL ``SELECT`` clause.
+:py:meth:`Query.select()<clorm.Query.select>` specification to provide the
+*projection* of the results. This is much like the use of the SQL ``SELECT``
+clause.
 
 .. note::
 
@@ -214,12 +216,13 @@ of the results. This is much like the use of the SQL ``SELECT`` clause.
 
 
 In the general case the query result is returned as a tuple consisting of the
-instances of the signature matching the ``query`` clause. However, if the result
-signature is for a single item, for example you only want to return the name of
-the pet, then returning a singleton tuple is not intuitive. Instead, when the
-result signature consists only of a single item then the API default behaviour
-is for the query result to return the items themselves rather than wrapped in a
-singleton tuple.
+instances of the signature matching the
+:py:meth:`FactBase.query()<clorm.FactBase.query>` specification. However, if the
+result signature is for a single item, for example you only want to return the
+name of the pet, then returning a singleton tuple is not very intuitive. So,
+instead, when the result signature consists only of a single item then the API
+default behaviour is for the query result to return the items themselves rather
+than being wrapped in a singleton tuple.
 
 .. code-block:: python
 
@@ -229,13 +232,13 @@ singleton tuple.
 
 One important point to note when using projections is that the uniqueness of the
 output is no longer guaranteed. While the combinations of the cross-product of
-tuples being joined are guaranteed to be unique, once a ``select`` clause is
-specified this may no longer be the case. For example, if in the above query we
-only want to output the addresses of the owners of the different pets, the
-projection will lead to duplicate elements. These duplicates can be removed from
-the search by specifying the :py:meth:`Query.distinct()<clorm.Query.distinct>`
-modifier. In terms of SQL this is similar to a specfying a ``SELECT DISTINCT``
-query.
+tuples being joined are guaranteed to be unique, once a
+:py:meth:`Query.select()<clorm.Query.select>` signature is specified this may no
+longer be the case. For example, if in the above query we only want to output
+the addresses of the owners of the different pets, the projection will lead to
+duplicate elements. These duplicates can be removed from the search by
+specifying the :py:meth:`Query.distinct()<clorm.Query.distinct>` modifier. In
+terms of SQL this is similar to specfying a ``SELECT DISTINCT`` query.
 
 .. code-block:: python
 
@@ -247,14 +250,27 @@ query.
    assert list(query7.all()) == ["UNSW"]
 
 
-Queries with Output Ordering
+Finally, for greatest flexibility the
+:py:meth:`Query.select()<clorm.Query.select>` member function can be passed a
+single Python `callable` object such as a function or lambda expression. The
+call signature of this object must match the signature specified in the
+:py:meth:`FactBase.query()<clorm.FactBase.query>` specification. The output of
+this callable are then presented as the results of the query.
+
+.. code-block:: python
+
+   query7=fb.query(Person,Pet).join(Person.id == Pet.owner)\
+            .select(lambda pn,pt: f"{pt.petname} from {pn.address}")
+
+
+Queries with Ordered Results
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Queries allow for ordering of the result by specifying parameters to the
-:py:meth:`Query.order_by()<clorm.Query.order_by>` member function. Multiple
-fields can be listed as well as being able to specify ascending or descending
-sort order; with ascending order being the default and descending order
-specified by the :func:`~clorm.desc` function.
+The :py:meth:`Query.order_by()<clorm.Query.order_by>` member function allows for
+the ordering of results similar to an SQL ``ORDER BY`` clause. Multiple fields
+can be listed as well as being able to specify ascending or descending sort
+order; with ascending order being the default and descending order specified by
+the :func:`~clorm.desc` function.
 
 .. code-block:: python
 
@@ -270,7 +286,7 @@ specified by the :func:`~clorm.desc` function.
 Grouping the Query Results
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Query results can be grouped in a similarly to an SQL `GROUP BY` clause using
+Query results can be grouped in a similarly to an SQL ``GROUP BY`` clause using
 the :py:meth:`Query.group_by()<clorm.Query.group_by>` member function . An
 important distinction between SQL and Clorm's grouping mechanism is that Clorm
 does not support query aggregate functions, so any aggregating needs to be

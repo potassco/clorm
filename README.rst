@@ -2,10 +2,15 @@ Clingo ORM (Clorm)
 ==================
 
 Clorm is a Python library that provides an Object Relational Mapping (ORM)
-interface to the Clingo Answer Set Programming (ASP) solver. The goal of this
-library is to make it easier to integrate Clingo within a Python application. It
-is implemented on top of the official Clingo API so is designed to supplement
-and not replace the Clingo API.
+interface to the Clingo Answer Set Programming (ASP) solver.
+
+For background, ASP is a declarative language for describing, and solving, hard
+search problems. `Clingo <https://github.com/potassco/clingo>`_ is a feature
+rich ASP solver with an extensive, but relatively low-level, Python API.
+
+The goal of this library is to make it easier to integrate Clingo within a
+Python application. It is implemented on top of the official Clingo API so is
+designed to supplement and not replace the Clingo API.
 
 When integrating an ASP program into an application you typically want to model
 the domain as a statically written ASP program, but then to generate problem
@@ -20,7 +25,16 @@ Note: Clorm works with Python 3.5+ and Clingo 5.4+
 Installation
 ------------
 
-The easiest way to install Clorm is with Anaconda. Assuming you have already
+Clorm requires Python 3.7+ and Clingo 5.4+. It can be installed using either the
+`pip` or `conda` package managers.
+
+`pip` packages can be downloaded from PyPI:
+
+.. code-block:: bash
+
+    $ pip install clorm
+
+The alternative to install Clorm is with Anaconda. Assuming you have already
 installed some variant of Anaconda, first you need to install Clingo:
 
 .. code-block:: bash
@@ -192,9 +206,10 @@ grounded.
 At this point the control object is ready to be run and generate
 solutions. There are a number of ways in which the ASP solver can be run (see
 the `Clingo API documentation
-<https://potassco.org/clingo/python-api/5.4/#clingo.Control.solve>`_).  For this
+<https://potassco.org/clingo/python-api/5.5/clingo/control.html#clingo.control.Control.solve>`_).  For this
 example, we use a mode where a callback function is specified. This
 function will then be called each time a model is found.
+
 
 .. code-block:: python
 
@@ -373,8 +388,8 @@ Clorm library. These include:
 
 Development
 -----------
-* Python version: Clorm was developed using Python 3.9
-* Clingo version: Clorm has been tested with Clingo version 5.4 and 5.4.
+* Python version: Clorm is actively developed using recent Python versions (3.8+)
+* Clingo version: Clorm is typically tested with both Clingo version 5.4 and 5.5
 
 Ideas for the Future
 --------------------

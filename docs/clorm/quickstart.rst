@@ -236,8 +236,8 @@ Querying
 
    As of Clorm 1.2.1 the new Query API should be the preferred query
    mechanism. It provides all the functionality of the old query interface and
-   much more; including SQL-like joins between predicates and controlling how
-   the query results are presented.
+   much more; including SQL-like ``JOIN`` clauses between predicates, and better
+   control of how the query results are presented.
 
 The final part of our Python program involves querying the solution to print out
 the relevant facts. In particular it would be useful to display all drivers and
@@ -262,8 +262,9 @@ Python ORM's such as SQLAlchemy or Peewee.
 The above query defines a search over the ``Assignment`` predicate to match the
 ``driver`` field to a special placeholder object ``ph1_`` and to return the
 assignments for that driver sorted by the delivery time. The value of ``ph1_``
-will be provided when the query is executed.  The ``query`` clause here mirrors
-a traditional SQL ``FROM`` clause.
+will be provided when the query is executed.  Here the
+:py:meth:`FactBase.query()<clorm.FactBase.query>` method mirrors a traditional
+SQL ``FROM`` clause.
 
 We can now loop over the known drivers and execute the query for each
 driver. This is done by first *binding* the value of the placeholder ``ph1_`` to
@@ -303,11 +304,14 @@ Running this example produces the following results:
              Item item3 at time 3
     Driver michael is not working today
 
-Note, the Clorm Query API doesn't support SQL style outer joins. Therefore to
-view the items for all drivers, including those drivers with no assignments, it
-was simplest to execute a query for each driver. However, if we were happy to
-only specify the drivers with assignments then the problem could be formulated
-in terms of a query with a grouping modifier.
+Note, viewing the items for all drivers, including those drivers with no
+assignments, could be done simply with a single SQL ``OUTER JOIN``
+query. Unfortunately, the Clorm Query API doesn't have an equivalent of an
+``OUTER JOIN``. While it can usually be simulated with a bit of extra Python
+code, in this case it was simplest to execute a query for each
+driver. Alternatively, if we were happy to only specify the drivers with
+assignments then the problem could be formulated in terms of a query with a
+grouping modifier.
 
 .. code-block:: python
 
@@ -321,11 +325,13 @@ in terms of a query with a grouping modifier.
         for item,time in grpit:
             print("\t Item {} at time {}".format(item, time))
 
-Here the :py:meth:`Query.group_by()<clorm.Query.group_by>` modifies the query
-generator output to return pairs of objects; where the first element of the pair
-consists of the elements specified by the ``group_by`` clause and the second
-element is an iterator over the matching elements for that group (here ordered
-by delivery time).
+Here the :py:meth:`Query.group_by()<clorm.Query.group_by>` method modifies the
+query generator output to return pairs of objects; where the first element of
+the pair consists of the elements specified by the grouping and the second
+element is an iterator over the matching elements for that group (here further
+ordered by delivery time). This is loosely analagous to how an SQL ``GROUP BY``
+clause works. Similarly the :py:meth:`Query.order_by()<clorm.Query.order_by>`
+function operates like an SQL ``ORDER BY`` clause.
 
 It is also worth noting that the :py:meth:`Query.select()<clorm.Query.select>`
 projection operator performs a similar function to an SQL ``SELECT`` clause to

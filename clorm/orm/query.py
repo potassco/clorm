@@ -3190,20 +3190,28 @@ class Query(abc.ABC):
         interested in specific parameters/fields within each tuple of facts. The
         ``select`` clause specifies a _projection_ over each query result tuple.
 
-        Note, each query result tuple is guaranteed to be distinct, since the
-        query is a filtering over the cross-product of the predicate
-        instances. However, the specification of a projection can result in
-        information being discarded and can therefore cause the projected query
-        results to no longer be distinct. To enforce uniqueness the
-        :meth:`Query.distinct` flag can be specified. Essentially this is the
-        same as an ``SQL SELECT DISTINCT ...`` statement.
+        Each query result tuple is guaranteed to be distinct, since the query is
+        a filtering over the cross-product of the predicate instances. However,
+        the specification of a projection can result in information being
+        discarded and can therefore cause the projected query results to no
+        longer be distinct. To enforce uniqueness the :meth:`Query.distinct`
+        flag can be specified. Essentially this is the same as an ``SQL SELECT
+        DISTINCT ...`` statement.
 
         Note: when :meth:`Query.select` is used with the :meth:`Query.delete`
         end-point the `select` signature must specify predicates and not
         parameter/fields within the predicates.
 
+        Finally, instead of a projection specification, a single Python
+        `callable` object can be specified with input parameters matching the
+        query signature. This callable object will then be called on each query
+        tuple and the results will make up the modified query result. This
+        provides the greatest flexibility in controlling the output of the
+        query.
+
         Args:
-           output_signature: the signature that defines the projection.
+           output_signature: the signature that defines the projection or a
+                             callable object.
 
         Returns:
           Returns the modified copy of the query.

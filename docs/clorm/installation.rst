@@ -1,15 +1,23 @@
 Installation
 ============
 
-Clorm is an open-source project and can be installed from source. An `Anaconda
-<https://en.wikipedia.org/wiki/Anaconda_(Python_distribution)>`_ installation is
-provided for convenience.
+Clorm requires Python 3.7+ and Clingo 5.4+ (as of writing Clingo 5.5.0 is the
+latest version). There are many ways to install Clorm. In order of simplicity,
+it can be installed using `pip`, `conda`, from the `Potassco PPA
+<https://launchpad.net/~potassco>`_ (for Ubuntu users), and finally from source.
 
-Anaconda installation
----------------------
+Installing from a Python package manager
+----------------------------------------
 
-The easiest way to install Clorm is with Anaconda. Assuming you have already
-installed some variant of Anaconda, first you need to install Clingo:
+The `pip` package can be installed from PyPI:
+
+.. code-block:: bash
+
+    $ pip install clorm
+
+For `conda` installation, assuming you have already installed some variant of
+`Anaconda <https://en.wikipedia.org/wiki/Anaconda_(Python_distribution)>`_,
+first you need to install Clingo:
 
 .. code-block:: bash
 
@@ -21,6 +29,26 @@ Then install Clorm:
 
     $ conda install -c potassco clorm
 
+Installing from the Potassco PPA
+--------------------------------
+
+Ubuntu users can install Clorm (and Clingo) from the `Potassco PPA
+<https://launchpad.net/~potassco>`_:
+
+.. code-block:: bash
+
+    $ sudo add-apt-repository ppa:potassco/stable
+    $ sudo apt-get update
+    $ sudo apt install python3-clorm
+
+
+.. note::
+
+   Unfortunately, the Clingo Ubuntu packages from the standard Ubuntu repository
+   do not work correctly with Python. Even though the ``clingo`` executable has
+   been compiled with Python support, the Clingo Python module itself is missing
+   from these packages.
+
 Installing from source
 ----------------------
 
@@ -31,19 +59,13 @@ also be installed using git:
 
     $ git clone https://github.com/potassco/clorm
     $ cd clorm
-    $ python setup.py install
+    $ pip install .        # or `python setup.py install` if you don't have pip
 
 .. note::
 
    The above instructions for installing from source assumes that you have
    already installed a version of Clingo that has been compiled with Python
    support, as well as the Python Clingo module.
-
-   Unfortunately, the pre-compiled Clingo Ubuntu packages from the *apt*
-   repository may not work. From what I can tell, even though the ``clingo``
-   executable has been compiled with Python support, the Clingo Python module
-   itself is missing from these packages. So you may need to compile and install
-   Clingo manually.
 
    For instructions on compiling and installing Clingo see:
    https://github.com/potassco/clingo/blob/master/INSTALL.md
