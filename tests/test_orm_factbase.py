@@ -77,7 +77,7 @@ class FactBaseTestCase(unittest.TestCase):
         pass
 
     #--------------------------------------------------------------------------
-    #
+    # Fact base can be initialised immediately
     #--------------------------------------------------------------------------
     def test_factbase_normal_init(self):
 
@@ -106,8 +106,9 @@ class FactBaseTestCase(unittest.TestCase):
         self.assertEqual(asp_str, "{}.".format(str(af1)))
 
     #--------------------------------------------------------------------------
-    #
-    #--------------------------------------------------------------------------
+    # Delayed fact base initialisation means that it is only populated when a
+    # member function is called.
+    # --------------------------------------------------------------------------
     def test_delayed_init(self):
 
         Afact = self._Afact
@@ -131,7 +132,7 @@ class FactBaseTestCase(unittest.TestCase):
 
 
     #--------------------------------------------------------------------------
-    #
+    # Test general set container operations
     #--------------------------------------------------------------------------
     def test_container_ops(self):
 
@@ -145,11 +146,52 @@ class FactBaseTestCase(unittest.TestCase):
         bf1 = Bfact(num1=1, str1="1", str2="a")
 
         fb = FactBase([af1])
-        fb3 = FactBase(facts=lambda: [])
+        fb3 = FactBase(facts=lambda: [bf1])
         self.assertTrue(af1 in fb)
         self.assertFalse(af2 in fb)
         self.assertFalse(bf1 in fb)
-        self.assertFalse(bf1 in fb3)
+        self.assertTrue(bf1 in fb3)
+
+        # Test add()
+        fb4 = FactBase([af1])
+        self.assertFalse(af2 in fb4)
+        self.assertTrue(af2 not in fb4)
+        fb4.add(af2)
+        self.assertTrue(af2 in fb4)
+        self.assertFalse(bf1 in fb4)
+        with self.assertRaises(TypeError) as ctx:
+            fb4.add("a string")
+        check_errmsg("'a string' is not a Predicate instance",ctx)
+        with self.assertRaises(TypeError) as ctx:
+            fb4.add(5)
+        check_errmsg("'5' is not a Predicate instance",ctx)
+
+        # Test add() overload for collections
+        fb4.add([bf1])
+        self.assertTrue(bf1 in fb4)
+        with self.assertRaises(TypeError) as ctx:
+            fb4.add([1, 2, 3])
+        check_errmsg("[1, 2, 3] are not Predicate instances",ctx)
+
+        # Test remove()
+        fb4 = FactBase([af1, af2])
+        fb4.remove(af1)
+        self.assertFalse(af1 in fb4)
+        with self.assertRaises(KeyError) as ctx:
+            fb4.remove(af1)
+        check_errmsg(f"{af1}",ctx)
+        with self.assertRaises(KeyError) as ctx:
+            fb4.remove(bf1)
+        check_errmsg(f"{bf1}",ctx)
+        with self.assertRaises(KeyError) as ctx:
+            fb4.remove(5)
+        check_errmsg(f"5",ctx)
+
+        # Test discard()
+        fb4 = FactBase([af1, af2])
+        fb4.discard(af1)
+        self.assertFalse(af1 in fb4)
+        fb4.discard(af1)
 
         # Test __bool__
         fb2 = FactBase()
@@ -190,11 +232,14 @@ class FactBaseTestCase(unittest.TestCase):
         self.assertFalse(fb3)
 
         # popping from an empty factbase should raise error
-        with self.assertRaises(KeyError) as ctx: fb3.pop()
+        with self.assertRaises(KeyError) as ctx:
+            fb3.pop()
+        check_errmsg("'pop from an empty FactBase'",ctx)
+
 
 
     #--------------------------------------------------------------------------
-    #
+    # Test (in-)equality between fact bases
     #--------------------------------------------------------------------------
     def test_comparison_ops(self):
         Afact = self._Afact
@@ -226,7 +271,7 @@ class FactBaseTestCase(unittest.TestCase):
 
 
     #--------------------------------------------------------------------------
-    #
+    # Test set comparison operators (strict-)subset/superset)
     #--------------------------------------------------------------------------
     def test_set_comparison_ops(self):
         Afact = self._Afact
@@ -337,9 +382,18 @@ class FactBaseTestCase(unittest.TestCase):
         r = fb4 - fb5;  self.assertEqual(r, FactBase([af2,bf3]))
 
         # Test symmetric difference
-        r=fb1.symmetric_difference(fb1_alt); self.assertEqual(r,fb0)
-        r=fb1.symmetric_difference([af2,bf3]); self.assertEqual(r,FactBase([af1,bf1,af2,bf3]))
-        r =fb1 ^ [af2,bf3]; self.assertEqual(r,FactBase([af1,bf1,af2,bf3]))
+        r=fb1.symmetric_difference(fb1_alt);
+        self.assertEqual(r,fb0)
+        r=fb1.symmetric_difference([af2,bf3]);
+        self.assertEqual(r,FactBase([af1,bf1,af2,bf3]))
+
+        r=FactBase([af1]).symmetric_difference([af2,bf1])
+        self.assertEqual(r,FactBase([af1,af2,bf1]))
+        r=FactBase([af1,bf1]).symmetric_difference([af2])
+        self.assertEqual(r,FactBase([af1,af2,bf1]))
+
+        r =fb1 ^ [af2,bf3]
+        self.assertEqual(r,FactBase([af1,bf1,af2,bf3]))
 
         # Test copy
         r=fb1.copy(); self.assertEqual(r,fb1)

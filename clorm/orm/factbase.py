@@ -190,31 +190,31 @@ class FactBase(object):
     #--------------------------------------------------------------------------
 
     def _add(self, arg):
-        if isinstance(arg, Predicate): return self._add_fact(type(arg),arg)
+        if isinstance(arg, Predicate):
+            return self._add_fact(type(arg),arg)
+        elif isinstance(arg, str) or not isinstance(arg, collections.abc.Iterable):
+            raise TypeError(f"'{arg}' is not a Predicate instance")
+
         facts = sorted(arg, key=lambda x : type(x).__name__)
         for ptype, g in itertools.groupby(facts, lambda x: type(x)):
             self._add_facts(ptype, g)
 
     def _add_fact(self, ptype, fact):
-        if not issubclass(ptype,Predicate):
-            raise TypeError(("type of object {} is not a Predicate "
-                             "(or sub-class)").format(fact))
         fm = self._factmaps.setdefault(ptype, FactMap(ptype))
         fm.add_fact(fact)
 
     def _add_facts(self, ptype, facts):
         if not issubclass(ptype,Predicate):
-            raise TypeError(("type of object {} is not a Predicate "
-                             "(or sub-class)").format(fact))
+            raise TypeError(f"{list(facts)} are not Predicate instances")
         fm = self._factmaps.setdefault(ptype, FactMap(ptype))
         fm.add_facts(facts)
 
     def _remove(self, fact, raise_on_missing):
         ptype = type(fact)
-        if not isinstance(arg, Predicate) or ptype not in self._factmaps:
-            raise KeyError("{} not in factbase".format(arg))
+        if not isinstance(fact, Predicate) or ptype not in self._factmaps:
+            raise KeyError(fact)
 
-        return self._factmaps[ptype].delete()
+        return self._factmaps[ptype].remove(fact,raise_on_missing)
 
     #--------------------------------------------------------------------------
     # Initiliser
@@ -270,7 +270,7 @@ class FactBase(object):
         self._check_init()  # Check for delayed init
         for pt, fm in self._factmaps.items():
             if fm: return fm.pop()
-        raise KeyError("Cannot pop() from an empty FactBase")
+        raise KeyError("pop from an empty FactBase")
 
     def clear(self):
         """Clear the fact base of all facts."""
@@ -597,10 +597,12 @@ class FactBase(object):
         predicates.update(other._factmaps.keys())
 
         for p in predicates:
-            if p in self._factmaps and p in other._factmaps:
+            in_self = p in self._factmaps ; in_other = p in other._factmaps
+            if in_self and in_other:
                 fb._factmaps[p] = self._factmaps[p].symmetric_difference(other._factmaps[p])
-            else:
-                if p in self._factmaps: fb._factmaps[p] = self._factmaps[p].copy()
+            elif in_self:
+                fb._factmaps[p] = self._factmaps[p].copy()
+            elif in_other:
                 fb._factmaps[p] = other._factmaps[p].copy()
 
         return fb
@@ -720,7 +722,6 @@ class Select(abc.ABC):
           Returns a reference to itself.
 
         """
-        pass
 
     @abc.abstractmethod
     def order_by(self, *fieldorder):
