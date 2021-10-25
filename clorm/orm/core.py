@@ -2346,27 +2346,6 @@ def _predicate_init_by_positional_values(self, *args, **kwargs):
     # Create the raw clingo.Symbol object
     self._raw = None
 
-# Constructor for every Predicate sub-class
-def _predicate_constructor(self, *args, **kwargs):
-    if len(args) > 0:
-        if len(kwargs) > 1 or (len(kwargs) == 1 and "sign" not in kwargs):
-            raise ValueError(("Invalid Predicate initialisation: only \"sign\" is a "
-                             "valid keyword argument when combined with positional "
-                              "arguments: {}").format(kwargs))
-        _predicate_init_by_positional_values(self, *args,**kwargs)
-    elif "raw" in kwargs:
-        _predicate_init_by_raw(self, **kwargs)
-    else:
-        _predicate_init_by_keyword_values(self, **kwargs)
-
-    # Force the hash to be calculated and cached.
-    self._hash = None
-    self.__hash__()
-
-
-def _predicate_base_constructor(self, *args, **kwargs):
-    raise TypeError(("Predicate/ComplexTerm must be sub-classed"))
-
 #------------------------------------------------------------------------------
 # Metaclass constructor support functions to create the fields
 #------------------------------------------------------------------------------
@@ -2548,14 +2527,12 @@ class _PredicateMeta(type):
 
         if name == "Predicate":
             dct["_predicate"] = None
-            dct["__init__"] = _predicate_base_constructor
             return super(_PredicateMeta, meta).__new__(meta, name, bases, dct)
 
         # Create the metadata AND populate dct - the class dict (including the fields)
 
         # Set the _meta attribute and constuctor
         dct["_meta"] = _make_predicatedefn(name, dct)
-        dct["__init__"] = _predicate_constructor
         dct["_field"] = _lateinit("{}._field".format(name))
 
         parents = [ b for b in bases if issubclass(b, Predicate) ]
@@ -2645,10 +2622,27 @@ class Predicate(object, metaclass=_PredicateMeta):
     #--------------------------------------------------------------------------
     #
     #--------------------------------------------------------------------------
-    def __init__(self):
-        raise NotImplementedError(("Class {} can only be instantiated through a "
-                                   "sub-class").format(self.__name__))
+    def __init__(self, *args, **kwargs):
+        if len(args) > 0:
+            if len(kwargs) > 1 or (len(kwargs) == 1 and "sign" not in kwargs):
+                raise ValueError(("Invalid Predicate initialisation: only \"sign\" is a "
+                                 "valid keyword argument when combined with positional "
+                                  "arguments: {}").format(kwargs))
+            _predicate_init_by_positional_values(self, *args,**kwargs)
+        elif "raw" in kwargs:
+            _predicate_init_by_raw(self, **kwargs)
+        else:
+            _predicate_init_by_keyword_values(self, **kwargs)
 
+        # Force the hash to be calculated and cached.
+        self._hash = None
+        self.__hash__()
+
+
+    def __new__(cls, *args, **kwargs):
+        if cls == __class__:
+            raise TypeError(("Predicate/ComplexTerm must be sub-classed"))
+        return super().__new__(cls)
 
     #--------------------------------------------------------------------------
     # Properties and functions for Predicate
