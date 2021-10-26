@@ -365,9 +365,9 @@ class FactBase(object):
     def asp_str(self,*,width=0,commented=False,sorted=False):
         """Return a ASP string representation of the fact base.
 
-        This ASP string representation is syntactically correct ASP code so is
-        suitable for adding as the input to to an ASP program (or writing to a
-        file for later use in an ASP program).
+        The generated ASP string representation is syntactically correct ASP
+        code so is suitable for adding as the input to to an ASP program (or
+        writing to a file for later use in an ASP program).
 
         By default the order of the facts in the string is arbitrary. Because
         `FactBase` is built on a `OrderedDict` (which preserves insertion
@@ -377,16 +377,15 @@ class FactBase(object):
         string. In order to guarantee the same output the `sorted` flag can be
         specified.
 
-        Args (keyword arguments only):
-
-            width=0: tries to fill to a given width by putting more than one
-                     fact on a line if necessary.
-
-            commented=False: produces commented ASP code by adding a predicate
-                             signature and turning the Predicate sub-class
-                             docstring into a ASP comments.
-
-            sorted=False: sort the output facts
+        Args:
+            width: tries to fill to a given width by putting more than one
+                   fact on a line if necessary (default: 0).
+            commented: produces commented ASP code by adding a predicate
+                       signature and turning the Predicate sub-class docstring
+                       into a ASP comments (default: False).
+            sorted: sort the output facts, first by predicates (name,arity) and
+                    then by the natural order of the instances for that
+                    predicate (default :False).
 
         """
         self._check_init()  # Check for delayed init
