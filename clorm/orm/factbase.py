@@ -41,6 +41,8 @@ __all__ = [
 # PEP 257 (modified for Python 3): https://www.python.org/dev/peps/pep-0257/
 # ------------------------------------------------------------------------------
 
+_builtin_sorted=sorted
+
 def _format_asp_facts(iterator,output,width):
     tmp1=""
     for f in iterator:
@@ -360,22 +362,51 @@ class FactBase(object):
         tmp = [ fm.factset for fm in self._factmaps.values() if fm]
         return list(itertools.chain(*tmp))
 
-    def asp_str(self,width=0,commented=False):
-        """Return a string representation of the fact base that is suitable for adding
-        to an ASP program
+    def asp_str(self,*,width=0,commented=False,sorted=False):
+        """Return a ASP string representation of the fact base.
+
+        This ASP string representation is syntactically correct ASP code so is
+        suitable for adding as the input to to an ASP program (or writing to a
+        file for later use in an ASP program).
+
+        By default the order of the facts in the string is arbitrary. Because
+        `FactBase` is built on a `OrderedDict` (which preserves insertion
+        order) the order of the facts will be deterministic between runs of the
+        same program. However two FactBases containing the same facts but
+        constructed in different ways will not produce the same output
+        string. In order to guarantee the same output the `sorted` flag can be
+        specified.
+
+        Args (keyword arguments only):
+
+            width=0: tries to fill to a given width by putting more than one
+                     fact on a line if necessary.
+
+            commented=False: produces commented ASP code by adding a predicate
+                             signature and turning the Predicate sub-class
+                             docstring into a ASP comments.
+
+            sorted=False: sort the output facts
 
         """
         self._check_init()  # Check for delayed init
         out = io.StringIO()
 
-        if not commented:
-            _format_asp_facts(self,out,width)
+        first=True
+        if sorted:
+            names = _builtin_sorted(self._factmaps.keys(),key=lambda pt:
+                                    (pt.meta.name, pt.meta.arity,pt.__name__))
+            fms = [self._factmaps[n] for n in names]
         else:
-            first=True
-            for fm in self._factmaps.values():
+            fms = self._factmaps.values()
+        for fm in fms:
+            if commented:
                 if first: first=False
                 else: print("",file=out)
                 _format_commented(fm,out)
+            if sorted:
+                _format_asp_facts(_builtin_sorted(fm.factset),out,width)
+            else:
                 _format_asp_facts(fm.factset,out,width)
 
         data = out.getvalue()

@@ -553,6 +553,52 @@ class FactBaseTestCase(unittest.TestCase):
         cfactspre="% Predicate signature:\n%     {}(n,s)\n".format(C.meta.name)
         self.assertTrue(aspstr.startswith(cfactspre))
 
+    #--------------------------------------------------------------------------
+    # Test the asp output string with the sorted flag
+    # --------------------------------------------------------------------------
+    def test_factbase_aspstr_sorted(self):
+        class A(Predicate):
+            a = IntegerField
+            class Meta: name="bb"
+        class B(Predicate):
+            a = IntegerField
+            class Meta: name="aa"
+        class C(Predicate):
+            a = IntegerField
+            b = IntegerField
+            class Meta: name="aa"
+
+        def tostr(facts):
+            return ".\n".join([str(f) for f in facts])
+
+        def sig(ptype):
+            cstr = ("% -------------------\n"
+                    "% Predicate signature\n"
+                    "%     {}(a)\n"
+                    "% -------------------\n").format(ptype.__name__)
+            return cstr
+
+        afacts = [A(100),A(50),A(99)]
+        bfacts = [B(100),B(50),B(99)]
+        cfacts = [C(100,100),C(50,50),C(99,99)]
+        fb=FactBase()
+        fb.add(cfacts)
+        fb.add(bfacts)
+        fb.add(afacts)
+
+        expected1 = tostr(cfacts) + ".\n" + tostr(bfacts) + ".\n" + \
+            tostr(afacts) + ".\n"
+        self.assertEqual(fb.asp_str(), expected1)
+
+        expected2 = tostr(sorted(bfacts)) + ".\n" + tostr(sorted(cfacts)) + \
+            ".\n" + tostr(sorted(afacts)) + ".\n"
+        self.assertEqual(fb.asp_str(sorted=True), expected2)
+
+        expected3 = \
+            sig(A) + tostr(sorted(bfacts)) + ".\n" + \
+            sig(B) + tostr(sorted(bfacts)) + ".\n" + \
+            sig(C) + tostr(sorted(afacts)) + ".\n"
+        self.assertTrue(fb.asp_str(commented=True,sorted=True), expected3)
 
 #------------------------------------------------------------------------------
 # Test QueryAPI version 1 (called via FactBase.select() and FactBase.delete())
