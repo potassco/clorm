@@ -156,7 +156,7 @@ static problem domain encoding must be loaded.
 
 .. code-block:: python
 
-    ctrl = Control(unifier=[Driver,Item,Assigment])
+    ctrl = Control(unifier=[Driver, Item, Assignment])
     ctrl.load("quickstart.lp")
 
 The ``clorm.clingo.Control`` object controls how the ASP solver is run. When the
