@@ -68,7 +68,7 @@ time slots, and you want to assign a driver to deliver each item, while also
 ensuring that all items are assigned and drivers aren't double-booked for a time
 slot.
 
-You also want to apply some optimsation criteria. Firstly, you want to minimise
+You also want to apply some optimisation criteria. Firstly, you want to minimise
 the number of drivers that you use (for example, because bringing a driver on
 for a day has some fixed cost). Secondly, you want to deliver items as early in
 the day as possible.
