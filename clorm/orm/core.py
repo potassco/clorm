@@ -943,18 +943,18 @@ def alias(predicate, name=None):
 # ------------------------------------------------------------------------------
 
 def dealiased_path(path):
-    if inspect.isclass(arg) and issubclass(arg, Predicate): return arg.meta.path
-
+    if inspect.isclass(path) and issubclass(path, Predicate): return path.meta.path
+    
     def getpath():
-        if isinstance(arg, PredicatePath): return arg
-        elif isinstance(arg, PredicatePath.Hashable): return arg.path
-        if not exception: return None
+        if isinstance(path, PredicatePath): return path
+        elif isinstance(path, PredicatePath.Hashable): return path.path
+        if not path: return None
         raise TypeError(("Invalid argument {} (type: {}): expecting either a "
                          "PredicatePath, a Predicate sub-class, or a "
-                         "PredicatePath.Hashable").format(arg, type(arg)))
+                         "PredicatePath.Hashable").format(path, type(path)))
     cleanpath = getpath()
     if cleanpath is None: return None
-    return cleanpath.meta.dealised
+    return cleanpath.meta.dealiased
 
 
 #------------------------------------------------------------------------------

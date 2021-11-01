@@ -28,7 +28,7 @@ from clorm import \
     SymbolMode, set_symbol_mode, get_symbol_mode, symbols
 
 # Implementation imports
-from clorm.orm.core import get_field_definition, PredicatePath, \
+from clorm.orm.core import dealiased_path, get_field_definition, PredicatePath, \
     QCondition, trueall, notcontains
 
 import clingo
@@ -2314,6 +2314,35 @@ class PredicatePathTestCase(unittest.TestCase):
         self.assertEqual(_h(X.c.b.meta.root) ,_h(X))
         self.assertNotEqual(_h(X.c.b.meta.root), _h(H))
 
+    # -----------------------------------------------------------------------------
+    # 
+    # -----------------------------------------------------------------------------
+    def test_dealised_path_predicate(self):
+        H = self.H
+        result = dealiased_path(H)
+
+        def _h(a): return hashable_path(a)
+
+        self.assertEqual(type(result), type(H.meta.path))
+        self.assertEqual(_h(result),_h(H.meta.path))
+
+    def test_dealised_path_predicate_path(self):
+        H = self.H
+        X = alias(H,'X')
+        result = dealiased_path(X.a)
+
+        def _h(a): return hashable_path(a)
+
+        self.assertEqual(type(result), type(H.a))
+        self.assertEqual(_h(result),_h(H.a))
+
+    def test_dealised_path_none(self):
+        result = dealiased_path(None)
+        self.assertIsNone(result)
+
+    def test_dealised_raise_type_error(self):
+        with self.assertRaises(TypeError):
+            dealiased_path("invalid argument")
 
     # -----------------------------------------------------------------------------
     # Test that the comparison operator overloads generate QCondition objects
