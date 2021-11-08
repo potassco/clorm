@@ -435,3 +435,8 @@ So, here are some other projects for using Python and Clingo:
 * `Clyngor <https://github.com/aluriak/clyngor>`_
 
 
+License
+-------
+
+This project is licensed under the terms of the MIT license.
+
