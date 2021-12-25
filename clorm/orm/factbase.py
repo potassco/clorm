@@ -16,6 +16,7 @@ import itertools
 from .core import *
 from .core import get_field_definition, PredicatePath, kwargs_check_keys, \
     validate_root_paths
+from .core import PredicateDefn
 
 from .query import *
 
@@ -96,17 +97,23 @@ def _format_docstring(docstring,output):
 def _maxwidth(lines):
     return max([len(l) for l in lines])
 
-def _format_commented(fm,out):
-    pm = fm.predicate.meta
+def _format_commented(fm: FactMap, out):
+    pm: PredicateDefn = fm.predicate.meta
     docstring = _trim_docstring(fm.predicate.__doc__) \
         if fm.predicate.__doc__ else ""
     indent = "    "
     if pm.arity == 0:
         lines = [ "Unary predicate signature:", indent + pm.name ]
     else:
-        params=[str(fa.name) for fa in pm]
+        def build_signature(p: Predicate) -> str:
+            args = []
+            for pp in p:
+                complex = pp.meta.field.complex
+                args.append(pp._pathseq[1] if not complex else build_signature(complex))
+            return f"{p.meta.name}({','.join(args)})"
+
         lines = [ "Predicate signature:",
-                  indent + "{}({})".format(pm.name, ",".join(params)) ]
+                  indent + build_signature(fm.predicate) ]
     if docstring:
         lines.append("Description:")
         for l in docstring.splitlines():lines.append(indent + l)
