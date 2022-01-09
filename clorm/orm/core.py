@@ -27,6 +27,7 @@ import re
 import uuid
 
 from . import noclingo
+from typing import Iterator, List, Tuple, Type, Union
 
 __all__ = [
     'ClormError',
@@ -422,7 +423,7 @@ def notin_(path, seq):
 #
 # ------------------------------------------------------------------------------
 
-def _define_predicate_path_subclass(predicate_class):
+def _define_predicate_path_subclass(predicate_class: 'Predicate') -> Type['PredicatePath']:
     class_name = predicate_class.__name__ + "_PredicatePath"
     return type(class_name, (PredicatePath,), { "_predicate_class" : predicate_class })
 
@@ -565,7 +566,7 @@ class PredicatePath(object, metaclass=_PredicatePathMeta):
     # --------------------------------------------------------------------------
 
     class Meta(object):
-        def __init__(self, parent):
+        def __init__(self, parent: 'PredicatePath'):
             self._parent = parent
         #--------------------------------------------------------------------------
         # Properties of the parent PredicatePath instance
@@ -638,14 +639,14 @@ class PredicatePath(object, metaclass=_PredicatePathMeta):
         # will return None
         # --------------------------------------------------------------------------
         @property
-        def field(self):
+        def field(self) -> 'BaseField':
             return self._parent._field
 
         # --------------------------------------------------------------------------
         # All the subpaths of this path
         #--------------------------------------------------------------------------
         @property
-        def subpaths(self):
+        def subpaths(self) -> Tuple['PredicatePath']:
             return self._parent._allsubpaths
 
         #--------------------------------------------------------------------------
@@ -674,7 +675,7 @@ class PredicatePath(object, metaclass=_PredicatePathMeta):
     # Predicate class and subsequent elements are strings refering to
     # attributes.
     #--------------------------------------------------------------------------
-    def __init__(self, pathseq):
+    def __init__(self, pathseq: List[Union['PathIdentity',str]]):
         self._meta = PredicatePath.Meta(self)
         self._pathseq = tuple(pathseq)
         self._subpath = {}
@@ -1211,7 +1212,7 @@ class BaseField(object, metaclass=_BaseFieldMeta):
 
     # Internal property - not part of official API
     @_classproperty
-    def complex(cls):
+    def complex(cls) -> 'Predicate':
         return None
 
     @property
@@ -2045,8 +2046,8 @@ def get_field_definition(defn):
 # Return the list of field_paths associated with a predicate (ignoring the base
 # predicate path itself).
 # ------------------------------------------------------------------------------
-def _get_paths(predicate):
-    def get_subpaths(path):
+def _get_paths(predicate: 'Predicate'):
+    def get_subpaths(path: 'PredicatePath') -> List[PredicatePath]:
         paths=[]
         for subpath in path.meta.subpaths:
             paths.append(subpath)
@@ -2058,8 +2059,8 @@ def _get_paths(predicate):
 #------------------------------------------------------------------------------
 # Return the list of field_paths that are specified as indexed
 #------------------------------------------------------------------------------
-def _get_paths_for_default_indexed_fields(predicate):
-    def is_indexed(path):
+def _get_paths_for_default_indexed_fields(predicate: 'Predicate') -> Iterator[PredicatePath]:
+    def is_indexed(path: PredicatePath):
         field = path.meta.field
         if field and field.index: return True
         return False
@@ -2103,7 +2104,7 @@ class PredicateDefn(object):
 
     """
 
-    def __init__(self, name, field_accessors, anon=False,sign=None):
+    def __init__(self, name, field_accessors: List[FieldAccessor], anon=False,sign=None):
         self._name = name
         self._byidx = tuple(field_accessors)
         self._byname = { f.name : f for f in field_accessors }
@@ -2176,7 +2177,7 @@ class PredicateDefn(object):
 
     # Internal property
     @parent.setter
-    def parent(self, pc):
+    def parent(self, pc: 'Predicate'):
         if self._parent_cls:
             raise RuntimeError(("Trying to reset the parent for a "
                                 "PredicateDefn doesn't make sense"))
@@ -2398,7 +2399,7 @@ def _is_bad_predicate_inner_class_declaration(name,obj):
 # both. Sign can be True/False/None. By default sign is None (meaning both
 # positive/negative) unless it is a tuple then it is positive only.
 
-def _make_predicatedefn(class_name, dct):
+def _make_predicatedefn(class_name, dct) -> PredicateDefn:
 
     # Set the default predicate name
     pname = _predicatedefn_default_predicate_name(class_name)
@@ -2485,7 +2486,7 @@ def _make_predicatedefn(class_name, dct):
 # instances and clingo symbol objects.
 # ------------------------------------------------------------------------------
 
-def _define_field_for_predicate(cls):
+def _define_field_for_predicate(cls) -> Type[BaseField]:
     if not issubclass(cls, Predicate):
         raise TypeError(("Class {} is not a Predicate/ComplexTerm "
                          "sub-class").format(cls))
@@ -2618,6 +2619,10 @@ class Predicate(object, metaclass=_PredicateMeta):
          - named parameters corresponding to the field names.
 
     """
+    if typing.TYPE_CHECKING:
+        # populated by the metaclass, defined here to help IDEs only
+        _meta: typing.ClassVar[PredicateDefn]
+        _field: typing.ClassVar[BaseField]
 
     #--------------------------------------------------------------------------
     #
@@ -2672,7 +2677,7 @@ class Predicate(object, metaclass=_PredicateMeta):
         return self._raw
 
     @_classproperty
-    def Field(cls):
+    def Field(cls) -> BaseField:
         """A BaseField sub-class corresponding to a Field for this class."""
         return cls._field
 
@@ -2713,7 +2718,7 @@ class Predicate(object, metaclass=_PredicateMeta):
 
     # Get the metadata for the Predicate definition
     @_classproperty
-    def meta(cls):
+    def meta(cls) -> PredicateDefn:
         """The meta data (definitional information) for the Predicate/Complex-term"""
         return cls._meta
 
@@ -2742,7 +2747,7 @@ class Predicate(object, metaclass=_PredicateMeta):
     # Overloaded index operator to access the values and len operator
     #--------------------------------------------------------------------------
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[PredicatePath]:
         # The number of parameters in a predicate are always small so convenient
         # to generate a list of values rather than have a specialised iterator.
         return iter([self[idx] for idx in range(0,len(self))])

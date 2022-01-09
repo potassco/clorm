@@ -270,7 +270,7 @@ def _fm_iterable(other):
     else: return other
 
 class FactMap(object):
-    def __init__(self, ptype, indexes=[]):
+    def __init__(self, ptype: Predicate, indexes=[]):
         def clean_path(p):
             p = path(p)
             if hashable_path(p) != hashable_path(p.meta.dealiased):
@@ -334,7 +334,7 @@ class FactMap(object):
         for fi in self._factindexes: fi.clear()
 
     @property
-    def predicate(self):
+    def predicate(self) -> Predicate:
         return self._ptype
 
     @property

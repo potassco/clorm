@@ -600,6 +600,57 @@ class FactBaseTestCase(unittest.TestCase):
             sig(C) + tostr(sorted(afacts)) + ".\n"
         self.assertTrue(fb.asp_str(commented=True,sorted=True), expected3)
 
+    #--------------------------------------------------------------------------
+    # Test the asp output string contains correct signature
+    # --------------------------------------------------------------------------
+    def test_factbase_aspstr_signature(self):
+        
+        class NestedNested(Predicate):
+            a = IntegerField
+            b = IntegerField
+            class Meta: name="nested_nested"
+        class Nested(Predicate):
+            a = IntegerField
+            b = NestedNested.Field
+            class Meta: name="nested"
+      
+        class C(Predicate):
+            a = IntegerField
+            b = (IntegerField,StringField)
+            c = Nested.Field
+            class Meta: name="aa"
+
+        class A(Predicate):
+            class Internal(Predicate):
+                a_ = IntegerField
+                b_ = IntegerField
+                class Meta:
+                    is_tuple=True
+            a = IntegerField
+            b = Internal.Field
+
+        cfact = C(a=2,b=(1,"2"),c=Nested(a=4,b=NestedNested(a=42,b=43)))
+        afact = A(a=3,b=A.Internal(a_=2,b_=4))
+        fb = FactBase()
+        fb.add(cfact)
+        fb.add(afact)
+
+        expected_sig_predC = (
+            "% --------------------------------------------------\n"
+            "% Predicate signature:\n"
+            "%     aa(a,(arg1,arg2),nested(a,nested_nested(a,b)))\n"
+            "% --------------------------------------------------\n"
+        )
+        expected_sig_predA = (
+            "% --------------------\n"
+            "% Predicate signature:\n"
+            "%     a(a,(a_,b_))\n"
+            "% --------------------\n"
+        )
+        result = fb.asp_str(commented=True)
+        self.assertIn(expected_sig_predC, result)
+        self.assertIn(expected_sig_predA, result)
+
 #------------------------------------------------------------------------------
 # Test QueryAPI version 1 (called via FactBase.select() and FactBase.delete())
 # ------------------------------------------------------------------------------
