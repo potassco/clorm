@@ -158,6 +158,12 @@ class FieldTestCase(unittest.TestCase):
             BaseField.cltopy(cnum1)
         check_errmsg("BaseField.cltopy() must be overriden",ctx)
 
+
+    def test_instantiate_BaseField(self):
+        # Test that you cannot instantiate BaseField
+        with self.assertRaises(TypeError):
+            a = BaseField()
+
     #--------------------------------------------------------------------------
     # Test user-defined BaseField sub-classes as well as raising exceptions for
     # badly defined fields.

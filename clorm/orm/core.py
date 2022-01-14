@@ -993,60 +993,12 @@ def _make_cltopy(parent, fn):
         return lambda cls,v : fn(pfn(v))
 
 
-def _basefield_class_constructor(self, *args, **kwargs):
-    raise TypeError(("BaseField must be sub-classed"))
-
-def _basefield_subclass_constructor(self, *args, **kwargs):
-    # Check the match between positional and keyword arguments
-    if "default" in kwargs and len(args) > 0:
-        raise TypeError(("Field constructor got multiple values for "
-                         "argument 'default'"))
-    if "index" in kwargs and len(args) > 1:
-        raise TypeError(("Field constructor got multiple values for "
-                         "argument 'index'"))
-    if len(args) > 2:
-        raise TypeError(("Field constructor takes from 0 to 2 positional"
-                         "arguments but {} given").format(len(args)))
-
-    # Check for bad positional arguments
-    badkeys = kwargs_check_keys(set(["default","index"]), set(kwargs.keys()))
-    if badkeys:
-        mstr = "Field constructor got unexpected keyword arguments: "
-        if len(badkeys) == 1:
-            mstr = "Field constructor got an unexpected keyword argument: "
-        raise TypeError("{}{}".format(mstr,",".join(sorted(badkeys))))
-
-    if "default" in kwargs: self._default = (True, kwargs["default"])
-    elif len(args) > 0: self._default = (True, args[0])
-    else: self._default = (False,None)
-
-    if "index" in kwargs: self._index = kwargs["index"]
-    elif len(args) > 1: self._index = args[1]
-    else: self._index=False
-
-    if not self._default[0]: return
-    dval = self._default[1]
-
-    # Check that the default is a valid value. If the default is a callable then
-    # we can't do this check because it could break a counter type procedure.
-    if not callable(dval):
-        try:
-            self.pytocl(dval)
-        except (TypeError,ValueError):
-            raise TypeError("Invalid default value \"{}\" for {}".format(
-                dval, type(self).__name__))
-
 class _BaseFieldMeta(type):
     def __new__(meta, name, bases, dct):
 
         if name == "BaseField":
-            dct["__init__"] = _basefield_class_constructor
             dct["_parentclass"] = None
             return super(_BaseFieldMeta, meta).__new__(meta, name, bases, dct)
-
-        # Add a default initialiser if one is not already defined
-        if "__init__" not in dct:
-            dct["__init__"] = _basefield_subclass_constructor
 
         dct["_fpb"] = _lateinit("{}._fpb".format(name))
 
@@ -1092,10 +1044,6 @@ class _BaseFieldMeta(type):
 
         return super(_BaseFieldMeta, meta).__new__(meta, name, bases, dct)
 
-    def __init__(cls, name, bases, dct):
-
-        return super(_BaseFieldMeta, cls).__init__(name, bases, dct)
-
 
 #------------------------------------------------------------------------------
 # To deal with using Clorm in a long running processes we need to not use
@@ -1130,7 +1078,10 @@ def get_symbol_mode():
 # and unifies, and the properties: default and has_default
 # ------------------------------------------------------------------------------
 
-class BaseField(object, metaclass=_BaseFieldMeta):
+# Mixin class to be able to use both MetaClasses
+class _AbstractBaseFieldMeta(abc.ABCMeta, _BaseFieldMeta): pass
+
+class BaseField(object, metaclass=_AbstractBaseFieldMeta):
     """A class that represents a field that correspond to logical terms.
 
     A field is typically used as part of a ``ComplexTerm`` or ``Predicate``
@@ -1190,13 +1141,54 @@ class BaseField(object, metaclass=_BaseFieldMeta):
         ``FactBase```. Defaults to ``False``.
 
     """
+    def __init__(self, *args, **kwargs) -> None:
+        # Check the match between positional and keyword arguments
+        if "default" in kwargs and len(args) > 0:
+            raise TypeError(("Field constructor got multiple values for "
+                            "argument 'default'"))
+        if "index" in kwargs and len(args) > 1:
+            raise TypeError(("Field constructor got multiple values for "
+                            "argument 'index'"))
+        if len(args) > 2:
+            raise TypeError(("Field constructor takes from 0 to 2 positional"
+                            "arguments but {} given").format(len(args)))
+
+        # Check for bad positional arguments
+        badkeys = kwargs_check_keys(set(["default","index"]), set(kwargs.keys()))
+        if badkeys:
+            mstr = "Field constructor got unexpected keyword arguments: "
+            if len(badkeys) == 1:
+                mstr = "Field constructor got an unexpected keyword argument: "
+            raise TypeError("{}{}".format(mstr,",".join(sorted(badkeys))))
+
+        if "default" in kwargs: self._default = (True, kwargs["default"])
+        elif len(args) > 0: self._default = (True, args[0])
+        else: self._default = (False,None)
+
+        if "index" in kwargs: self._index = kwargs["index"]
+        elif len(args) > 1: self._index = args[1]
+        else: self._index=False
+
+        if not self._default[0]: return
+        dval = self._default[1]
+
+        # Check that the default is a valid value. If the default is a callable then
+        # we can't do this check because it could break a counter type procedure.
+        if not callable(dval):
+            try:
+                self.pytocl(dval)
+            except (TypeError,ValueError):
+                raise TypeError("Invalid default value \"{}\" for {}".format(
+                    dval, type(self).__name__))
 
     @classmethod
+    @abc.abstractmethod
     def cltopy(cls, v): #pass
         """Called when translating data from Clingo to Python"""
         raise NotImplementedError("BaseField.cltopy() must be overriden")
 
     @classmethod
+    @abc.abstractmethod
     def pytocl(cls, v):
         """Called when translating data from Python to Clingo"""
         raise NotImplementedError("BaseField.pytocl() must be overriden")
