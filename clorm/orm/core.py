@@ -27,7 +27,7 @@ import re
 import uuid
 
 from . import noclingo
-from typing import Iterator, List, Tuple, Type, Union
+from typing import Any, Iterator, List, Tuple, Type, Union
 
 __all__ = [
     'ClormError',
@@ -68,6 +68,10 @@ __all__ = [
 
 # A compiled regular expression for matching an ASP constant term
 g_constant_term_regex = re.compile("^_*[a-z][A-Za-z0-9_']*$")
+
+class _MISSING_TYPE:
+    pass
+MISSING = _MISSING_TYPE()
 
 #------------------------------------------------------------------------------
 # A _classproperty decorator. (see
@@ -1141,49 +1145,25 @@ class BaseField(object, metaclass=_AbstractBaseFieldMeta):
         ``FactBase```. Defaults to ``False``.
 
     """
-    def __init__(self, *args, **kwargs) -> None:
-        # Check the match between positional and keyword arguments
-        if "default" in kwargs and len(args) > 0:
-            raise TypeError(("Field constructor got multiple values for "
-                            "argument 'default'"))
-        if "index" in kwargs and len(args) > 1:
-            raise TypeError(("Field constructor got multiple values for "
-                            "argument 'index'"))
-        if len(args) > 2:
-            raise TypeError(("Field constructor takes from 0 to 2 positional"
-                            "arguments but {} given").format(len(args)))
+    def __init__(self, default: Any=MISSING, index: Any=MISSING) -> None:
+        self._default = (True, default) if default is not MISSING else (False, None)
+        self._index = index if index is not MISSING else False
 
-        # Check for bad positional arguments
-        badkeys = kwargs_check_keys(set(["default","index"]), set(kwargs.keys()))
-        if badkeys:
-            mstr = "Field constructor got unexpected keyword arguments: "
-            if len(badkeys) == 1:
-                mstr = "Field constructor got an unexpected keyword argument: "
-            raise TypeError("{}{}".format(mstr,",".join(sorted(badkeys))))
-
-        if "default" in kwargs: self._default = (True, kwargs["default"])
-        elif len(args) > 0: self._default = (True, args[0])
-        else: self._default = (False,None)
-
-        if "index" in kwargs: self._index = kwargs["index"]
-        elif len(args) > 1: self._index = args[1]
-        else: self._index=False
-
-        if not self._default[0]: return
-        dval = self._default[1]
+        if default is MISSING:
+            return
 
         # Check that the default is a valid value. If the default is a callable then
         # we can't do this check because it could break a counter type procedure.
-        if not callable(dval):
+        if not callable(default):
             try:
-                self.pytocl(dval)
+                self.pytocl(default)
             except (TypeError,ValueError):
                 raise TypeError("Invalid default value \"{}\" for {}".format(
-                    dval, type(self).__name__))
+                    default, type(self).__name__))
 
     @classmethod
     @abc.abstractmethod
-    def cltopy(cls, v): #pass
+    def cltopy(cls, v):
         """Called when translating data from Clingo to Python"""
         raise NotImplementedError("BaseField.cltopy() must be overriden")
 
