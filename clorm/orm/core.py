@@ -27,7 +27,7 @@ import re
 import uuid
 
 from . import noclingo
-from typing import Any, Callable, Iterator, List, Sequence, Tuple, Type, TypeVar, Union, overload
+from typing import Any, Callable, Iterator, List, Optional, Sequence, Tuple, Type, TypeVar, Union, overload
 
 __all__ = [
     'ClormError',
@@ -2413,6 +2413,15 @@ def _is_bad_predicate_inner_class_declaration(name,obj):
     if name == "Meta": return True
     return obj.__name__ == name
 
+# infer fielddefinition based on a given type
+def _infer_field_definition(type_: Type) -> Optional[BaseField]:
+    if issubclass(type_, int):
+        return IntegerField
+    elif issubclass(type_, str):
+        return StringField
+    elif issubclass(type_, Predicate):
+        return type_.Field
+    return None
 
 # build the metadata for the Predicate - NOTE: this funtion returns a
 # PredicateDefn instance but it also modified the dct paramater to add the fields. It
@@ -2467,9 +2476,8 @@ def _make_predicatedefn(class_name, dct) -> PredicateDefn:
     # Generate the fields - NOTE: this relies on dct being an OrderedDict()
     # which is true from Python 3.5+ (see PEP520
     # https://www.python.org/dev/peps/pep-0520/)
-    fas= []
-    idx = 0
 
+    fields_from_dct = {}
     for fname, fdefn in dct.items():
 
         # Ignore entries that are not field declarations
@@ -2487,6 +2495,32 @@ def _make_predicatedefn(class_name, dct) -> PredicateDefn:
         if fname.startswith('_'):
             raise ValueError(("Error: field names cannot start with an "
                               "underscore: {}").format(fname))
+        fields_from_dct[fname] = fdefn
+
+    fields_from_annotations = {}
+    for name, type_ in dct.get("__annotations__", {}).items():
+        if name in fields_from_dct: # first check if FieldDefinition was assigned 
+            fields_from_annotations[name] = fields_from_dct[name]
+        else:
+            fdefn = _infer_field_definition(type_) # if not try to infer the definition based on the type
+            if fdefn:
+                fields_from_annotations[name] = fdefn
+            elif inspect.isclass(type_):
+                raise TypeError((f"Predicate '{pname}': Can't infer Field from annotation {type_} "
+                                 f"of variable {name}"))
+    
+    # TODO can this be done more elegantly
+    set_anno = set(fields_from_annotations)
+    set_dct = set(fields_from_dct)
+    set_union = set_dct.union(set_anno)
+    if set_dct < set_union > set_anno:
+        raise TypeError((f"Predicate '{pname}': Mixed fields are not allowed. "
+         "(one field has just an annotation, the other one was only assigned a FieldDefinition)"))
+
+    fas= []
+    idx = 0
+    fields_from_annotations.update(**fields_from_dct)
+    for fname, fdefn in  fields_from_annotations.items():
         try:
             fd = get_field_definition(fdefn)
             fa = FieldAccessor(fname, idx, fd)

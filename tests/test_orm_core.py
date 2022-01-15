@@ -1279,6 +1279,43 @@ class PredicateTestCase(unittest.TestCase):
         e = Empty()
         self.assertFalse(e)
 
+    #--------------------------------------------------------------------------
+    # Test to infer FieldDefinition based on given annotation
+    # --------------------------------------------------------------------------
+    def test_predicates_with_annotated_fields(self):
+        class P(Predicate):
+            a: int = IntegerField
+            b = StringField
+
+        class P1(Predicate):
+            a: int
+            b: str
+            c: P
+
+        with self.subTest():
+            p = P(3,"2")
+            self.assertEquals(str(p),'p(3,"2")')
+            self.assertEquals(p.a, 3)
+            self.assertEquals(p.b, "2")
+
+        with self.subTest():
+            p = P1(3,"2",P(4,"4"))
+            self.assertEquals(p.a,3)
+            self.assertEquals(p.b,"2")
+            self.assertEquals(p.c.a,4)
+            self.assertEquals(p.c.b,"4")
+
+    def test_predicate_with_wrong_mixed_annotations_and_Fields(self):
+        with self.assertRaises(TypeError, msg="order of fields can't be determined"):
+            class P(Predicate):
+                a = IntegerField
+                b: str
+
+    def test_predicate_cant_infer_field_from_annotation(self):
+        with self.assertRaises(TypeError):
+            class P(Predicate):
+                a: int = IntegerField
+                b: float
 
     #--------------------------------------------------------------------------
     # As part of the get_field_definition function to flexibly deal with tuples
