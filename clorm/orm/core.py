@@ -27,7 +27,7 @@ import re
 import uuid
 
 from . import noclingo
-from typing import Any, Iterator, List, Tuple, Type, Union
+from typing import Any, Iterator, List, Sequence, Tuple, Type, TypeVar, Union, overload
 
 __all__ = [
     'ClormError',
@@ -72,6 +72,8 @@ g_constant_term_regex = re.compile("^_*[a-z][A-Za-z0-9_']*$")
 class _MISSING_TYPE:
     pass
 MISSING = _MISSING_TYPE()
+
+_T = TypeVar('_T')
 
 #------------------------------------------------------------------------------
 # A _classproperty decorator. (see
@@ -1211,6 +1213,38 @@ class BaseField(object, metaclass=_AbstractBaseFieldMeta):
     def index(self):
         """Returns whether this field should be indexed by default in a `FactBase`"""
         return self._index
+
+
+# This function is used instead of exposing BaseField creation directly,
+# so that a type checker can be told (via overloads) that this is a
+# function whose type depends on its parameters.
+# concept taken from dataclasses
+# https://github.com/python/cpython/blob/0b58bac3e7877d722bdbd3c38913dba2cb212f13/Lib/dataclasses.py#L346
+# https://github.com/python/typeshed/blob/e434b23741a5e3f2ea899ccfb0ef2a15f168ebf1/stubs/dataclasses/dataclasses.pyi#L45
+
+@overload
+def field(basefield: Union[Type[BaseField], Sequence[Type[BaseField]]]) -> Any: ...
+
+@overload
+def field(basefield: Union[Type[BaseField], Sequence[Type[BaseField]]],*, default: _T) -> _T: ...
+
+def field(basefield,*, default=MISSING):
+    if isinstance(basefield, Sequence):
+        if default is not MISSING:
+            if not isinstance(default, Sequence) or len(basefield) != len(default):
+                raise ValueError((f"Default {default} must have the same length as {basefield}"))
+            ret: Tuple[Any,...] = ()
+            for i, bf in enumerate(basefield):
+                ret += (field(bf,default=default[i]),)
+            return ret
+        return basefield
+
+    if issubclass(basefield, BaseField):
+        if default is not MISSING:
+            return basefield(default)
+        return basefield
+
+    raise TypeError(f"{basefield} can just be of Type '{BaseField}' or '{Sequence}'")
 
 #------------------------------------------------------------------------------
 # RawField is a sub-class of BaseField for storing clingo.Symbol or

@@ -9,6 +9,7 @@
 # ------------------------------------------------------------------------------
 
 import inspect
+from typing import Type
 import unittest
 import datetime
 import operator
@@ -28,7 +29,7 @@ from clorm import \
     SymbolMode, set_symbol_mode, get_symbol_mode, symbols
 
 # Implementation imports
-from clorm.orm.core import dealiased_path, get_field_definition, PredicatePath, \
+from clorm.orm.core import dealiased_path, field, get_field_definition, PredicatePath, \
     QCondition, trueall, notcontains
 
 import clingo
@@ -193,6 +194,48 @@ class FieldTestCase(unittest.TestCase):
         with self.assertRaises(TypeError) as ctx:
             class DateField(StringField, StringField):
                 pass
+
+    #--------------------------------------------------------------------------
+    # Test that the field function works as expected
+    #--------------------------------------------------------------------------
+    def test_api_field_function(self):    
+        with self.subTest("with single BaseField"):
+            f = field(IntegerField)
+            self.assertEquals(f, IntegerField)
+
+            f = field(IntegerField,default=4)
+            self.assertEquals(type(f),IntegerField)
+            self.assertEquals(f.default, 4)
+
+        with self.subTest("with tuple"):
+            t = field((StringField,IntegerField))
+            self.assertEquals(t, (StringField,IntegerField))
+
+            t = field((StringField,IntegerField),default=("3",4))
+            self.assertEquals(len(t),2)
+            self.assertEquals(type(t[0]),StringField)
+            self.assertEquals(type(t[1]),IntegerField)
+            self.assertEquals(t[0].default, "3")
+            self.assertEquals(t[1].default, 4)
+
+        with self.subTest("with custom field"):
+            INLField = define_flat_list_field(IntegerField,name="INLField")
+            t = field(INLField,default=[3,4,5])
+            self.assertTrue(isinstance(t, INLField))
+            self.assertEquals(t.default, [3,4,5])
+
+    def test_api_field_function_illegal_arguments(self):
+        with self.subTest("illegal basefield type"):
+            with self.assertRaises(TypeError):
+                _ = field(int)
+        
+        with self.subTest("unequal len basefield and default"):
+            with self.assertRaises(ValueError):
+                _ = field((StringField, IntegerField), default=["3",1,2])
+
+        with self.subTest("basefield is sequennce, default not"):
+            with self.assertRaises(ValueError):
+                _ = field((StringField, IntegerField), default="3")
 
     #--------------------------------------------------------------------------
     # Test the behaviour of Raw object (which wraps clingo.Symbol and
