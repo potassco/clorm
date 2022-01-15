@@ -21,6 +21,7 @@ import bisect
 import enum
 import functools
 import itertools
+import sys
 import clingo
 import typing
 import re
@@ -28,6 +29,34 @@ import uuid
 
 from . import noclingo
 from typing import Any, Callable, Iterator, List, Optional, Sequence, Tuple, Type, TypeVar, Union, overload
+
+# copied from https://github.com/samuelcolvin/pydantic/blob/master/pydantic/typing.py
+if sys.version_info < (3, 8):
+    from typing_extensions import Annotated
+    from typing import _GenericAlias, Any, Callable, cast
+
+    def get_args(t: Type[Any]) -> Tuple[Any, ...]:
+        """Compatibility version of get_args for python 3.7.
+        Mostly compatible with the python 3.8 `typing` module version
+        and able to handle almost all use cases.
+        """
+        if type(t).__name__ in {'AnnotatedMeta', '_AnnotatedAlias'}:
+            return t.__args__ + t.__metadata__
+        if isinstance(t, _GenericAlias):
+            res = t.__args__
+            if t.__origin__ is Callable and res and res[0] is not Ellipsis:
+                res = (list(res[:-1]), res[-1])
+            return res
+        return getattr(t, '__args__', ())
+    
+    def get_origin(t: Type[Any]) -> Optional[Type[Any]]:
+        if type(t).__name__ in {'AnnotatedMeta', '_AnnotatedAlias'}:
+            # weirdly this is a runtime requirement, as well as for mypy
+            return cast(Type[Any], Annotated)
+        return getattr(t, '__origin__', None)
+    
+else:
+    from typing import get_origin, get_args
 
 __all__ = [
     'ClormError',
@@ -2415,12 +2444,16 @@ def _is_bad_predicate_inner_class_declaration(name,obj):
 
 # infer fielddefinition based on a given type
 def _infer_field_definition(type_: Type) -> Optional[BaseField]:
-    if issubclass(type_, int):
-        return IntegerField
-    elif issubclass(type_, str):
-        return StringField
-    elif issubclass(type_, Predicate):
-        return type_.Field
+    if inspect.isclass(type_):
+        if issubclass(type_, int):
+            return IntegerField
+        elif issubclass(type_, str):
+            return StringField
+        elif issubclass(type_, Predicate):
+            return type_.Field
+    origin = get_origin(type_)
+    if issubclass(origin, Tuple):
+        return tuple(_infer_field_definition(arg) for arg in get_args(type_))
     return None
 
 # build the metadata for the Predicate - NOTE: this funtion returns a
