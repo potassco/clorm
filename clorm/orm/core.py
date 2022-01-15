@@ -2043,9 +2043,12 @@ def get_field_definition(defn):
     # proto = { "arg{}".format(i+1) : get_field_definition(d) for i,d in enumerate(defn) }
     proto = collections.OrderedDict([("arg{}".format(i+1), get_field_definition(d))
                                      for i,d in enumerate(defn)])
+    default = tuple([field.default for field in proto.values() if field.has_default])
+    set_default = len(default) == len(proto) # calling type modifies proto so compare it beforehand
+    
     proto['Meta'] = type("Meta", (object,), {"is_tuple" : True, "_anon" : True})
     ct = type("ClormAnonTuple", (Predicate,), proto)
-    return ct.Field()
+    return ct.Field(default) if set_default else ct.Field()
 
 
 #------------------------------------------------------------------------------

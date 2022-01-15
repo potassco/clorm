@@ -970,13 +970,30 @@ class PredicateTestCase(unittest.TestCase):
         # None is a legit value and can therefore be set as a default value.
         class DumbField(StringField):
             pytocl = lambda d: "silly" if d  is None else "ok"
-            cltopy = lambda s: None if d == "silly" else "ok"
+            cltopy = lambda s: None if s == "silly" else "ok"
         class Q(Predicate):
             first = DumbField(default=None)
 
         q = Q()
         raw_q = Function("q",[String("silly")])
         self.assertEqual(q.raw, raw_q)
+
+    #--------------------------------------------------------------------------
+    # Test default value for anonymous tuple
+    # --------------------------------------------------------------------------
+    def test_predicate_anonymous_field_with_default(self):
+
+        class P(Predicate):
+            first = IntegerField
+            tuple_ = (IntegerField(2),StringField("42"))
+
+        p = P(first=15,tuple_=(1,"2"))
+        raw_p = Function("p",[Number(15), Function("",[Number(1),String("2")])])
+        self.assertEqual(p.raw, raw_p)
+
+        p = P(first=15)
+        raw_p = Function("p",[Number(15), Function("",[Number(2),String("42")])])
+        self.assertEqual(p.raw, raw_p)
 
 
     #--------------------------------------------------------------------------
