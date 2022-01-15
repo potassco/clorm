@@ -212,11 +212,10 @@ class FieldTestCase(unittest.TestCase):
             self.assertEquals(t, (StringField,IntegerField))
 
             t = field((StringField,IntegerField),default=("3",4))
-            self.assertEquals(len(t),2)
-            self.assertEquals(type(t[0]),StringField)
-            self.assertEquals(type(t[1]),IntegerField)
-            self.assertEquals(t[0].default, "3")
-            self.assertEquals(t[1].default, 4)
+            self.assertIsInstance(t, BaseField)
+            self.assertIsInstance(t.complex[0].meta.field, StringField)
+            self.assertIsInstance(t.complex[1].meta.field, IntegerField)
+            self.assertEquals(t.default, ("3",4))
 
         with self.subTest("with custom field"):
             INLField = define_flat_list_field(IntegerField,name="INLField")
@@ -224,17 +223,39 @@ class FieldTestCase(unittest.TestCase):
             self.assertTrue(isinstance(t, INLField))
             self.assertEquals(t.default, [3,4,5])
 
+        with self.subTest("with default factory"):
+            t = field(IntegerField, default_factory=lambda: 42)
+            self.assertEquals(t.default, 42)
+            x = 0
+            def factory():
+                nonlocal x
+                x +=1
+                return ("3", x)
+            t = field((StringField,IntegerField),default_factory=factory)
+            self.assertEquals(t.default, ("3",1))
+            self.assertEquals(t.default, ("3",2))
+
+        with self.subTest("with nested tuple and default"):
+            t = field((StringField,(StringField, IntegerField)))
+            self.assertEquals(t, (StringField,(StringField,IntegerField)))
+
+            t = field((StringField,(StringField,IntegerField)),default=("3",("1",4)))
+            self.assertIsInstance(t, BaseField)
+            self.assertIsInstance(t.complex[0].meta.field, StringField)
+            self.assertIsInstance(t.complex[1].meta.field, BaseField)
+            self.assertEquals(t.default, ("3",("1",4)))
+
     def test_api_field_function_illegal_arguments(self):
         with self.subTest("illegal basefield type"):
             with self.assertRaises(TypeError):
                 _ = field(int)
         
         with self.subTest("unequal len basefield and default"):
-            with self.assertRaises(ValueError):
-                _ = field((StringField, IntegerField), default=["3",1,2])
+            with self.assertRaises(TypeError, msg="invalid default value"):
+                _ = field((StringField, IntegerField), default=("3",1,2))
 
-        with self.subTest("basefield is sequennce, default not"):
-            with self.assertRaises(ValueError):
+        with self.subTest("basefield is sequence, default not"):
+            with self.assertRaises(TypeError, msg="invalid defauflt value"):
                 _ = field((StringField, IntegerField), default="3")
 
     #--------------------------------------------------------------------------

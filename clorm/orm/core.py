@@ -27,7 +27,7 @@ import re
 import uuid
 
 from . import noclingo
-from typing import Any, Iterator, List, Sequence, Tuple, Type, TypeVar, Union, overload
+from typing import Any, Callable, Iterator, List, Sequence, Tuple, Type, TypeVar, Union, overload
 
 __all__ = [
     'ClormError',
@@ -1222,26 +1222,32 @@ class BaseField(object, metaclass=_AbstractBaseFieldMeta):
 # https://github.com/python/cpython/blob/0b58bac3e7877d722bdbd3c38913dba2cb212f13/Lib/dataclasses.py#L346
 # https://github.com/python/typeshed/blob/e434b23741a5e3f2ea899ccfb0ef2a15f168ebf1/stubs/dataclasses/dataclasses.pyi#L45
 
-@overload
-def field(basefield: Union[Type[BaseField], Sequence[Type[BaseField]]]) -> Any: ...
+_FieldDefinition = Union[Type[BaseField], Tuple['_FieldDefinition']]
 
 @overload
-def field(basefield: Union[Type[BaseField], Sequence[Type[BaseField]]],*, default: _T) -> _T: ...
+def field(basefield: _FieldDefinition) -> Any: ...
 
-def field(basefield,*, default=MISSING):
-    if isinstance(basefield, Sequence):
+@overload
+def field(basefield: _FieldDefinition,*, default: _T) -> _T: ...
+
+@overload
+def field(basefield: _FieldDefinition,*, default_factory: Callable[[], _T]) -> _T: ...
+
+def field(basefield,*, default=MISSING, default_factory=MISSING):
+    if default is not MISSING and default_factory is not MISSING:
+        raise ValueError('can not specify both default and default_factory')
+    if isinstance(basefield, Tuple):
         if default is not MISSING:
-            if not isinstance(default, Sequence) or len(basefield) != len(default):
-                raise ValueError((f"Default {default} must have the same length as {basefield}"))
-            ret: Tuple[Any,...] = ()
-            for i, bf in enumerate(basefield):
-                ret += (field(bf,default=default[i]),)
-            return ret
+            return _create_complex_term(basefield, default)
+        elif default_factory is not MISSING:
+            return _create_complex_term(basefield, default_factory)
         return basefield
 
     if issubclass(basefield, BaseField):
         if default is not MISSING:
             return basefield(default)
+        elif default_factory is not MISSING:
+            return basefield(default_factory)
         return basefield
 
     raise TypeError(f"{basefield} can just be of Type '{BaseField}' or '{Sequence}'")
@@ -2034,6 +2040,9 @@ def get_field_definition(defn):
     # Expecting a tuple and treat it as a recursive definition
     if not isinstance(defn, tuple): raise TypeError(errmsg.format(defn))
 
+    return _create_complex_term(defn)
+
+def _create_complex_term(defn, default_value=MISSING) -> BaseField:
     # NOTE: I was using a dict rather than OrderedDict which just happened to
     # work. Apparently, in Python 3.6 this was an implmentation detail and
     # Python 3.7 it is a language specification (see:
@@ -2041,11 +2050,16 @@ def get_field_definition(defn):
     # However, since Clorm is meant to be Python 3.5 compatible change this to
     # use an OrderedDict.
     # proto = { "arg{}".format(i+1) : get_field_definition(d) for i,d in enumerate(defn) }
-    proto = collections.OrderedDict([("arg{}".format(i+1), get_field_definition(d))
+    proto = collections.OrderedDict([(f"arg{i+1}", get_field_definition(d))
                                      for i,d in enumerate(defn)])
-    default = tuple([field.default for field in proto.values() if field.has_default])
-    set_default = len(default) == len(proto) # calling type modifies proto so compare it beforehand
-    
+    if default_value is not MISSING:
+        default = default_value
+        set_default = True
+    else:
+        default = tuple([field.default for field in proto.values() if field.has_default])
+        set_default = len(default) == len(proto) # calling type modifies proto so compare it beforehand
+        if not set_default and default:
+            raise ValueError((f"Default {default_value} must have the same length as {defn}"))
     proto['Meta'] = type("Meta", (object,), {"is_tuple" : True, "_anon" : True})
     ct = type("ClormAnonTuple", (Predicate,), proto)
     return ct.Field(default) if set_default else ct.Field()
