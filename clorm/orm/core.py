@@ -1650,7 +1650,7 @@ def combine_fields(fields,*,name=None):
         for f in fields:
             try:
                 return f.pytocl(v)
-            except (TypeError, ValueError):
+            except (TypeError, ValueError, AttributeError):
                 pass
         raise TypeError("No combined pytocl() match for value {}".format(v))
 
@@ -2452,8 +2452,12 @@ def _infer_field_definition(type_: Type) -> Optional[BaseField]:
         elif issubclass(type_, Predicate):
             return type_.Field
     origin = get_origin(type_)
+    if origin is Union:
+        return combine_fields([_infer_field_definition(arg) for arg in get_args(type_)])
     if issubclass(origin, Tuple):
-        return tuple(_infer_field_definition(arg) for arg in get_args(type_))
+        # not just return a tuple of Fields, but create a Field-Instance and take the type so
+        # Tuple[...] can be used within Union
+        return type(get_field_definition(tuple(_infer_field_definition(arg) for arg in get_args(type_))))
     return None
 
 # build the metadata for the Predicate - NOTE: this funtion returns a

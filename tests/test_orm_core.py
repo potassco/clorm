@@ -9,7 +9,7 @@
 # ------------------------------------------------------------------------------
 
 import inspect
-from typing import Tuple
+from typing import Tuple, Union
 import unittest
 import datetime
 import operator
@@ -1317,6 +1317,20 @@ class PredicateTestCase(unittest.TestCase):
             self.assertEquals(p.a.arg2.arg1, "4")
             self.assertEquals(p.a[1][1], 2)
             self.assertEquals(p.a.arg2.arg2, 2)
+
+        class P3(Predicate):
+            a: Union[str, int, P, Tuple[int, int]]
+
+        with self.subTest():
+            self.assertTrue(isinstance(P3.a.meta.field, BaseField))
+            p3_str = P3("1")
+            p3_int = P3(2)
+            p3_P = P3(P(3,"4"))
+            p3_tuple = P3((42,43))
+            self.assertEquals(str(p3_str), "p3(\"1\")")
+            self.assertEquals(str(p3_int), "p3(2)")
+            self.assertEquals(str(p3_P), "p3(p(3,\"4\"))")
+            self.assertEquals(str(p3_tuple), "p3((42,43))")
 
     def test_predicate_with_wrong_mixed_annotations_and_Fields(self):
         with self.assertRaises(TypeError, msg="order of fields can't be determined"):
