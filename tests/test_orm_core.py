@@ -9,6 +9,7 @@
 # ------------------------------------------------------------------------------
 
 import inspect
+from typing import Type
 import unittest
 import datetime
 import operator
@@ -28,7 +29,7 @@ from clorm import \
     SymbolMode, set_symbol_mode, get_symbol_mode, symbols
 
 # Implementation imports
-from clorm.orm.core import dealiased_path, get_field_definition, PredicatePath, \
+from clorm.orm.core import dealiased_path, field, get_field_definition, PredicatePath, \
     QCondition, trueall, notcontains
 
 import clingo
@@ -193,6 +194,69 @@ class FieldTestCase(unittest.TestCase):
         with self.assertRaises(TypeError) as ctx:
             class DateField(StringField, StringField):
                 pass
+
+    #--------------------------------------------------------------------------
+    # Test that the field function works as expected
+    #--------------------------------------------------------------------------
+    def test_api_field_function(self):    
+        with self.subTest("with single BaseField"):
+            f = field(IntegerField)
+            self.assertEquals(f, IntegerField)
+
+            f = field(IntegerField,default=4)
+            self.assertEquals(type(f),IntegerField)
+            self.assertEquals(f.default, 4)
+
+        with self.subTest("with tuple"):
+            t = field((StringField,IntegerField))
+            self.assertEquals(t, (StringField,IntegerField))
+
+            t = field((StringField,IntegerField),default=("3",4))
+            self.assertIsInstance(t, BaseField)
+            self.assertIsInstance(t.complex[0].meta.field, StringField)
+            self.assertIsInstance(t.complex[1].meta.field, IntegerField)
+            self.assertEquals(t.default, ("3",4))
+
+        with self.subTest("with custom field"):
+            INLField = define_flat_list_field(IntegerField,name="INLField")
+            t = field(INLField,default=[3,4,5])
+            self.assertTrue(isinstance(t, INLField))
+            self.assertEquals(t.default, [3,4,5])
+
+        with self.subTest("with default factory"):
+            t = field(IntegerField, default_factory=lambda: 42)
+            self.assertEquals(t.default, 42)
+            x = 0
+            def factory():
+                nonlocal x
+                x +=1
+                return ("3", x)
+            t = field((StringField,IntegerField),default_factory=factory)
+            self.assertEquals(t.default, ("3",1))
+            self.assertEquals(t.default, ("3",2))
+
+        with self.subTest("with nested tuple and default"):
+            t = field((StringField,(StringField, IntegerField)))
+            self.assertEquals(t, (StringField,(StringField,IntegerField)))
+
+            t = field((StringField,(StringField,IntegerField)),default=("3",("1",4)))
+            self.assertIsInstance(t, BaseField)
+            self.assertIsInstance(t.complex[0].meta.field, StringField)
+            self.assertIsInstance(t.complex[1].meta.field, BaseField)
+            self.assertEquals(t.default, ("3",("1",4)))
+
+    def test_api_field_function_illegal_arguments(self):
+        with self.subTest("illegal basefield type"):
+            with self.assertRaises(TypeError):
+                _ = field(int)
+        
+        with self.subTest("unequal len basefield and default"):
+            with self.assertRaises(TypeError, msg="invalid default value"):
+                _ = field((StringField, IntegerField), default=("3",1,2))
+
+        with self.subTest("basefield is sequence, default not"):
+            with self.assertRaises(TypeError, msg="invalid defauflt value"):
+                _ = field((StringField, IntegerField), default="3")
 
     #--------------------------------------------------------------------------
     # Test the behaviour of Raw object (which wraps clingo.Symbol and
@@ -927,13 +991,30 @@ class PredicateTestCase(unittest.TestCase):
         # None is a legit value and can therefore be set as a default value.
         class DumbField(StringField):
             pytocl = lambda d: "silly" if d  is None else "ok"
-            cltopy = lambda s: None if d == "silly" else "ok"
+            cltopy = lambda s: None if s == "silly" else "ok"
         class Q(Predicate):
             first = DumbField(default=None)
 
         q = Q()
         raw_q = Function("q",[String("silly")])
         self.assertEqual(q.raw, raw_q)
+
+    #--------------------------------------------------------------------------
+    # Test default value for anonymous tuple
+    # --------------------------------------------------------------------------
+    def test_predicate_anonymous_field_with_default(self):
+
+        class P(Predicate):
+            first = IntegerField
+            tuple_ = (IntegerField(2),StringField("42"))
+
+        p = P(first=15,tuple_=(1,"2"))
+        raw_p = Function("p",[Number(15), Function("",[Number(1),String("2")])])
+        self.assertEqual(p.raw, raw_p)
+
+        p = P(first=15)
+        raw_p = Function("p",[Number(15), Function("",[Number(2),String("42")])])
+        self.assertEqual(p.raw, raw_p)
 
 
     #--------------------------------------------------------------------------
