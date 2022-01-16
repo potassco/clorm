@@ -15,6 +15,8 @@ import datetime
 import operator
 import enum
 import collections.abc as cabc
+
+from clorm.orm.types import ConstantStr
 from .support import check_errmsg
 import pickle
 
@@ -1331,6 +1333,15 @@ class PredicateTestCase(unittest.TestCase):
             self.assertEquals(str(p3_int), "p3(2)")
             self.assertEquals(str(p3_P), "p3(p(3,\"4\"))")
             self.assertEquals(str(p3_tuple), "p3((42,43))")
+
+        class P4(Predicate):
+            a: ConstantStr
+
+        with self.subTest():
+            self.assertTrue(isinstance(P4.a.meta.field, ConstantField))
+            p4 = P4("asdf")
+            self.assertEquals(str(p4), "p4(asdf)")
+
 
     def test_predicate_with_wrong_mixed_annotations_and_Fields(self):
         with self.assertRaises(TypeError, msg="order of fields can't be determined"):

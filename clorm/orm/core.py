@@ -27,6 +27,8 @@ import typing
 import re
 import uuid
 
+from clorm.orm.types import ConstantStr
+
 from . import noclingo
 from typing import Any, Callable, Iterator, List, Optional, Sequence, Tuple, Type, TypeVar, Union, overload
 
@@ -2444,6 +2446,8 @@ def _is_bad_predicate_inner_class_declaration(name,obj):
 
 # infer fielddefinition based on a given type
 def _infer_field_definition(type_: Type) -> Optional[BaseField]:
+    if type_ is ConstantStr:
+        return ConstantField
     if inspect.isclass(type_):
         if issubclass(type_, int):
             return IntegerField
