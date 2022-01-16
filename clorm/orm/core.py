@@ -2446,6 +2446,9 @@ def _is_bad_predicate_inner_class_declaration(name,obj):
 
 # infer fielddefinition based on a given type
 def _infer_field_definition(type_: Type) -> Optional[BaseField]:
+    origin = get_origin(type_)
+    args = get_args(type_)
+
     if type_ is ConstantStr:
         return ConstantField
     if inspect.isclass(type_):
@@ -2459,13 +2462,15 @@ def _infer_field_definition(type_: Type) -> Optional[BaseField]:
             return StringField
         elif issubclass(type_, Predicate):
             return type_.Field
-    origin = get_origin(type_)
     if origin is Union:
-        return combine_fields([_infer_field_definition(arg) for arg in get_args(type_)])
-    if issubclass(origin, Tuple):
-        # not just return a tuple of Fields, but create a Field-Instance and take the type so
-        # Tuple[...] can be used within Union
-        return type(get_field_definition(tuple(_infer_field_definition(arg) for arg in get_args(type_))))
+        return combine_fields([_infer_field_definition(arg) for arg in args])
+    if len(args) > 1 and issubclass(origin, Tuple):
+        if len(args) == 2 and args[1] is Ellipsis: # e.g. Tuple[int, ...]
+            return define_flat_list_field(_infer_field_definition(args[0]))
+        else:
+            # not just return a tuple of Fields, but create a Field-Instance and take the type so
+            # Tuple[...] can be used within Union
+            return type(get_field_definition(tuple(_infer_field_definition(arg) for arg in args)))
     return None
 
 # build the metadata for the Predicate - NOTE: this funtion returns a

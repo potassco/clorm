@@ -1323,7 +1323,7 @@ class PredicateTestCase(unittest.TestCase):
         class P3(Predicate):
             a: Union[str, int, P, Tuple[int, int]]
 
-        with self.subTest():
+        with self.subTest("union as annotation"):
             self.assertTrue(isinstance(P3.a.meta.field, BaseField))
             p3_str = P3("1")
             p3_int = P3(2)
@@ -1337,7 +1337,7 @@ class PredicateTestCase(unittest.TestCase):
         class P4(Predicate):
             a: ConstantStr
 
-        with self.subTest():
+        with self.subTest("str which should be handled as a Constant"):
             self.assertTrue(isinstance(P4.a.meta.field, ConstantField))
             p4 = P4("asdf")
             self.assertEquals(str(p4), "p4(asdf)")
@@ -1357,13 +1357,27 @@ class PredicateTestCase(unittest.TestCase):
             c: EnumConstStr
             d: EnumRaw
 
-        with self.subTest():
+        with self.subTest("different variants of enum as annotation"):
             p5 = P5(a=EnumStr.A, b= EnumInt.B, c=EnumConstStr.C, d=EnumRaw.C)
             self.assertTrue(isinstance(P5.a.meta.field, StringField))
             self.assertTrue(isinstance(P5.b.meta.field, IntegerField))
             self.assertTrue(isinstance(P5.c.meta.field, ConstantField))
             self.assertTrue(isinstance(P5.d.meta.field, IntegerField))
             self.assertEquals(str(p5), "p5(\"a\",1,c,42)")
+
+        class P6(Predicate):
+            a: Tuple[int,...]
+        class P61(Predicate):
+            a: Tuple[Tuple[str,int],...]
+
+        with self.subTest("Tuple with arbitrary length as annotation"):
+            p6_4 = P6(a=(1,2,3,4))
+            p6_2 = P6(a=(7,8))
+            p61_2 = P61(a=(("1",2),("3",4)))
+            self.assertEqual(str(p6_4), "p6((1,2,3,4))")
+            self.assertEqual(str(p6_2), "p6((7,8))")
+            self.assertEqual(str(p61_2), "p61(((\"1\",2),(\"3\",4)))")
+
 
     def test_predicate_with_wrong_mixed_annotations_and_Fields(self):
         with self.assertRaises(TypeError, msg="order of fields can't be determined"):
