@@ -2449,6 +2449,10 @@ def _infer_field_definition(type_: Type) -> Optional[BaseField]:
     if type_ is ConstantStr:
         return ConstantField
     if inspect.isclass(type_):
+        if issubclass(type_, enum.Enum):
+            # if type_ just inherits from Enum is IntegerField, otherwise find appropriate Field
+            field = IntegerField if len(type_.__bases__) == 1 else _infer_field_definition(type_.__bases__[0])
+            return define_enum_field(field, type_)
         if issubclass(type_, int):
             return IntegerField
         elif issubclass(type_, str):

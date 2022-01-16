@@ -1342,6 +1342,28 @@ class PredicateTestCase(unittest.TestCase):
             p4 = P4("asdf")
             self.assertEquals(str(p4), "p4(asdf)")
 
+        class EnumStr(str,enum.Enum):
+            A="a"
+        class EnumInt(int,enum.Enum):
+            B=1
+        class EnumConstStr(ConstantStr,enum.Enum):
+            C="c"
+        class EnumRaw(enum.Enum):
+            C=42
+
+        class P5(Predicate):
+            a: EnumStr
+            b: EnumInt
+            c: EnumConstStr
+            d: EnumRaw
+
+        with self.subTest():
+            p5 = P5(a=EnumStr.A, b= EnumInt.B, c=EnumConstStr.C, d=EnumRaw.C)
+            self.assertTrue(isinstance(P5.a.meta.field, StringField))
+            self.assertTrue(isinstance(P5.b.meta.field, IntegerField))
+            self.assertTrue(isinstance(P5.c.meta.field, ConstantField))
+            self.assertTrue(isinstance(P5.d.meta.field, IntegerField))
+            self.assertEquals(str(p5), "p5(\"a\",1,c,42)")
 
     def test_predicate_with_wrong_mixed_annotations_and_Fields(self):
         with self.assertRaises(TypeError, msg="order of fields can't be determined"):
