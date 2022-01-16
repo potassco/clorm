@@ -158,6 +158,12 @@ class FieldTestCase(unittest.TestCase):
             BaseField.cltopy(cnum1)
         check_errmsg("BaseField.cltopy() must be overriden",ctx)
 
+
+    def test_instantiate_BaseField(self):
+        # Test that you cannot instantiate BaseField
+        with self.assertRaises(TypeError):
+            a = BaseField()
+
     #--------------------------------------------------------------------------
     # Test user-defined BaseField sub-classes as well as raising exceptions for
     # badly defined fields.
@@ -331,12 +337,11 @@ class FieldTestCase(unittest.TestCase):
 
         with self.assertRaises(TypeError) as ctx:
             fld5=IntegerField(unknown=5)
-        check_errmsg("Field constructor got an", ctx)
+        check_errmsg("__init__() got an unexpected keyword argument 'unknown'", ctx)
 
         with self.assertRaises(TypeError) as ctx:
             fld5=IntegerField(unknown1=5,unknown2="f")
-        check_errmsg(("Field constructor got unexpected keyword arguments: "
-                      "unknown1,unknown2"), ctx)
+        check_errmsg(("__init__() got an unexpected keyword argument 'unknown1'"), ctx)
 
     #--------------------------------------------------------------------------
     # Test setting the index flag for a field
