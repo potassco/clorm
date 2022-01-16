@@ -16,7 +16,7 @@ import operator
 import enum
 import collections.abc as cabc
 
-from clorm.orm.types import ConstantStr
+from clorm.orm.types import ConstantStr, HeadList, HeadListReversed, TailList, TailListReversed
 from .support import check_errmsg
 import pickle
 
@@ -1378,6 +1378,24 @@ class PredicateTestCase(unittest.TestCase):
             self.assertEqual(str(p6_2), "p6((7,8))")
             self.assertEqual(str(p61_2), "p61(((\"1\",2),(\"3\",4)))")
 
+        class P7(Predicate):
+            a: HeadList[int]
+            b: HeadListReversed[str]
+            c: TailList[Tuple[str, int]]
+            d: TailListReversed[str]
+
+        with self.subTest("nested lists"):
+            p7 = P7(a=(1,2,3),
+                    b=("1","2","3"),
+                    c=(("1",2),("2",3),("3",4)),
+                    d=("1", "2", "3")
+                    )
+            a = '(1,(2,(3,())))'
+            b = '("3",("2",("1",())))'
+            c = '((((),("1",2)),("2",3)),("3",4))'
+            d = '((((),"3"),"2"),"1")'
+            self.assertEqual(str(p7), f"p7({a},{b},{c},{d})")
+            
 
     def test_predicate_with_wrong_mixed_annotations_and_Fields(self):
         with self.assertRaises(TypeError, msg="order of fields can't be determined"):

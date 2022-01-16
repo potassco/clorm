@@ -27,7 +27,7 @@ import typing
 import re
 import uuid
 
-from clorm.orm.types import ConstantStr
+from clorm.orm.types import ConstantStr, HeadList, HeadListReversed, TailList, TailListReversed
 
 from . import noclingo
 from typing import Any, Callable, Iterator, List, Optional, Sequence, Tuple, Type, TypeVar, Union, overload
@@ -2451,6 +2451,14 @@ def _infer_field_definition(type_: Type) -> Optional[BaseField]:
 
     if type_ is ConstantStr:
         return ConstantField
+    if origin is HeadList:
+        return define_nested_list_field(_infer_field_definition(args[0]))
+    if origin is HeadListReversed:
+        return define_nested_list_field(_infer_field_definition(args[0]),reverse=True)
+    if origin is TailList:
+        return define_nested_list_field(_infer_field_definition(args[0]),headlist=False)
+    if origin is TailListReversed:
+        return define_nested_list_field(_infer_field_definition(args[0]),headlist=False, reverse=True)
     if inspect.isclass(type_):
         if issubclass(type_, enum.Enum):
             # if type_ just inherits from Enum is IntegerField, otherwise find appropriate Field
