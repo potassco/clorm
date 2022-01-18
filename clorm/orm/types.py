@@ -12,6 +12,7 @@ else:
 _T = TypeVar('_T')
 
 if TYPE_CHECKING:
+    # perhaps renaming to something like Head(First)Tuple(Reversed), Tail(First)Tuple(Reversed)
     HeadList = Tuple[_T, ...]
     HeadListReversed = Tuple[_T, ...]
     TailList = Tuple[_T, ...]
