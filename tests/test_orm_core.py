@@ -1395,7 +1395,13 @@ class PredicateTestCase(unittest.TestCase):
             c = '((((),("1",2)),("2",3)),("3",4))'
             d = '((((),"3"),"2"),"1")'
             self.assertEqual(str(p7), f"p7({a},{b},{c},{d})")
-            
+        
+        class P8(Predicate):
+            a: datetime.date
+
+        with self.subTest("date-object"):
+            p8 = P8(datetime.datetime.strptime("2022-01-11","%Y-%m-%d"))
+            self.assertEquals(p8.a,datetime.datetime(2022,1,11))
 
     def test_predicate_with_wrong_mixed_annotations_and_Fields(self):
         with self.assertRaises(TypeError, msg="order of fields can't be determined"):
