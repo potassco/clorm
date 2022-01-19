@@ -2482,6 +2482,9 @@ def _infer_field_definition(type_: Type) -> Optional[BaseField]:
     if issubclass(type_, datetime.date):
         from clorm.lib.date import DateField # import here because of circular imports
         return DateField
+    if issubclass(type_, datetime.time):
+        from clorm.lib.timeslot import TimeField # import here because of circular imports
+        return TimeField
     return None
 
 # build the metadata for the Predicate - NOTE: this funtion returns a
