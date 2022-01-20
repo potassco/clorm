@@ -1410,6 +1410,13 @@ class PredicateTestCase(unittest.TestCase):
             p9 = P9(datetime.time(17,12))
             self.assertEquals(str(p9),"p9(\"17:12\")")
 
+        class P10(Predicate):
+            a: Raw
+
+        with self.subTest("raw symbol annotations"):
+            p10 = P10(Raw(Function("test",[String("1")])))
+            self.assertEqual(str(p10), "p10(test(\"1\"))")
+
     def test_predicate_with_wrong_mixed_annotations_and_Fields(self):
         with self.assertRaises(TypeError, msg="order of fields can't be determined"):
             class P(Predicate):
