@@ -16,7 +16,6 @@ import operator
 import enum
 import collections.abc as cabc
 
-from clorm.orm.types import ConstantStr, HeadList, HeadListReversed, TailList, TailListReversed
 from .support import check_errmsg
 import pickle
 
@@ -28,7 +27,8 @@ from clorm import \
     define_flat_list_field, define_nested_list_field, define_enum_field, \
     simple_predicate, path, hashable_path, alias, \
     not_, and_, or_, cross, in_, notin_, \
-    SymbolMode, set_symbol_mode, get_symbol_mode, symbols
+    SymbolMode, set_symbol_mode, get_symbol_mode, symbols, \
+    ConstantStr, HeadList, HeadListReversed, TailList, TailListReversed
 
 # Implementation imports
 from clorm.orm.core import dealiased_path, field, get_field_definition, PredicatePath, \

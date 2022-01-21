@@ -8,6 +8,7 @@ from .factbase import *
 from .query import *
 from .symbols_facts import *
 from .atsyntax import *
+from .types import *
 
 __all__ = [
     'ClormError',
@@ -69,6 +70,11 @@ __all__ = [
     'control_add_facts',
     'symbolic_atoms_to_facts',
     'parse_fact_string',
-    'parse_fact_files'
+    'parse_fact_files',
+    "ConstantStr",
+    "HeadList",
+    "HeadListReversed",
+    "TailList",
+    "TailListReversed"
     ]
 
