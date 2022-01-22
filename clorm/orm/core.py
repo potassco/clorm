@@ -10,6 +10,7 @@
 
 #import logging
 #import os
+import datetime
 import io
 import abc
 import contextlib
@@ -21,13 +22,44 @@ import bisect
 import enum
 import functools
 import itertools
+import sys
 import clingo
 import typing
 import re
 import uuid
 
+from clorm.orm.types import ConstantStr, HeadList, HeadListReversed, TailList, TailListReversed
+
 from . import noclingo
-from typing import Any, Callable, Iterator, List, Sequence, Tuple, Type, TypeVar, Union, overload
+from typing import Any, Callable, Iterator, List, Optional, Sequence, Tuple, Type, TypeVar, Union, overload
+
+# copied from https://github.com/samuelcolvin/pydantic/blob/master/pydantic/typing.py
+if sys.version_info < (3, 8):
+    from typing_extensions import Annotated
+    from typing import _GenericAlias, Any, Callable, cast
+
+    def get_args(t: Type[Any]) -> Tuple[Any, ...]:
+        """Compatibility version of get_args for python 3.7.
+        Mostly compatible with the python 3.8 `typing` module version
+        and able to handle almost all use cases.
+        """
+        if type(t).__name__ in {'AnnotatedMeta', '_AnnotatedAlias'}:
+            return t.__args__ + t.__metadata__
+        if isinstance(t, _GenericAlias):
+            res = t.__args__
+            if t.__origin__ is Callable and res and res[0] is not Ellipsis:
+                res = (list(res[:-1]), res[-1])
+            return res
+        return getattr(t, '__args__', ())
+    
+    def get_origin(t: Type[Any]) -> Optional[Type[Any]]:
+        if type(t).__name__ in {'AnnotatedMeta', '_AnnotatedAlias'}:
+            # weirdly this is a runtime requirement, as well as for mypy
+            return cast(Type[Any], Annotated)
+        return getattr(t, '__origin__', None)
+    
+else:
+    from typing import get_origin, get_args
 
 __all__ = [
     'ClormError',
@@ -1621,7 +1653,7 @@ def combine_fields(fields,*,name=None):
         for f in fields:
             try:
                 return f.pytocl(v)
-            except (TypeError, ValueError):
+            except (TypeError, ValueError, AttributeError):
                 pass
         raise TypeError("No combined pytocl() match for value {}".format(v))
 
@@ -2413,6 +2445,49 @@ def _is_bad_predicate_inner_class_declaration(name,obj):
     if name == "Meta": return True
     return obj.__name__ == name
 
+# infer fielddefinition based on a given type
+def _infer_field_definition(type_: Type) -> Optional[BaseField]:
+    origin = get_origin(type_)
+    args = get_args(type_)
+
+    if origin is HeadList:
+        return define_nested_list_field(_infer_field_definition(args[0]))
+    if origin is HeadListReversed:
+        return define_nested_list_field(_infer_field_definition(args[0]),reverse=True)
+    if origin is TailList:
+        return define_nested_list_field(_infer_field_definition(args[0]),headlist=False)
+    if origin is TailListReversed:
+        return define_nested_list_field(_infer_field_definition(args[0]),headlist=False, reverse=True)
+    if origin is Union:
+        return combine_fields([_infer_field_definition(arg) for arg in args])
+    if len(args) > 1 and issubclass(origin, Tuple):
+        if len(args) == 2 and args[1] is Ellipsis: # e.g. Tuple[int, ...]
+            return define_flat_list_field(_infer_field_definition(args[0]))
+
+        # not just return a tuple of Fields, but create a Field-Instance and take the type so
+        # Tuple[...] can be used within Union
+        return type(get_field_definition(tuple(_infer_field_definition(arg) for arg in args)))
+    if issubclass(type_, ConstantStr):
+        return ConstantField
+    if issubclass(type_, enum.Enum):
+        # if type_ just inherits from Enum is IntegerField, otherwise find appropriate Field
+        field = IntegerField if len(type_.__bases__) == 1 else _infer_field_definition(type_.__bases__[0])
+        return define_enum_field(field, type_)
+    if issubclass(type_, int):
+        return IntegerField
+    if issubclass(type_, str):
+        return StringField
+    if issubclass(type_, Predicate):
+        return type_.Field
+    if issubclass(type_, datetime.date):
+        from clorm.lib.date import DateField # import here because of circular imports
+        return DateField
+    if issubclass(type_, datetime.time):
+        from clorm.lib.timeslot import TimeField # import here because of circular imports
+        return TimeField
+    if issubclass(type_, Raw):
+        return RawField
+    return None
 
 # build the metadata for the Predicate - NOTE: this funtion returns a
 # PredicateDefn instance but it also modified the dct paramater to add the fields. It
@@ -2467,9 +2542,8 @@ def _make_predicatedefn(class_name, dct) -> PredicateDefn:
     # Generate the fields - NOTE: this relies on dct being an OrderedDict()
     # which is true from Python 3.5+ (see PEP520
     # https://www.python.org/dev/peps/pep-0520/)
-    fas= []
-    idx = 0
 
+    fields_from_dct = {}
     for fname, fdefn in dct.items():
 
         # Ignore entries that are not field declarations
@@ -2487,6 +2561,32 @@ def _make_predicatedefn(class_name, dct) -> PredicateDefn:
         if fname.startswith('_'):
             raise ValueError(("Error: field names cannot start with an "
                               "underscore: {}").format(fname))
+        fields_from_dct[fname] = fdefn
+
+    fields_from_annotations = {}
+    for name, type_ in dct.get("__annotations__", {}).items():
+        if name in fields_from_dct: # first check if FieldDefinition was assigned 
+            fields_from_annotations[name] = fields_from_dct[name]
+        else:
+            fdefn = _infer_field_definition(type_) # if not try to infer the definition based on the type
+            if fdefn:
+                fields_from_annotations[name] = fdefn
+            elif inspect.isclass(type_):
+                raise TypeError((f"Predicate '{pname}': Can't infer Field from annotation {type_} "
+                                 f"of variable {name}"))
+    
+    # TODO can this be done more elegantly
+    set_anno = set(fields_from_annotations)
+    set_dct = set(fields_from_dct)
+    set_union = set_dct.union(set_anno)
+    if set_dct < set_union > set_anno:
+        raise TypeError((f"Predicate '{pname}': Mixed fields are not allowed. "
+         "(one field has just an annotation, the other one was only assigned a FieldDefinition)"))
+
+    fas= []
+    idx = 0
+    fields_from_annotations.update(**fields_from_dct)
+    for fname, fdefn in  fields_from_annotations.items():
         try:
             fd = get_field_definition(fdefn)
             fa = FieldAccessor(fname, idx, fd)

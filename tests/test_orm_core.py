@@ -9,12 +9,13 @@
 # ------------------------------------------------------------------------------
 
 import inspect
-from typing import Type
+from typing import Tuple, Union
 import unittest
 import datetime
 import operator
 import enum
 import collections.abc as cabc
+
 from .support import check_errmsg
 import pickle
 
@@ -26,7 +27,8 @@ from clorm import \
     define_flat_list_field, define_nested_list_field, define_enum_field, \
     simple_predicate, path, hashable_path, alias, \
     not_, and_, or_, cross, in_, notin_, \
-    SymbolMode, set_symbol_mode, get_symbol_mode, symbols
+    SymbolMode, set_symbol_mode, get_symbol_mode, symbols, \
+    ConstantStr, HeadList, HeadListReversed, TailList, TailListReversed
 
 # Implementation imports
 from clorm.orm.core import dealiased_path, field, get_field_definition, PredicatePath, \
@@ -1279,6 +1281,153 @@ class PredicateTestCase(unittest.TestCase):
         e = Empty()
         self.assertFalse(e)
 
+    #--------------------------------------------------------------------------
+    # Test to infer FieldDefinition based on given annotation
+    # --------------------------------------------------------------------------
+    def test_predicates_with_annotated_fields(self):
+        class P(Predicate):
+            a: int = IntegerField
+            b = StringField
+
+        class P1(Predicate):
+            a: int
+            b: str
+            c: P
+
+        with self.subTest("one with and one without annotation"):
+            p = P(3,"2")
+            self.assertEquals(str(p),'p(3,"2")')
+            self.assertEquals(p.a, 3)
+            self.assertEquals(p.b, "2")
+
+        with self.subTest("all with annotations + Predicate"):
+            p = P1(3,"2",P(4,"4"))
+            self.assertEquals(p.a,3)
+            self.assertEquals(p.b,"2")
+            self.assertEquals(p.c.a,4)
+            self.assertEquals(p.c.b,"4")
+
+        class P2(Predicate):
+            a: Tuple[int,Tuple[str, int]]
+
+        with self.subTest("nested tuples as annotations"):
+            self.assertTrue(issubclass(type(P2.meta["a"].defn), BaseField))
+            p = P2((3,("4", 2)))
+            self.assertEquals(p.a[0], 3)
+            self.assertEquals(p.a.arg1, 3)
+            self.assertEquals(p.a[1][0], "4")
+            self.assertEquals(p.a.arg2.arg1, "4")
+            self.assertEquals(p.a[1][1], 2)
+            self.assertEquals(p.a.arg2.arg2, 2)
+
+        class P3(Predicate):
+            a: Union[str, int, P, Tuple[int, int]]
+
+        with self.subTest("union as annotation"):
+            self.assertTrue(isinstance(P3.a.meta.field, BaseField))
+            p3_str = P3("1")
+            p3_int = P3(2)
+            p3_P = P3(P(3,"4"))
+            p3_tuple = P3((42,43))
+            self.assertEquals(str(p3_str), "p3(\"1\")")
+            self.assertEquals(str(p3_int), "p3(2)")
+            self.assertEquals(str(p3_P), "p3(p(3,\"4\"))")
+            self.assertEquals(str(p3_tuple), "p3((42,43))")
+
+        class P4(Predicate):
+            a: ConstantStr
+
+        with self.subTest("str which should be handled as a Constant"):
+            self.assertTrue(isinstance(P4.a.meta.field, ConstantField))
+            p4 = P4("asdf")
+            self.assertEquals(str(p4), "p4(asdf)")
+
+        class EnumStr(str,enum.Enum):
+            A="a"
+        class EnumInt(int,enum.Enum):
+            B=1
+        class EnumConstStr(ConstantStr,enum.Enum):
+            C="c"
+        class EnumRaw(enum.Enum):
+            C=42
+
+        class P5(Predicate):
+            a: EnumStr
+            b: EnumInt
+            c: EnumConstStr
+            d: EnumRaw
+
+        with self.subTest("different variants of enum as annotation"):
+            p5 = P5(a=EnumStr.A, b= EnumInt.B, c=EnumConstStr.C, d=EnumRaw.C)
+            self.assertTrue(isinstance(P5.a.meta.field, StringField))
+            self.assertTrue(isinstance(P5.b.meta.field, IntegerField))
+            self.assertTrue(isinstance(P5.c.meta.field, ConstantField))
+            self.assertTrue(isinstance(P5.d.meta.field, IntegerField))
+            self.assertEquals(str(p5), "p5(\"a\",1,c,42)")
+
+        class P6(Predicate):
+            a: Tuple[int,...]
+        class P61(Predicate):
+            a: Tuple[Tuple[str,int],...]
+
+        with self.subTest("Tuple with arbitrary length as annotation"):
+            p6_4 = P6(a=(1,2,3,4))
+            p6_2 = P6(a=(7,8))
+            p61_2 = P61(a=(("1",2),("3",4)))
+            self.assertEqual(str(p6_4), "p6((1,2,3,4))")
+            self.assertEqual(str(p6_2), "p6((7,8))")
+            self.assertEqual(str(p61_2), "p61(((\"1\",2),(\"3\",4)))")
+
+        class P7(Predicate):
+            a: HeadList[int]
+            b: HeadListReversed[str]
+            c: TailList[Tuple[str, int]]
+            d: TailListReversed[str]
+
+        with self.subTest("nested lists"):
+            p7 = P7(a=(1,2,3),
+                    b=("1","2","3"),
+                    c=(("1",2),("2",3),("3",4)),
+                    d=("1", "2", "3")
+                    )
+            a = '(1,(2,(3,())))'
+            b = '("3",("2",("1",())))'
+            c = '((((),("1",2)),("2",3)),("3",4))'
+            d = '((((),"3"),"2"),"1")'
+            self.assertEqual(str(p7), f"p7({a},{b},{c},{d})")
+        
+        class P8(Predicate):
+            a: datetime.date
+
+        with self.subTest("date-object"):
+            p8 = P8(datetime.date(2022,1,11))
+            self.assertEquals(str(p8),"p8(\"2022-01-11\")")
+
+        class P9(Predicate):
+            a: datetime.time
+
+        with self.subTest("date-object"):
+            p9 = P9(datetime.time(17,12))
+            self.assertEquals(str(p9),"p9(\"17:12\")")
+
+        class P10(Predicate):
+            a: Raw
+
+        with self.subTest("raw symbol annotations"):
+            p10 = P10(Raw(Function("test",[String("1")])))
+            self.assertEqual(str(p10), "p10(test(\"1\"))")
+
+    def test_predicate_with_wrong_mixed_annotations_and_Fields(self):
+        with self.assertRaises(TypeError, msg="order of fields can't be determined"):
+            class P(Predicate):
+                a = IntegerField
+                b: str
+
+    def test_predicate_cant_infer_field_from_annotation(self):
+        with self.assertRaises(TypeError):
+            class P(Predicate):
+                a: int = IntegerField
+                b: float
 
     #--------------------------------------------------------------------------
     # As part of the get_field_definition function to flexibly deal with tuples
