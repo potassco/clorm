@@ -13,7 +13,7 @@ from .types import *
 __all__ = [
     'ClormError',
     'UnifierNoMatchError',
-    'NonFactError',
+    'FactParserError',
     'BaseField',
     'Raw',
     'RawField',

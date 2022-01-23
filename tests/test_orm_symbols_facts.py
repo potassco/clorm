@@ -22,7 +22,7 @@ from clorm.orm import \
 from clorm import SymbolPredicateUnifier, unify, \
     control_add_facts, symbolic_atoms_to_facts, \
     parse_fact_string, parse_fact_files, \
-    UnifierNoMatchError, NonFactError, define_nested_list_field
+    UnifierNoMatchError, FactParserError, define_nested_list_field
 
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
@@ -616,10 +616,10 @@ class ParseTestCase(unittest.TestCase):
         check_errmsg("Cannot unify symbol 'q(abc",ctx)
 
         # Error on nonfact
-        with self.assertRaises(NonFactError) as ctx:
+        with self.assertRaises(FactParserError) as ctx:
             fb_out = parse_fact_string(asp2,unifier=[P],
                                        raise_nonfact=True)
-        check_errmsg("Rule 'q(X,Y)",ctx)
+        assert ctx.exception.line == 2
 
         # Try the fact files parser
         with tempfile.TemporaryDirectory() as tmpdirname:
@@ -643,7 +643,7 @@ class ParseTestCase(unittest.TestCase):
         self.assertEqual(fb_in,fb_out)
 
     #--------------------------------------------------------------------------
-    # Parsing non simple facts to raise NonFactError. Non simple facts include:
+    # Parsing non simple facts to raise FactParserError. Non simple facts include:
     # - a term with @-function call (this needs a Control object for grounding)
     # - a disjunctive fact
     # - a choice rule
@@ -655,27 +655,27 @@ class ParseTestCase(unittest.TestCase):
 
         # Using an external function
         asp="""p(@func(1))."""
-        with self.assertRaises(NonFactError) as ctx:
+        with self.assertRaises(FactParserError) as ctx:
             fb_out = parse_fact_string(asp,unifier=[P],raise_nonfact=True)
-        check_errmsg("'@func(1)' is an external function in 'p(@func(1)).'",ctx)
+        assert ctx.exception.line == 1
 
         # A choice rule
         asp="""{ p(2); p(3) }."""
-        with self.assertRaises(NonFactError) as ctx:
+        with self.assertRaises(FactParserError) as ctx:
             fb_out = parse_fact_string(asp,unifier=[P],raise_nonfact=True)
-        check_errmsg("Aggregate '{ p(2); p(3) }'",ctx)
+        assert ctx.exception.line == 1
 
         # A disjunctive fact
         asp="""p(2); p(3)."""
-        with self.assertRaises(NonFactError) as ctx:
+        with self.assertRaises(FactParserError) as ctx:
             fb_out = parse_fact_string(asp,unifier=[P],raise_nonfact=True)
-        check_errmsg("Disjunction 'p(2); p(3)'",ctx)
+        assert ctx.exception.line == 1
 
         # A theory atom - let the general non-fact literal catch this
         asp="""&diff{p(2)}."""
-        with self.assertRaises(NonFactError) as ctx:
+        with self.assertRaises(FactParserError) as ctx:
             fb_out = parse_fact_string(asp,unifier=[P],raise_nonfact=True)
-        check_errmsg("'&diff { p(2) }'",ctx)
+        assert ctx.exception.line == 1
 
 
 #------------------------------------------------------------------------------

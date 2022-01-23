@@ -10,6 +10,9 @@
 # ------------------------------------------------------------------------------
 
 import itertools
+from typing import Any, Union
+from collections import abc
+
 import clingo
 import clingo.ast as clast
 from .core import *
@@ -27,7 +30,7 @@ __all__ = [
     'parse_fact_string',
     'parse_fact_files',
     'UnifierNoMatchError',
-    'NonFactError'
+    'FactParserError'
     ]
 
 #------------------------------------------------------------------------------
@@ -39,7 +42,7 @@ __all__ = [
 #------------------------------------------------------------------------------
 
 class UnifierNoMatchError(ClormError):
-    def __init__(self,message,symbol,predicates):
+    def __init__(self,message, symbol, predicates):
         super().__init__(message)
         self._symbol=symbol
         self._predicates=predicates
@@ -48,8 +51,10 @@ class UnifierNoMatchError(ClormError):
     @property
     def predicates(self): return self._predicates
 
-class NonFactError(ClormError):
-    def __init__(self,message):
+class FactParserError(ClormError):
+    def __init__(self,message: str, line: int, column: int):
+        self.line = line
+        self.column = column
         super().__init__(message)
 
 #------------------------------------------------------------------------------
@@ -327,112 +332,96 @@ def symbolic_atoms_to_facts(symbolic_atoms, unifier, *,
 # parse a string containing ASP facts into a factbase
 #------------------------------------------------------------------------------
 
-def _t2d(t):
-    return { k : v for k,v in t }
+class ClingoParserWrapperError(Exception):
+    """A special exception for returning from the clingo parser.
 
-def _negate(s):
-    if is_Number(s):
-        return symbols.Number(s.number*-1)
-    if is_Function(s):
-        return symbols.Function(s.name,s.arguments,not s.positive)
-    raise NonFactError(f"'{s}' cannot be negated in a simple fact")
+    I think the clingo parser is assuming all exceptions behave as if they have
+    a copy constructor.
 
-class _ASTVisitor(object):
-    def __init__(self,unifier,*,factbase=None,
-                 raise_nomatch=False,raise_nonfact=False):
-        self._stack = []
-        self._location=None
-        self._unifier = unifier
-        self._fb = FactBase() if factbase is None else factbase
-        self._raise_nomatch=raise_nomatch
-        self._raise_nonfact=raise_nonfact
-        self._stmtstr = ""
-
-    def _err(self,msg):
-        if self._raise_nonfact:
-            raise NonFactError(f"{msg} in '{self._stmtstr}' {self._location}")
-        return None
-
-    def symbolic_term(self,x):
-        items=_t2d(x.items())
-        self._location=items['location']
-        symbol=items['symbol']
-        self._stack.append(symbol)
-
-    def unary_operation(self,x):
-        items=_t2d(x.items())
-        self._location=items['location']
-        otype=items['operator_type']
-        if otype != clast.UnaryOperator.Minus:
-            return self._err(f"Unexpected non minus unary operator in simple fact")
-        argument=items['argument']
-        self.term(argument)
-        self._stack.append(_negate(self._stack.pop()))
-
-    def function(self,x):
-        items=_t2d(x.items())
-        self._location=items['location']
-        name=items['name']
-        arguments=items['arguments']
-        external=items['external']
-
-        if external:
-            return self._err(f"'{x}' is an external function")
-        if arguments:
-            for a in arguments: self.term(a)
-            args=self._stack[-1*len(arguments):]
-            del self._stack[-1*len(arguments):]
+    """
+    def __init__(self, arg):
+        if type(arg) == type(self):
+            self.exc = arg.exc
         else:
-            args=[]
-        tmp=symbols.Function(name,args)
-        self._stack.append(tmp)
-
-    def term(self,x):
-        if x.ast_type == clast.ASTType.SymbolicTerm:
-            self.symbolic_term(x)
-        elif x.ast_type == clast.ASTType.UnaryOperation:
-            self.unary_operation(x)
-        elif x.ast_type == clast.ASTType.Function:
-            self.function(x)
-        else:
-            return self._err(f"'{x}' ({x.ast_type}) is not a simple fact")
-
-    def head(self,x):
-        if x.ast_type == clast.ASTType.Disjunction:
-            return self._err(f"Disjunction '{x}' is not a simple fact")
-        if x.ast_type == clast.ASTType.Aggregate:
-            return self._err(f"Aggregate '{x}' is not a simple fact")
-        if x.ast_type != clast.ASTType.Literal:
-            return self._err(f"'{x}' is not a simple fact literal")
-        hitems=_t2d(x.items())
-        self._location=hitems['location']
-        sign=hitems['sign']
-        atom=hitems['atom']
-
-        aitems=_t2d(atom.items())
-        if 'symbol' not in aitems:
-            return self._err(f"'{atom}' is not a symbol")
-        self.term(aitems['symbol'])
-
-    def rule(self,x):
-        items=_t2d(x.items())
-        self._location=items['location']
-
-        if items['body']: return self._err(f"Rule '{x}' is not a fact")
-        self.head(items['head'])
-
-    def stmt(self,ast):
-        self._stmtstr = str(ast)
-        if ast.ast_type != clast.ASTType.Rule: return None
-        self.rule(ast)
-
-    def facts(self):
-        return self._unifier.unify(self._stack,factbase=self._fb,
-                                   raise_nomatch=self._raise_nomatch)
+            self.exc = arg
+        super().__init__()
 
 #------------------------------------------------------------------------------
 # Parse ASP facts from a string or files into a factbase
 #------------------------------------------------------------------------------
+
+from clingo.ast import AST, ASTType, ASTSequence
+
+class NonFactVisitor:
+    ERROR_AST = set({
+        ASTType.Id,
+        ASTType.Variable,
+        ASTType.BinaryOperation,
+        ASTType.Interval,
+        ASTType.Pool,
+        ASTType.CspProduct,
+        ASTType.CspSum,
+        ASTType.CspGuard,
+        ASTType.BooleanConstant,
+        ASTType.Comparison,
+        ASTType.CspLiteral,
+        ASTType.AggregateGuard,
+        ASTType.ConditionalLiteral,
+        ASTType.Aggregate,
+        ASTType.BodyAggregateElement,
+        ASTType.BodyAggregate,
+        ASTType.HeadAggregateElement,
+        ASTType.HeadAggregate,
+        ASTType.Disjunction,
+        ASTType.DisjointElement,
+        ASTType.Disjoint,
+        ASTType.TheorySequence,
+        ASTType.TheoryFunction,
+        ASTType.TheoryUnparsedTermElement,
+        ASTType.TheoryUnparsedTerm,
+        ASTType.TheoryGuard,
+        ASTType.TheoryAtomElement,
+        ASTType.TheoryAtom,
+        ASTType.TheoryOperatorDefinition,
+        ASTType.TheoryTermDefinition,
+        ASTType.TheoryGuardDefinition,
+        ASTType.TheoryAtomDefinition,
+        ASTType.Definition,
+        ASTType.ShowSignature,
+        ASTType.ShowTerm,
+        ASTType.Minimize,
+        ASTType.Script,
+        ASTType.External,
+        ASTType.Edge,
+        ASTType.Heuristic,
+        ASTType.ProjectAtom,
+        ASTType.ProjectSignature,
+        ASTType.Defined,
+        ASTType.TheoryDefinition})
+
+    def __call__(self, stmt: AST):
+        self._stmt = stmt
+        self._visit(stmt)
+
+    def _visit(self, ast: AST):
+        '''
+        Dispatch to a visit method.
+        '''
+        if (ast.ast_type in NonFactVisitor.ERROR_AST or
+            (ast.ast_type == ASTType.Function and ast.external)):
+            line = ast.location.begin.line
+            column = ast.location.begin.column
+            exc = FactParserError(message=f"Non-fact '{self._stmt}'",
+                                  line=line, column=column)
+            raise ClingoParserWrapperError(exc)
+
+        for key in ast.child_keys:
+            subast = getattr(ast, key)
+            if isinstance(subast, ASTSequence):
+                for x in subast:
+                    self._visit(x)
+            if isinstance(subast, AST):
+                self._visit(subast)
 
 def parse_fact_string(aspstr,unifier,*,factbase=None,
                       raise_nomatch=False,raise_nonfact=False):
@@ -452,18 +441,40 @@ def parse_fact_string(aspstr,unifier,*,factbase=None,
       factbase: if no factbase is specified then create a new one
       unifier: a list of clorm.Predicate classes to unify against
       raise_nomatch: raise UnifierNoMatchError on a fact that cannot unify
-      raise_nonfact: raise NonFactError on any non simple fact (eg. complex rules)
+      raise_nonfact: raise FactParserError on any non simple fact (eg. complex rules)
 
     '''
 
     if get_symbol_mode() == SymbolMode.NOCLINGO:
-        raise NotImplementedError("Function not supported in NOCLINGO mode")
+        if not raise_nonfact:
+            raise NotImplementedError("Non-fact parsing not supported in NOCLINGO mode")
+        return lark_parse_fact_files(files=files, unifier=unifier,
+                                      raise_nomatch=raise_nomatch)
 
-    v=_ASTVisitor(unifier=Unifier(unifier),factbase=factbase,
-                  raise_nomatch=raise_nomatch,raise_nonfact=raise_nonfact)
+    ctrl = clingo.Control()
+    un=Unifier(unifier)
+    try:
+        with clast.ProgramBuilder(ctrl) as bld:
+            if raise_nonfact:
+                nfv = NonFactVisitor()
+                def on_rule(ast: AST):
+                    nonlocal nfv, bld
+                    if nfv: nfv(ast)
+                    bld.add(ast)
+            else:
+                on_rule = bld.add
 
-    clast.parse_string(aspstr,v.stmt)
-    return v.facts()
+            clast.parse_string(aspstr, on_rule)
+    except ClingoParserWrapperError as e:
+        raise e.exc
+
+    ctrl.ground([("base",[])])
+
+    return un.unify([sa.symbol for sa in ctrl.symbolic_atoms if sa.is_fact],
+                    raise_nomatch=raise_nomatch)
+
+
+
 
 def parse_fact_files(files,unifier,*,factbase=None,
                      raise_nomatch=False,raise_nonfact=False):
@@ -483,18 +494,106 @@ def parse_fact_files(files,unifier,*,factbase=None,
       factbase: if no factbase is specified then create a new one
       unifier: a list of clorm.Predicate classes to unify against
       raise_nomatch: raise UnifierNoMatchError on a fact that cannot unify
-      raise_nonfact: raise NonFactError on any non simple fact (eg. complex rules)
+      raise_nonfact: raise FactParserError on any non simple fact (eg. complex rules)
     '''
 
     if get_symbol_mode() == SymbolMode.NOCLINGO:
-        raise NotImplementedError("Function not supported in NOCLINGO mode")
+        if not raise_nonfact:
+            raise NotImplementedError("Non-fact parsing not supported in NOCLINGO mode")
+        return lark_parse_fact_files(files=files, unifier=unifier,
+                                      raise_nomatch=raise_nomatch)
 
-    v=_ASTVisitor(unifier=Unifier(unifier),factbase=factbase,
-                  raise_nomatch=raise_nomatch,raise_nonfact=raise_nonfact)
+    ctrl = clingo.Control()
+    un=Unifier(unifier)
+    try:
+        with clast.ProgramBuilder(ctrl) as bld:
+            if raise_nonfact:
+                nfv = NonFactVisitor()
+                def on_rule(ast: AST):
+                    nonlocal nfv, bld
+                    if nfv: nfv(ast)
+                    bld.add(ast)
+            else:
+                def on_rule(ast: AST):
+                    nonlocal bld
+                    bld.add(ast)
 
-    clast.parse_files(files,v.stmt)
-    return v.facts()
+            clast.parse_files(files, on_rule)
 
+    except ClingoParserWrapperError as e:
+        raise e.exc
+
+    ctrl.ground([("base",[])])
+    return un.unify([sa.symbol for sa in ctrl.symbolic_atoms if sa.is_fact],
+                    raise_nomatch=raise_nomatch)
+
+#------------------------------------------------------------------------------
+#
+# A pure-python fact parser that uses Lark
+#------------------------------------------------------------------------------
+
+from .lark_fact_parser import Lark_StandAlone, Transformer, VisitError, LarkError, UnexpectedInput
+
+class _END:
+    pass
+
+class _NEGATE:
+    pass
+
+END = _END()
+NEGATE = _NEGATE()
+
+class LarkFactTransformer(Transformer):
+    def STRING(self, v):
+        return symbols.String(v.value.strip("\""))
+    def END(self, v):
+        return END
+    def NEGATE(self, v):
+        return NEGATE
+    def NAME(self, v):
+        return str(v.value)
+    def NUMBER(self, v):
+        return symbols.Number(int(v))
+    def function(self, v):
+        if v[0] == NEGATE:
+            positive = False
+            v.pop(0)
+        else:
+            positive = True
+        args = [] if len(v) == 1 else v[1]
+        return symbols.Function(v[0],args,positive=positive)
+    def fact(self, f):
+        return f[0]
+    def args(self,v):
+        return v
+    def tuple(self, v):
+        return symbols.Function("",v[0])
+    def start(self, v):
+        return v
+
+def lark_parse_fact_string(aspstr,unifier, *, raise_nomatch=False):
+    try:
+        fact_parser = Lark_StandAlone(transformer=LarkFactTransformer())
+        symbols = fact_parser.parse(aspstr)
+        un = Unifier(unifier)
+        return un.unify(symbols, raise_nomatch=raise_nomatch)
+    except UnexpectedInput as e:
+        raise FactParserError(str(e), line=e.line, column=e.column)
+    except LarkError as e:
+        raise FactParserError(str(e))
+
+def lark_parse_fact_files(files, unifier, *, raise_nomatch=False):
+    fb = None
+    for fn in files:
+        with open(fn, 'r') as file:
+            aspstr = file.read()
+            tmpfb = lark_parse_fact_string(aspstr=aspstr, unifier=unifier,
+                                           raise_nomatch=raise_nomatch)
+        if fb:
+            fb.update(tmpfb)
+        else:
+            fb = tmpfb
+    return fb
 
 #------------------------------------------------------------------------------
 # main
