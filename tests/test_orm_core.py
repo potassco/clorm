@@ -200,58 +200,58 @@ class FieldTestCase(unittest.TestCase):
     #--------------------------------------------------------------------------
     # Test that the field function works as expected
     #--------------------------------------------------------------------------
-    def test_api_field_function(self):    
+    def test_api_field_function(self):
         with self.subTest("with single BaseField"):
             f = field(IntegerField)
-            self.assertEquals(f, IntegerField)
+            self.assertEqual(f, IntegerField)
 
             f = field(IntegerField,default=4)
-            self.assertEquals(type(f),IntegerField)
-            self.assertEquals(f.default, 4)
+            self.assertEqual(type(f),IntegerField)
+            self.assertEqual(f.default, 4)
 
         with self.subTest("with tuple"):
             t = field((StringField,IntegerField))
-            self.assertEquals(t, (StringField,IntegerField))
+            self.assertEqual(t, (StringField,IntegerField))
 
             t = field((StringField,IntegerField),default=("3",4))
             self.assertIsInstance(t, BaseField)
             self.assertIsInstance(t.complex[0].meta.field, StringField)
             self.assertIsInstance(t.complex[1].meta.field, IntegerField)
-            self.assertEquals(t.default, ("3",4))
+            self.assertEqual(t.default, ("3",4))
 
         with self.subTest("with custom field"):
             INLField = define_flat_list_field(IntegerField,name="INLField")
             t = field(INLField,default=[3,4,5])
             self.assertTrue(isinstance(t, INLField))
-            self.assertEquals(t.default, [3,4,5])
+            self.assertEqual(t.default, [3,4,5])
 
         with self.subTest("with default factory"):
             t = field(IntegerField, default_factory=lambda: 42)
-            self.assertEquals(t.default, 42)
+            self.assertEqual(t.default, 42)
             x = 0
             def factory():
                 nonlocal x
                 x +=1
                 return ("3", x)
             t = field((StringField,IntegerField),default_factory=factory)
-            self.assertEquals(t.default, ("3",1))
-            self.assertEquals(t.default, ("3",2))
+            self.assertEqual(t.default, ("3",1))
+            self.assertEqual(t.default, ("3",2))
 
         with self.subTest("with nested tuple and default"):
             t = field((StringField,(StringField, IntegerField)))
-            self.assertEquals(t, (StringField,(StringField,IntegerField)))
+            self.assertEqual(t, (StringField,(StringField,IntegerField)))
 
             t = field((StringField,(StringField,IntegerField)),default=("3",("1",4)))
             self.assertIsInstance(t, BaseField)
             self.assertIsInstance(t.complex[0].meta.field, StringField)
             self.assertIsInstance(t.complex[1].meta.field, BaseField)
-            self.assertEquals(t.default, ("3",("1",4)))
+            self.assertEqual(t.default, ("3",("1",4)))
 
     def test_api_field_function_illegal_arguments(self):
         with self.subTest("illegal basefield type"):
             with self.assertRaises(TypeError):
                 _ = field(int)
-        
+
         with self.subTest("unequal len basefield and default"):
             with self.assertRaises(TypeError, msg="invalid default value"):
                 _ = field((StringField, IntegerField), default=("3",1,2))
@@ -1296,16 +1296,16 @@ class PredicateTestCase(unittest.TestCase):
 
         with self.subTest("one with and one without annotation"):
             p = P(3,"2")
-            self.assertEquals(str(p),'p(3,"2")')
-            self.assertEquals(p.a, 3)
-            self.assertEquals(p.b, "2")
+            self.assertEqual(str(p),'p(3,"2")')
+            self.assertEqual(p.a, 3)
+            self.assertEqual(p.b, "2")
 
         with self.subTest("all with annotations + Predicate"):
             p = P1(3,"2",P(4,"4"))
-            self.assertEquals(p.a,3)
-            self.assertEquals(p.b,"2")
-            self.assertEquals(p.c.a,4)
-            self.assertEquals(p.c.b,"4")
+            self.assertEqual(p.a,3)
+            self.assertEqual(p.b,"2")
+            self.assertEqual(p.c.a,4)
+            self.assertEqual(p.c.b,"4")
 
         class P2(Predicate):
             a: Tuple[int,Tuple[str, int]]
@@ -1313,12 +1313,12 @@ class PredicateTestCase(unittest.TestCase):
         with self.subTest("nested tuples as annotations"):
             self.assertTrue(issubclass(type(P2.meta["a"].defn), BaseField))
             p = P2((3,("4", 2)))
-            self.assertEquals(p.a[0], 3)
-            self.assertEquals(p.a.arg1, 3)
-            self.assertEquals(p.a[1][0], "4")
-            self.assertEquals(p.a.arg2.arg1, "4")
-            self.assertEquals(p.a[1][1], 2)
-            self.assertEquals(p.a.arg2.arg2, 2)
+            self.assertEqual(p.a[0], 3)
+            self.assertEqual(p.a.arg1, 3)
+            self.assertEqual(p.a[1][0], "4")
+            self.assertEqual(p.a.arg2.arg1, "4")
+            self.assertEqual(p.a[1][1], 2)
+            self.assertEqual(p.a.arg2.arg2, 2)
 
         class P3(Predicate):
             a: Union[str, int, P, Tuple[int, int]]
@@ -1329,10 +1329,10 @@ class PredicateTestCase(unittest.TestCase):
             p3_int = P3(2)
             p3_P = P3(P(3,"4"))
             p3_tuple = P3((42,43))
-            self.assertEquals(str(p3_str), "p3(\"1\")")
-            self.assertEquals(str(p3_int), "p3(2)")
-            self.assertEquals(str(p3_P), "p3(p(3,\"4\"))")
-            self.assertEquals(str(p3_tuple), "p3((42,43))")
+            self.assertEqual(str(p3_str), "p3(\"1\")")
+            self.assertEqual(str(p3_int), "p3(2)")
+            self.assertEqual(str(p3_P), "p3(p(3,\"4\"))")
+            self.assertEqual(str(p3_tuple), "p3((42,43))")
 
         class P4(Predicate):
             a: ConstantStr
@@ -1340,7 +1340,7 @@ class PredicateTestCase(unittest.TestCase):
         with self.subTest("str which should be handled as a Constant"):
             self.assertTrue(isinstance(P4.a.meta.field, ConstantField))
             p4 = P4("asdf")
-            self.assertEquals(str(p4), "p4(asdf)")
+            self.assertEqual(str(p4), "p4(asdf)")
 
         class EnumStr(str,enum.Enum):
             A="a"
@@ -1363,7 +1363,7 @@ class PredicateTestCase(unittest.TestCase):
             self.assertTrue(isinstance(P5.b.meta.field, IntegerField))
             self.assertTrue(isinstance(P5.c.meta.field, ConstantField))
             self.assertTrue(isinstance(P5.d.meta.field, IntegerField))
-            self.assertEquals(str(p5), "p5(\"a\",1,c,42)")
+            self.assertEqual(str(p5), "p5(\"a\",1,c,42)")
 
         class P6(Predicate):
             a: Tuple[int,...]
@@ -1395,20 +1395,20 @@ class PredicateTestCase(unittest.TestCase):
             c = '((((),("1",2)),("2",3)),("3",4))'
             d = '((((),"3"),"2"),"1")'
             self.assertEqual(str(p7), f"p7({a},{b},{c},{d})")
-        
+
         class P8(Predicate):
             a: datetime.date
 
         with self.subTest("date-object"):
             p8 = P8(datetime.date(2022,1,11))
-            self.assertEquals(str(p8),"p8(\"2022-01-11\")")
+            self.assertEqual(str(p8),"p8(\"2022-01-11\")")
 
         class P9(Predicate):
             a: datetime.time
 
         with self.subTest("date-object"):
             p9 = P9(datetime.time(17,12))
-            self.assertEquals(str(p9),"p9(\"17:12\")")
+            self.assertEqual(str(p9),"p9(\"17:12\")")
 
         class P10(Predicate):
             a: Raw
@@ -2670,7 +2670,6 @@ class QConditionTestCase(unittest.TestCase):
         with self.assertRaises(TypeError) as ctx:
             QCondition(trueall,2,1)
 
-        
     #--------------------------------------------------------------------------
     # Test that the explicit and implicit (operator overload) creates the same
     # thing
