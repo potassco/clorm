@@ -2998,11 +2998,11 @@ ComplexTerm=Predicate
 # ------------------------------------------------------------------------------
 
 def simple_predicate(predicate_name,arity,*,name=None,module=None):
-    """Factory function to define a predicate with only BaseField arguments.
+    """Factory function to define a predicate with only RawField arguments.
 
     A helper factory function that takes a name and an arity and returns a
     predicate class that is suitable for unifying with predicate instances of
-    that name and arity. It's parameters are all specified as BaseFields.
+    that name and arity. It's parameters are all specified as RawFields.
 
     This function is useful for debugging ASP programs. There may be some
     auxillary predicates that you aren't interested in extracting their values
