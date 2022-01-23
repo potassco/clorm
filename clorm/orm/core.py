@@ -51,13 +51,13 @@ if sys.version_info < (3, 8):
                 res = (list(res[:-1]), res[-1])
             return res
         return getattr(t, '__args__', ())
-    
+
     def get_origin(t: Type[Any]) -> Optional[Type[Any]]:
         if type(t).__name__ in {'AnnotatedMeta', '_AnnotatedAlias'}:
             # weirdly this is a runtime requirement, as well as for mypy
             return cast(Type[Any], Annotated)
         return getattr(t, '__origin__', None)
-    
+
 else:
     from typing import get_origin, get_args
 
