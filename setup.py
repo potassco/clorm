@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import os
+import sys
 import re
 from setuptools import setup
 
@@ -26,6 +27,6 @@ setup(
     license="MIT",
     url="https://github.com/potassco/clorm",
     packages=["clorm","clorm.orm","clorm.util","clorm.lib"],
-    install_requires=['clingo'],
+    install_requires=['clingo'] if sys.version_info >= (3, 8) else ['clingo', 'typing_extensions'],
     long_description=read("README.rst"),
 )
