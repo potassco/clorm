@@ -448,7 +448,7 @@ def parse_fact_string(aspstr,unifier,*,factbase=None,
     if get_symbol_mode() == SymbolMode.NOCLINGO:
         if not raise_nonfact:
             raise NotImplementedError("Non-fact parsing not supported in NOCLINGO mode")
-        return lark_parse_fact_files(files=files, unifier=unifier,
+        return lark_parse_fact_string(aspstr=aspstr, unifier=unifier, factbase=factbase,
                                       raise_nomatch=raise_nomatch)
 
     ctrl = clingo.Control()
@@ -500,7 +500,7 @@ def parse_fact_files(files,unifier,*,factbase=None,
     if get_symbol_mode() == SymbolMode.NOCLINGO:
         if not raise_nonfact:
             raise NotImplementedError("Non-fact parsing not supported in NOCLINGO mode")
-        return lark_parse_fact_files(files=files, unifier=unifier,
+        return lark_parse_fact_files(files=files, unifier=unifier, factbase=factbase,
                                       raise_nomatch=raise_nomatch)
 
     ctrl = clingo.Control()
@@ -571,28 +571,27 @@ class LarkFactTransformer(Transformer):
     def start(self, v):
         return v
 
-def lark_parse_fact_string(aspstr,unifier, *, raise_nomatch=False):
+def lark_parse_fact_string(aspstr,unifier, *,
+                           factbase=None, raise_nomatch=False):
     try:
         fact_parser = Lark_StandAlone(transformer=LarkFactTransformer())
         symbols = fact_parser.parse(aspstr)
         un = Unifier(unifier)
-        return un.unify(symbols, raise_nomatch=raise_nomatch)
+        return un.unify(symbols, factbase=factbase, raise_nomatch=raise_nomatch)
     except UnexpectedInput as e:
         raise FactParserError(str(e), line=e.line, column=e.column)
     except LarkError as e:
         raise FactParserError(str(e))
 
-def lark_parse_fact_files(files, unifier, *, raise_nomatch=False):
-    fb = None
+def lark_parse_fact_files(files, unifier, *,
+                          factbase=None, raise_nomatch=False):
+    fb=FactBase() if factbase is None else factbase
     for fn in files:
         with open(fn, 'r') as file:
             aspstr = file.read()
             tmpfb = lark_parse_fact_string(aspstr=aspstr, unifier=unifier,
+                                           factbase=fb,
                                            raise_nomatch=raise_nomatch)
-        if fb:
-            fb.update(tmpfb)
-        else:
-            fb = tmpfb
     return fb
 
 #------------------------------------------------------------------------------

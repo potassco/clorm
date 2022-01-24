@@ -13,6 +13,8 @@ from .support import check_errmsg, add_program_string
 
 from clingo import Control, Number, String, Function, SymbolType
 
+from clorm import set_symbol_mode, SymbolMode
+
 # Official Clorm API imports
 from clorm.orm import \
     BaseField, Raw, RawField, IntegerField, StringField, ConstantField, SimpleField,  \
@@ -645,6 +647,83 @@ class ParseTestCase(unittest.TestCase):
             parse_fact_files([fname],unifier=[P,Q], factbase=fb_out)
             self.assertEqual(fb_in,fb_out)
 
+
+    #--------------------------------------------------------------------------
+    #
+    #--------------------------------------------------------------------------
+    def test_lark_parse_facts(self):
+        class P(Predicate):
+            '''A P predicate'''
+            x=IntegerField
+            y=StringField
+
+        class Q(Predicate):
+            '''A Q predicate'''
+            x=ConstantField
+            y=P.Field
+
+        asp1="""p(1,"home\\""). -p(-2,"blah").\n"""
+        asp2=asp1  + """q(X,Y) :- p(X,Y)."""
+
+        fb_p=FactBase([P(1,"home\""),P(-2,"blah",sign=False)])
+        fb_in=FactBase([P(1,"home\""),
+                        Q("abc",P(3,"H ome")),
+                        Q("z",P(-1,"One more string")),
+                        P(-2,"blah",sign=False)])
+
+        # Match a basic string with a rule
+        fb_out = parse_fact_string(asp2,unifier=[P,Q])
+        self.assertEqual(fb_p,fb_out)
+
+        # All inputs and outputs match
+        fb_out = parse_fact_string(fb_in.asp_str(),unifier=[P,Q])
+        self.assertEqual(fb_in,fb_out)
+
+        # Match only the p/2 facts
+        fb_out = parse_fact_string(fb_in.asp_str(),unifier=[P])
+        self.assertEqual(fb_p,fb_out)
+
+        # Match with comments
+        fb_out = parse_fact_string(fb_in.asp_str(commented=True),unifier=[P,Q])
+        self.assertEqual(fb_in,fb_out)
+
+        # Error on ununified facts
+        with self.assertRaises(UnifierNoMatchError) as ctx:
+            fb_out = parse_fact_string(fb_in.asp_str(),unifier=[P],
+                                       raise_nomatch=True)
+        check_errmsg("Cannot unify symbol 'q(abc",ctx)
+
+        # Error on nonfact
+        with self.assertRaises(FactParserError) as ctx:
+            fb_out = parse_fact_string(asp2,unifier=[P],
+                                       raise_nonfact=True)
+        assert ctx.exception.line == 2
+
+        # Try the fact files parser
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            fname=os.path.join(tmpdirname,"asp.lp")
+            with open(fname, "w+") as f:
+                f.write(fb_in.asp_str(commented=True))
+            fb_out=parse_fact_files([fname],unifier=[P,Q])
+            self.assertEqual(fb_in,fb_out)
+
+
+        # Option where a factbase is given
+        fb_out = FactBase()
+        parse_fact_string(fb_in.asp_str(commented=True),
+                          unifier=[P,Q], factbase=fb_out)
+        self.assertEqual(fb_in,fb_out)
+
+        # Fact file parser where factbase is given
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            fname=os.path.join(tmpdirname,"asp.lp")
+            with open(fname, "w+") as f:
+                f.write(fb_in.asp_str(commented=True))
+            fb_out = FactBase()
+            parse_fact_files([fname],unifier=[P,Q], factbase=fb_out)
+            self.assertEqual(fb_in,fb_out)
+
+
     #--------------------------------------------------------------------------
     # Test parsing some nested facts
     #--------------------------------------------------------------------------
@@ -657,6 +736,25 @@ class ParseTestCase(unittest.TestCase):
         aspstr = fb_in.asp_str()
         fb_out = parse_fact_string(aspstr,unifier=[P],raise_nomatch=True)
         self.assertEqual(fb_in,fb_out)
+
+    #--------------------------------------------------------------------------
+    # Test lark parsing some nested facts
+    #--------------------------------------------------------------------------
+    def test_lark_parse_nested_facts(self):
+        class P(Predicate):
+            x=IntegerField
+            y=define_nested_list_field(ConstantField)
+
+        set_symbol_mode(SymbolMode.NOCLINGO)
+
+        fb_in = FactBase([P(x=1,y=tuple(["a","b","c"]))])
+        aspstr = fb_in.asp_str()
+        fb_out = parse_fact_string(aspstr,unifier=[P],
+                                   raise_nomatch=True, raise_nonfact=True)
+        self.assertEqual(fb_in,fb_out)
+
+        set_symbol_mode(SymbolMode.CLINGO)
+
 
     #--------------------------------------------------------------------------
     # Parsing non simple facts to raise FactParserError. Non simple facts include:
@@ -693,6 +791,43 @@ class ParseTestCase(unittest.TestCase):
             fb_out = parse_fact_string(asp,unifier=[P],raise_nonfact=True)
         assert ctx.exception.line == 1
 
+
+    #--------------------------------------------------------------------------
+    # Parsing non simple facts to raise FactParserError with NOCLINGO mode (so
+    # using the lark parser).
+    # --------------------------------------------------------------------------
+    def test_lark_parse_non_simple_facts(self):
+        class P(Predicate):
+            '''A P predicate'''
+            x=IntegerField
+
+        set_symbol_mode(SymbolMode.NOCLINGO)
+
+        # Using an external function
+        asp="""p(@func(1))."""
+        with self.assertRaises(FactParserError) as ctx:
+            fb_out = parse_fact_string(asp,unifier=[P],raise_nonfact=True)
+        assert ctx.exception.line == 1
+
+        # A choice rule
+        asp="""{ p(2); p(3) }."""
+        with self.assertRaises(FactParserError) as ctx:
+            fb_out = parse_fact_string(asp,unifier=[P],raise_nonfact=True)
+        assert ctx.exception.line == 1
+
+        # A disjunctive fact
+        asp="""p(2); p(3)."""
+        with self.assertRaises(FactParserError) as ctx:
+            fb_out = parse_fact_string(asp,unifier=[P],raise_nonfact=True)
+        assert ctx.exception.line == 1
+
+        # A theory atom - let the general non-fact literal catch this
+        asp="""&diff{p(2)}."""
+        with self.assertRaises(FactParserError) as ctx:
+            fb_out = parse_fact_string(asp,unifier=[P],raise_nonfact=True)
+        assert ctx.exception.line == 1
+
+        set_symbol_mode(SymbolMode.CLINGO)
 
 #------------------------------------------------------------------------------
 # main

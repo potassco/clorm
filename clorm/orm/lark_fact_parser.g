@@ -1,5 +1,5 @@
 
-    ?start : [ fact* ]
+    start : [ fact* ]
 
     fact : function [ END ]
 
@@ -23,4 +23,5 @@
     %import common.SIGNED_NUMBER -> NUMBER
     %import common.WS
     %ignore WS
+
 
