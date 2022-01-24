@@ -157,6 +157,49 @@ class FieldTestCase(unittest.TestCase):
         self.assertTrue(fconst.unifies(csim2))
 
 
+    #--------------------------------------------------------------------------
+    # Test that the simple field unify functions works for noclingo symbols.
+    #--------------------------------------------------------------------------
+    def test_api_noclingo_pytocl_and_cltopy_and_unifies(self):
+        num1 = 1
+        str1 = "string"
+        sim1 = "name"
+        sim2 = "-name"
+        cnum1 = noclingo.Number(num1)
+        cstr1 = noclingo.String(str1)
+        csim1 = noclingo.Function(sim1)
+        csim2 = noclingo.Function(sim1,[],False)
+
+        self.assertEqual(num1, IntegerField.cltopy(cnum1))
+        self.assertEqual(str1, StringField.cltopy(cstr1))
+        self.assertEqual(sim1, ConstantField.cltopy(csim1))
+        self.assertEqual(sim2, ConstantField.cltopy(csim2))
+
+        self.assertEqual(cnum1.number, IntegerField.pytocl(num1).number)
+        self.assertEqual(cstr1.string, StringField.pytocl(str1).string)
+        self.assertEqual(csim1.name, ConstantField.pytocl(sim1).name)
+        self.assertEqual(csim2.name, ConstantField.pytocl(sim2).name)
+
+        self.assertTrue(IntegerField.unifies(cnum1))
+        self.assertTrue(StringField.unifies(cstr1))
+        self.assertTrue(ConstantField.unifies(csim1))
+        self.assertTrue(ConstantField.unifies(csim2))
+
+        self.assertFalse(IntegerField.unifies(csim1))
+        self.assertFalse(StringField.unifies(cnum1))
+        self.assertFalse(ConstantField.unifies(cstr1))
+
+        fint = IntegerField()
+        fstr = StringField()
+        fconst = ConstantField()
+
+        self.assertTrue(fint.unifies(cnum1))
+        self.assertTrue(fstr.unifies(cstr1))
+        self.assertTrue(fconst.unifies(csim1))
+        self.assertTrue(fconst.unifies(csim2))
+
+    #--------------------------------------------------------------------------
+    #--------------------------------------------------------------------------
     def test_api_basefield_bad_instantiation(self):
 
         num1 = 1

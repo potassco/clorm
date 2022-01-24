@@ -1408,7 +1408,7 @@ class StringField(BaseField):
         if not hasattr(raw,'type'):
             raise TypeError(("Object '{}' ({}) is not a String "
                             "Symbol").format(raw,type(raw)))
-        if raw.type != symbols.SymbolType.String:
+        if not noclingo.is_String(raw):
             raise TypeError(("Symbol '{}' ({}) is not a String "
                             "Symbol").format(raw,raw.type))
         return raw.string
@@ -1420,7 +1420,7 @@ class IntegerField(BaseField):
         if not hasattr(raw,'type'):
             raise TypeError(("Object '{}' ({}) is not a Number "
                             "Symbol").format(raw,type(raw)))
-        if raw.type != symbols.SymbolType.Number:
+        if not noclingo.is_Number(raw):
             raise TypeError(("Symbol '{}' ({}) is not a Number "
                             "Symbol").format(raw,raw.type))
         return raw.number
@@ -1455,7 +1455,7 @@ class ConstantField(BaseField):
         if not hasattr(raw,'type'):
             raise TypeError(("Object '{}' ({}) is not a nullary Function "
                             "Symbol").format(raw,type(raw)))
-        if raw.type != symbols.SymbolType.Function or len(raw.arguments) != 0:
+        if not noclingo.is_Function(raw) or len(raw.arguments) != 0:
             raise TypeError(("Symbol '{}' ({}) is not a nullary Function "
                             "Symbol").format(raw,raw.type))
         return raw.name if raw.positive else "-{}".format(raw.name)
