@@ -80,7 +80,6 @@ ppa:
         - 'LICENSE'
     distributions:
         focal:
-        bionic:
             source:
                 Build-Depends: 'debhelper-compat (= 11), dh-python, python3-all, python3-setuptools, python3-clingo'
     source:
