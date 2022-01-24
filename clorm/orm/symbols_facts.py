@@ -471,7 +471,7 @@ def parse_fact_string(aspstr,unifier,*,factbase=None,
     ctrl.ground([("base",[])])
 
     return un.unify([sa.symbol for sa in ctrl.symbolic_atoms if sa.is_fact],
-                    raise_nomatch=raise_nomatch)
+                    factbase=factbase, raise_nomatch=raise_nomatch)
 
 
 
@@ -525,7 +525,7 @@ def parse_fact_files(files,unifier,*,factbase=None,
 
     ctrl.ground([("base",[])])
     return un.unify([sa.symbol for sa in ctrl.symbolic_atoms if sa.is_fact],
-                    raise_nomatch=raise_nomatch)
+                    factbase=factbase, raise_nomatch=raise_nomatch)
 
 #------------------------------------------------------------------------------
 #

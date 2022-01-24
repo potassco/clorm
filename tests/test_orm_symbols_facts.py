@@ -629,6 +629,22 @@ class ParseTestCase(unittest.TestCase):
             fb_out=parse_fact_files([fname],unifier=[P,Q])
             self.assertEqual(fb_in,fb_out)
 
+
+        # Option where a factbase is given
+        fb_out = FactBase()
+        parse_fact_string(fb_in.asp_str(commented=True),
+                          unifier=[P,Q], factbase=fb_out)
+        self.assertEqual(fb_in,fb_out)
+
+        # Fact file parser where factbase is given
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            fname=os.path.join(tmpdirname,"asp.lp")
+            with open(fname, "w+") as f:
+                f.write(fb_in.asp_str(commented=True))
+            fb_out = FactBase()
+            parse_fact_files([fname],unifier=[P,Q], factbase=fb_out)
+            self.assertEqual(fb_in,fb_out)
+
     #--------------------------------------------------------------------------
     # Test parsing some nested facts
     #--------------------------------------------------------------------------
