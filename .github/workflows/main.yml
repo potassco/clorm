@@ -28,7 +28,7 @@ jobs:
     - name: install prerequisites
       shell: pwsh
       run: |
-        conda install clingo pytest
+        pip install pytest 'clingo>=5.5.1'
         python setup.py install
 
     - name: info
