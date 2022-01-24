@@ -1391,7 +1391,11 @@ class RawField(BaseField):
     """A field to pass through an arbitrary Clingo.Symbol."""
 
     cltopy = lambda v: Raw(v)
-    pytocl = lambda v: v.symbol
+
+    def pytocl(v):
+        if not isinstance(v, Raw):
+            v = Raw(v)
+        return v.symbol
 
 #------------------------------------------------------------------------------
 # RawField, StringField and IntegerField are simple sub-classes of BaseField

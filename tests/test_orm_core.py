@@ -78,21 +78,29 @@ class FieldTestCase(unittest.TestCase):
         self.assertEqual(type(StringField.cltopy(symstr)), str)
         self.assertEqual(StringField.cltopy(symstr), "SYM")
         self.assertEqual(StringField.pytocl("SYM"), symstr)
+        self.assertEqual(RawField.pytocl(Raw(symstr)), symstr)
+        self.assertEqual(RawField.pytocl(symstr), symstr)
 
         symstr = Function("const")
         self.assertEqual(type(ConstantField.cltopy(symstr)), str)
         self.assertEqual(ConstantField.cltopy(symstr), "const")
         self.assertEqual(ConstantField.pytocl("const"), symstr)
+        self.assertEqual(RawField.pytocl(Raw(symstr)), symstr)
+        self.assertEqual(RawField.pytocl(symstr), symstr)
 
         symstr = Function("const",[],False)
         self.assertEqual(type(ConstantField.cltopy(symstr)), str)
         self.assertEqual(ConstantField.cltopy(symstr), "-const")
         self.assertEqual(ConstantField.pytocl("-const"), symstr)
+        self.assertEqual(RawField.pytocl(Raw(symstr)), symstr)
+        self.assertEqual(RawField.pytocl(symstr), symstr)
 
         symstr = Number(1)
         self.assertEqual(type(IntegerField.cltopy(symstr)), int)
         self.assertEqual(IntegerField.cltopy(symstr), 1)
         self.assertEqual(IntegerField.pytocl(1), symstr)
+        self.assertEqual(RawField.pytocl(Raw(symstr)), symstr)
+        self.assertEqual(RawField.pytocl(symstr), symstr)
 
         # Now some bad conversions
         with self.assertRaises(TypeError) as ctx:
