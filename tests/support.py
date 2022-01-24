@@ -9,9 +9,15 @@ def check_errmsg(startmsg, ctx):
     msg=str(ctx.exception)
     if not msg.startswith(startmsg):
         msg = ("Error message \"{}\" does not start "
-               "with \"{}\"").format(msg,startmsg)
+               "with \"{}\"").format(msg, startmsg)
         raise AssertionError(msg)
 
+def check_errmsg_contains(contmsg, ctx):
+    msg=str(ctx.exception)
+    if contmsg not in msg:
+        msg = ("Error message \"{}\" does not contain "
+               "\"{}\"").format(msg, contmsg)
+        raise AssertionError(msg)
 
 #------------------------------------------------------------------------------
 #

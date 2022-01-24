@@ -10,7 +10,7 @@
 
 import unittest
 import operator
-from .support import check_errmsg
+from .support import check_errmsg, check_errmsg_contains
 
 from clingo import Control, Number, String, Function, SymbolType
 
@@ -99,11 +99,11 @@ class PlaceholderTestCase(unittest.TestCase):
 
         with self.assertRaises(TypeError) as ctx:
             ph = NamedPlaceholder("foo")
-        check_errmsg("__init__() takes 1 positional", ctx)
+        check_errmsg_contains("__init__() takes 1 positional", ctx)
 
         with self.assertRaises(TypeError) as ctx:
             ph = NamedPlaceholder("foo","bar")
-        check_errmsg("__init__() takes 1 positional", ctx)
+        check_errmsg_contains("__init__() takes 1 positional", ctx)
 
         self.assertFalse(ph1 == 1)
         self.assertFalse(ph1 == 'a')
@@ -120,7 +120,7 @@ class PlaceholderTestCase(unittest.TestCase):
 
         with self.assertRaises(TypeError) as ctx:
             ph = PositionalPlaceholder(0)
-        check_errmsg("__init__() takes 1 positional", ctx)
+        check_errmsg_contains("__init__() takes 1 positional", ctx)
 
         self.assertFalse(1 == ph2)
         self.assertTrue(1 != ph2)
@@ -762,7 +762,7 @@ class ComparatorTestCase(unittest.TestCase):
         # Bad calls to the callable
         with self.assertRaises(TypeError) as ctx:
             sat1(g1,f1)
-        check_errmsg("__call__() takes 2", ctx)
+        check_errmsg_contains("__call__() takes 2", ctx)
 
         # NOTE: Now using the attrgetter which is more liberal and doesn't check
         # for the correct predicate type. So this error is no longer raised.

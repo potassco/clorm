@@ -16,7 +16,7 @@ import operator
 import enum
 import collections.abc as cabc
 
-from .support import check_errmsg
+from .support import check_errmsg, check_errmsg_contains
 import pickle
 
 from clingo import Number, String, Function, SymbolType
@@ -444,7 +444,7 @@ class FieldTestCase(unittest.TestCase):
 
 
     #--------------------------------------------------------------------------
-    # Test catching invalid instantiation of a filed (such as giving a bad
+    # Test catching invalid instantiation of a field (such as giving a bad
     # default values for a field).
     # --------------------------------------------------------------------------
     def test_api_catch_bad_field_instantiation(self):
@@ -454,11 +454,13 @@ class FieldTestCase(unittest.TestCase):
 
         with self.assertRaises(TypeError) as ctx:
             fld5=IntegerField(unknown=5)
-        check_errmsg("__init__() got an unexpected keyword argument 'unknown'", ctx)
+        check_errmsg_contains(("__init__() got an unexpected keyword argument "
+                               "'unknown'"), ctx)
 
         with self.assertRaises(TypeError) as ctx:
             fld5=IntegerField(unknown1=5,unknown2="f")
-        check_errmsg(("__init__() got an unexpected keyword argument 'unknown1'"), ctx)
+        check_errmsg_contains(("__init__() got an unexpected keyword argument "
+                               "'unknown1'"), ctx)
 
     #--------------------------------------------------------------------------
     # Test setting the index flag for a field
