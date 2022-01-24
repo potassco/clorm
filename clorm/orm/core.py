@@ -31,12 +31,37 @@ import uuid
 from clorm.orm.types import ConstantStr, HeadList, HeadListReversed, TailList, TailListReversed
 
 from . import noclingo
-from typing import Any, Callable, Iterator, List, Optional, Sequence, Tuple, Type, TypeVar, Union, overload
+from typing import ( Any, Callable, Iterator, List, Optional, Sequence, Tuple,
+                     Type, TypeVar, Union, overload, cast )
+
 
 # copied from https://github.com/samuelcolvin/pydantic/blob/master/pydantic/typing.py
 if sys.version_info < (3, 8):
     from typing_extensions import Annotated
-    from typing import _GenericAlias, Any, Callable, cast
+
+    def get_origin(t: Type[Any]) -> Optional[Type[Any]]:
+        if type(t).__name__ in {'AnnotatedMeta', '_AnnotatedAlias'}:
+            # weirdly this is a runtime requirement, as well as for mypy
+            return cast(Type[Any], Annotated)
+        return getattr(t, '__origin__', None)
+else:
+    from typing import get_origin, get_args
+
+
+if sys.version_info < (3, 7):
+    def get_args(t: Type[Any]) -> Tuple[Any, ...]:
+        """Simplest get_args compatibility layer possible.
+        The Python 3.6 typing module does not have `_GenericAlias` so
+        this won't work for everything. In particular this will not
+        support the `generics` module (we don't support generic models in
+        python 3.6).
+        """
+        if type(t).__name__ in {'AnnotatedMeta', '_AnnotatedAlias'}:
+            return t.__args__ + t.__metadata__
+        return getattr(t, '__args__', ())
+
+elif sys.version_info < (3, 8):
+    from typing import _GenericAlias
 
     def get_args(t: Type[Any]) -> Tuple[Any, ...]:
         """Compatibility version of get_args for python 3.7.
@@ -52,14 +77,6 @@ if sys.version_info < (3, 8):
             return res
         return getattr(t, '__args__', ())
 
-    def get_origin(t: Type[Any]) -> Optional[Type[Any]]:
-        if type(t).__name__ in {'AnnotatedMeta', '_AnnotatedAlias'}:
-            # weirdly this is a runtime requirement, as well as for mypy
-            return cast(Type[Any], Annotated)
-        return getattr(t, '__origin__', None)
-
-else:
-    from typing import get_origin, get_args
 
 __all__ = [
     'ClormError',
