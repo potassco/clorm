@@ -1000,7 +1000,7 @@ def alias(predicate, name=None):
 
 def dealiased_path(path):
     if inspect.isclass(path) and issubclass(path, Predicate): return path.meta.path
-    
+
     def getpath():
         if isinstance(path, PredicatePath): return path
         elif isinstance(path, PredicatePath.Hashable): return path.path
@@ -1421,26 +1421,28 @@ class RawField(BaseField):
 class StringField(BaseField):
     """A field to convert between a Clingo.String object and a Python string."""
 
-    def cltopy(raw):
-        if not hasattr(raw,'type'):
-            raise TypeError(("Object '{}' ({}) is not a String "
-                            "Symbol").format(raw,type(raw)))
-        if not noclingo.is_String(raw):
+    def cltopy(symbol):
+        try:
+            return symbol.string
+        except (AttributeError, RuntimeError):
+            if not hasattr(symbol,'type'):
+                raise TypeError(("Object '{}' ({}) is not a String "
+                                "Symbol").format(symbol,type(symbol)))
             raise TypeError(("Symbol '{}' ({}) is not a String "
-                            "Symbol").format(raw,raw.type))
-        return raw.string
+                             "Symbol").format(symbol,symbol.type))
     pytocl = lambda v: symbols.String(v)
 
 class IntegerField(BaseField):
     """A field to convert between a Clingo.Number object and a Python integer."""
-    def cltopy(raw):
-        if not hasattr(raw,'type'):
-            raise TypeError(("Object '{}' ({}) is not a Number "
-                            "Symbol").format(raw,type(raw)))
-        if not noclingo.is_Number(raw):
+    def cltopy(symbol):
+        try:
+            return symbol.number
+        except (AttributeError, RuntimeError):
+            if not hasattr(symbol,'type'):
+                raise TypeError(("Object '{}' ({}) is not a Number "
+                                "Symbol").format(symbol,type(symbol)))
             raise TypeError(("Symbol '{}' ({}) is not a Number "
-                            "Symbol").format(raw,raw.type))
-        return raw.number
+                             "Symbol").format(symbol,symbol.type))
 
     pytocl = lambda v: symbols.Number(v)
 
@@ -1468,14 +1470,18 @@ class ConstantField(BaseField):
     Clorm version 2.0 release.
 
     """
-    def cltopy(raw):
-        if not hasattr(raw,'type'):
-            raise TypeError(("Object '{}' ({}) is not a nullary Function "
-                            "Symbol").format(raw,type(raw)))
-        if not noclingo.is_Function(raw) or len(raw.arguments) != 0:
+    def cltopy(symbol):
+        try:
+            if symbol.arguments:
+                raise TypeError(("Symbol '{}' ({}) is not a nullary Function "
+                                "Symbol").format(symbol,symbol.type))
+            return symbol.name if symbol.positive else "-{}".format(symbol.name)
+        except (AttributeError, RuntimeError):
+            if not hasattr(symbol,'type'):
+                raise TypeError(("Object '{}' ({}) is not a nullary Function "
+                                "Symbol").format(symbol,type(symbol)))
             raise TypeError(("Symbol '{}' ({}) is not a nullary Function "
-                            "Symbol").format(raw,raw.type))
-        return raw.name if raw.positive else "-{}".format(raw.name)
+                             "Symbol").format(symbol,symbol.type))
 
     def pytocl(v):
         if not isinstance(v,str):
@@ -1504,12 +1510,20 @@ class SimpleField(BaseField):
     rather than the ``SimpleField`` class.
 
     """
-    def cltopy(raw):
-        if noclingo.is_String(raw): return raw.string
-        elif noclingo.is_Number(raw): return raw.number
-        elif noclingo.is_Function(raw):
-            if len(raw.arguments) == 0 and raw.positive:
-                return raw.name
+    def cltopy(symbol):
+        try:
+            return symbol.number
+        except (AttributeError, RuntimeError):
+            pass
+        try:
+            return symbol.string
+        except (AttributeError, RuntimeError):
+            pass
+        try:
+            if len(symbol.arguments) == 0 and symbol.positive:
+                return symbol.name
+        except (AttributeError, RuntimeError):
+            pass
         raise TypeError("Not a simple term (string/constant/integer)")
 
     def pytocl(value):
@@ -2330,21 +2344,19 @@ def _preprocess_field_value(field_defn, v):
 
 # Construct a Predicate via an explicit (raw) clingo.Symbol object
 def _predicate_init_by_raw(self, **kwargs):
-    if len(kwargs) != 1:
-        raise ValueError("Invalid combination of keyword arguments")
     raw = kwargs["raw"]
     self._raw = raw
     try:
         cls=type(self)
-        if not noclingo.is_Function(raw): raise ValueError()
-        arity=len(raw.arguments)
-        if raw.name != cls.meta.name: raise ValueError()
-        if arity != cls.meta.arity: raise ValueError()
-        if cls.meta.sign is not None and cls.meta.sign != raw.positive: raise ValueError()
+        if (raw.name != cls.meta.name or
+            cls.meta.arity != len(raw.arguments) or
+            (cls.meta.sign is not None and cls.meta.sign != raw.positive)):
+            raise ValueError(("Failed to unify clingo.Symbol object {} with "
+                              "Predicate class {}").format(raw, cls.__name__))
         self._sign = raw.positive
         self._field_values = tuple( f.defn.cltopy(raw.arguments[f.index]) \
-                                     for f in self.meta )
-    except (TypeError,ValueError):
+                                    for f in self.meta )
+    except (TypeError,AttributeError,RuntimeError):
         raise ValueError(("Failed to unify clingo.Symbol object {} with "
                           "Predicate class {}").format(raw, cls.__name__))
 

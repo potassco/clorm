@@ -91,9 +91,19 @@ class Unifier(object):
     def unify(self,symbols,*,factbase=None,raise_nomatch=False):
         fb=FactBase() if factbase is None else factbase
         for sym in symbols:
-            f=self.unify_symbol(sym,raise_nomatch=raise_nomatch)
-            if f is not None: fb.add(f)
-
+            matched = False
+            mpredicates = self._pgroups.get((sym.name,len(sym.arguments)),[])
+            for pred in mpredicates:
+                try:
+                    fb.add(pred(raw=sym))
+                    matched = True
+                    break
+                except ValueError:
+                    pass
+            if not matched and raise_nomatch:
+                raise UnifierNoMatchError(
+                    f"Cannot unify symbol '{sym}' to predicates in {self._predicates}",
+                    sym, self._predicates)
         return fb
 
 #------------------------------------------------------------------------------

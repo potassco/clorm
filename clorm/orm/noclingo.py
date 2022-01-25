@@ -92,22 +92,26 @@ class Symbol(object):
 
     @property
     def name(self):
-        if self._stype != SymbolType.Function: return None
+        if self._stype != SymbolType.Function:
+            raise RuntimeError()
         return self._value
 
     @property
     def arguments(self):
-        if self._stype != SymbolType.Function: return None
+        if self._stype != SymbolType.Function:
+            raise RuntimeError()
         return self._args
 
     @property
     def string(self):
-        if self._stype != SymbolType.String: return None
+        if self._stype != SymbolType.String:
+            raise RuntimeError()
         return self._value
 
     @property
     def number(self):
-        if self._stype != SymbolType.Number: return None
+        if self._stype != SymbolType.Number:
+            raise RuntimeError()
         return self._value
 
     @property
@@ -116,12 +120,14 @@ class Symbol(object):
 
     @property
     def positive(self):
-        if self._stype != SymbolType.Function: return None
+        if self._stype != SymbolType.Function:
+            raise RuntimeError()
         return self._sign
 
     @property
     def negative(self):
-        if self._stype != SymbolType.Function: return None
+        if self._stype != SymbolType.Function:
+            raise RuntimeError()
         return not self._sign
 
     def __hash__(self):

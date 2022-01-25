@@ -72,7 +72,7 @@ class FieldTestCase(unittest.TestCase):
     # Test the Field conversion functions for the primitive fields
     # (StringField/ConstantField/IntegerField) as well as sub-classing
     # --------------------------------------------------------------------------
-    def test_api_primtive_field_conversion(self):
+    def test_api_primitive_field_conversion(self):
 
         symstr = String("SYM")
         self.assertEqual(type(StringField.cltopy(symstr)), str)
@@ -1717,6 +1717,30 @@ class PredicateInternalUnifyTestCase(unittest.TestCase):
         with self.assertRaises(ValueError) as ctx:
             func2=Function("fact",[String("1"),String("test")])
             f=Fact(raw=func2)
+
+        with self.assertRaises(ValueError) as ctx:
+            f=Fact(raw=[1,2,3])
+
+
+    # --------------------------------------------------------------------------
+    # Test initialising a predicate with a raw with some bad input
+    # --------------------------------------------------------------------------
+    def test_predicate_init_with_raw(self):
+
+        class Fact(Predicate):
+            anum = IntegerField
+            astr = StringField
+
+        good = Function("fact",[Number(1),String("test")])
+        bad = [1,2]
+
+#        f=Fact(raw=bad)
+
+#        with self.assertRaises(ValueError) as ctx:
+#            func2=Function("fact",[String("1"),String("test")])
+#            f=Fact(raw=func2)
+
+
 
     # --------------------------------------------------------------------------
     # Test unifies for Predicate.Field function
