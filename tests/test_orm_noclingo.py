@@ -10,7 +10,7 @@ import operator
 import clingo
 import clorm.orm.noclingo as noclingo
 from clorm.orm.noclingo import clingo_to_noclingo, noclingo_to_clingo, \
-    SymbolMode, get_symbol_generator, _get_symboltype, \
+    SymbolMode, get_symbol_generator,\
     is_Number, is_String, is_Function, is_Supremum, is_Infimum
 
 clingo_version = clingo.__version__
@@ -33,34 +33,6 @@ class NoClingoTestCase(unittest.TestCase):
     def tearDown(self):
         pass
 
-
-    #--------------------------------------------------------------------------
-    #
-    #--------------------------------------------------------------------------
-    def test_symboltype_value_and_order(self):
-        self.assertTrue(str(clingo.SymbolType.Number), str(noclingo.SymbolType.Number))
-        self.assertTrue(str(clingo.SymbolType.String), str(noclingo.SymbolType.String))
-        self.assertTrue(str(clingo.SymbolType.Function), str(noclingo.SymbolType.Function))
-        self.assertTrue(str(clingo.SymbolType.Supremum), str(noclingo.SymbolType.Supremum))
-        self.assertTrue(str(clingo.SymbolType.Infimum), str(noclingo.SymbolType.Infimum))
-
-        # Note: ordering comparision between SymbolTypes is not supported in 5.5.0+
-        if clingo_version >= "5.5.0": return
-
-        if clingo.SymbolType.Number < clingo.SymbolType.String:
-            self.assertTrue(noclingo.SymbolType.Number < noclingo.SymbolType.String)
-        else:
-            self.assertTrue(noclingo.SymbolType.Number > noclingo.SymbolType.String)
-
-        if clingo.SymbolType.Number < clingo.SymbolType.Function:
-            self.assertTrue(noclingo.SymbolType.Number < noclingo.SymbolType.Function)
-        else:
-            self.assertTrue(noclingo.SymbolType.Number > noclingo.SymbolType.Function)
-
-        if clingo.SymbolType.String < clingo.SymbolType.Function:
-            self.assertTrue(noclingo.SymbolType.String < noclingo.SymbolType.Function)
-        else:
-            self.assertTrue(noclingo.SymbolType.String > noclingo.SymbolType.Function)
 
     #--------------------------------------------------------------------------
     #
@@ -221,10 +193,28 @@ class NoClingoTestCase(unittest.TestCase):
         nc7 = noclingo.Function("abc",[noclingo.String("45"), noclingo.Number(5)])
         self.assertTrue(nc6 < nc7)
 
-        if noclingo.SymbolType.Number < noclingo.SymbolType.String:
-            self.assertTrue(nc1 < nc3)
-        else:
-            self.assertTrue(nc1 > nc3)
+        def compare_ordering(a, b):
+            if noclingo_to_clingo(a) < noclingo_to_clingo(b):
+                self.assertTrue(a < b)
+            elif noclingo_to_clingo(b) < noclingo_to_clingo(a):
+                self.assertTrue(b < a)
+            else:
+                self.assertEqual(a, b)
+
+        compare_ordering(noclingo.String("1"), noclingo.Number(2))
+        compare_ordering(noclingo.Number(1), noclingo.String("2"))
+        compare_ordering(noclingo.String("1"), noclingo.Function("2"))
+        compare_ordering(noclingo.Function("2"), noclingo.String("1"))
+        compare_ordering(noclingo.Number(1), noclingo.Function("2"))
+        compare_ordering(noclingo.Function("1"), noclingo.Number(2))
+        compare_ordering(noclingo.Infimum, noclingo.Supremum)
+        compare_ordering(noclingo.Supremum, noclingo.Infimum)
+        compare_ordering(noclingo.Infimum, noclingo.Number(2))
+        compare_ordering(noclingo.Infimum, noclingo.String("2"))
+        compare_ordering(noclingo.Infimum, noclingo.Function("2"))
+        compare_ordering(noclingo.Supremum, noclingo.Function("2"))
+        compare_ordering(noclingo.Supremum, noclingo.String("2"))
+        compare_ordering(noclingo.Supremum, noclingo.Number(2))
 
     def test_clingo_noclingo_difference(self):
         self.assertNotEqual(clingo.String("blah"), noclingo.String("blah"))
@@ -270,46 +260,6 @@ class NoClingoTestCase(unittest.TestCase):
         ncl5 = noclingo.Function("f",[ncl3,ncl4,ncl1],False)
         self.assertEqual(clingo_to_noclingo(cl5),ncl5)
         self.assertEqual(noclingo_to_clingo(ncl5),cl5)
-
-
-    def test_get_symboltype(self):
-        cli = clingo.Infimum
-        cls = clingo.Supremum
-        cl1 = clingo.Function("const")
-        cl2 = clingo.Number(3)
-        cl3 = clingo.String("No")
-        cl4 = clingo.Function("",[cl1,cl2])
-
-        ncli = noclingo.Infimum
-        ncls = noclingo.Supremum
-        ncl1 = noclingo.Function("const")
-        ncl2 = noclingo.Number(3)
-        ncl3 = noclingo.String("No")
-        ncl4 = noclingo.Function("",[ncl1,ncl2])
-
-        self.assertEqual(_get_symboltype(cli),noclingo.SymbolType.Infimum)
-        self.assertEqual(_get_symboltype(cls),noclingo.SymbolType.Supremum)
-        self.assertEqual(_get_symboltype(cl1),noclingo.SymbolType.Function)
-        self.assertEqual(_get_symboltype(cl2),noclingo.SymbolType.Number)
-        self.assertEqual(_get_symboltype(cl3),noclingo.SymbolType.String)
-        self.assertEqual(_get_symboltype(cl4),noclingo.SymbolType.Function)
-
-        self.assertEqual(_get_symboltype(ncli),noclingo.SymbolType.Infimum)
-        self.assertEqual(_get_symboltype(ncls),noclingo.SymbolType.Supremum)
-        self.assertEqual(_get_symboltype(ncl1),noclingo.SymbolType.Function)
-        self.assertEqual(_get_symboltype(ncl2),noclingo.SymbolType.Number)
-        self.assertEqual(_get_symboltype(ncl3),noclingo.SymbolType.String)
-        self.assertEqual(_get_symboltype(ncl4),noclingo.SymbolType.Function)
-
-        self.assertNotEqual(_get_symboltype(cls),noclingo.SymbolType.Infimum)
-        self.assertNotEqual(_get_symboltype(cli),noclingo.SymbolType.Supremum)
-        self.assertNotEqual(_get_symboltype(cl2),noclingo.SymbolType.Function)
-        self.assertNotEqual(_get_symboltype(cl4),noclingo.SymbolType.Number)
-        self.assertNotEqual(_get_symboltype(cl4),noclingo.SymbolType.String)
-        self.assertNotEqual(_get_symboltype(cl3),noclingo.SymbolType.Function)
-
-        with self.assertRaises(TypeError) as ctx:
-            x=_get_symboltype(4)
 
     def test_is_functions(self):
         cli = clingo.Infimum

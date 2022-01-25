@@ -16,7 +16,7 @@ from collections import abc
 import clingo
 import clingo.ast as clast
 from .core import *
-from .noclingo import is_Function, is_Number, SymbolMode
+from .noclingo import SymbolMode
 from .factbase import *
 from .core import get_field_definition, PredicatePath, kwargs_check_keys, \
     get_symbol_mode

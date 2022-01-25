@@ -8,6 +8,7 @@
 import functools
 import enum
 import clingo
+from clingo import SymbolType
 
 __all__ = [
     'Function',
@@ -28,20 +29,19 @@ __all__ = [
     'get_symbol_generator'
 ]
 
-class SymbolType(enum.IntEnum):
-    Infimum = 1
-    Number = 2
-    String = 3
-    Function = 4
-    Supremum = 5
 
-    def __str__(self):
-        if self.Infimum: return "Infimum"
-        elif self.Number: return "Number"
-        elif self.String: return "String"
-        elif self.Function: return "Function"
-        return "Supremum"
 
+# --------------------------------------------------------------------------------
+# Note: the ordering between symbols is manually determined to match clingo 5.5
+# --------------------------------------------------------------------------------
+
+_SYMBOLTYPE_OID = {
+    SymbolType.Infimum: 1,
+    SymbolType.Number: 2,
+    SymbolType.Function: 3,
+    SymbolType.String: 4,
+    SymbolType.Supremum: 5
+}
 
 class Symbol(object):
     """A noclingo replacement for clingo.Symbol.
@@ -155,7 +155,8 @@ class Symbol(object):
     def __gt__(self, other):
         """Overloaded boolean operator."""
         if not isinstance(other, self.__class__): return NotImplemented
-        if self._stype != other._stype: return self._stype > other._stype
+        if self._stype != other._stype:
+            return _SYMBOLTYPE_OID[self._stype] > _SYMBOLTYPE_OID[other._stype]
         if self._stype == SymbolType.Infimum: return False
         if self._stype == SymbolType.Supremum: return False
 
@@ -172,7 +173,8 @@ class Symbol(object):
     def __lt__(self, other):
         """Overloaded boolean operator."""
         if not isinstance(other, self.__class__): return NotImplemented
-        if self._stype != other._stype: return self._stype < other._stype
+        if self._stype != other._stype:
+            return _SYMBOLTYPE_OID[self._stype] < _SYMBOLTYPE_OID[other._stype]
         if self._stype == SymbolType.Infimum: return False
         if self._stype == SymbolType.Supremum: return False
 
@@ -252,68 +254,43 @@ def noclingo_to_clingo(nclsym):
                     tuple(noclingo_to_clingo(t) for t in nclsym.arguments),
                     nclsym.positive)
 
-
-# ------------------------------------------------------------------------------
-# Internal function that converts the clingo.SymbolType to noclingo.SymbolType
-# ------------------------------------------------------------------------------
-def _get_symboltype(sym):
-    if isinstance(sym,clingo.Symbol):
-        if sym.type == clingo.SymbolType.Number: return SymbolType.Number
-        elif sym.type == clingo.SymbolType.String: return SymbolType.String
-        elif sym.type == clingo.SymbolType.Function: return SymbolType.Function
-        elif sym.type == clingo.SymbolType.Infimum: return SymbolType.Infimum
-        elif sym.type == clingo.SymbolType.Supremum: return SymbolType.Supremum
-        else:
-            raise ValueError(("Internal Error: unrecognised SymbolType for "
-                              "'{}'").format(sym))
-    if isinstance(sym, Symbol): return sym.type
-    raise TypeError("Object '{}' ({}) is not a Symbol".format(sym,type(sym)))
-
 # ------------------------------------------------------------------------------
 # Functions to test the type of Symbol irrespective of clingo.Symbol or
 # noclingo.Symbol.
 # ------------------------------------------------------------------------------
 def is_Number(sym):
     try:
-        stype = _get_symboltype(sym)
-        return stype == SymbolType.Number
+        return sym.type == SymbolType.Number
     except:
         return False
 
 def is_String(sym):
     try:
-        stype = _get_symboltype(sym)
-        return stype == SymbolType.String
+        return sym.type == SymbolType.String
     except:
         return False
 
 def is_Function(sym):
     try:
-        stype = _get_symboltype(sym)
-        return stype == SymbolType.Function
+        return sym.type == SymbolType.Function
     except:
         return False
 
 def is_Supremum(sym):
     try:
-        stype = _get_symboltype(sym)
-        return stype == SymbolType.Supremum
+        return sym.type == SymbolType.Supremum
     except:
         return False
 
 def is_Infimum(sym):
     try:
-        stype = _get_symboltype(sym)
-        return stype == SymbolType.Infimum
+        return sym.type == SymbolType.Infimum
     except:
         return False
 
 def is_Symbol(sym):
-    try:
-        stype = _get_symboltype(sym)
-        return True
-    except:
-        return False
+    return (isinstance(sym, clingo.Symbol) or
+            isinstance(sym, noclingo.Symbol))
 
 #------------------------------------------------------------------------------
 # A mechanism to group together the symbol generator functions for clingo or
