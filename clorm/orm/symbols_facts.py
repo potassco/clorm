@@ -464,17 +464,17 @@ def parse_fact_string(aspstr,unifier,*,factbase=None,
     ctrl = clingo.Control()
     un=Unifier(unifier)
     try:
-        with clast.ProgramBuilder(ctrl) as bld:
-            if raise_nonfact:
+        if raise_nonfact:
+            with clast.ProgramBuilder(ctrl) as bld:
                 nfv = NonFactVisitor()
                 def on_rule(ast: AST):
                     nonlocal nfv, bld
                     if nfv: nfv(ast)
                     bld.add(ast)
-            else:
-                on_rule = bld.add
-
-            clast.parse_string(aspstr, on_rule)
+                clast.parse_string(aspstr, on_rule)
+        else:
+            ctrl.add("base", [], aspstr)
+    
     except ClingoParserWrapperError as e:
         raise e.exc
 
@@ -516,20 +516,17 @@ def parse_fact_files(files,unifier,*,factbase=None,
     ctrl = clingo.Control()
     un=Unifier(unifier)
     try:
-        with clast.ProgramBuilder(ctrl) as bld:
-            if raise_nonfact:
+        if raise_nonfact:
+            with clast.ProgramBuilder(ctrl) as bld:
                 nfv = NonFactVisitor()
                 def on_rule(ast: AST):
                     nonlocal nfv, bld
                     if nfv: nfv(ast)
                     bld.add(ast)
-            else:
-                def on_rule(ast: AST):
-                    nonlocal bld
-                    bld.add(ast)
-
-            clast.parse_files(files, on_rule)
-
+                clast.parse_files(files, on_rule)
+        else:
+            for fn in files:
+                ctrl.load(fn)
     except ClingoParserWrapperError as e:
         raise e.exc
 
