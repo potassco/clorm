@@ -1263,6 +1263,11 @@ class BaseField(object, metaclass=_AbstractBaseFieldMeta):
         """Returns whether this field should be indexed by default in a `FactBase`"""
         return self._index
 
+    def __str__(self):
+        return f"{self.__class__.__name__}(index={self.index})"
+
+    def __repr__(self):
+        return self.__str__()
 
 # This function is used instead of exposing BaseField creation directly,
 # so that a type checker can be told (via overloads) that this is a
@@ -2123,6 +2128,8 @@ def _create_complex_term(defn, default_value=MISSING, module=None) -> BaseField:
     # proto = { "arg{}".format(i+1) : get_field_definition(d) for i,d in enumerate(defn) }
     proto = collections.OrderedDict([(f"arg{i+1}", get_field_definition(d, module))
                                      for i,d in enumerate(defn)])
+    class_name = f'ClormAnonTuple({",".join(f"{arg[0]}={repr(arg[1])}" for arg in proto.items())})'
+
     if default_value is not MISSING:
         default = default_value
         set_default = True
@@ -2132,14 +2139,11 @@ def _create_complex_term(defn, default_value=MISSING, module=None) -> BaseField:
         if not set_default and default:
             raise ValueError((f"Default {default_value} must have the same length as {defn}"))
     proto['Meta'] = type("Meta", (object,), {"is_tuple" : True, "_anon" : True})
-    class_name = "ClormAnonTuple"
 
     # For pickling to work, the __module__ variable needs to be set to the frame
     # where the named tuple is created.
     if module is not None:
         proto['__module__'] = module
-        class_name += f"{uuid.uuid4().time_mid}"
-        
     ct = type(class_name, (Predicate,), proto)
     # For pickling to work, the frame must know the class
     if module is not None:
@@ -2149,7 +2153,10 @@ def _create_complex_term(defn, default_value=MISSING, module=None) -> BaseField:
             while True:
                 f_globals = sys._getframe(depth).f_globals
                 if f_globals["__name__"] == module:
-                    f_globals[class_name] = ct
+                    if class_name in f_globals: # reuse class if already exists
+                        ct = f_globals[class_name]
+                    else:
+                        f_globals[class_name] = ct
                     break
                 depth += 1
         except ValueError:
