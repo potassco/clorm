@@ -1286,10 +1286,14 @@ def field(basefield,*, default=MISSING, default_factory=MISSING):
     if default is not MISSING and default_factory is not MISSING:
         raise ValueError('can not specify both default and default_factory')
     if isinstance(basefield, Tuple):
+        try:
+            module = sys._getframe(1).f_globals.get('__name__', '__main__')
+        except (AttributeError, ValueError):
+            module = None
         if default is not MISSING:
-            return _create_complex_term(basefield, default)
+            return _create_complex_term(basefield, default, module)
         elif default_factory is not MISSING:
-            return _create_complex_term(basefield, default_factory)
+            return _create_complex_term(basefield, default_factory, module)
         return basefield
 
     if issubclass(basefield, BaseField):
@@ -2091,7 +2095,7 @@ class SignAccessor(object):
 # ClormAnonTuple).
 # ------------------------------------------------------------------------------
 
-def get_field_definition(defn):
+def get_field_definition(defn, module=None):
     errmsg = ("Unrecognised field definition object '{}'. Expecting: "
               "1) BaseField (sub-)class, 2) BaseField (sub-)class instance, "
               "3) a tuple containing a field definition")
@@ -2107,9 +2111,9 @@ def get_field_definition(defn):
     # Expecting a tuple and treat it as a recursive definition
     if not isinstance(defn, tuple): raise TypeError(errmsg.format(defn))
 
-    return _create_complex_term(defn)
+    return _create_complex_term(defn, module=module)
 
-def _create_complex_term(defn, default_value=MISSING) -> BaseField:
+def _create_complex_term(defn, default_value=MISSING, module=None) -> BaseField:
     # NOTE: I was using a dict rather than OrderedDict which just happened to
     # work. Apparently, in Python 3.6 this was an implmentation detail and
     # Python 3.7 it is a language specification (see:
@@ -2117,7 +2121,7 @@ def _create_complex_term(defn, default_value=MISSING) -> BaseField:
     # However, since Clorm is meant to be Python 3.5 compatible change this to
     # use an OrderedDict.
     # proto = { "arg{}".format(i+1) : get_field_definition(d) for i,d in enumerate(defn) }
-    proto = collections.OrderedDict([(f"arg{i+1}", get_field_definition(d))
+    proto = collections.OrderedDict([(f"arg{i+1}", get_field_definition(d, module))
                                      for i,d in enumerate(defn)])
     if default_value is not MISSING:
         default = default_value
@@ -2128,7 +2132,28 @@ def _create_complex_term(defn, default_value=MISSING) -> BaseField:
         if not set_default and default:
             raise ValueError((f"Default {default_value} must have the same length as {defn}"))
     proto['Meta'] = type("Meta", (object,), {"is_tuple" : True, "_anon" : True})
-    ct = type("ClormAnonTuple", (Predicate,), proto)
+    class_name = "ClormAnonTuple"
+
+    # For pickling to work, the __module__ variable needs to be set to the frame
+    # where the named tuple is created.
+    if module is not None:
+        proto['__module__'] = module
+        class_name += f"{uuid.uuid4().time_mid}"
+        
+    ct = type(class_name, (Predicate,), proto)
+    # For pickling to work, the frame must know the class
+    if module is not None:
+        try:
+            depth = 0
+            # find the correct frame based on the given module
+            while True:
+                f_globals = sys._getframe(depth).f_globals
+                if f_globals["__name__"] == module:
+                    f_globals[class_name] = ct
+                    break
+                depth += 1
+        except ValueError:
+            pass
     return ct.Field(default) if set_default else ct.Field()
 
 
@@ -2479,32 +2504,32 @@ def _is_bad_predicate_inner_class_declaration(name,obj):
     return obj.__name__ == name
 
 # infer fielddefinition based on a given type
-def _infer_field_definition(type_: Type) -> Optional[BaseField]:
+def _infer_field_definition(type_: Type, module: str) -> Optional[BaseField]:
     origin = get_origin(type_)
     args = get_args(type_)
 
     if origin is HeadList:
-        return define_nested_list_field(_infer_field_definition(args[0]))
+        return define_nested_list_field(_infer_field_definition(args[0], module))
     if origin is HeadListReversed:
-        return define_nested_list_field(_infer_field_definition(args[0]),reverse=True)
+        return define_nested_list_field(_infer_field_definition(args[0], module),reverse=True)
     if origin is TailList:
-        return define_nested_list_field(_infer_field_definition(args[0]),headlist=False)
+        return define_nested_list_field(_infer_field_definition(args[0], module),headlist=False)
     if origin is TailListReversed:
-        return define_nested_list_field(_infer_field_definition(args[0]),headlist=False, reverse=True)
+        return define_nested_list_field(_infer_field_definition(args[0], module),headlist=False, reverse=True)
     if origin is Union:
-        return combine_fields([_infer_field_definition(arg) for arg in args])
+        return combine_fields([_infer_field_definition(arg, module) for arg in args])
     if len(args) > 1 and issubclass(origin, Tuple):
         if len(args) == 2 and args[1] is Ellipsis: # e.g. Tuple[int, ...]
-            return define_flat_list_field(_infer_field_definition(args[0]))
+            return define_flat_list_field(_infer_field_definition(args[0], module))
 
         # not just return a tuple of Fields, but create a Field-Instance and take the type so
         # Tuple[...] can be used within Union
-        return type(get_field_definition(tuple(_infer_field_definition(arg) for arg in args)))
+        return type(get_field_definition(tuple(_infer_field_definition(arg, module) for arg in args), module))
     if issubclass(type_, ConstantStr):
         return ConstantField
     if issubclass(type_, enum.Enum):
         # if type_ just inherits from Enum is IntegerField, otherwise find appropriate Field
-        field = IntegerField if len(type_.__bases__) == 1 else _infer_field_definition(type_.__bases__[0])
+        field = IntegerField if len(type_.__bases__) == 1 else _infer_field_definition(type_.__bases__[0], module)
         return define_enum_field(field, type_)
     if issubclass(type_, int):
         return IntegerField
@@ -2597,11 +2622,12 @@ def _make_predicatedefn(class_name, dct) -> PredicateDefn:
         fields_from_dct[fname] = fdefn
 
     fields_from_annotations = {}
+    module = dct.get("__module__", None)
     for name, type_ in dct.get("__annotations__", {}).items():
         if name in fields_from_dct: # first check if FieldDefinition was assigned 
             fields_from_annotations[name] = fields_from_dct[name]
         else:
-            fdefn = _infer_field_definition(type_) # if not try to infer the definition based on the type
+            fdefn = _infer_field_definition(type_, module) # if not try to infer the definition based on the type
             if fdefn:
                 fields_from_annotations[name] = fdefn
             elif inspect.isclass(type_):
@@ -2621,7 +2647,7 @@ def _make_predicatedefn(class_name, dct) -> PredicateDefn:
     fields_from_annotations.update(**fields_from_dct)
     for fname, fdefn in  fields_from_annotations.items():
         try:
-            fd = get_field_definition(fdefn)
+            fd = get_field_definition(fdefn, module)
             fa = FieldAccessor(fname, idx, fd)
             dct[fname] = fa
             fas.append(fa)
