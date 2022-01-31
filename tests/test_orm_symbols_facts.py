@@ -69,8 +69,8 @@ class UnifyTestCase(unittest.TestCase):
             n1 = IntegerField()
             r1 = RawField()
 
-        self.assertTrue(Tmp._unifies(rt1))
-        self.assertTrue(Tmp._unifies(rt2))
+        self.assertTrue(Tmp._unify(rt1) is not None)
+        self.assertTrue(Tmp._unify(rt2) is not None)
         t1 = Tmp(1,Raw(raw1))
         t2 = Tmp(1,Raw(raw2))
 

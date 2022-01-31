@@ -2922,21 +2922,6 @@ class Predicate(object, metaclass=_PredicateMeta):
         """The meta data (definitional information) for the Predicate/Complex-term"""
         return cls._meta
 
-    # Returns whether or not a clingo.Symbol object can unify with this
-    # Predicate
-    @classmethod
-    def _unifies(cls, raw):
-        if not noclingo.is_Function(raw): return False
-
-        if raw.name != cls.meta.name: return False
-        if len(raw.arguments) != len(cls.meta): return False
-
-        if cls.meta.sign is not None:
-            if cls.meta.sign != raw.positive: return False
-
-        for idx, field in enumerate(cls.meta):
-            if not field.defn.unifies(raw.arguments[idx]): return False
-        return True
 
     # Factory that returns a unified Predicate object
     @classmethod
@@ -2960,6 +2945,7 @@ class Predicate(object, metaclass=_PredicateMeta):
         except AttributeError as e:
             raise ValueError((f"Cannot unify with object {raw} ({type(raw)}) as "
                               "it is not a clingo Symbol Function object"))
+
 
     #--------------------------------------------------------------------------
     # Overloaded index operator to access the values and len operator
