@@ -59,7 +59,8 @@ class FactParserError(ClormError):
 
 #------------------------------------------------------------------------------
 # A unifier takes a list of predicates to unify against (order matters) and a
-# set of raw clingo symbols against this list.
+# set of raw clingo symbols against this list. Implementation detail: maintain
+# a lookup of predicates that is determined first by arity and then by name.
 # ------------------------------------------------------------------------------
 
 class Unifier(object):
@@ -70,18 +71,17 @@ class Unifier(object):
 
     def _add_predicates(self,predicates=[]):
         for p in predicates:
-            self._pgroups.setdefault((p.meta.name,p.meta.arity),[]).append(p)
+            self._pgroups.setdefault((p.meta.arity,p.meta.name),[]).append(p)
 
     def add_predicate(self,predicate):
         self._add_predicates([predicates])
 
     def unify_symbol(self,sym,*,raise_nomatch=False):
-        mpredicates = self._pgroups.get((sym.name,len(sym.arguments)),[])
+        mpredicates = self._pgroups.get((len(sym.arguments),sym.name),[])
         for pred in mpredicates:
-            try:
-                return pred._unify(sym)
-            except ValueError:
-                pass
+            instance = pred._unify(sym)
+            if instance is not None:
+                return instance
         if raise_nomatch:
             raise UnifierNoMatchError(
                 f"Cannot unify symbol '{sym}' to predicates in {self._predicates}",
@@ -92,14 +92,13 @@ class Unifier(object):
         fb=FactBase() if factbase is None else factbase
         for sym in symbols:
             matched = False
-            mpredicates = self._pgroups.get((sym.name,len(sym.arguments)),[])
+            mpredicates = self._pgroups.get((len(sym.arguments),sym.name),[])
             for pred in mpredicates:
-                try:
-                    fb.add(pred(raw=sym))
+                instance = pred._unify(sym)
+                if instance is not None:
+                    fb.add(instance)
                     matched = True
                     break
-                except ValueError:
-                    pass
             if not matched and raise_nomatch:
                 raise UnifierNoMatchError(
                     f"Cannot unify symbol '{sym}' to predicates in {self._predicates}",
@@ -112,17 +111,11 @@ class Unifier(object):
 # ------------------------------------------------------------------------------
 
 def _unify(predicates, symbols):
-    def unify_single(cls, r):
-        try:
-            return cls._unify(r)
-        except ValueError:
-            return None
-
-    # To make things a little more efficient use the name/arity signature as a
+    # To make things a little more efficient use the arity-name signature as a
     # filter. However, Python doesn't have a built in multidict class, and I
     # don't want to add a dependency to an external library just for one small
     # feature, so implement a simple structure here.
-    sigs = [((cls.meta.name, len(cls.meta)),cls) for cls in predicates]
+    sigs = [((len(cls.meta), cls.meta.name),cls) for cls in predicates]
     types = {}
     for sig,cls in sigs:
         if sig not in types: types[sig] = [cls]
@@ -130,10 +123,10 @@ def _unify(predicates, symbols):
 
     # Loop through symbols and yield when we have a match
     for raw in symbols:
-        classes = types.get((raw.name, len(raw.arguments)))
+        classes = types.get((len(raw.arguments), raw.name))
         if not classes: continue
         for cls in classes:
-            f = unify_single(cls,raw)
+            f = cls._unify(raw)
             if f is not None:
                 yield f
                 break
@@ -320,13 +313,6 @@ def symbolic_atoms_to_facts(symbolic_atoms, unifier, *,
             groups.setdefault((pcls.meta.name,pcls.meta.arity),[]).append(pcls)
         return groups
 
-    def single(cls,sym):
-        try:
-            factbase.add(cls._unify(sym))
-            return True
-        except ValueError:
-            return False
-
     groups = group_predicates()
     for (name,arity), mpredicates in groups.items():
         for symatom in itertools.chain(
@@ -334,7 +320,10 @@ def symbolic_atoms_to_facts(symbolic_atoms, unifier, *,
                 symbolic_atoms.by_signature(name,arity,False)):
             if facts_only and not symatom.is_fact: continue
             for pcls in mpredicates:
-                if single(pcls,symatom.symbol): continue
+                instance = pcls._unify(symatom.symbol)
+                if instance is None:
+                    continue
+                factbase.add(instance)
     return factbase
 
 

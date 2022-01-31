@@ -2433,9 +2433,6 @@ def _predicate_init_by_keyword_values(self, **kwargs):
     # Assign the sign
     self._sign = sign
 
-    # Create the raw clingo.Symbol object
-    self._raw = None
-
 # Construct a Predicate using keyword arguments
 def _predicate_init_by_positional_values(self, *args, **kwargs):
     argc = len(args)
@@ -2445,8 +2442,8 @@ def _predicate_init_by_positional_values(self, *args, **kwargs):
 
     clingoargs = []
     self._field_values = []
-    for f in self.meta:
-        v = _preprocess_field_value(f.defn, args[f.index])
+    for f, a in zip(self.meta, args):
+        v = _preprocess_field_value(f.defn, a)
         self._field_values.append(v)
         clingoargs.append(f.defn.pytocl(v))
 
@@ -2454,16 +2451,18 @@ def _predicate_init_by_positional_values(self, *args, **kwargs):
     self._field_values = tuple(self._field_values)
 
     # Calculate the sign of the literal and check that it matches the allowed values
-    sign = bool(kwargs["sign"]) if "sign" in kwargs else True
-    if self.meta.sign is not None and sign != self.meta.sign:
+    self._sign = bool(kwargs["sign"]) if "sign" in kwargs else True
+    if self.meta.sign is not None and self._sign != self.meta.sign:
         raise ValueError(("Predicate {} is defined to only allow {} "
                           "instances").format(type(self).__name__, self.meta.sign))
 
-    # Assign the sign
-    self._sign = sign
 
-    # Create the raw clingo.Symbol object
-    self._raw = None
+# Construct the object from an already unified pair of raw and values.
+def _predicate_init_by_unify(self, _raw, _values):
+    self._raw = _raw
+    self._field_values = _values
+    self._sign = _raw.positive
+
 
 #------------------------------------------------------------------------------
 # Metaclass constructor support functions to create the fields
@@ -2694,7 +2693,13 @@ def _define_field_for_predicate(cls) -> Type[BaseField]:
         raise TypeError("Value {} ({}) is not an instance of {}".format(v,type(v),cls))
 
     def _cltopy(v):
-        return cls(raw=v)
+        try:
+            instance = cls._unify(v)
+            if instance is not None:
+                return instance
+        except:
+            pass
+        raise ValueError("Failed to unify")
 
     field = type(field_name, (BaseField,),
                  { "pytocl": _pytocl, "cltopy": _cltopy,
@@ -2794,9 +2799,10 @@ class Predicate(object, metaclass=_PredicateMeta):
       "clone", or "Field".
 
     The constructor creates a predicate instance (i.e., a *fact*) or complex
-    term. If the ``raw`` parameter is used then it tries to unify the supplied
-    Clingo.Symbol with the class definition, and will raise a ValueError if it
-    fails to unify.
+    term.
+
+    Note: Using the ``raw`` parameter is now deprecated. You should use the
+    `unify()` function or `Unifier` class instead.
 
     Args:
       **kwargs:
@@ -2815,20 +2821,27 @@ class Predicate(object, metaclass=_PredicateMeta):
     #
     #--------------------------------------------------------------------------
     def __init__(self, *args, **kwargs):
-        if len(args) > 0:
-            if len(kwargs) > 1 or (len(kwargs) == 1 and "sign" not in kwargs):
-                raise ValueError(("Invalid Predicate initialisation: only \"sign\" is a "
-                                 "valid keyword argument when combined with positional "
-                                  "arguments: {}").format(kwargs))
+        # The is calculated and cached when __hash__() is called and _raw is
+        # set either when needed or (set explicitly during unification)
+        self._hash = None
+
+        if "_raw" in kwargs:
+            _predicate_init_by_unify(self, **kwargs)
+        elif args:
+            if kwargs:
+                if len(kwargs) > 1 or "sign" not in kwargs:
+                    msg = ("Invalid Predicate initialisation: only \"sign\" is a "
+                           "valid keyword argument when combined with positional "
+                           "arguments: {}").format(kwargs)
+                    raise ValueError(msg)
             _predicate_init_by_positional_values(self, *args,**kwargs)
+            self._raw = None
+
         elif "raw" in kwargs:
             _predicate_init_by_raw(self, **kwargs)
         else:
             _predicate_init_by_keyword_values(self, **kwargs)
-
-        # Force the hash to be calculated and cached.
-        self._hash = None
-        self.__hash__()
+            self._raw = None
 
 
     def __new__(cls, *args, **kwargs):
@@ -2928,7 +2941,25 @@ class Predicate(object, metaclass=_PredicateMeta):
     # Factory that returns a unified Predicate object
     @classmethod
     def _unify(cls, raw):
-        return cls(raw=raw)
+        """Unify a (raw) clingo.Symbol object with the class.
+
+        Returns None on failure to unify otherwise returns the new fact
+        """
+        try:
+            if cls.meta.arity != len(raw.arguments):
+                return None
+            if cls.meta.sign is not None and cls.meta.sign != raw.positive:
+                return None
+            if cls.meta.name != raw.name:
+                return None
+            values = tuple(f.defn.cltopy(a) for f, a in zip(cls.meta, raw.arguments))
+            instance = cls(_raw=raw, _values=values)
+            return instance
+        except (TypeError, ValueError):
+            return None
+        except AttributeError as e:
+            raise ValueError((f"Cannot unify with object {raw} ({type(raw)}) as "
+                              "it is not a clingo Symbol Function object"))
 
     #--------------------------------------------------------------------------
     # Overloaded index operator to access the values and len operator

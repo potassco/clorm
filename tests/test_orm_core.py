@@ -1225,6 +1225,7 @@ class PredicateTestCase(unittest.TestCase):
 
         self.assertEqual(f1.raw, raw_f1)
         self.assertEqual(F(raw=raw_f1), f1)
+        self.assertEqual(F._unify(raw_f1), f1)
 
         self.assertEqual(str(F(101,tuple([]),202)), """f(101,(),202)""")
         self.assertEqual(str(F(1,tuple([1,2,3,4]),2)),
@@ -1714,12 +1715,17 @@ class PredicateInternalUnifyTestCase(unittest.TestCase):
         self.assertEqual(f1, f2)
         self.assertEqual(f1.raw, func)
 
+        func2=Function("fact",[String("1"),String("test")])
         with self.assertRaises(ValueError) as ctx:
-            func2=Function("fact",[String("1"),String("test")])
             f=Fact(raw=func2)
+        self.assertEqual(Fact._unify(func2), None)
 
         with self.assertRaises(ValueError) as ctx:
             f=Fact(raw=[1,2,3])
+
+        with self.assertRaises(ValueError) as ctx:
+            Fact._unify([1,2,3])
+        check_errmsg("Cannot unify with object ", ctx)
 
 
     # --------------------------------------------------------------------------
@@ -2274,8 +2280,7 @@ class PredicateInternalUnifyTestCase(unittest.TestCase):
         self.assertEqual(gfact1_pred.asim, "ok")
 
         bfact1_sym = Function("fact",[String("1"),String("Dave"),Function("ok",[])])
-        with self.assertRaises(ValueError) as ctx:
-            bfact1_pred = Fact._unify(bfact1_sym)
+        self.assertEqual(Fact._unify(bfact1_sym), None)
 
     #--------------------------------------------------------------------------
     # Test unifying a symbol with a predicate
@@ -2297,8 +2302,7 @@ class PredicateInternalUnifyTestCase(unittest.TestCase):
         self.assertEqual(good_fact_pred1.afun, Fact.Fun(1,"Dave"))
 
         bad_fact_symbol1 = Function("fact",[Function("fun",[Number(1)])])
-        with self.assertRaises(ValueError) as ctx:
-            bad_fact_pred1 = Fact._unify(bad_fact_symbol1)
+        self.assertEqual(Fact._unify(bad_fact_symbol1), None)
 
         # A field value can only be set at construction
         with self.assertRaises(AttributeError) as ctx:
