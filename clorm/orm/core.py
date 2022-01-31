@@ -1226,7 +1226,12 @@ class BaseField(object, metaclass=_AbstractBaseFieldMeta):
 
     @classmethod
     def unifies(cls, v):
-        """Returns whether a `Clingo.Symbol` can be unified with this type of term"""
+        """Returns whether a `Clingo.Symbol` can be unified with this type of term
+
+        Note: this function is deprecated. It is no longer used internally and
+        doesn't serve any real purpose for clorm users.
+
+        """
         try:
             cls.cltopy(v)
         except (TypeError,ValueError):
