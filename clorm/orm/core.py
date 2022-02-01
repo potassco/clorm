@@ -2289,15 +2289,13 @@ class PredicateDefn(object):
 
         This lets the user create a join query between a predicate and itself.
 
-        If a name is specified then a unique name is generated. Uses a component
-        uuid4() as the unique number - aliases shouldn't be used often so
-        using a small component should still be unlikely to clash.
+        If a name is specified then a unique name is generated. Uses the
+        uuid.uuid4() function to avoid clashes.
 
         """
         if not name:
             classname = self._parent_cls.__name__
-            num = uuid.uuid4().time_mid
-            name = "({}.alias.{})".format(classname,num)
+            name = "({}.alias.{})".format(classname,uuid.uuid4().hex)
         return self._path_class([PathIdentity(self._parent_cls,name)])
 
 
