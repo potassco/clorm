@@ -8,9 +8,12 @@
 # to be completed.
 # ------------------------------------------------------------------------------
 
+from typing import Tuple
 import unittest
 import operator
 import pickle
+
+from clorm.orm.core import field
 from .support import check_errmsg
 
 from clingo import Control, Number, String, Function, SymbolType
@@ -1700,6 +1703,15 @@ class FBP_F(Predicate):
     aint = IntegerField
     astr = StringField
 
+class FBP_Tuple_Field(Predicate):
+    atuple = (IntegerField, IntegerField)
+
+class FBP_Tuple_annotation(Predicate):
+    atuple: Tuple[int, int]
+
+class FBP_Tuple_field(Predicate):
+    atuple = field((IntegerField, IntegerField))
+
 class FactBasePicklingTestCase(unittest.TestCase):
     def setUp(self):
         pass
@@ -1752,6 +1764,25 @@ class FactBasePicklingTestCase(unittest.TestCase):
         out=list(fb2.query(FBP_F).order_by(FBP_F.aint).all())
         self.assertEqual(out,[f1,f2,f3])
 
+    def test_pickle_anonTuple(self):
+
+        f = FBP_Tuple_Field((1,2))
+        with self.subTest("standard definition with Field"):
+            data=pickle.dumps(f)
+            fpickled = pickle.loads(data)
+            self.assertEqual(f,fpickled)
+
+        f = FBP_Tuple_annotation((1,2))
+        with self.subTest("definition with type annotation"):
+            data=pickle.dumps(f)
+            fpickled = pickle.loads(data)
+            self.assertEqual(f,fpickled)
+
+        f = FBP_Tuple_field((1,2))
+        with self.subTest("definition with field-Function"):
+            data=pickle.dumps(f)
+            fpickled = pickle.loads(data)
+            self.assertEqual(f,fpickled)
 
 #------------------------------------------------------------------------------
 # main
