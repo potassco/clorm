@@ -23,12 +23,16 @@ jobs:
         auto-update-conda: true
         python-version: ${{ matrix.python-version }}
         activate-environment: clorm
-        channels: potassco,conda-forge
+        channels: conda-forge
 
     - name: install prerequisites
       shell: pwsh
       run: |
-        pip install pytest 'clingo>=5.5.1'
+        conda install --file requirements.txt
+
+    - name: install clorm
+      shell: pwsh
+      run: |
         python setup.py install
 
     - name: info
@@ -40,4 +44,5 @@ jobs:
 
     - name: test
       shell: pwsh
-      run: pytest
+      run: |
+        python -m unittest tests
