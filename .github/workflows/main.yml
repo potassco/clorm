@@ -16,19 +16,15 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-
-    - name: setup miniconda
-      uses: conda-incubator/setup-miniconda@v2
+    - name: setup python ${{ matrix.python-version }}
+      uses: actions/setup-python@v2
       with:
-        auto-update-conda: true
         python-version: ${{ matrix.python-version }}
-        activate-environment: clorm
-        channels: conda-forge
 
     - name: install prerequisites
       shell: pwsh
       run: |
-        conda install --file requirements.txt
+        pip install -r requirements.txt
 
     - name: install clorm
       shell: pwsh
@@ -38,9 +34,8 @@ jobs:
     - name: info
       shell: pwsh
       run: |
-        conda info
-        conda list
         python -VV
+        pip list
 
     - name: test
       shell: pwsh
