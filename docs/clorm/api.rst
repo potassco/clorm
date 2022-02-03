@@ -34,6 +34,8 @@ more intuitive Python objects.
 
 .. autofunction:: clorm.define_nested_list_field
 
+.. autofunction:: clorm.define_flat_list_field
+
 .. _api_predicates:
 
 Predicates and Complex Terms
