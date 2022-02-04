@@ -27,6 +27,7 @@ setup(
     license="MIT",
     url="https://github.com/potassco/clorm",
     packages=["clorm","clorm.orm","clorm.util","clorm.lib"],
+    package_data={"clorm": ["py.typed"]},
     install_requires=['clingo'] if sys.version_info >= (3, 8) else ['clingo', 'typing_extensions'],
     long_description=read("README.rst"),
 )
