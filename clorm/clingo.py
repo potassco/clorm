@@ -14,6 +14,7 @@ import functools
 import itertools
 from collections.abc import Iterable, Iterator, Generator
 from abc import ABCMeta
+from typing import TYPE_CHECKING, Any, List, Optional, Sequence, Union, overload
 from .orm import *
 from .util.wrapper import WrapperMetaClass, init_wrapper, make_class_wrapper
 
@@ -289,8 +290,25 @@ class ControlOverride(object):
     parameter.
 
     '''
+    @overload
+    def __init__(self, arguments: Sequence[str] = [],
+                 logger: Optional[Logger] = None, message_limit: int = 20) -> None: ...
 
-    def __init__(self, *args, **kwargs):
+    @overload
+    def __init__(self, control_: Any) -> None: ...
+
+    @overload
+    def __init__(
+        self,
+        *args: Any,
+        unifier: Union[List[Predicate], SymbolPredicateUnifier],
+        **kwargs: Any
+    ) -> None: ...
+
+    @overload
+    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         self._unifier = None
         if "unifier" in kwargs: self._unifier = _build_unifier(kwargs["unifier"])
 
@@ -475,7 +493,13 @@ class ControlOverride(object):
         return getattr(self._wrapped,attr)
 
 
-Control = make_class_wrapper(OControl, ControlOverride)
+_clorm_control = make_class_wrapper(OControl, ControlOverride)
+if TYPE_CHECKING:
+    class Control(_clorm_control, OControl):  # type: ignore
+        pass
+else:
+    Control = _clorm_control
+
 
 #------------------------------------------------------------------------------
 # This is probably bad practice... Modify the original clingo docstrings so that
