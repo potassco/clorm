@@ -225,6 +225,9 @@ def String(string):
 def Number(number):
     return Symbol(SymbolType.Number,number)
 
+def Tuple_(args=[]):
+    return Symbol(SymbolType.Function,"",args)
+
 
 #--------------------------------------------------------------------------------
 # Functions to convert between clingo.Symbol and noclingo.Symbol
