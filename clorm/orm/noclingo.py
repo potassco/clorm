@@ -196,8 +196,11 @@ class Symbol(object):
 
         # SymbolType.Function
         if not self._args: return str(self._value)
-        return "{}{}({})".format("" if self._sign else "-", self._value,
-                                 ",".join([str(a) for a in self._args]))
+        if self._value or len(self._args) > 1:
+            return "{}{}({})".format("" if self._sign else "-", self._value,
+                                     ",".join([str(a) for a in self._args]))
+        # A singleton tuple
+        return "({},)".format(str(self._args[0]))
 
     def __repr__(self):
         return self.__str__()

@@ -124,6 +124,14 @@ class NoClingoTestCase(unittest.TestCase):
         nc = noclingo.Function("", [nc1,nc2])
         c =  clingo.Function("", [c1,c2])
 
+        self.assertEqual(str(nc), str(c))
+        # Check that a tuple with a single element is represented correctly
+
+        nc_one_tuple = noclingo.Function("", [nc2])
+        c_one_tuple = clingo.Function("", [c2])
+        self.assertEqual(str(nc_one_tuple), str(c_one_tuple))
+
+
     def test_hash_and_equality_comparison_ops(self):
         nc1 = noclingo.String("aaaGGDFa")
         nc2 = noclingo.String("aaaGGDFa")
