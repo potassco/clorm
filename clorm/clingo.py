@@ -89,24 +89,24 @@ class ModelOverride(object):
 
     '''
 
-    def __init__(self, model,unifier=None):
+    def __init__(self, model: OModel, unifier: Optional[Union[List[Predicate], SymbolPredicateUnifier]] = None) -> None:
         self._unifier = _build_unifier(unifier)
-        _check_is_func(model,"symbols")
-        init_wrapper(self,wrapped_=model)
+        _check_is_func(model, "symbols")
+        init_wrapper(self, wrapped_=model)
 
-    #------------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------
     # Return the underlying model object
-    #------------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------
     @property
-    def model_(self):
+    def model_(self) -> OModel:
         '''Returns the underlying clingo.Model object.'''
         return self._wrapped
 
-    #------------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------
     # A new function to return a list of facts - similar to symbols
-    #------------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------
 
-    def facts(self, *args, **kwargs):
+    def facts(self, *args: Any, **kwargs: Any) -> FactBase:
         '''Returns a FactBase containing the facts in the model that unify with the
         SymbolPredicateUnifier.
 
@@ -133,39 +133,44 @@ class ModelOverride(object):
         if len(nargs) >= 5 and "raise_on_empty" in nkwargs:
             raise TypeError("facts() got multiple values for argument 'raise_on_empty'")
 
-        raise_on_empty = nkwargs.pop("raise_on_empty",False)
-        if len(nargs) >= 5: raise_on_empty = nargs.pop(4)
+        raise_on_empty = nkwargs.pop("raise_on_empty", False)
+        if len(nargs) >= 5:
+            raise_on_empty = nargs.pop(4)
         unifier = nkwargs.pop("unifier",None)
-        if len(nargs) >= 1: unifier = nargs.pop(0)
+        if len(nargs) >= 1:
+            unifier = nargs.pop(0)
 
-        if unifier is not None: unifier=_build_unifier(unifier)
-        else: unifier=self._unifier
-        if unifier is None:
+        unifier_ = _build_unifier(unifier) if unifier is not None else self._unifier
+        if unifier_ is None:
             msg = "Missing a predicate unifier specification in function call " + \
                 "(no default was given at model instantiation)"
             raise ValueError(msg)
 
-        return unifier.unify(
-            symbols=self._wrapped.symbols(*nargs,**nkwargs),
+        return unifier_.unify(
+            symbols=self.model_.symbols(*nargs, **nkwargs),
             raise_on_empty=raise_on_empty,
             delayed_init=True)
 
-    #------------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------
     # Overide contains
-    #------------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------
 
-    def contains(self, fact):
+    def contains(self, fact: Union[Predicate, oclingo.Symbol]) -> bool:
         '''Return whether the fact or symbol is contained in the model. Extends
         ``clingo.Model.contains`` to allow for clorm facts as well as a clingo
         symbols.
 
         '''
-        if isinstance(fact, Predicate):
-            return self._wrapped.contains(fact.raw)
-        return self._wrapped.contains(fact)
+        atom = fact.raw if isinstance(fact, Predicate) else fact
+        return self.model_.contains(atom)
 
 
-Model = make_class_wrapper(OModel, ModelOverride)
+__clorm_Model = make_class_wrapper(OModel, ModelOverride)
+if TYPE_CHECKING:
+    class Model(__clorm_Model, OSolveHandle):  # type: ignore
+        pass
+else:
+    Model = __clorm_Model
 
 # ------------------------------------------------------------------------------
 # Wrap clingo.SolveHandle and override some functions
