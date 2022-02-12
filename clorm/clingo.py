@@ -177,37 +177,6 @@ else:
 # ------------------------------------------------------------------------------
 
 
-class SolveHandleGenerator(Generator[Model, None, None]):
-    def __init__(self, gen: Iterator[OModel], unifier: Any) -> None:
-        self._gen = gen
-        self._unifier = unifier
-
-    def __iter__(self):
-        return self
-
-    def __next__(self):
-        model = next(self._gen)
-        if self._unifier:
-            return Model(model, unifier=self._unifier)
-        else:
-            return Model(model)
-
-    # TODO throw, send, close, del will raise an error when called...
-
-    def throw(self, typ, val=None, tb=None):
-        self._gen.throw(typ, val, tb)
-
-    def send(self, value):
-        self._gen.send(value)
-
-    def close(self):
-        self._gen.close()
-
-    def __del__(self):
-        if oclingo.__version__ >= "5.5.0":
-            self._gen.__del__()
-
-
 class SolveHandleOverride(object):
 #class SolveHandle(OSolveHandle, metaclass=WrapperMetaClass):
     '''Handle for solve calls.
@@ -237,7 +206,8 @@ class SolveHandleOverride(object):
     # ------------------------------------------------------------------------------
 
     def __iter__(self):
-        return SolveHandleGenerator(iter(self.solvehandle_), self._unifier)
+        for model in self.solvehandle_:
+            yield Model(model, unifier=self._unifier)
 
     def __enter__(self):
         self.solvehandle_.__enter__()
