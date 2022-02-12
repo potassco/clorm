@@ -21,14 +21,14 @@ from .util.wrapper import WrapperMetaClass, init_wrapper, make_class_wrapper
 # 'Control', 'Model', 'SolveHandle' ]. The following seems to work but I'm not
 # sure if this is bad.
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Reference to the original clingo objects so that when we replace them our
 # references point to the originals.
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 import clingo as oclingo
-OModel=oclingo.Model
-OSolveHandle=oclingo.SolveHandle
-OControl=oclingo.Control
+OModel = oclingo.Model
+OSolveHandle = oclingo.SolveHandle
+OControl = oclingo.Control
 
 if oclingo.__version__ >= "5.5.0":
     from clingo.ast import parse_string
@@ -45,21 +45,11 @@ __version__ = oclingo.__version__
 # ------------------------------------------------------------------------------
 
 
-@overload
-def _build_unifier() -> None: ...
-
-
-@overload
-def _build_unifier(unifier: SymbolPredicateUnifier) -> SymbolPredicateUnifier: ...
-
-
-@overload
-def _build_unifier(unifier: List[Predicate]) -> SymbolPredicateUnifier: ...
-
-
 def _build_unifier(unifier: Optional[Union[List[Predicate], SymbolPredicateUnifier]] = None) -> Optional[SymbolPredicateUnifier]:
-    if unifier is None: return None
-    if isinstance(unifier, SymbolPredicateUnifier): return unifier
+    if unifier is None:
+        return None
+    if isinstance(unifier, SymbolPredicateUnifier):
+        return unifier
     return SymbolPredicateUnifier(predicates=unifier)
 
 
@@ -70,7 +60,7 @@ def _build_unifier(unifier: Optional[Union[List[Predicate], SymbolPredicateUnifi
 def _check_is_func(obj: Any, name: str) -> None:
     if not callable(obj.__getattribute__(name)):
         raise AttributeError(("Wrapped object of type '{}' does not have "
-                                  "a function '{}()'").format(type(obj),name))
+                              "a function '{}()'").format(type(obj), name))
 
 
 # ------------------------------------------------------------------------------
@@ -136,7 +126,7 @@ class ModelOverride(object):
         raise_on_empty = nkwargs.pop("raise_on_empty", False)
         if len(nargs) >= 5:
             raise_on_empty = nargs.pop(4)
-        unifier = nkwargs.pop("unifier",None)
+        unifier = nkwargs.pop("unifier", None)
         if len(nargs) >= 1:
             unifier = nargs.pop(0)
 
@@ -189,7 +179,7 @@ class SolveHandleOverride(object):
 
     '''
 
-    def __init__(self, handle: Any, unifier: Optional[Union[List[Predicate], SymbolPredicateUnifier]] = None) -> None:
+    def __init__(self, handle: OSolveHandle, unifier: Optional[Union[List[Predicate], SymbolPredicateUnifier]] = None) -> None:
         init_wrapper(self, wrapped_=handle)
         self._unifier = _build_unifier(unifier)
 
@@ -255,7 +245,8 @@ def _expand_assumptions(assumptions: Iterable[Tuple[Union[Iterable[Union[Predica
             if isinstance(arg, Predicate):
                 _add_fact(arg, bval)
             elif isinstance(arg, Iterable):
-                for f in arg: _add_fact(f, bval)
+                for f in arg:
+                    _add_fact(f, bval)
             else:
                 _add_fact(arg, bval)
     except (TypeError, ValueError) as e:
@@ -477,17 +468,15 @@ class ControlOverride(object):
 
             @functools.wraps(on_model)
             def on_model_wrapper(model):
-                if self._unifier: return on_model(Model(model, self._unifier))
-                else: return on_model(Model(model))
-            nkwargs["on_model"] =  on_model_wrapper
+                return on_model(Model(model, self.unifier))
+            nkwargs["on_model"] = on_model_wrapper
 
         # Call the wrapped solve function and handle the return value
         # appropriately
         result = self._wrapped.solve(**nkwargs)
-        if ("yield_" in nkwargs and nkwargs["yield_"])  or \
+        if ("yield_" in nkwargs and nkwargs["yield_"]) or \
            (async_keyword in nkwargs and nkwargs[async_keyword]):
-            if self._unifier: return SolveHandle(result,unifier=self._unifier)
-            else: return SolveHandle(result)
+            return SolveHandle(result, unifier=self._unifier)
         else:
             return result
 
