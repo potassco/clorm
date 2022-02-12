@@ -10,7 +10,7 @@
 # ------------------------------------------------------------------------------
 
 import itertools
-from typing import Any, Union
+from typing import Any, Iterable, Union
 from collections import abc
 
 import clingo
@@ -249,7 +249,7 @@ def unify(unifier,symbols,ordered=False):
 
 if clingo.__version__ >= "5.5.0":
 
-    def control_add_facts(ctrl, facts):
+    def control_add_facts(ctrl: clingo.Control, facts: Iterable[Union[Predicate, clingo.Symbol]]) -> None:
         with ctrl.backend() as bknd:
             for f in facts:
                 raw=f.raw if isinstance(f,Predicate) else f
@@ -258,7 +258,7 @@ if clingo.__version__ >= "5.5.0":
 else:
     import clingo.ast as ast
 
-    def control_add_facts(ctrl, facts):
+    def control_add_facts(ctrl: clingo.Control, facts: Iterable[Union[Predicate, clingo.Symbol]]) -> None:
         with ctrl.builder() as bldr:
             line=1
             for f in facts:
@@ -528,7 +528,7 @@ def parse_fact_files(files,unifier,*,factbase=None,
 # A pure-python fact parser that uses Lark
 #------------------------------------------------------------------------------
 
-from .lark_fact_parser import Lark_StandAlone, Transformer, VisitError, LarkError, UnexpectedInput
+from .lark_fact_parser import Lark_StandAlone, Symbol, Transformer, VisitError, LarkError, UnexpectedInput
 
 class _END:
     pass

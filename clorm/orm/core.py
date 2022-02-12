@@ -2883,7 +2883,7 @@ class Predicate(object, metaclass=_PredicateMeta):
 
     # Get the underlying clingo.Symbol object
     @property
-    def raw(self):
+    def raw(self) -> clingo.Symbol:
         """Returns the underlying clingo.Symbol object"""
         if self._raw is None: self.symbol
         if isinstance(self._raw, noclingo.Symbol):

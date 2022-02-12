@@ -24,7 +24,7 @@ https://code.activestate.com/recipes/496741-object-proxying/
 
 import functools
 import inspect
-from typing import Optional, Type, TypeVar, Union, overload
+from typing import Any, Optional, Type, TypeVar, Union, overload
 
 _T = TypeVar("_T", bound=object)
 
@@ -54,7 +54,7 @@ def _check_wrapper_object(wrapper,strict=False):
                          "{}").format(wrapper._wrapped,WrappedType))
 
 # Constructor for every Predicate sub-class
-def init_wrapper(wrapper, *args, **kwargs):
+def init_wrapper(wrapper: Any, *args: Any, **kwargs: Any) -> None:
     Wrapped = wrapper._wrapped_cls
     if "wrapped_" in kwargs:
         if len(args) != 0 and len(kwargs) != 1:

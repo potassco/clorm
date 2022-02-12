@@ -12,9 +12,9 @@ import io
 import sys
 import functools
 import itertools
-from collections.abc import Iterable, Iterator, Generator
+from collections.abc import Iterator, Generator
 from abc import ABCMeta
-from typing import TYPE_CHECKING, Any, List, Optional, Sequence, Union, overload
+from typing import TYPE_CHECKING, Any, Iterable, List, Optional, Sequence, Tuple, Union, overload
 from .orm import *
 from .util.wrapper import WrapperMetaClass, init_wrapper, make_class_wrapper
 
@@ -46,7 +46,20 @@ __version__ = oclingo.__version__
 # been provided.
 # ------------------------------------------------------------------------------
 
-def _build_unifier(unifier):
+
+@overload
+def _build_unifier() -> None: ...
+
+
+@overload
+def _build_unifier(unifier: SymbolPredicateUnifier) -> SymbolPredicateUnifier: ...
+
+
+@overload
+def _build_unifier(unifier: List[Predicate]) -> SymbolPredicateUnifier: ...
+
+
+def _build_unifier(unifier: Union[List[Predicate], SymbolPredicateUnifier] = None) -> Optional[SymbolPredicateUnifier]:
     if unifier is None: return None
     if isinstance(unifier, SymbolPredicateUnifier): return unifier
     return SymbolPredicateUnifier(predicates=unifier)
@@ -56,7 +69,7 @@ def _build_unifier(unifier):
 # Helper function to test that an attribute exists and corresponds to a function.
 # ------------------------------------------------------------------------------
 
-def _check_is_func(obj,name):
+def _check_is_func(obj: Any, name: str) -> None:
     if not callable(obj.__getattribute__(name)):
         raise AttributeError(("Wrapped object of type '{}' does not have "
                                   "a function '{}()'").format(type(obj),name))
@@ -240,39 +253,40 @@ SolveHandle = make_class_wrapper(OSolveHandle, SolveHandleOverride)
 # symbols or clorm predicates. This needs to be expanded into a list of
 # symbol-bool pairs.
 # ------------------------------------------------------------------------------
-def _expand_assumptions(assumptions):
+def _expand_assumptions(assumptions: Iterable[Tuple[Union[Iterable[Union[Predicate, Symbol]],
+                                                          Predicate, Symbol], bool]]) -> List[Tuple[Symbol, bool]]:
     pos_assump = set()
     neg_assump = set()
 
-    def _add_fact(fact,bval):
+    def _add_fact(fact: Union[Predicate, Symbol], bval: bool) -> None:
         nonlocal pos_assump, neg_assump
-        if isinstance(fact, Predicate): raw = fact.raw
-        else: raw = fact
-        if bval: pos_assump.add(raw)
-        else: neg_assump.add(raw)
+        raw = fact.raw if isinstance(fact, Predicate) else fact
+        if bval:
+            pos_assump.add(raw)
+        else:
+            neg_assump.add(raw)
 
     try:
-        for (arg,bval) in assumptions:
+        for (arg, bval) in assumptions:
             if isinstance(arg, Predicate):
-                _add_fact(arg,bval)
+                _add_fact(arg, bval)
             elif isinstance(arg, Iterable):
-                for f in arg: _add_fact(f,bval)
+                for f in arg: _add_fact(f, bval)
             else:
-                _add_fact(arg,bval)
+                _add_fact(arg, bval)
     except (TypeError, ValueError) as e:
         raise TypeError(("Invalid solve assumptions. Expecting list of arg-bool "
                          "pairs (arg is a raw-symbol/predicate or a collection "
                          "of raw-symbols/predicates). Got: {}").format(assumptions))
 
     # Now returned a list of raw assumptions combining pos and neg
-    pos = [ (raw,True) for raw in pos_assump ]
-    neg = [ (raw,False) for raw in neg_assump ]
-    return list(itertools.chain(pos,neg))
+    pos = [(raw, True) for raw in pos_assump]
+    neg = [(raw, False) for raw in neg_assump]
+    return list(itertools.chain(pos, neg))
 
 # ------------------------------------------------------------------------------
 # Control class
 # ------------------------------------------------------------------------------
-
 
 
 class ControlOverride(object):
@@ -295,7 +309,7 @@ class ControlOverride(object):
                  logger: Optional[Logger] = None, message_limit: int = 20) -> None: ...
 
     @overload
-    def __init__(self, control_: Any) -> None: ...
+    def __init__(self, control_: oclingo.Control) -> None: ...
 
     @overload
     def __init__(
@@ -310,34 +324,36 @@ class ControlOverride(object):
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         self._unifier = None
-        if "unifier" in kwargs: self._unifier = _build_unifier(kwargs["unifier"])
+        if "unifier" in kwargs:
+            self._unifier = _build_unifier(kwargs["unifier"])
 
         # Do we need to build a clingo.Control object or use an existing one. If
         # using existing one make sure the wrapped object has at least the
         # ground and solve functions.
         if len(args) == 0 and "control_" in kwargs:
-            wrapped_=kwargs["control_"]
-            _check_is_func(wrapped_,"solve")
-            _check_is_func(wrapped_,"ground")
-            init_wrapper(self,wrapped_=wrapped_)
+            wrapped_ = kwargs["control_"]
+            _check_is_func(wrapped_, "solve")
+            _check_is_func(wrapped_, "ground")
+            init_wrapper(self, wrapped_=wrapped_)
         else:
             kwargs2 = dict(kwargs)
-            if "unifier" in kwargs2: del kwargs2["unifier"]
-            init_wrapper(self,*args,**kwargs2)
+            if "unifier" in kwargs2:
+                del kwargs2["unifier"]
+            init_wrapper(self, *args, **kwargs2)
 
-    #------------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------
     # Return the underlying control object
-    #------------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------
     @property
-    def control_(self):
+    def control_(self) -> OControl:
         '''Returns the underlying clingo.Control object.'''
         return self._wrapped
 
-    #------------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------
     # Make the unifier a property with a getter and setter
-    #------------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------
     @property
-    def unifier(self):
+    def unifier(self) -> Optional[SymbolPredicateUnifier]:
         """Get/set the unifier.
 
         Unifier can be specified as a SymbolPredicateUnifier or a collection of
@@ -347,13 +363,13 @@ class ControlOverride(object):
         return self._unifier
 
     @unifier.setter
-    def unifier(self,unifier):
+    def unifier(self, unifier: Union[List[Predicate], SymbolPredicateUnifier]) -> None:
         self._unifier = _build_unifier(unifier)
 
-    #------------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------
     # A new function to add facts from a factbase or a list of facts
-    #------------------------------------------------------------------------------
-    def add_facts(self, facts):
+    # ------------------------------------------------------------------------------
+    def add_facts(self, facts: Iterable[Union[Predicate, Symbol]]) -> None:
         '''Add facts to the control object. Note: facts must be added before grounding.
 
            This function can take an arbitrary collection containing a mixture
@@ -367,10 +383,10 @@ class ControlOverride(object):
         '''
         control_add_facts(self._wrapped, facts)
 
-    #------------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------
     # Overide assign_external to deal with Predicate object and a Clingo Symbol
-    #------------------------------------------------------------------------------
-    def assign_external(self, external, truth):
+    # ------------------------------------------------------------------------------
+    def assign_external(self, external: Iterable[Union[Predicate, oclingo.Symbol, int]], truth: Optional[bool]) -> None:
         '''Assign a truth value to an external fact (or collection of facts)
 
         A fact can be a raw clingo.Symbol object, a clorm.Predicate instance, or
@@ -380,21 +396,22 @@ class ControlOverride(object):
         This function extends ``clingo.Control.release_external``.
 
         '''
-        def _assign_fact(fact):
+        def _assign_fact(fact: Union[Predicate, oclingo.Symbol, int]) -> None:
             if isinstance(fact, Predicate):
-                self._wrapped.assign_external(fact.raw, truth)
+                self.control_.assign_external(fact.raw, truth)
             else:
-                self._wrapped.assign_external(fact, truth)
+                self.control_.assign_external(fact, truth)
 
         if isinstance(external, Iterable):
-            for f in external: _assign_fact(f)
+            for f in external:
+                _assign_fact(f)
         else:
             _assign_fact(external)
 
-    #------------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------
     # Overide release_external to deal with Predicate object and a Clingo Symbol
-    #------------------------------------------------------------------------------
-    def release_external(self, external):
+    # ------------------------------------------------------------------------------
+    def release_external(self, external: Iterable[Union[Predicate, oclingo.Symbol, int]]) -> None:
         '''Release an external fact (or collection of facts)
 
         A fact can be a raw clingo.Symbol object, a clorm.Predicate instance, or
@@ -404,18 +421,19 @@ class ControlOverride(object):
         This function extends ``clingo.Control.release_external``.
 
         '''
-        def _release_fact(fact):
+        def _release_fact(fact: Union[Predicate, oclingo.Symbol, int]) -> None:
             if isinstance(fact, Predicate):
-                self._wrapped.release_external(fact.raw)
+                self.control_.release_external(fact.raw)
             else:
-                self._wrapped.release_external(fact)
+                self.control_.release_external(fact)
 
         if isinstance(external, Iterable):
-            for f in external: _release_fact(f)
+            for f in external:
+                _release_fact(f)
         else:
             _release_fact(external)
 
-    #---------------------------------------------------------------------------
+    # ---------------------------------------------------------------------------
     # Overide solve and if necessary replace on_model with a wrapper that
     # returns a clorm.Model object. Also because of the issue with using the
     # keyword "async" as a parameter in Python 3.7 (which forced clingo 5.3.1+
@@ -442,21 +460,21 @@ class ControlOverride(object):
         # Build the list of valid arguments; using the correct "async" or
         # "async_" parameter based on the clingo version.  Note: "async" is a
         # keyword for Python 3.7+.
-        async_keyword="async"
-        if oclingo.__version__ > '5.3.1': async_keyword="async_"
+        async_keyword = "async_" if oclingo.__version__ > '5.3.1' else "async"
 
-        posnargs = ["assumptions","on_model","on_statistics",
-                    "on_finish","yield_",async_keyword]
+        posnargs = ["assumptions", "on_model", "on_statistics",
+                    "on_finish", "yield_", async_keyword]
         validargs = set(posnargs)
 
         # translate all positional arguments into keyword arguments.
         if len(args) > len(posnargs):
             raise TypeError(("solve() takes {} positional arguments but {}"
-                             "were given").format(len(posnargs),len(args)))
+                             "were given").format(len(posnargs), len(args)))
         nkwargs = {}
-        for idx,arg in enumerate(args): nkwargs[posnargs[idx]] = arg
+        for idx, arg in enumerate(args):
+            nkwargs[posnargs[idx]] = arg
 
-        for k,v in kwargs.items():
+        for k, v in kwargs.items():
             if k not in validargs:
                 raise TypeError(("solve() got an unexpected keyword "
                                  "argument '{}'").format(k))
@@ -471,7 +489,8 @@ class ControlOverride(object):
 
         # generate a new on_model function if necessary
         if "on_model" in nkwargs and nkwargs["on_model"] is not None:
-            on_model=nkwargs["on_model"]
+            on_model = nkwargs["on_model"]
+
             @functools.wraps(on_model)
             def on_model_wrapper(model):
                 if self._unifier: return on_model(Model(model, self._unifier))
@@ -488,20 +507,19 @@ class ControlOverride(object):
         else:
             return result
 
+    def __getattr__(self, attr):
+        return getattr(self.control_, attr)
 
-    def __getattr__(self,attr):
-        return getattr(self._wrapped,attr)
 
-
-_clorm_control = make_class_wrapper(OControl, ControlOverride)
+__clorm_control = make_class_wrapper(OControl, ControlOverride)
 if TYPE_CHECKING:
-    class Control(_clorm_control, OControl):  # type: ignore
+    class Control(__clorm_control, OControl):  # type: ignore
         pass
 else:
-    Control = _clorm_control
+    Control = __clorm_control
 
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # This is probably bad practice... Modify the original clingo docstrings so that
 # when I generate the autodoc with clingo being mocked it installs a reference
 # to the original clingo docs.
@@ -518,8 +536,8 @@ Model.__doc__ += OModel.__doc__
 Model.contains.__doc__ += OModel.contains.__doc__
 SolveHandle.__doc__ += OSolveHandle.__doc__
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # main
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 if __name__ == "__main__":
     raise RuntimeError('Cannot run modules')
