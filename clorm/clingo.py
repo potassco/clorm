@@ -8,13 +8,11 @@ for more details.
 # TODO: For clorm v2.0 the raise_on_empty parameter in Model.facts() should be
 #       moved to the second parameter position.
 
-import io
-import sys
 import functools
 import itertools
-from typing import TYPE_CHECKING, Any, Generator, Iterable, Iterator, List, Optional, Sequence, Tuple, Union, overload
+from typing import TYPE_CHECKING, Any, Iterable, List, Optional, Sequence, Tuple, Union, cast, overload
 from .orm import *
-from .util.wrapper import WrapperMetaClass, init_wrapper, make_class_wrapper
+from .util.wrapper import init_wrapper, make_class_wrapper
 
 # I want to replace the original clingo - re-exporting everything in clingo
 # except replacing the class overides with my version: _class_overides = [
@@ -33,10 +31,11 @@ OControl = oclingo.Control
 if oclingo.__version__ >= "5.5.0":
     from clingo.ast import parse_string
 else:
-    from clingo import parse_program
+    from clingo import parse_program  # type: ignore
 
 from clingo import *
-__all__ = list([ k for k in oclingo.__dict__.keys() if k[0] != '_'])
+
+__all__ = list([k for k in oclingo.__dict__.keys() if k[0] != '_'])
 __version__ = oclingo.__version__
 
 # ------------------------------------------------------------------------------
@@ -356,7 +355,7 @@ class ControlOverride(object):
           facts: a collection of ``clorm.Predicate`` or ``clingo.Symbol`` objects
 
         '''
-        control_add_facts(self._wrapped, facts)
+        control_add_facts(self.control_, facts)
 
     # ------------------------------------------------------------------------------
     # Overide assign_external to deal with Predicate object and a Clingo Symbol
@@ -416,7 +415,7 @@ class ControlOverride(object):
     # function parameters. At some point will drop support for older clingo and
     # can simplify this function.
     # ---------------------------------------------------------------------------
-    def solve(self, *args, **kwargs):
+    def solve(self, *args: Any, **kwargs: Any) -> Union[SolveHandle, SolveResult]:
         '''Run the clingo solver.
 
         This function extends ``clingo.Control.solve()`` in two ways:
@@ -473,12 +472,12 @@ class ControlOverride(object):
 
         # Call the wrapped solve function and handle the return value
         # appropriately
-        result = self._wrapped.solve(**nkwargs)
+        result = self.control_.solve(**nkwargs)
         if ("yield_" in nkwargs and nkwargs["yield_"]) or \
            (async_keyword in nkwargs and nkwargs[async_keyword]):
-            return SolveHandle(result, unifier=self._unifier)
+            return SolveHandle(cast(OSolveHandle, result), unifier=self._unifier)
         else:
-            return result
+            return cast(SolveResult, result)
 
     def __getattr__(self, attr):
         return getattr(self.control_, attr)
