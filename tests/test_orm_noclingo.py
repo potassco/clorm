@@ -260,7 +260,6 @@ class NoClingoTestCase(unittest.TestCase):
         self.assertEqual(noclingo_to_clingo(ncl2),cl2)
         self.assertEqual(noclingo_to_clingo(ncl3),cl3)
 
-
         # More complex function structures
         cl4 = clingo.Function("",[cl1,cl2])
         ncl4 = noclingo.Function("",[ncl1,ncl2])
@@ -271,6 +270,13 @@ class NoClingoTestCase(unittest.TestCase):
         ncl5 = noclingo.Function("f",[ncl3,ncl4,ncl1],False)
         self.assertEqual(clingo_to_noclingo(cl5),ncl5)
         self.assertEqual(noclingo_to_clingo(ncl5),cl5)
+
+        # If it is already the correct symbol type then no conversion required
+        self.assertEqual(clingo_to_noclingo(ncl1), ncl1)
+        self.assertEqual(noclingo_to_clingo(cl1), cl1)
+        self.assertTrue(clingo_to_noclingo(ncl1) is ncl1)
+        self.assertTrue(noclingo_to_clingo(cl1) is cl1)
+
 
     def test_is_functions(self):
         cli = clingo.Infimum

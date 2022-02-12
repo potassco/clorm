@@ -234,6 +234,7 @@ def Tuple_(args=[]):
 # --------------------------------------------------------------------------------
 
 def clingo_to_noclingo(clsym):
+    if isinstance(clsym, Symbol): return clsym
     if clsym.type == clingo.SymbolType.Infimum: return Infimum
     elif clsym.type == clingo.SymbolType.Supremum: return Supremum
     elif clsym.type == clingo.SymbolType.Number: return Number(clsym.number)
@@ -248,6 +249,7 @@ def clingo_to_noclingo(clsym):
 
 
 def noclingo_to_clingo(nclsym):
+    if isinstance(nclsym, clingo.Symbol): return nclsym
     if nclsym.type == SymbolType.Infimum: return clingo.Infimum
     elif nclsym.type == SymbolType.Supremum: return clingo.Supremum
     elif nclsym.type == SymbolType.Number: return clingo.Number(nclsym.number)
