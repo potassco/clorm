@@ -12,9 +12,7 @@ import io
 import sys
 import functools
 import itertools
-from collections.abc import Iterator, Generator
-from abc import ABCMeta
-from typing import TYPE_CHECKING, Any, Iterable, List, Optional, Sequence, Tuple, Union, overload
+from typing import TYPE_CHECKING, Any, Generator, Iterable, Iterator, List, Optional, Sequence, Tuple, Union, overload
 from .orm import *
 from .util.wrapper import WrapperMetaClass, init_wrapper, make_class_wrapper
 
@@ -59,7 +57,7 @@ def _build_unifier(unifier: SymbolPredicateUnifier) -> SymbolPredicateUnifier: .
 def _build_unifier(unifier: List[Predicate]) -> SymbolPredicateUnifier: ...
 
 
-def _build_unifier(unifier: Union[List[Predicate], SymbolPredicateUnifier] = None) -> Optional[SymbolPredicateUnifier]:
+def _build_unifier(unifier: Optional[Union[List[Predicate], SymbolPredicateUnifier]] = None) -> Optional[SymbolPredicateUnifier]:
     if unifier is None: return None
     if isinstance(unifier, SymbolPredicateUnifier): return unifier
     return SymbolPredicateUnifier(predicates=unifier)
@@ -173,26 +171,33 @@ Model = make_class_wrapper(OModel, ModelOverride)
 # Wrap clingo.SolveHandle and override some functions
 # ------------------------------------------------------------------------------
 
-class SolveHandleGenerator(Generator):
-    def __init__(self, gen, unifier):
+
+class SolveHandleGenerator(Generator[Model, None, None]):
+    def __init__(self, gen: Iterator[OModel], unifier: Any) -> None:
         self._gen = gen
         self._unifier = unifier
 
     def __iter__(self):
         return self
+
     def __next__(self):
         model = next(self._gen)
         if self._unifier:
-            return Model(model,unifier=self._unifier)
+            return Model(model, unifier=self._unifier)
         else:
             return Model(model)
 
-    def throw(self,typ,val=None,tb=None):
-        self._gen.throw(typ,val,tb)
-    def send(self,value):
+    # TODO throw, send, close, del will raise an error when called...
+
+    def throw(self, typ, val=None, tb=None):
+        self._gen.throw(typ, val, tb)
+
+    def send(self, value):
         self._gen.send(value)
+
     def close(self):
         self._gen.close()
+
     def __del__(self):
         if oclingo.__version__ >= "5.5.0":
             self._gen.__del__()
@@ -210,36 +215,40 @@ class SolveHandleOverride(object):
 
     '''
 
-
-    def __init__(self, handle,unifier=None):
-        init_wrapper(self,wrapped_=handle)
+    def __init__(self, handle: Any, unifier: Optional[Union[List[Predicate], SymbolPredicateUnifier]] = None) -> None:
+        init_wrapper(self, wrapped_=handle)
         self._unifier = _build_unifier(unifier)
 
-    #------------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------
     # Return the underlying solvehandle object
-    #------------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------
     @property
-    def solvehandle_(self):
+    def solvehandle_(self) -> OSolveHandle:
         '''Access the underlying clingo.SolveHandle object.'''
         return self._wrapped
 
-    #------------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------
     # Overrides
-    #------------------------------------------------------------------------------
+    # ------------------------------------------------------------------------------
 
     def __iter__(self):
-        return SolveHandleGenerator(iter(self._wrapped), self._unifier)
+        return SolveHandleGenerator(iter(self.solvehandle_), self._unifier)
 
     def __enter__(self):
-        self._wrapped.__enter__()
+        self.solvehandle_.__enter__()
         return self
 
     def __exit__(self, exception_type, exception_value, traceback):
-        self._wrapped.__exit__(exception_type,exception_value,traceback)
+        self.solvehandle_.__exit__(exception_type, exception_value, traceback)
         return None
 
 
-SolveHandle = make_class_wrapper(OSolveHandle, SolveHandleOverride)
+__clorm_SolveHandle = make_class_wrapper(OSolveHandle, SolveHandleOverride)
+if TYPE_CHECKING:
+    class SolveHandle(__clorm_SolveHandle, OSolveHandle):  # type: ignore
+        pass
+else:
+    SolveHandle = __clorm_SolveHandle
 
 
 # ------------------------------------------------------------------------------
