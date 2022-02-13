@@ -10,7 +10,7 @@ for more details.
 
 import functools
 import itertools
-from typing import TYPE_CHECKING, Any, Iterable, List, Optional, Sequence, Tuple, Union, cast, overload
+from typing import TYPE_CHECKING, Any, ClassVar, Iterable, List, Optional, Sequence, Tuple, Union, cast, overload
 from .orm import *
 from .util.wrapper import init_wrapper, make_class_wrapper
 
@@ -66,7 +66,7 @@ def _check_is_func(obj: Any, name: str) -> None:
 # Wrap clingo.Model and override some functions
 # ------------------------------------------------------------------------------
 
-#class Model(OModel, metaclass=WrapperMetaClass):
+# class Model(OModel, metaclass=WrapperMetaClass):
 class ModelOverride(object):
     '''Provides access to a model during a solve call.
 
@@ -77,6 +77,8 @@ class ModelOverride(object):
     and fact bases.
 
     '''
+    if TYPE_CHECKING:
+        _wrapped: ClassVar[OModel]  # will be set through init_wrapper
 
     def __init__(self, model: OModel, unifier: Optional[Union[List[Predicate], SymbolPredicateUnifier]] = None) -> None:
         self._unifier = _build_unifier(unifier)
@@ -156,7 +158,7 @@ class ModelOverride(object):
 
 __clorm_Model = make_class_wrapper(OModel, ModelOverride)
 if TYPE_CHECKING:
-    class Model(__clorm_Model, OSolveHandle):  # type: ignore
+    class Model(__clorm_Model, OModel):  # type: ignore
         pass
 else:
     Model = __clorm_Model
@@ -166,8 +168,8 @@ else:
 # ------------------------------------------------------------------------------
 
 
+# class SolveHandle(OSolveHandle, metaclass=WrapperMetaClass):
 class SolveHandleOverride(object):
-#class SolveHandle(OSolveHandle, metaclass=WrapperMetaClass):
     '''Handle for solve calls.
 
     Objects mustn't be created manually. Instead they are returned by
@@ -177,6 +179,8 @@ class SolveHandleOverride(object):
     objects.
 
     '''
+    if TYPE_CHECKING:
+        _wrapped: ClassVar[OSolveHandle]  # will be set through init_wrapper
 
     def __init__(self, handle: OSolveHandle, unifier: Optional[Union[List[Predicate], SymbolPredicateUnifier]] = None) -> None:
         init_wrapper(self, wrapped_=handle)
@@ -196,14 +200,14 @@ class SolveHandleOverride(object):
 
     def __iter__(self):
         for model in self.solvehandle_:
-            yield Model(model, unifier=self._unifier)
+            yield Model(model, unifier=self._unifier)  # type: ignore
 
     def __enter__(self):
-        self.solvehandle_.__enter__()
+        self.solvehandle_.__enter__()  # type: ignore
         return self
 
     def __exit__(self, exception_type, exception_value, traceback):
-        self.solvehandle_.__exit__(exception_type, exception_value, traceback)
+        self.solvehandle_.__exit__(exception_type, exception_value, traceback)  # type: ignore
         return None
 
 
@@ -245,7 +249,7 @@ def _expand_assumptions(assumptions: Iterable[Tuple[Union[Iterable[Union[Predica
                 _add_fact(arg, bval)
             elif isinstance(arg, Iterable):
                 for f in arg:
-                    _add_fact(f, bval)
+                    _add_fact(cast(Union[Predicate, Symbol], f), bval)
             else:
                 _add_fact(arg, bval)
     except (TypeError, ValueError) as e:
@@ -263,8 +267,8 @@ def _expand_assumptions(assumptions: Iterable[Tuple[Union[Iterable[Union[Predica
 # ------------------------------------------------------------------------------
 
 
+# class Control(OControl, metaclass=WrapperMetaClass):
 class ControlOverride(object):
-#class Control(OControl, metaclass=WrapperMetaClass):
     '''Control object for the grounding/solving process.
 
     Behaves like ``clingo.Control`` but with modifications to deal with Clorm
@@ -278,12 +282,15 @@ class ControlOverride(object):
     parameter.
 
     '''
+    if TYPE_CHECKING:
+        _wrapped: ClassVar[OControl]  # will be set through init_wrapper
+
     @overload
     def __init__(self, arguments: Sequence[str] = [],
                  logger: Optional[Logger] = None, message_limit: int = 20) -> None: ...
 
     @overload
-    def __init__(self, control_: oclingo.Control) -> None: ...
+    def __init__(self, control_: OControl) -> None: ...
 
     @overload
     def __init__(
@@ -467,7 +474,7 @@ class ControlOverride(object):
 
             @functools.wraps(on_model)
             def on_model_wrapper(model):
-                return on_model(Model(model, self.unifier))
+                return on_model(Model(model, self.unifier))  # type: ignore
             nkwargs["on_model"] = on_model_wrapper
 
         # Call the wrapped solve function and handle the return value
@@ -475,7 +482,7 @@ class ControlOverride(object):
         result = self.control_.solve(**nkwargs)
         if ("yield_" in nkwargs and nkwargs["yield_"]) or \
            (async_keyword in nkwargs and nkwargs[async_keyword]):
-            return SolveHandle(cast(OSolveHandle, result), unifier=self._unifier)
+            return SolveHandle(cast(OSolveHandle, result), unifier=self._unifier)  # type: ignore
         else:
             return cast(SolveResult, result)
 
@@ -500,13 +507,13 @@ else:
 # sure I had it working but now seems to be failing. Adding more hacks :(
 # ------------------------------------------------------------------------------
 
-Control.__doc__ += OControl.__doc__
-Control.assign_external.__doc__ += OControl.assign_external.__doc__
-Control.release_external.__doc__ += OControl.release_external.__doc__
-Control.solve.__doc__ += OControl.solve.__doc__
-Model.__doc__ += OModel.__doc__
-Model.contains.__doc__ += OModel.contains.__doc__
-SolveHandle.__doc__ += OSolveHandle.__doc__
+Control.__doc__ += OControl.__doc__  # type: ignore
+Control.assign_external.__doc__ += OControl.assign_external.__doc__  # type: ignore
+Control.release_external.__doc__ += OControl.release_external.__doc__  # type: ignore
+Control.solve.__doc__ += OControl.solve.__doc__  # type: ignore
+Model.__doc__ += OModel.__doc__  # type: ignore
+Model.contains.__doc__ += OModel.contains.__doc__  # type: ignore
+SolveHandle.__doc__ += OSolveHandle.__doc__  # type: ignore
 
 # ------------------------------------------------------------------------------
 # main
