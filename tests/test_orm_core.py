@@ -1116,7 +1116,13 @@ class PredicateTestCase(unittest.TestCase):
         self.assertEqual("name", MyPredicateNameSign.meta.name)
         self.assertEqual(False, MyPredicateNameSign.meta.sign)
 
-       
+    def test_predicate_meta_kwargs_class_conflict(self):
+        with self.assertRaises(TypeError) as e:
+            class MyPredicateName(Predicate, name = "name_kwarg"):
+                a: str
+                class Meta:
+                    name = "name_meta"
+        self.assertEqual(e.exception.args[0], "Specifying meta options in two places is ambiguous, use either Meta-Class or class kwargs")
 
     #--------------------------------------------------------------------------
     # Test bad predicate definitions

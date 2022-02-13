@@ -2734,6 +2734,8 @@ class _PredicateMeta(type):
         if meta_from_namespace and not inspect.isclass(meta_from_namespace):
             raise TypeError("'Meta' attribute is not an inner class")
         meta_from_namespace = meta_from_namespace.__dict__ if meta_from_namespace else {}
+        if meta_kwargs and meta_from_namespace:
+            raise TypeError("Specifying meta options in two places is ambiguous, use either Meta-Class or class kwargs")
         meta_dct = meta_kwargs or meta_from_namespace
 
         # Set the _meta attribute and constuctor
