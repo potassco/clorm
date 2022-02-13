@@ -1091,6 +1091,33 @@ class PredicateTestCase(unittest.TestCase):
         self.assertEqual(mfp1.aterm1, "astring")
         self.assertEqual(mfp1.aterm2, "asimple")
 
+    def test_predicate_kwargs_meta(self):
+
+        class MyPredicateName(Predicate, name = "name"):
+            a: str
+
+        self.assertEqual("name", MyPredicateName.meta.name)
+
+        class MyPredicateTuple(Predicate, is_tuple = True):
+            a: str
+            b: int
+
+        self.assertEqual(True, MyPredicateTuple.meta.is_tuple)
+
+        class MyPredicateSign(Predicate, sign = False):
+            a: str
+            b: int
+
+        self.assertEqual(False, MyPredicateSign.meta.sign)
+
+        class MyPredicateNameSign(Predicate, name = "name", sign=False):
+            a: str
+
+        self.assertEqual("name", MyPredicateNameSign.meta.name)
+        self.assertEqual(False, MyPredicateNameSign.meta.sign)
+
+       
+
     #--------------------------------------------------------------------------
     # Test bad predicate definitions
     # --------------------------------------------------------------------------

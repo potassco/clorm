@@ -2564,7 +2564,7 @@ def _infer_field_definition(type_: Type, module: str) -> Optional[BaseField]:
 # both. Sign can be True/False/None. By default sign is None (meaning both
 # positive/negative) unless it is a tuple then it is positive only.
 
-def _make_predicatedefn(class_name, dct) -> PredicateDefn:
+def _make_predicatedefn(class_name, dct, **kwargs) -> PredicateDefn:
 
     # Set the default predicate name
     pname = _predicatedefn_default_predicate_name(class_name)
@@ -2572,20 +2572,26 @@ def _make_predicatedefn(class_name, dct) -> PredicateDefn:
     sign = None
     is_tuple = False
 
-    if "Meta" in dct:
-        metadefn = dct["Meta"]
-        if not inspect.isclass(metadefn):
-            raise TypeError("'Meta' attribute is not an inner class")
+    allowed_meta_kwargs = {"name", "is_tuple", "sign"}
+    meta_kwargs = {key: kwargs.pop(key) for key in kwargs.keys() & allowed_meta_kwargs}
 
+    meta_from_dct = dct.pop("Meta", None)
+    if meta_from_dct and not inspect.isclass(meta_from_dct):
+        raise TypeError("'Meta' attribute is not an inner class")
+    meta_from_dct = meta_from_dct.__dict__ if meta_from_dct else {}
+    meta = meta_kwargs or meta_from_dct
+    if meta:
+        metadefn = meta
+        
         # What has been defined
-        name_def = "name" in metadefn.__dict__
-        is_tuple_def = "is_tuple" in metadefn.__dict__
-        sign_def = "sign" in metadefn.__dict__
+        name_def = "name" in metadefn
+        is_tuple_def = "is_tuple" in metadefn
+        sign_def = "sign" in metadefn
 
-        if name_def : pname = metadefn.__dict__["name"]
-        if is_tuple_def : is_tuple = bool(metadefn.__dict__["is_tuple"])
-        if "_anon" in metadefn.__dict__:
-            anon = metadefn.__dict__["_anon"]
+        if name_def : pname = metadefn["name"]
+        if is_tuple_def : is_tuple = bool(metadefn["is_tuple"])
+        if "_anon" in metadefn:
+            anon = metadefn["_anon"]
 
         if name_def and not pname:
             raise ValueError(("Empty 'name' attribute is invalid. Use "
@@ -2597,7 +2603,7 @@ def _make_predicatedefn(class_name, dct) -> PredicateDefn:
 
         if is_tuple: sign = True       # Change sign default if is tuple
 
-        if "sign" in  metadefn.__dict__: sign = metadefn.__dict__["sign"]
+        if "sign" in  metadefn: sign = metadefn["sign"]
         if sign is not None: sign = bool(sign)
 
         if is_tuple and not sign:
@@ -2719,19 +2725,20 @@ class _PredicateMeta(type):
     #--------------------------------------------------------------------------
     # Allocate the new metaclass
     #--------------------------------------------------------------------------
-    def __new__(meta, name, bases, dct):
+    def __new__(meta, cls_name, bases, dct, **kwargs):
+        # Uses something other than `name` as second arg to allow "name" as a kwarg
         # Make sure we use slots
         dct["__slots__"] = ('_field_values','_sign', '_raw', '_hash')
 
-        if name == "Predicate":
+        if cls_name == "Predicate":
             dct["_predicate"] = None
-            return super(_PredicateMeta, meta).__new__(meta, name, bases, dct)
+            return super(_PredicateMeta, meta).__new__(meta, cls_name, bases, dct)
 
         # Create the metadata AND populate dct - the class dict (including the fields)
 
         # Set the _meta attribute and constuctor
-        dct["_meta"] = _make_predicatedefn(name, dct)
-        dct["_field"] = _lateinit("{}._field".format(name))
+        dct["_meta"] = _make_predicatedefn(cls_name, dct, **kwargs)
+        dct["_field"] = _lateinit("{}._field".format(cls_name))
 
         parents = [ b for b in bases if issubclass(b, Predicate) ]
         if len(parents) == 0:
@@ -2739,11 +2746,11 @@ class _PredicateMeta(type):
         if len(parents) > 1:
             raise TypeError("Multiple Predicate sub-class inheritance forbidden")
 
-        return super(_PredicateMeta, meta).__new__(meta, name, bases, dct)
+        return super(_PredicateMeta, meta).__new__(meta, cls_name, bases, dct)
 
-    def __init__(cls, name, bases, dct):
-        if name == "Predicate":
-            return super(_PredicateMeta, cls).__init__(name, bases, dct)
+    def __init__(cls, cls_name, bases, dct, **kwargs):
+        if cls_name == "Predicate":
+            return super(_PredicateMeta, cls).__init__(cls_name, bases, dct)
 
         # Set a BaseField sub-class that converts to/from cls instances
         dct["_field"].assign(_define_field_for_predicate(cls))
@@ -2761,7 +2768,7 @@ class _PredicateMeta(type):
         # Assign the parent for the SignAccessor
         dct["sign"].parent = cls
 
-        return super(_PredicateMeta, cls).__init__(name, bases, dct)
+        return super(_PredicateMeta, cls).__init__(cls_name, bases, dct)
 
     # A Predicate subclass is an instance of this meta class. So to
     # provide querying of a Predicate subclass Blah by a positional
