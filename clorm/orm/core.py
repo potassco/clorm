@@ -31,7 +31,7 @@ import uuid
 from clorm.orm.types import ConstantStr, HeadList, HeadListReversed, TailList, TailListReversed
 
 from . import noclingo
-from typing import ( Any, Callable, Iterator, List, Optional, Sequence, Tuple,
+from typing import ( Any, Callable, Dict, Iterator, List, Optional, Sequence, Tuple,
                      Type, TypeVar, Union, overload, cast )
 
 
@@ -2564,7 +2564,7 @@ def _infer_field_definition(type_: Type, module: str) -> Optional[BaseField]:
 # both. Sign can be True/False/None. By default sign is None (meaning both
 # positive/negative) unless it is a tuple then it is positive only.
 
-def _make_predicatedefn(class_name, dct, **kwargs) -> PredicateDefn:
+def _make_predicatedefn(class_name: str, namespace: Dict[str, Any], meta_dct: Dict[str, Any]) -> PredicateDefn:
 
     # Set the default predicate name
     pname = _predicatedefn_default_predicate_name(class_name)
@@ -2572,26 +2572,17 @@ def _make_predicatedefn(class_name, dct, **kwargs) -> PredicateDefn:
     sign = None
     is_tuple = False
 
-    allowed_meta_kwargs = {"name", "is_tuple", "sign"}
-    meta_kwargs = {key: kwargs.pop(key) for key in kwargs.keys() & allowed_meta_kwargs}
-
-    meta_from_dct = dct.pop("Meta", None)
-    if meta_from_dct and not inspect.isclass(meta_from_dct):
-        raise TypeError("'Meta' attribute is not an inner class")
-    meta_from_dct = meta_from_dct.__dict__ if meta_from_dct else {}
-    meta = meta_kwargs or meta_from_dct
-    if meta:
-        metadefn = meta
+    if meta_dct:
         
         # What has been defined
-        name_def = "name" in metadefn
-        is_tuple_def = "is_tuple" in metadefn
-        sign_def = "sign" in metadefn
+        name_def = "name" in meta_dct
+        is_tuple_def = "is_tuple" in meta_dct
+        sign_def = "sign" in meta_dct
 
-        if name_def : pname = metadefn["name"]
-        if is_tuple_def : is_tuple = bool(metadefn["is_tuple"])
-        if "_anon" in metadefn:
-            anon = metadefn["_anon"]
+        if name_def : pname = meta_dct["name"]
+        if is_tuple_def : is_tuple = bool(meta_dct["is_tuple"])
+        if "_anon" in meta_dct:
+            anon = meta_dct["_anon"]
 
         if name_def and not pname:
             raise ValueError(("Empty 'name' attribute is invalid. Use "
@@ -2603,7 +2594,7 @@ def _make_predicatedefn(class_name, dct, **kwargs) -> PredicateDefn:
 
         if is_tuple: sign = True       # Change sign default if is tuple
 
-        if "sign" in  metadefn: sign = metadefn["sign"]
+        if sign_def: sign = meta_dct["sign"]
         if sign is not None: sign = bool(sign)
 
         if is_tuple and not sign:
@@ -2617,7 +2608,7 @@ def _make_predicatedefn(class_name, dct, **kwargs) -> PredicateDefn:
     # https://www.python.org/dev/peps/pep-0520/)
 
     fields_from_dct = {}
-    for fname, fdefn in dct.items():
+    for fname, fdefn in namespace.items():
 
         # Ignore entries that are not field declarations
         if fname == "Meta": continue
@@ -2637,8 +2628,8 @@ def _make_predicatedefn(class_name, dct, **kwargs) -> PredicateDefn:
         fields_from_dct[fname] = fdefn
 
     fields_from_annotations = {}
-    module = dct.get("__module__", None)
-    for name, type_ in dct.get("__annotations__", {}).items():
+    module = namespace.get("__module__", None)
+    for name, type_ in namespace.get("__annotations__", {}).items():
         if name in fields_from_dct: # first check if FieldDefinition was assigned 
             fields_from_annotations[name] = fields_from_dct[name]
         else:
@@ -2664,7 +2655,7 @@ def _make_predicatedefn(class_name, dct, **kwargs) -> PredicateDefn:
         try:
             fd = get_field_definition(fdefn, module)
             fa = FieldAccessor(fname, idx, fd)
-            dct[fname] = fa
+            namespace[fname] = fa
             fas.append(fa)
             idx += 1
         except TypeError as e:
@@ -2672,7 +2663,7 @@ def _make_predicatedefn(class_name, dct, **kwargs) -> PredicateDefn:
 
     # Create the "sign" attribute - must be assigned a parent in the metaclass
     # __init__() call.
-    dct["sign"] = SignAccessor()
+    namespace["sign"] = SignAccessor()
 
     # Now create the PredicateDefn object
     return PredicateDefn(name=pname,field_accessors=fas, anon=anon,sign=sign)
@@ -2725,20 +2716,29 @@ class _PredicateMeta(type):
     #--------------------------------------------------------------------------
     # Allocate the new metaclass
     #--------------------------------------------------------------------------
-    def __new__(meta, cls_name, bases, dct, **kwargs):
+    def __new__(meta, cls_name, bases, namespace, **kwargs):
         # Uses something other than `name` as second arg to allow "name" as a kwarg
         # Make sure we use slots
-        dct["__slots__"] = ('_field_values','_sign', '_raw', '_hash')
+        namespace["__slots__"] = ('_field_values','_sign', '_raw', '_hash')
 
         if cls_name == "Predicate":
-            dct["_predicate"] = None
-            return super(_PredicateMeta, meta).__new__(meta, cls_name, bases, dct)
+            namespace["_predicate"] = None
+            return super(_PredicateMeta, meta).__new__(meta, cls_name, bases, namespace)
 
         # Create the metadata AND populate dct - the class dict (including the fields)
 
+        # create meta-dict
+        allowed_meta_kwargs = {"name", "is_tuple", "sign"}
+        meta_kwargs = {key: kwargs.pop(key) for key in kwargs.keys() & allowed_meta_kwargs}
+        meta_from_namespace = namespace.pop("Meta", None)
+        if meta_from_namespace and not inspect.isclass(meta_from_namespace):
+            raise TypeError("'Meta' attribute is not an inner class")
+        meta_from_namespace = meta_from_namespace.__dict__ if meta_from_namespace else {}
+        meta_dct = meta_kwargs or meta_from_namespace
+
         # Set the _meta attribute and constuctor
-        dct["_meta"] = _make_predicatedefn(cls_name, dct, **kwargs)
-        dct["_field"] = _lateinit("{}._field".format(cls_name))
+        namespace["_meta"] = _make_predicatedefn(cls_name, namespace, meta_dct)
+        namespace["_field"] = _lateinit("{}._field".format(cls_name))
 
         parents = [ b for b in bases if issubclass(b, Predicate) ]
         if len(parents) == 0:
@@ -2746,7 +2746,7 @@ class _PredicateMeta(type):
         if len(parents) > 1:
             raise TypeError("Multiple Predicate sub-class inheritance forbidden")
 
-        return super(_PredicateMeta, meta).__new__(meta, cls_name, bases, dct)
+        return super(_PredicateMeta, meta).__new__(meta, cls_name, bases, namespace)
 
     def __init__(cls, cls_name, bases, dct, **kwargs):
         if cls_name == "Predicate":
