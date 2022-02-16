@@ -123,6 +123,7 @@ class _MISSING_TYPE:
 MISSING = _MISSING_TYPE()
 
 _T = TypeVar('_T')
+_P = TypeVar('_P', bound='Predicate')
 
 #------------------------------------------------------------------------------
 # A _classproperty decorator. (see
@@ -2462,13 +2463,6 @@ def _predicate_init_by_positional_values(self, *args, **kwargs):
                           "instances").format(type(self).__name__, self.meta.sign))
 
 
-# Construct the object from an already unified pair of raw and values.
-def _predicate_init_by_unify(self, _raw, _values):
-    self._raw = _raw
-    self._field_values = _values
-    self._sign = _raw.positive
-
-
 #------------------------------------------------------------------------------
 # Metaclass constructor support functions to create the fields
 #------------------------------------------------------------------------------
@@ -2839,9 +2833,7 @@ class Predicate(object, metaclass=_PredicateMeta):
         # set either when needed or (set explicitly during unification)
         self._hash = None
 
-        if "_raw" in kwargs:
-            _predicate_init_by_unify(self, **kwargs)
-        elif args:
+        if args:
             if kwargs:
                 if len(kwargs) > 1 or "sign" not in kwargs:
                     msg = ("Invalid Predicate initialisation: only \"sign\" is a "
@@ -2858,7 +2850,7 @@ class Predicate(object, metaclass=_PredicateMeta):
             self._raw = None
 
 
-    def __new__(cls, *args, **kwargs):
+    def __new__(cls: Type[_P], *args: Any, **kwargs: Any) -> _P:
         if cls == __class__:
             raise TypeError(("Predicate/ComplexTerm must be sub-classed"))
         return super().__new__(cls)
@@ -2939,7 +2931,7 @@ class Predicate(object, metaclass=_PredicateMeta):
 
     # Factory that returns a unified Predicate object
     @classmethod
-    def _unify(cls, raw):
+    def _unify(cls: Type[_P], raw: clingo.Symbol) -> Optional[_P]:
         """Unify a (raw) clingo.Symbol object with the class.
 
         Returns None on failure to unify otherwise returns the new fact
@@ -2951,8 +2943,11 @@ class Predicate(object, metaclass=_PredicateMeta):
                 return None
             if cls.meta.name != raw.name:
                 return None
-            values = tuple(f.defn.cltopy(a) for f, a in zip(cls.meta, raw.arguments))
-            instance = cls(_raw=raw, _values=values)
+            instance = cls.__new__(cls)
+            instance._raw = raw
+            instance._field_values = tuple(f.defn.cltopy(a) for f, a in zip(cls.meta, raw.arguments))
+            instance._sign = raw.positive
+            instance._hash = None
             return instance
         except (TypeError, ValueError):
             return None
