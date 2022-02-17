@@ -1994,14 +1994,18 @@ class PredicateInternalUnifyTestCase(unittest.TestCase):
 
         # Test trying to initialise with the wrong number of arguments - note
         # cannot use default values when initialising with positional arguments.
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(TypeError) as ctx:
             f4=Fact(1,"test",2)
+        check_errmsg("<lambda>() takes from 1 to 3 positional arguments but 4 were given", ctx)
 
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(TypeError) as ctx:
             f2=Fact(1)
+        check_errmsg('Missing argument for field "astr" (which has no default value)', ctx)
 
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(TypeError) as ctx:
             f3=Fact("test")
+        check_errmsg("an integer is required", ctx)
+
 
     #--------------------------------------------------------------------------
     # Test that we can initialise using keyword arguments

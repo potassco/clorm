@@ -2379,11 +2379,10 @@ def _preprocess_field_value(field_defn, v):
 # ------------------------------------------------------------------------------
 
 # Construct a Predicate via an explicit (raw) clingo.Symbol object
-def _predicate_init_by_raw(self, **kwargs):
-    raw = kwargs["raw"]
+def _predicate_init_by_raw(self: 'Predicate', raw: clingo.Symbol) -> None:
     self._raw = raw
+    cls=type(self)
     try:
-        cls=type(self)
         if (raw.name != cls.meta.name or
             cls.meta.arity != len(raw.arguments) or
             (cls.meta.sign is not None and cls.meta.sign != raw.positive)):
@@ -2397,14 +2396,13 @@ def _predicate_init_by_raw(self, **kwargs):
                           "Predicate class {}").format(raw, cls.__name__))
 
 # Construct a Predicate via the field keywords
-def _predicate_init_by_keyword_values(self, **kwargs):
-    argnum=0
+def _predicate_init_by_keyword_values(self, sign, **kwargs):
     field_values = []
     clingoargs = []
     for f in self.meta:
-        if f.name in kwargs:
+        v = kwargs[f.name]
+        if v is not MISSING:
             v= _preprocess_field_value(f.defn, kwargs[f.name])
-            argnum += 1
         elif f.defn.has_default:
             # Note: must be careful to get the default value only once in case
             # it is a function with side-effects.
@@ -2420,47 +2418,8 @@ def _predicate_init_by_keyword_values(self, **kwargs):
     # Turn it into a tuple
     self._field_values = tuple(field_values)
 
-    # Calculate the sign of the literal and check that it matches the allowed values
-    if "sign" in kwargs:
-        sign = bool(kwargs["sign"])
-        argnum += 1
-    else:
-        sign = True
-
-    if len(kwargs) > argnum:
-        args=set(kwargs.keys())
-        expected=set([f.name for f in self.meta])
-        raise TypeError(("Unexpected keyword arguments for \"{}\" constructor: "
-                          "{}").format(type(self).__name__, ",".join(args-expected)))
-    if self.meta.sign is not None:
-        if sign != self.meta.sign:
-            raise ValueError(("Predicate {} is defined to only allow {} signed "
-                              "instances").format(self.__class__, self.meta.sign))
     # Assign the sign
-    self._sign = sign
-
-# Construct a Predicate using keyword arguments
-def _predicate_init_by_positional_values(self, *args, **kwargs):
-    argc = len(args)
-    arity = len(self.meta)
-    if argc != arity:
-        raise ValueError("Expected {} arguments but {} given".format(argc,arity))
-
-    clingoargs = []
-    self._field_values = []
-    for f, a in zip(self.meta, args):
-        v = _preprocess_field_value(f.defn, a)
-        self._field_values.append(v)
-        clingoargs.append(f.defn.pytocl(v))
-
-    # Turn it into a tuple
-    self._field_values = tuple(self._field_values)
-
-    # Calculate the sign of the literal and check that it matches the allowed values
-    self._sign = bool(kwargs["sign"]) if "sign" in kwargs else True
-    if self.meta.sign is not None and self._sign != self.meta.sign:
-        raise ValueError(("Predicate {} is defined to only allow {} "
-                          "instances").format(type(self).__name__, self.meta.sign))
+    self._sign = bool(sign)
 
 
 #------------------------------------------------------------------------------
@@ -2702,6 +2661,20 @@ def _define_field_for_predicate(cls) -> Type[BaseField]:
                    "complex": lambda self: cls})
     return field
 
+def _predicate__init__(self: 'Predicate', sign: bool, raw: clingo.Symbol, **kwargs: Any) -> None:
+        # The is calculated and cached when __hash__() is called and _raw is
+        # set either when needed or (set explicitly during unification)
+        self._hash = None
+
+        if raw is not MISSING:
+            _predicate_init_by_raw(self, raw)
+        else:
+            if self.meta.sign is not None and sign != self.meta.sign:
+                raise ValueError(("Predicate {} is defined to only allow {} signed "
+                                "instances").format(self.__class__, self.meta.sign))
+            _predicate_init_by_keyword_values(self, sign, **kwargs)
+            self._raw = None
+
 #------------------------------------------------------------------------------
 # A Metaclass for the Predicate base class
 #------------------------------------------------------------------------------
@@ -2741,6 +2714,23 @@ class _PredicateMeta(type):
             raise TypeError("Internal bug: number of Predicate bases is 0!")
         if len(parents) > 1:
             raise TypeError("Multiple Predicate sub-class inheritance forbidden")
+
+        # create __init__ method
+        args_list = []
+        lambda_args_with_defaults = ""
+        for fd in namespace["_meta"]:
+            args_list.append(fd.name)
+            lambda_args_with_defaults += f"{fd.name}=MISSING, "
+        
+        lambda_args_with_defaults += "* ,sign=True, raw=MISSING"
+        kwargs_init= "sign=sign, raw=raw, " + ", ".join(f"{a}={a}" for a in args_list)
+        doc_args = ", ".join(args_list) + ", sign=True, raw=MISSING"
+
+        code = f"lambda _self, {lambda_args_with_defaults}: _predicate_init(_self, {kwargs_init})"
+        __init__ = eval(code, {'_predicate_init': _predicate__init__, 'MISSING': MISSING} )
+        __init__.__name__  = '__init__'
+        __init__.__doc__ = f'Initialize instance of {cls_name}({doc_args})'
+        namespace["__init__"] = __init__
 
         return super(_PredicateMeta, meta).__new__(meta, cls_name, bases, namespace)
 
@@ -2828,28 +2818,6 @@ class Predicate(object, metaclass=_PredicateMeta):
     #--------------------------------------------------------------------------
     #
     #--------------------------------------------------------------------------
-    def __init__(self, *args, **kwargs):
-        # The is calculated and cached when __hash__() is called and _raw is
-        # set either when needed or (set explicitly during unification)
-        self._hash = None
-
-        if args:
-            if kwargs:
-                if len(kwargs) > 1 or "sign" not in kwargs:
-                    msg = ("Invalid Predicate initialisation: only \"sign\" is a "
-                           "valid keyword argument when combined with positional "
-                           "arguments: {}").format(kwargs)
-                    raise ValueError(msg)
-            _predicate_init_by_positional_values(self, *args,**kwargs)
-            self._raw = None
-
-        elif "raw" in kwargs:
-            _predicate_init_by_raw(self, **kwargs)
-        else:
-            _predicate_init_by_keyword_values(self, **kwargs)
-            self._raw = None
-
-
     def __new__(cls: Type[_P], *args: Any, **kwargs: Any) -> _P:
         if cls == __class__:
             raise TypeError(("Predicate/ComplexTerm must be sub-classed"))
