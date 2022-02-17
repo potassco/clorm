@@ -528,7 +528,7 @@ def parse_fact_files(files,unifier,*,factbase=None,
 # A pure-python fact parser that uses Lark
 #------------------------------------------------------------------------------
 
-from .lark_fact_parser import Lark_StandAlone, Symbol, Transformer, VisitError, LarkError, UnexpectedInput
+from .lark_fact_parser import Lark_StandAlone, Transformer, VisitError, LarkError, UnexpectedInput
 
 class _END:
     pass

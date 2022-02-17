@@ -44,7 +44,7 @@ __version__ = oclingo.__version__
 # ------------------------------------------------------------------------------
 
 
-def _build_unifier(unifier: Optional[Union[List[Predicate], SymbolPredicateUnifier]] = None) -> Optional[SymbolPredicateUnifier]:
+def _build_unifier(unifier: Optional[Union[List[Predicate], SymbolPredicateUnifier]]) -> Optional[SymbolPredicateUnifier]:
     if unifier is None:
         return None
     if isinstance(unifier, SymbolPredicateUnifier):
@@ -78,7 +78,7 @@ class ModelOverride(object):
 
     '''
     if TYPE_CHECKING:
-        _wrapped: ClassVar[OModel]  # will be set through init_wrapper
+        _wrapped: OModel  # will be set through init_wrapper
 
     def __init__(self, model: OModel, unifier: Optional[Union[List[Predicate], SymbolPredicateUnifier]] = None) -> None:
         self._unifier = _build_unifier(unifier)
@@ -180,7 +180,7 @@ class SolveHandleOverride(object):
 
     '''
     if TYPE_CHECKING:
-        _wrapped: ClassVar[OSolveHandle]  # will be set through init_wrapper
+        _wrapped: OSolveHandle  # will be set through init_wrapper
 
     def __init__(self, handle: OSolveHandle, unifier: Optional[Union[List[Predicate], SymbolPredicateUnifier]] = None) -> None:
         init_wrapper(self, wrapped_=handle)
@@ -283,7 +283,7 @@ class ControlOverride(object):
 
     '''
     if TYPE_CHECKING:
-        _wrapped: ClassVar[OControl]  # will be set through init_wrapper
+        _wrapped: OControl  # will be set through init_wrapper
 
     @overload
     def __init__(self, arguments: Sequence[str] = [],
@@ -451,9 +451,7 @@ class ControlOverride(object):
         if len(args) > len(posnargs):
             raise TypeError(("solve() takes {} positional arguments but {}"
                              "were given").format(len(posnargs), len(args)))
-        nkwargs = {}
-        for idx, arg in enumerate(args):
-            nkwargs[posnargs[idx]] = arg
+        nkwargs = {posnargs[idx]: arg for idx, arg in enumerate(args)}
 
         for k, v in kwargs.items():
             if k not in validargs:
