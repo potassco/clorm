@@ -125,15 +125,18 @@ MISSING = _MISSING_TYPE()
 _T = TypeVar('_T')
 _P = TypeVar('_P', bound='Predicate')
 
-#------------------------------------------------------------------------------
-# A _classproperty decorator. (see
-# https://stackoverflow.com/questions/3203286/how-to-create-a-read-only-class-property-in-python)
-#------------------------------------------------------------------------------
-class _classproperty(object):
-    def __init__(self, getter):
-        self.getter= getter
-    def __get__(self, instance, owner):
-        return self.getter(owner)
+
+# ------------------------------------------------------------------------------
+# A _classproperty decorator used in combination with @classmethod. (see
+# https://stackoverflow.com/a/2544313)
+# ------------------------------------------------------------------------------
+class _classproperty(property):
+    def __get__(self, obj, type_):
+        return self.fget.__get__(None, type_)()  # type: ignore
+
+    def __set__(self, obj, value):
+        cls = type(obj)
+        return self.fset.__get__(None, cls)(value)  # type: ignore
 
 #------------------------------------------------------------------------------
 # A descriptor for late initialisation of a read-only value. Helpful for delayed
@@ -1093,9 +1096,9 @@ class _BaseFieldMeta(type):
         # For complex-terms provide an interface to the underlying complex term
         # object
         if "complex" in dct:
-            dct["complex"] = _classproperty(dct["complex"])
+            dct["complex"] = _classproperty(classmethod(dct["complex"]))
         else:
-            dct["complex"] = _classproperty(lambda cls: None)
+            dct["complex"] = _classproperty(classmethod(lambda cls: None))
 #            dct["complex"] = _classproperty(None)
 
         return super(_BaseFieldMeta, meta).__new__(meta, name, bases, dct)
@@ -2376,7 +2379,7 @@ def _predicate_init_by_raw(self: 'Predicate', raw: clingo.Symbol) -> None:
                           "Predicate class {}").format(raw, cls.__name__))
 
 # Construct a Predicate via the field keywords
-def _predicate_init_by_keyword_values(self, sign, **kwargs):
+def _predicate_init_by_keyword_values(self: 'Predicate', sign: Any, **kwargs: Any) -> None:
     field_values = []
     clingoargs = []
     for f in self.meta:
@@ -2844,6 +2847,7 @@ class Predicate(object, metaclass=_PredicateMeta):
         return self._raw
 
     @_classproperty
+    @classmethod
     def Field(cls) -> BaseField:
         """A BaseField sub-class corresponding to a Field for this class."""
         return cls._field
@@ -2885,6 +2889,7 @@ class Predicate(object, metaclass=_PredicateMeta):
 
     # Get the metadata for the Predicate definition
     @_classproperty
+    @classmethod
     def meta(cls) -> PredicateDefn:
         """The meta data (definitional information) for the Predicate/Complex-term"""
         return cls._meta
