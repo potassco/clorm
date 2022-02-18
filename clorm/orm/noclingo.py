@@ -7,6 +7,7 @@
 # --------------------------------------------------------------------------------
 import functools
 import enum
+from typing import Any
 import clingo
 from clingo import SymbolType
 
@@ -309,6 +310,7 @@ class SymbolMode(enum.IntEnum):
     CLINGO=0
     NOCLINGO=1
 
+
 class SymbolGenerator(object):
     """Groups together the Symbol generators for clingo or noclingo.
 
@@ -331,15 +333,13 @@ class SymbolGenerator(object):
     * ``Function()``
     """
 
-    def __init__(self, mode, **kwargs):
+    def __init__(self, mode: SymbolMode, **kwargs: Any) -> None:
         self._mode = mode
-        self._links = dict(kwargs)
+        for key, val in kwargs.items():
+            setattr(self, key, val)
 
     @property
     def mode(self): return self._mode
-
-    def __getattr__(self, item):
-        return self._links[item]
 
 
 clingo_symbol_generator = SymbolGenerator(SymbolMode.CLINGO,
