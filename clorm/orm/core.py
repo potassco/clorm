@@ -1425,7 +1425,7 @@ class Raw(object):
 class RawField(BaseField):
     """A field to pass through an arbitrary Clingo.Symbol."""
 
-    cltopy = lambda v: Raw(v)
+    cltopy = Raw
 
     def pytocl(v):
         if not isinstance(v, Raw):
@@ -1439,7 +1439,7 @@ class RawField(BaseField):
 class StringField(BaseField):
     """A field to convert between a Clingo.String object and a Python string."""
 
-    def cltopy(symbol):
+    def cltopy(symbol: clingo.Symbol) -> str:
         try:
             return symbol.string
         except (AttributeError, RuntimeError):
@@ -1448,11 +1448,11 @@ class StringField(BaseField):
                                 "Symbol").format(symbol,type(symbol)))
             raise TypeError(("Symbol '{}' ({}) is not a String "
                              "Symbol").format(symbol,symbol.type))
-    pytocl = lambda v: symbols.String(v)
+    pytocl = symbols.String
 
 class IntegerField(BaseField):
     """A field to convert between a Clingo.Number object and a Python integer."""
-    def cltopy(symbol):
+    def cltopy(symbol: clingo.Symbol) -> int:
         try:
             return symbol.number
         except (AttributeError, RuntimeError):
@@ -1462,7 +1462,7 @@ class IntegerField(BaseField):
             raise TypeError(("Symbol '{}' ({}) is not a Number "
                              "Symbol").format(symbol,symbol.type))
 
-    pytocl = lambda v: symbols.Number(v)
+    pytocl = symbols.Number
 
 #------------------------------------------------------------------------------
 # ConstantField is more complex than basic string or integer because the value
@@ -1488,7 +1488,7 @@ class ConstantField(BaseField):
     Clorm version 2.0 release.
 
     """
-    def cltopy(symbol):
+    def cltopy(symbol: clingo.Symbol) -> str:
         try:
             if symbol.arguments:
                 raise TypeError(("Symbol '{}' ({}) is not a nullary Function "
@@ -2014,7 +2014,7 @@ def define_enum_field(parent_field,enum_class,*,name=None):
 
     return type(subclass_name, (parent_field,),
                 { "pytocl": _pytocl,
-                  "cltopy": lambda cl: enum_class(cl)})
+                  "cltopy": enum_class})
 
 #------------------------------------------------------------------------------
 # FieldAccessor - a Python descriptor (similar to a property) to access the
@@ -2024,7 +2024,7 @@ def define_enum_field(parent_field,enum_class,*,name=None):
 # a query).
 # ------------------------------------------------------------------------------
 class FieldAccessor(object):
-    def __init__(self, name, index, defn):
+    def __init__(self, name: str, index: int, defn: BaseField) -> None:
         self._name = name
         self._index = index
         self._defn = defn
