@@ -1307,7 +1307,7 @@ def field(basefield: _FieldDefinition,*, default: _T) -> _T: ...
 @overload
 def field(basefield: _FieldDefinition,*, default_factory: Callable[[], _T]) -> _T: ...
 
-def field(basefield: _FieldDefinition,*, default: Any=MISSING, default_factory: Any=MISSING) -> Any:
+def field(basefield: _FieldDefinition,*, default: Any=MISSING, default_factory: Any=MISSING, kw_only: bool=False) -> Any:
     if default is not MISSING and default_factory is not MISSING:
         raise ValueError('can not specify both default and default_factory')
     if isinstance(basefield, Tuple):
@@ -2845,6 +2845,10 @@ class Predicate(object, metaclass=_PredicateMeta):
          - named parameters corresponding to the field names.
 
     """
+    # sign and raw are specified here to be recognized from __dataclass_transform__
+    # they will be overriden later
+    sign: bool = field(IntegerField, default=True, kw_only=True)
+    raw: clingo.Symbol = field(IntegerField, default=MISSING, kw_only=True)
     if typing.TYPE_CHECKING:
         # populated by the metaclass, defined here to help IDEs only
         _meta: typing.ClassVar[PredicateDefn]
