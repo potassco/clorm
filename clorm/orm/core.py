@@ -2921,7 +2921,6 @@ class Predicate(object, metaclass=_PredicateMeta):
                 cloneargs[field.name] = kwargs[field.name]
             else:
                 cloneargs[field.name] = self._field_values[field.index]
-                kwargs[field.name] = self._field_values[field.index]
 
         # Create the new object
         return type(self)(**cloneargs)
