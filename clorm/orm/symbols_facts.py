@@ -30,7 +30,8 @@ __all__ = [
     'parse_fact_string',
     'parse_fact_files',
     'UnifierNoMatchError',
-    'FactParserError'
+    'FactParserError',
+    'Unifier'
     ]
 
 #------------------------------------------------------------------------------

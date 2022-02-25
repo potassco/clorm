@@ -26,6 +26,7 @@ __all__ = [
     'ComplexTerm',
     'FactBase',
     'SymbolPredicateUnifier',
+    'Unifier',
     'ContextBuilder',
     'TypeCastSignature',
     'Query',
