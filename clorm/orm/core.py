@@ -2381,7 +2381,7 @@ def _instance_from_tuple(predicate_cls, v):
 # ------------------------------------------------------------------------------
 
 # Construct a Predicate via the field keywords
-def _predicate_init_by_keyword_values(self, **kwargs):
+def _predicate_init_by_keyword_values(self, kwargs):
     argnum=0
     field_values = []
     clingoargs = []
@@ -2430,7 +2430,7 @@ def _predicate_init_by_keyword_values(self, **kwargs):
     self._raw = symbols.Function(self.meta.name, clingoargs, self._sign)
 
 # Construct a Predicate using keyword arguments
-def _predicate_init_by_positional_values(self, *args, **kwargs):
+def _predicate_init_by_positional_values(self, args, kwargs):
     argc = len(args)
     arity = len(self.meta)
     if argc != arity:
@@ -2456,10 +2456,10 @@ def _predicate_init_by_positional_values(self, *args, **kwargs):
     self._raw = symbols.Function(self.meta.name, clingoargs, self._sign)
 
 # Construct the object from an already unified pair of raw and values.
-def _predicate_init_by_unify(self, _raw, _values):
-    self._raw = _raw
-    self._field_values = _values
-    self._sign = _raw.positive
+def _predicate_init_by_unify(self, raw_, values_):
+    self._raw = raw_
+    self._field_values = values_
+    self._sign = raw_.positive
 
 
 #------------------------------------------------------------------------------
@@ -2837,8 +2837,9 @@ class Predicate(object, metaclass=_PredicateMeta):
         # set either when needed or (set explicitly during unification)
         self._hash = None
 
-        if "_raw" in kwargs:
-            _predicate_init_by_unify(self, **kwargs)
+        raw = kwargs.get("raw_", None)
+        if raw is not None:
+            _predicate_init_by_unify(self, raw, kwargs["values_"])
         elif args:
             if kwargs:
                 if len(kwargs) > 1 or "sign" not in kwargs:
@@ -2846,9 +2847,9 @@ class Predicate(object, metaclass=_PredicateMeta):
                            "valid keyword argument when combined with positional "
                            "arguments: {}").format(kwargs)
                     raise ValueError(msg)
-            _predicate_init_by_positional_values(self, *args,**kwargs)
+            _predicate_init_by_positional_values(self, args, kwargs)
         else:
-            _predicate_init_by_keyword_values(self, **kwargs)
+            _predicate_init_by_keyword_values(self, kwargs)
 
 
     def __new__(cls, *args, **kwargs):
@@ -2944,7 +2945,7 @@ class Predicate(object, metaclass=_PredicateMeta):
             if cls.meta.name != raw.name:
                 return None
             values = tuple(f.defn.cltopy(a) for f, a in zip(cls.meta, raw.arguments))
-            instance = cls(_raw=raw, _values=values)
+            instance = cls(raw_=raw, values_=values)
             return instance
         except (TypeError, ValueError):
             return None
