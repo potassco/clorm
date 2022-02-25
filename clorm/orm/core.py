@@ -1114,19 +1114,16 @@ class _BaseFieldMeta(type):
 # groups the symbol creation functions.
 # ------------------------------------------------------------------------------
 
-g_symbol_mode = noclingo.SymbolMode.CLINGO
-
-symbols = noclingo.get_symbol_generator(g_symbol_mode)
+symbols = noclingo.get_symbol_generator(noclingo.SymbolMode.CLINGO)
 
 def set_symbol_mode(sm):
-    global g_symbol_mode, symbols
+    global symbols
     if not isinstance(sm,noclingo.SymbolMode):
         raise TypeError("Object '{}' ({}) is not a SymbolMode".format(sm,type(sm)))
-    g_symbol_mode = sm
-    symbols = noclingo.get_symbol_generator(g_symbol_mode)
+    symbols = noclingo.get_symbol_generator(sm)
 
 def get_symbol_mode():
-    return g_symbol_mode
+    return symbols.mode
 
 #------------------------------------------------------------------------------
 # Field definitions. All fields have the functions: pytocl, cltopy,
@@ -1319,7 +1316,7 @@ def field(basefield,*, default=MISSING, default_factory=MISSING):
 # RawField is a sub-class of BaseField for storing clingo.Symbol or
 # noclingo.Symbol objects. The behaviour of Raw with respect to using
 # clingo.Symbol or noclingo.Symbol is modified by the global variable
-# g_symbol_mode.
+# symbols.mode.
 # ------------------------------------------------------------------------------
 
 class Raw(object):
@@ -1335,7 +1332,7 @@ class Raw(object):
             raise TypeError("Object '{}' ({}) is not a Symbol".format(sym,type(sym)))
 
     def __str__(self):
-        if g_symbol_mode == noclingo.SymbolMode.CLINGO:
+        if symbols.mode == noclingo.SymbolMode.CLINGO:
             return str(self.clingo)
         return str(self.noclingo)
 
@@ -1343,7 +1340,7 @@ class Raw(object):
         return self.__str__()
 
     def __hash__(self):
-        if g_symbol_mode == noclingo.SymbolMode.CLINGO:
+        if symbols.mode == noclingo.SymbolMode.CLINGO:
             return hash(self.clingo)
         else:
             return hash(self.noclingo)
@@ -1351,7 +1348,7 @@ class Raw(object):
     def __eq__(self,other):
         """Overloaded boolean operator."""
         if not isinstance(other, Raw): return NotImplemented
-        if g_symbol_mode == noclingo.SymbolMode.CLINGO:
+        if symbols.mode == noclingo.SymbolMode.CLINGO:
             return self.clingo == other.clingo
         return self.noclingo == other.noclingo
 
@@ -1364,7 +1361,7 @@ class Raw(object):
     def __gt__(self, other):
         """Overloaded boolean operator."""
         if not isinstance(other, Raw): return NotImplemented
-        if g_symbol_mode == noclingo.SymbolMode.CLINGO:
+        if symbols.mode == noclingo.SymbolMode.CLINGO:
             return self.clingo > other.clingo
         return self.noclingo > other.noclingo
 
@@ -1377,7 +1374,7 @@ class Raw(object):
     def __lt__(self, other):
         """Overloaded boolean operator."""
         if not isinstance(other, Raw): return NotImplemented
-        if g_symbol_mode == noclingo.SymbolMode.CLINGO:
+        if symbols.mode == noclingo.SymbolMode.CLINGO:
             return self.clingo < other.clingo
         return self.noclingo < other.noclingo
 
@@ -1408,7 +1405,7 @@ class Raw(object):
 
     @property
     def symbol(self):
-        if g_symbol_mode == noclingo.SymbolMode.CLINGO:
+        if symbols.mode == noclingo.SymbolMode.CLINGO:
             return self.clingo
         return self.noclingo
 
@@ -2877,7 +2874,7 @@ class Predicate(object, metaclass=_PredicateMeta):
         if self._raw is None:
             clingoargs=[]
             for f,v in zip(self.meta, self._field_values):
-                clingoargs.append(f.defn.pytocl(v))
+                clingoargs.append(v.symbol if f.defn.complex else f.defn.pytocl(v))
             self._raw = symbols.Function(self.meta.name, clingoargs, self._sign)
         return self._raw
 

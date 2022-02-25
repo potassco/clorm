@@ -310,6 +310,8 @@ class SymbolMode(enum.IntEnum):
     NOCLINGO=1
 
 class SymbolGenerator(object):
+    __slots__ = ('mode', 'Function', 'String', 'Number', 'Infimum',
+                 'Supremum', 'SymbolType')
     """Groups together the Symbol generators for clingo or noclingo.
 
     noclingo is a mirror of the clingo ``Symbol`` class that creates a Python
@@ -332,14 +334,13 @@ class SymbolGenerator(object):
     """
 
     def __init__(self, mode, **kwargs):
-        self._mode = mode
-        self._links = dict(kwargs)
-
-    @property
-    def mode(self): return self._mode
-
-    def __getattr__(self, item):
-        return self._links[item]
+        self.mode = mode
+        self.Function = kwargs["Function"]
+        self.String = kwargs["String"]
+        self.Number = kwargs["Number"]
+        self.Infimum = kwargs["Infimum"]
+        self.Supremum = kwargs["Supremum"]
+        self.SymbolType = kwargs["SymbolType"]
 
 
 clingo_symbol_generator = SymbolGenerator(SymbolMode.CLINGO,
