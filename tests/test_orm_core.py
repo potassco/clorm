@@ -2017,9 +2017,8 @@ class PredicateInternalUnifyTestCase(unittest.TestCase):
             aint = IntegerField()
             # note: don't need to specify defn keyword
             atup = MyTuple.Field(default=MyTuple(aint=2,astr="str"))
+            atup2 = MyTuple.Field(default=(2,"str"))
             afunc = Fun.Field(default=Fun(aint=2.0,astr="str"))
-#            atup = ComplexField(MyTuple,default=MyTuple(aint=2,astr="str"))
-#            afunc = ComplexField(defn=Fun,default=Fun(aint=2.0,astr="str"))
 
         af1=Fact(aint=1)
         af2=Fact(aint=2, atup=MyTuple(aint=4,astr="XXX"),
@@ -2027,15 +2026,22 @@ class PredicateInternalUnifyTestCase(unittest.TestCase):
 
         f1 = Function("fact",[Number(1),
                               Function("",[Number(2),String("str")]),
+                              Function("",[Number(2),String("str")]),
                               Function("fun",[Number(200),String("str")])])
         f2 = Function("fact",[Number(2),
                               Function("",[Number(4),String("XXX")]),
+                              Function("",[Number(2),String("str")]),
                               Function("fun",[Number(550),String("YYY")])])
 
         self.assertEqual(f1, af1.raw)
         self.assertEqual(f2, af2.raw)
         self.assertEqual(af2.atup.aint,4)
 
+        # Define a predicate with a bad default value
+        with self.assertRaises(TypeError) as ctx:
+            class Fact2(Predicate):
+                afun = Fun.Field(default=(1,"str"))
+        check_errmsg("""Invalid default value "(1, 'str')" for FunField""", ctx)
 
     #--------------------------------------------------------------------------
     # Test the simple_predicate function as a mechanism for defining

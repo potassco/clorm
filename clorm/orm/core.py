@@ -1228,7 +1228,10 @@ class BaseField(object, metaclass=_AbstractBaseFieldMeta):
 
         try:
             if cmplx:
-                self._default = (True, _instance_from_tuple(cmplx, default))
+                if cmplx.meta.is_tuple:
+                    self._default = (True, _instance_from_tuple(cmplx, default))
+                else:
+                    raise default
             else:
                 self.pytocl(default)
         except (TypeError,ValueError):
@@ -2505,7 +2508,7 @@ def _make_predicate_init(pdefn: PredicateDefn):
     tmp2 = []
     for f in pdefn:
         cmplx = f.defn.complex
-        if cmplx:
+        if cmplx and cmplx.meta.is_tuple:
             tmp.append(ASSIGN_COMPLEX_TEMPLATE.format(arg=f.name))
             tmp2.append(f"{f.name}.symbol, ")
         else:
@@ -2526,7 +2529,7 @@ def _make_predicate_init(pdefn: PredicateDefn):
     ldict = {}
     exec(def_init, gdict, ldict)
 
-#    print(f"INIT:\n\n{def_init}\n\n")
+    #    print(f"INIT:\n\n{def_init}\n\n")
 
     doc_args = f"{args_signature}*, sign=True, raw=None"
     return (ldict["__init__"], doc_args)
