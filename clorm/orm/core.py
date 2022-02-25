@@ -1113,7 +1113,6 @@ class _BaseFieldMeta(type):
             dct["complex"] = _classproperty(dct["complex"])
         else:
             dct["complex"] = _classproperty(lambda cls: None)
-#            dct["complex"] = _classproperty(None)
 
         return super(_BaseFieldMeta, meta).__new__(meta, name, bases, dct)
 
@@ -1212,20 +1211,29 @@ class BaseField(object, metaclass=_AbstractBaseFieldMeta):
 
     """
     def __init__(self, default: Any=MISSING, index: Any=MISSING) -> None:
-        self._default = (True, default) if default is not MISSING else (False, None)
         self._index = index if index is not MISSING else False
 
         if default is MISSING:
+            self._default = (False, None)
             return
 
-        # Check that the default is a valid value. If the default is a callable then
-        # we can't do this check because it could break a counter type procedure.
-        if not callable(default):
-            try:
+        self._default = (True, default)
+        cmplx = self.complex
+
+        # Check and convert the default to a valid value. Note: if the default
+        # is a callable then we can't do this check because it could break a
+        # counter type procedure.
+        if callable(default) or (cmplx and isinstance(default, cmplx)):
+            return
+
+        try:
+            if cmplx:
+                self._default = (True, _instance_from_tuple(cmplx, default))
+            else:
                 self.pytocl(default)
-            except (TypeError,ValueError):
-                raise TypeError("Invalid default value \"{}\" for {}".format(
-                    default, type(self).__name__))
+        except (TypeError,ValueError):
+            raise TypeError("Invalid default value \"{}\" for {}".format(
+                default, type(self).__name__))
 
     @staticmethod
     @abc.abstractmethod
@@ -2376,19 +2384,10 @@ class PredicateDefn(object):
 # tuple. Otherwise simply returns the value.
 # ------------------------------------------------------------------------------
 
-def _preprocess_field_value(field_defn, v):
-    predicate_cls = field_defn.complex
-    if not predicate_cls: return v
-    mt = predicate_cls.meta
-    if isinstance(v, predicate_cls): return v
-    if (mt.is_tuple and isinstance(v,Predicate) and v.meta.is_tuple) or \
-       isinstance(v, tuple):
-        if len(v) != len(mt):
-            raise ValueError(("mis-matched arity between field {} (arity {}) and "
-                             " value (arity {})").format(field_defn, len(mt), len(v)))
+def _instance_from_tuple(predicate_cls, v):
+    if isinstance(v, tuple) or (isinstance(v,Predicate) and v.meta.is_tuple):
         return predicate_cls(*v)
-    else:
-        return v
+    raise TypeError(f"Cannot map {v} ({type(v)}) to {predicate_cls.meta} object")
 
 # ------------------------------------------------------------------------------
 # Helper functions for PredicateMeta class to create a Predicate
@@ -2419,20 +2418,25 @@ def _predicate_init_by_keyword_values(self, **kwargs):
     field_values = []
     clingoargs = []
     for f in self.meta:
-        if f.name in kwargs:
-            v= _preprocess_field_value(f.defn, kwargs[f.name])
+        cmplx = f.defn.complex
+        v = kwargs.get(f.name, None)
+        if v is not None:
+            if cmplx and not isinstance(v, cmplx):
+                v = _instance_from_tuple(cmplx, v)
             argnum += 1
         elif f.defn.has_default:
             # Note: must be careful to get the default value only once in case
             # it is a function with side-effects.
-            v = _preprocess_field_value(f.defn, f.defn.default)
+            v = f.defn.default
+            if cmplx and not isinstance(v, cmplx):
+                v = _instance_from_tuple(cmplx, v)
         else:
             raise TypeError(("Missing argument for field \"{}\" (which has no "
                              "default value)").format(f.name))
 
         # Set the value for the field
         field_values.append(v)
-        clingoargs.append(f.defn.pytocl(v))
+        clingoargs.append(v.symbol if f.defn.complex else f.defn.pytocl(v))
 
     # Turn it into a tuple
     self._field_values = tuple(field_values)
@@ -2455,6 +2459,7 @@ def _predicate_init_by_keyword_values(self, **kwargs):
                               "instances").format(self.__class__, self.meta.sign))
     # Assign the sign
     self._sign = sign
+    self._raw = symbols.Function(self.meta.name, clingoargs, self._sign)
 
 # Construct a Predicate using keyword arguments
 def _predicate_init_by_positional_values(self, *args, **kwargs):
@@ -2465,10 +2470,12 @@ def _predicate_init_by_positional_values(self, *args, **kwargs):
 
     clingoargs = []
     self._field_values = []
-    for f, a in zip(self.meta, args):
-        v = _preprocess_field_value(f.defn, a)
+    for f, v in zip(self.meta, args):
+        cmplx = f.defn.complex
+        if cmplx and not isinstance(v, cmplx):
+            v = _instance_from_tuple(cmplx, v)
         self._field_values.append(v)
-        clingoargs.append(f.defn.pytocl(v))
+        clingoargs.append(v.symbol if f.defn.complex else f.defn.pytocl(v))
 
     # Turn it into a tuple
     self._field_values = tuple(self._field_values)
@@ -2478,7 +2485,7 @@ def _predicate_init_by_positional_values(self, *args, **kwargs):
     if self.meta.sign is not None and self._sign != self.meta.sign:
         raise ValueError(("Predicate {} is defined to only allow {} "
                           "instances").format(type(self).__name__, self.meta.sign))
-
+    self._raw = symbols.Function(self.meta.name, clingoargs, self._sign)
 
 # Construct the object from an already unified pair of raw and values.
 def _predicate_init_by_unify(self, _raw, _values):
@@ -2872,13 +2879,11 @@ class Predicate(object, metaclass=_PredicateMeta):
                            "arguments: {}").format(kwargs)
                     raise ValueError(msg)
             _predicate_init_by_positional_values(self, *args,**kwargs)
-            self._raw = None
 
         elif "raw" in kwargs:
             _predicate_init_by_raw(self, **kwargs)
         else:
             _predicate_init_by_keyword_values(self, **kwargs)
-            self._raw = None
 
 
     def __new__(cls, *args, **kwargs):
