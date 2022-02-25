@@ -6,7 +6,6 @@
 import sys
 import io
 import operator
-import collections
 import bisect
 import inspect
 import abc
@@ -206,18 +205,17 @@ class FactBase(object):
                 self._factmaps[type_] = FactMap(type_)
             return self._factmaps[type_].add_fact(arg)
 
-        elif isinstance(arg, str) or not isinstance(arg, collections.abc.Iterable):
+        if isinstance(arg, str) or not isinstance(arg, Iterable):
             raise TypeError(f"'{arg}' is not a Predicate instance")
 
-        facts = sorted(arg, key=lambda x : type(x).__name__)
-        for ptype, g in itertools.groupby(facts, lambda x: type(x)):
-            self._add_facts(ptype, g)
-
-    def _add_facts(self, ptype, facts):
-        if not issubclass(ptype,Predicate):
-            raise TypeError(f"{list(facts)} are not Predicate instances")
-        fm = self._factmaps.setdefault(ptype, FactMap(ptype))
-        fm.add_facts(facts)
+        facts = sorted(arg, key=lambda x: x.__class__.__name__)
+        for ptype, g in itertools.groupby(facts, lambda x: x.__class__):
+            if not issubclass(ptype, Predicate):
+                raise TypeError(f"{list(facts)} are not Predicate instances")
+            if not ptype in self._factmaps:
+                self._factmaps[ptype] = FactMap(ptype)
+            self._factmaps[ptype].add_facts(g)
+        return
 
     def _remove(self, fact, raise_on_missing):
         ptype = type(fact)
@@ -250,7 +248,7 @@ class FactBase(object):
     #--------------------------------------------------------------------------
     # Set member functions
     #--------------------------------------------------------------------------
-    def add(self, arg):
+    def add(self, arg: Union[Predicate, Iterable[Predicate]]) -> None:
         """Add a single fact or a collection of facts.
 
         Because a ``FactBase`` can only hold :class:`~Predicate` sub-class
