@@ -2841,8 +2841,8 @@ class Predicate(object, metaclass=_PredicateMeta):
     The constructor creates a predicate instance (i.e., a *fact*) or complex
     term.
 
-    Note: Using the ``raw`` parameter is now deprecated. You should use the
-    `unify()` function or `Unifier` class instead.
+    Note: Using the ``raw`` parameter is no longer supported. You should use
+    the `unify()` function or `Unifier` class instead.
 
     Args:
       **kwargs:

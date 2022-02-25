@@ -62,6 +62,9 @@ the underlying raw clingo symbol objects. For example, if the user choses not to
 use the ``clorm.clingo`` integration module but instead to use the main
 ``clingo`` module.
 
+
+.. _advanced_unification:
+
 Unification
 ^^^^^^^^^^^
 

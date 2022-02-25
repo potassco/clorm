@@ -856,19 +856,16 @@ be accessed using the ``raw`` property of a :class:`~clorm.Predicate` or
 
    assert address.raw == raw_address
 
-Clorm :class:`~clorm.Predicate` objects can also be constructed from the raw
-symbol objects. So assuming the above python code.
-
-.. code-block:: python
-
-   address_copy = Address(raw=raw_address)
-
 .. note::
 
-   Not every raw symbol will *unify* with a given :class:`~clorm.Predicate` or
-   :class:`~clorm.ComplexTerm` sub-class. If the raw constructor fails to unify
-   a symbol with a predicate definition then a ``ValueError`` exception will be
-   raised.
+   To construct clorm objects from raw clingo symbols involves *unifying* the
+   clingo symbol with the :class:`~clorm.Predicate` or
+   :class:`~clorm.ComplexTerm` sub-class. This typically happens when you have
+   a list of symbols corresponding to a clingo model and you want to turn them
+   into a set of clorm facts.  See :ref:`advanced_unification`,
+   :ref:`api_clingo_integration`, and :py:func:`~clorm.unify` for details about
+   unification.
+
 
 Integrating Clingo Symbols into a Predicate Definition
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
