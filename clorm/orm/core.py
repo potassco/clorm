@@ -2380,24 +2380,6 @@ def _instance_from_tuple(predicate_cls, v):
 # class constructor.
 # ------------------------------------------------------------------------------
 
-# Construct a Predicate via an explicit (raw) clingo.Symbol object
-def _predicate_init_by_raw(self, **kwargs):
-    raw = kwargs["raw"]
-    self._raw = raw
-    try:
-        cls=type(self)
-        if (raw.name != cls.meta.name or
-            cls.meta.arity != len(raw.arguments) or
-            (cls.meta.sign is not None and cls.meta.sign != raw.positive)):
-            raise ValueError(("Failed to unify clingo.Symbol object {} with "
-                              "Predicate class {}").format(raw, cls.__name__))
-        self._sign = raw.positive
-        self._field_values = tuple( f.defn.cltopy(raw.arguments[f.index]) \
-                                    for f in self.meta )
-    except (TypeError,AttributeError,RuntimeError):
-        raise ValueError(("Failed to unify clingo.Symbol object {} with "
-                          "Predicate class {}").format(raw, cls.__name__))
-
 # Construct a Predicate via the field keywords
 def _predicate_init_by_keyword_values(self, **kwargs):
     argnum=0
@@ -2865,9 +2847,6 @@ class Predicate(object, metaclass=_PredicateMeta):
                            "arguments: {}").format(kwargs)
                     raise ValueError(msg)
             _predicate_init_by_positional_values(self, *args,**kwargs)
-
-        elif "raw" in kwargs:
-            _predicate_init_by_raw(self, **kwargs)
         else:
             _predicate_init_by_keyword_values(self, **kwargs)
 
