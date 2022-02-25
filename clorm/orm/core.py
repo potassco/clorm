@@ -2380,87 +2380,156 @@ def _instance_from_tuple(predicate_cls, v):
 # class constructor.
 # ------------------------------------------------------------------------------
 
-# Construct a Predicate via the field keywords
-def _predicate_init_by_keyword_values(self, kwargs):
-    argnum=0
-    field_values = []
-    clingoargs = []
-    for f in self.meta:
-        cmplx = f.defn.complex
-        v = kwargs.get(f.name, None)
-        if v is not None:
-            if cmplx and not isinstance(v, cmplx):
-                v = _instance_from_tuple(cmplx, v)
-            argnum += 1
-        elif f.defn.has_default:
-            # Note: must be careful to get the default value only once in case
-            # it is a function with side-effects.
-            v = f.defn.default
-            if cmplx and not isinstance(v, cmplx):
-                v = _instance_from_tuple(cmplx, v)
-        else:
-            raise TypeError(("Missing argument for field \"{}\" (which has no "
-                             "default value)").format(f.name))
+AnySymbol = Union[clingo.Symbol,noclingo.Symbol]
 
-        # Set the value for the field
-        field_values.append(v)
-        clingoargs.append(v.symbol if f.defn.complex else f.defn.pytocl(v))
+def _get_symbols():
+    return symbols
 
-    # Turn it into a tuple
-    self._field_values = tuple(field_values)
+def _expand_template(template, **kwargs):
+    def add_spaces(num, text):
+        space = " " * num
+        out = []
+        for idx, l in enumerate(text.splitlines()):
+            if idx == 0:
+                out = [l]
+            else:
+                out.append(space+l)
+        return "\n".join(out)
 
-    # Calculate the sign of the literal and check that it matches the allowed values
-    if "sign" in kwargs:
-        sign = bool(kwargs["sign"])
-        argnum += 1
+    if not template:
+        return ''
+    lines = template.expandtabs(4).splitlines()
+    outlines = []
+    for line in lines:
+        start = line.find("{%")
+        if start == -1:
+            outlines.append(line)
+            continue
+        end = line.find("%}",start)
+        if end == -1:
+            raise ValueError("But template expansion in {line}")
+        kw = line[start+2:end]
+        text = add_spaces(start, kwargs[kw])
+        line = line[0:start] + text + line[end+2:]
+        outlines.append(line)
+    return "\n".join(outlines)
+
+PREDICATE_INIT_TEMPLATE = r"""
+def __init__(self,
+             {{%args_signature%}}
+             *, sign: bool=True, raw: AnySymbol=None):
+
+    self._hash = None
+    self._sign = bool(sign)
+
+    {{%sign_check%}}
+
+    # Raw should only be used as part of unification so expect no missing values
+    if (MISSING in ({{%args%}})) and raw is not None:
+        raise ValueError("Mis-use of \"raw\" in Predicate.__init__()")
+
+    {{%check_no_defaults%}}
+
+    # Assign defaults for missing values and apply map tuple transform for complex values
+    {{%assign_defaults%}}
+    {{%check_complex%}}
+
+    self._field_values = ({{%args%}})
+
+    # Create the raw symbol if required
+    if raw is None:
+        args=({{%args_raw%}})
+        self._raw = _get_symbols().Function("{pdefn.name}", args, self._sign)
     else:
-        sign = True
+        self._raw = raw
+"""
 
-    if len(kwargs) > argnum:
-        args=set(kwargs.keys())
-        expected=set([f.name for f in self.meta])
-        raise TypeError(("Unexpected keyword arguments for \"{}\" constructor: "
-                          "{}").format(type(self).__name__, ",".join(args-expected)))
-    if self.meta.sign is not None:
-        if sign != self.meta.sign:
-            raise ValueError(("Predicate {} is defined to only allow {} signed "
-                              "instances").format(self.__class__, self.meta.sign))
-    # Assign the sign
-    self._sign = sign
-    self._raw = symbols.Function(self.meta.name, clingoargs, self._sign)
+CHECK_SIGN_TEMPLATE = r"""
+# Check if the sign is allowed
+if self._sign != {sign}:
+    raise ValueError(f"Predicate {{type(self).__name__}}"
+                     f"is defined to only allow {pdefn.sign} instances")
+"""
 
-# Construct a Predicate using keyword arguments
-def _predicate_init_by_positional_values(self, args, kwargs):
-    argc = len(args)
-    arity = len(self.meta)
-    if argc != arity:
-        raise ValueError("Expected {} arguments but {} given".format(argc,arity))
+NO_DEFAULTS_TEMPLATE = r"""
+# Check for missing values that have no defaults
+if MISSING in ({args}):
+    for arg, name in ({named_args}):
+        if arg == MISSING:
+            raise TypeError((f"Missing argument for field \"{{name}}\""
+                             f"(which has no default value)"))
+"""
 
-    clingoargs = []
-    self._field_values = []
-    for f, v in zip(self.meta, args):
+ASSIGN_DEFAULT_TEMPLATE = r"""
+if {arg} == MISSING:
+    {arg} = {arg}_field.default
+"""
+
+ASSIGN_COMPLEX_TEMPLATE = r"""
+if not isinstance({arg}, {arg}_class):
+    {arg} = _instance_from_tuple({arg}_class, {arg})
+"""
+
+def _make_predicate_init(pdefn: PredicateDefn):
+
+    gdict = {"_instance_from_tuple": _instance_from_tuple,
+               "_get_symbols": _get_symbols,
+               "MISSING": MISSING,
+               "AnySymbol": AnySymbol}
+
+    for f in pdefn:
+        gdict[f"{f.name}_field"] = f.defn
+        if f.defn.complex:
+            gdict[f"{f.name}_class"] = f.defn.complex
+
+    args_signature = "".join([f"{f.name}=MISSING, " for f in pdefn])
+    args = "".join([f"{f.name}, " for f in pdefn])
+
+    sign_check = "" if pdefn.sign is None else \
+        CHECK_SIGN_TEMPLATE.format(pdefn=pdefn, sign=str(pdefn.sign))
+
+    # Create the check for missing values that have no defaults
+    tmp1 = "".join([f"{f.name}, " for f in pdefn if not f.defn.has_default])
+    tmp2 = "".join([f"({f.name}, '{f.name}'), " for f in pdefn if not f.defn.has_default])
+    check_no_defaults = NO_DEFAULTS_TEMPLATE.format(args=tmp1, named_args=tmp2) if tmp1 else ""
+
+    # or assigning a default
+    tmp = []
+    for f in pdefn:
+        if f.defn.has_default:
+            tmp.append(ASSIGN_DEFAULT_TEMPLATE.format(arg=f.name))
+    assign_defaults = "".join(tmp)
+
+    # Create the check for dealing with complex assignment
+    tmp = []
+    tmp2 = []
+    for f in pdefn:
         cmplx = f.defn.complex
-        if cmplx and not isinstance(v, cmplx):
-            v = _instance_from_tuple(cmplx, v)
-        self._field_values.append(v)
-        clingoargs.append(v.symbol if f.defn.complex else f.defn.pytocl(v))
+        if cmplx:
+            tmp.append(ASSIGN_COMPLEX_TEMPLATE.format(arg=f.name))
+            tmp2.append(f"{f.name}.symbol, ")
+        else:
+            tmp2.append(f"{f.name}_field.pytocl({f.name}), ")
+    check_complex = "".join(tmp)
+    args_raw = "".join(tmp2)
 
-    # Turn it into a tuple
-    self._field_values = tuple(self._field_values)
+    expansions = {"args_signature": args_signature,
+                  "sign_check": sign_check,
+                  "args": args,
+                  "check_no_defaults": check_no_defaults,
+                  "assign_defaults": assign_defaults,
+                  "check_complex": check_complex,
+                  "args_raw": args_raw}
 
-    # Calculate the sign of the literal and check that it matches the allowed values
-    self._sign = bool(kwargs["sign"]) if "sign" in kwargs else True
-    if self.meta.sign is not None and self._sign != self.meta.sign:
-        raise ValueError(("Predicate {} is defined to only allow {} "
-                          "instances").format(type(self).__name__, self.meta.sign))
-    self._raw = symbols.Function(self.meta.name, clingoargs, self._sign)
+    template = PREDICATE_INIT_TEMPLATE.format(pdefn=pdefn)
+    def_init = _expand_template(template, **expansions)
+    ldict = {}
+    exec(def_init, gdict, ldict)
 
-# Construct the object from an already unified pair of raw and values.
-def _predicate_init_by_unify(self, raw_, values_):
-    self._raw = raw_
-    self._field_values = values_
-    self._sign = raw_.positive
+#    print(f"INIT:\n\n{def_init}\n\n")
 
+    doc_args = f"{args_signature}*, sign=True, raw=None"
+    return (ldict["__init__"], doc_args)
 
 #------------------------------------------------------------------------------
 # Metaclass constructor support functions to create the fields
@@ -2736,6 +2805,11 @@ class _PredicateMeta(type):
         namespace["_meta"] = _make_predicatedefn(cls_name, namespace, meta_dct)
         namespace["_field"] = _lateinit("{}._field".format(cls_name))
 
+        (predicate_init, doc_args) = _make_predicate_init(namespace["_meta"])
+        namespace["__init__"] = predicate_init
+        predicate_init.__name__ = "__init__"
+        predicate_init.__doc__ = f"{cls_name}({doc_args})"
+
         parents = [ b for b in bases if issubclass(b, Predicate) ]
         if len(parents) == 0:
             raise TypeError("Internal bug: number of Predicate bases is 0!")
@@ -2832,26 +2906,6 @@ class Predicate(object, metaclass=_PredicateMeta):
     #--------------------------------------------------------------------------
     #
     #--------------------------------------------------------------------------
-    def __init__(self, *args, **kwargs):
-        # The is calculated and cached when __hash__() is called and _raw is
-        # set either when needed or (set explicitly during unification)
-        self._hash = None
-
-        raw = kwargs.get("raw_", None)
-        if raw is not None:
-            _predicate_init_by_unify(self, raw, kwargs["values_"])
-        elif args:
-            if kwargs:
-                if len(kwargs) > 1 or "sign" not in kwargs:
-                    msg = ("Invalid Predicate initialisation: only \"sign\" is a "
-                           "valid keyword argument when combined with positional "
-                           "arguments: {}").format(kwargs)
-                    raise ValueError(msg)
-            _predicate_init_by_positional_values(self, args, kwargs)
-        else:
-            _predicate_init_by_keyword_values(self, kwargs)
-
-
     def __new__(cls, *args, **kwargs):
         if cls == __class__:
             raise TypeError(("Predicate/ComplexTerm must be sub-classed"))
@@ -2945,7 +2999,7 @@ class Predicate(object, metaclass=_PredicateMeta):
             if cls.meta.name != raw.name:
                 return None
             values = tuple(f.defn.cltopy(a) for f, a in zip(cls.meta, raw.arguments))
-            instance = cls(raw_=raw, values_=values)
+            instance = cls(*values, raw=raw, sign=raw.positive)
             return instance
         except (TypeError, ValueError):
             return None

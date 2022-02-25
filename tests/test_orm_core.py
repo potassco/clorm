@@ -1910,13 +1910,13 @@ class PredicateInternalUnifyTestCase(unittest.TestCase):
 
         # Test trying to initialise with the wrong number of arguments - note
         # cannot use default values when initialising with positional arguments.
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(TypeError) as ctx:
             f4=Fact(1,"test",2)
 
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(TypeError) as ctx:
             f2=Fact(1)
 
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(TypeError) as ctx:
             f3=Fact("test")
 
     #--------------------------------------------------------------------------
