@@ -12,6 +12,7 @@ import inspect
 import abc
 import functools
 import itertools
+from typing import Iterable, Union
 
 from .core import *
 from .core import get_field_definition, PredicatePath, kwargs_check_keys, \
@@ -198,19 +199,19 @@ class FactBase(object):
     #
     #--------------------------------------------------------------------------
 
-    def _add(self, arg):
+    def _add(self, arg: Union[Predicate, Iterable[Predicate]]) -> None:
         if isinstance(arg, Predicate):
-            return self._add_fact(type(arg),arg)
+            type_ = arg.__class__
+            if not type_  in self._factmaps:
+                self._factmaps[type_] = FactMap(type_)
+            return self._factmaps[type_].add_fact(arg)
+
         elif isinstance(arg, str) or not isinstance(arg, collections.abc.Iterable):
             raise TypeError(f"'{arg}' is not a Predicate instance")
 
         facts = sorted(arg, key=lambda x : type(x).__name__)
         for ptype, g in itertools.groupby(facts, lambda x: type(x)):
             self._add_facts(ptype, g)
-
-    def _add_fact(self, ptype, fact):
-        fm = self._factmaps.setdefault(ptype, FactMap(ptype))
-        fm.add_fact(fact)
 
     def _add_facts(self, ptype, facts):
         if not issubclass(ptype,Predicate):
