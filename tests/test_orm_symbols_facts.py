@@ -63,7 +63,6 @@ class UnifyTestCase(unittest.TestCase):
         rf1 = RawField()
         rt1 = Function("tmp", [Number(1), raw1])
         rt2 = Function("tmp", [Number(1), raw2])
-        self.assertTrue(rf1.unifies(raw1))
 
         class Tmp(Predicate):
             n1 = IntegerField()

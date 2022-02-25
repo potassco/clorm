@@ -118,7 +118,7 @@ class FieldTestCase(unittest.TestCase):
     #--------------------------------------------------------------------------
     # Test that the simple field unify functions work as expected
     #--------------------------------------------------------------------------
-    def test_api_pytocl_and_cltopy_and_unifies(self):
+    def test_api_pytocl_and_cltopy(self):
         num1 = 1
         str1 = "string"
         sim1 = "name"
@@ -138,29 +138,15 @@ class FieldTestCase(unittest.TestCase):
         self.assertEqual(csim1, ConstantField.pytocl(sim1))
         self.assertEqual(csim2, ConstantField.pytocl(sim2))
 
-        self.assertTrue(IntegerField.unifies(cnum1))
-        self.assertTrue(StringField.unifies(cstr1))
-        self.assertTrue(ConstantField.unifies(csim1))
-        self.assertTrue(ConstantField.unifies(csim2))
-
-        self.assertFalse(IntegerField.unifies(csim1))
-        self.assertFalse(StringField.unifies(cnum1))
-        self.assertFalse(ConstantField.unifies(cstr1))
-
         fint = IntegerField()
         fstr = StringField()
         fconst = ConstantField()
-
-        self.assertTrue(fint.unifies(cnum1))
-        self.assertTrue(fstr.unifies(cstr1))
-        self.assertTrue(fconst.unifies(csim1))
-        self.assertTrue(fconst.unifies(csim2))
 
 
     #--------------------------------------------------------------------------
     # Test that the simple field unify functions works for noclingo symbols.
     #--------------------------------------------------------------------------
-    def test_api_noclingo_pytocl_and_cltopy_and_unifies(self):
+    def test_api_noclingo_pytocl_and_cltopy(self):
         num1 = 1
         str1 = "string"
         sim1 = "name"
@@ -180,23 +166,9 @@ class FieldTestCase(unittest.TestCase):
         self.assertEqual(csim1.name, ConstantField.pytocl(sim1).name)
         self.assertEqual(csim2.name, ConstantField.pytocl(sim2).name)
 
-        self.assertTrue(IntegerField.unifies(cnum1))
-        self.assertTrue(StringField.unifies(cstr1))
-        self.assertTrue(ConstantField.unifies(csim1))
-        self.assertTrue(ConstantField.unifies(csim2))
-
-        self.assertFalse(IntegerField.unifies(csim1))
-        self.assertFalse(StringField.unifies(cnum1))
-        self.assertFalse(ConstantField.unifies(cstr1))
-
         fint = IntegerField()
         fstr = StringField()
         fconst = ConstantField()
-
-        self.assertTrue(fint.unifies(cnum1))
-        self.assertTrue(fstr.unifies(cstr1))
-        self.assertTrue(fconst.unifies(csim1))
-        self.assertTrue(fconst.unifies(csim2))
 
     #--------------------------------------------------------------------------
     #--------------------------------------------------------------------------
@@ -549,12 +521,6 @@ class FieldTestCase(unittest.TestCase):
         self.assertEqual(ABCField.cltopy(r_b), "b")
         self.assertEqual(ABCField.cltopy(r_c), "c")
 
-        self.assertTrue(ABCField.unifies(r_a))
-        self.assertTrue(ABCField.unifies(r_b))
-        self.assertTrue(ABCField.unifies(r_c))
-        self.assertFalse(ABCField.unifies(r_d))
-        self.assertFalse(ABCField.unifies(r_1))
-
         # Test a version with no class name
         ABCField2 = rf(ConstantField, ["a","b","c"])
         self.assertEqual(ABCField2.pytocl("a"), r_a)
@@ -623,10 +589,6 @@ class FieldTestCase(unittest.TestCase):
         with self.assertRaises(TypeError) as ctx:
             v = PosIntField.cltopy(r_a)
 
-        self.assertTrue(PosIntField.unifies(r_0))
-        self.assertTrue(PosIntField.unifies(r_1))
-        self.assertFalse(PosIntField.unifies(r_neg1))
-        self.assertFalse(PosIntField.unifies(r_a))
 
     #--------------------------------------------------------------------------
     # Test making a new field that is a combination of other fields
@@ -1760,44 +1722,6 @@ class PredicateInternalUnifyTestCase(unittest.TestCase):
             Fact._unify([1,2,3])
         check_errmsg("Cannot unify with object ", ctx)
 
-
-    # --------------------------------------------------------------------------
-    # Test initialising a predicate with a raw with some bad input
-    # --------------------------------------------------------------------------
-    def test_predicate_init_with_raw(self):
-
-        class Fact(Predicate):
-            anum = IntegerField
-            astr = StringField
-
-        good = Function("fact",[Number(1),String("test")])
-        bad = [1,2]
-
-#        f=Fact(raw=bad)
-
-#        with self.assertRaises(ValueError) as ctx:
-#            func2=Function("fact",[String("1"),String("test")])
-#            f=Fact(raw=func2)
-
-
-
-    # --------------------------------------------------------------------------
-    # Test unifies for Predicate.Field function
-    # --------------------------------------------------------------------------
-
-    def test_rawfield_unifies(self):
-
-        class Fact(Predicate):
-            astr = StringField()
-
-        good=Function("fact",[String("astring")])
-        bad=Function("fact",[Number(1)])
-
-        self.assertTrue(RawField.unifies(good))
-        self.assertTrue(ConstantField.unifies(Function("fact",[])))
-        self.assertFalse(ConstantField.unifies(String("fact")))
-        self.assertTrue(Fact.Field.unifies(good))
-        self.assertFalse(Fact.Field.unifies(bad))
 
 
     #--------------------------------------------------------------------------

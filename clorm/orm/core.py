@@ -1247,20 +1247,6 @@ class BaseField(object, metaclass=_AbstractBaseFieldMeta):
         """Called when translating data from Python to Clingo"""
         raise NotImplementedError("BaseField.pytocl() must be overriden")
 
-    @classmethod
-    def unifies(cls, v):
-        """Returns whether a `Clingo.Symbol` can be unified with this type of term
-
-        Note: this function is deprecated. It is no longer used internally and
-        doesn't serve any real purpose for clorm users.
-
-        """
-        try:
-            cls.cltopy(v)
-        except (TypeError,ValueError):
-            return False
-        return True
-
     # Internal property - not part of official API
     @_classproperty
     def complex(cls) -> 'Predicate':
