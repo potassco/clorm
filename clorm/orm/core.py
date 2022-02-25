@@ -1418,7 +1418,8 @@ class Raw(object):
 class RawField(BaseField):
     """A field to pass through an arbitrary Clingo.Symbol."""
 
-    cltopy = lambda v: Raw(v)
+    def cltopy(v):
+        return Raw(v)
 
     def pytocl(v):
         if not isinstance(v, Raw):
@@ -1441,7 +1442,8 @@ class StringField(BaseField):
                                 "Symbol").format(symbol,type(symbol)))
             raise TypeError(("Symbol '{}' ({}) is not a String "
                              "Symbol").format(symbol,symbol.type))
-    pytocl = lambda v: symbols.String(v)
+    def pytocl(v):
+        return symbols.String(v)
 
 class IntegerField(BaseField):
     """A field to convert between a Clingo.Number object and a Python integer."""
@@ -1455,7 +1457,8 @@ class IntegerField(BaseField):
             raise TypeError(("Symbol '{}' ({}) is not a Number "
                              "Symbol").format(symbol,symbol.type))
 
-    pytocl = lambda v: symbols.Number(v)
+    def pytocl(v):
+        return symbols.Number(v)
 
 #------------------------------------------------------------------------------
 # ConstantField is more complex than basic string or integer because the value
@@ -2570,7 +2573,7 @@ def _make_predicatedefn(class_name: str, namespace: Dict[str, Any], meta_dct: Di
     is_tuple = False
 
     if meta_dct:
-        
+
         # What has been defined
         name_def = "name" in meta_dct
         is_tuple_def = "is_tuple" in meta_dct
