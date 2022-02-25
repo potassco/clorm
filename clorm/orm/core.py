@@ -1035,17 +1035,19 @@ def kwargs_check_keys(validkeys, inputkeys):
 # from a sub-class of BaseField then call the parents conversion function first.
 def _make_pytocl(parent, fn):
     if parent == BaseField:
-        return lambda cls,v : fn(v)
-    else:
-        pfn = parent.pytocl
-        return lambda cls,v : pfn(fn(v))
+        return fn
+    pfn = parent.pytocl
+    def complex_pytocl(v):
+        return pfn(fn(v))
+    return complex_pytocl
 
 def _make_cltopy(parent, fn):
     if parent == BaseField:
-        return lambda cls,v : fn(v)
-    else:
-        pfn = parent.cltopy
-        return lambda cls,v : fn(pfn(v))
+        return fn
+    pfn = parent.cltopy
+    def complex_cltopy(v):
+        return fn(pfn(v))
+    return complex_cltopy
 
 
 class _BaseFieldMeta(type):
@@ -1069,24 +1071,24 @@ class _BaseFieldMeta(type):
         dct["_parentclass"] = parents[0]
 
         # When a conversion is not specified raise a NotImplementedError
-        def _raise_cltopy_nie(cls,v):
+        def _raise_cltopy_nie(v):
             msg=("'{}' is only partially specified and has no "
                  "Clingo to Python (cltopy) conversion").format(name)
             raise NotImplementedError(msg)
-        def _raise_pytocl_nie(cls,v):
+        def _raise_pytocl_nie(v):
             msg=("'{}' is only partially specified and has no "
                  "Python to Clingo (cltopy) conversion").format(name)
             raise NotImplementedError(msg)
 
         if "cltopy" in dct:
-            dct["cltopy"] = classmethod(_make_cltopy(parents[0], dct["cltopy"]))
+            dct["cltopy"] = staticmethod(_make_cltopy(parents[0], dct["cltopy"]))
         else:
-            dct["cltopy"] = classmethod(_raise_cltopy_nie)
+            dct["cltopy"] = staticmethod(_raise_cltopy_nie)
 
         if "pytocl" in dct:
-            dct["pytocl"] = classmethod(_make_pytocl(parents[0], dct["pytocl"]))
+            dct["pytocl"] = staticmethod(_make_pytocl(parents[0], dct["pytocl"]))
         else:
-            dct["pytocl"] = classmethod(_raise_pytocl_nie)
+            dct["pytocl"] = staticmethod(_raise_pytocl_nie)
 
 
         # For complex-terms provide an interface to the underlying complex term
@@ -1209,15 +1211,15 @@ class BaseField(object, metaclass=_AbstractBaseFieldMeta):
                 raise TypeError("Invalid default value \"{}\" for {}".format(
                     default, type(self).__name__))
 
-    @classmethod
+    @staticmethod
     @abc.abstractmethod
-    def cltopy(cls, v):
+    def cltopy(v):
         """Called when translating data from Clingo to Python"""
         raise NotImplementedError("BaseField.cltopy() must be overriden")
 
-    @classmethod
+    @staticmethod
     @abc.abstractmethod
-    def pytocl(cls, v):
+    def pytocl(v):
         """Called when translating data from Python to Clingo"""
         raise NotImplementedError("BaseField.pytocl() must be overriden")
 
