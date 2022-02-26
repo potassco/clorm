@@ -2425,12 +2425,15 @@ def __init__(self,
     self._hash = None
     self._sign = bool(sign)
 
+    # If raw is supplied then we're using the Internal unification API so we
+    # don't do any value checking. So be warned that mis-using this API can
+    # result in unexcpected behaviour.
+    if raw is not None:
+        self._raw = raw
+        self._field_values = ({{%args%}})
+        return
+
     {{%sign_check%}}
-
-    # Raw should only be used as part of unification so expect no missing values
-    if (MISSING in ({{%args%}})) and raw is not None:
-        raise ValueError("Mis-use of \"raw\" in Predicate.__init__()")
-
     {{%check_no_defaults%}}
 
     # Assign defaults for missing values and apply map tuple transform for complex values
@@ -2439,12 +2442,10 @@ def __init__(self,
 
     self._field_values = ({{%args%}})
 
-    # Create the raw symbol if required
-    if raw is None:
-        args=({{%args_raw%}})
-        self._raw = _get_symbols().Function("{pdefn.name}", args, self._sign)
-    else:
-        self._raw = raw
+    # Create the raw symbol
+    self._raw = _get_symbols().Function("{pdefn.name}",
+                                        ({{%args_raw%}}),
+                                        self._sign)
 """
 
 CHECK_SIGN_TEMPLATE = r"""
@@ -2482,6 +2483,8 @@ def _make_predicate_init(pdefn: PredicateDefn):
 
     for f in pdefn:
         gdict[f"{f.name}_field"] = f.defn
+        gdict[f"{f.name}_pytocl"] = f.defn.pytocl
+
         if f.defn.complex:
             gdict[f"{f.name}_class"] = f.defn.complex
 
@@ -2512,7 +2515,7 @@ def _make_predicate_init(pdefn: PredicateDefn):
             tmp.append(ASSIGN_COMPLEX_TEMPLATE.format(arg=f.name))
             tmp2.append(f"{f.name}.symbol, ")
         else:
-            tmp2.append(f"{f.name}_field.pytocl({f.name}), ")
+            tmp2.append(f"{f.name}_pytocl({f.name}), ")
     check_complex = "".join(tmp)
     args_raw = "".join(tmp2)
 
@@ -2529,7 +2532,7 @@ def _make_predicate_init(pdefn: PredicateDefn):
     ldict = {}
     exec(def_init, gdict, ldict)
 
-    #    print(f"INIT:\n\n{def_init}\n\n")
+#    print(f"INIT:\n\n{def_init}\n\n")
 
     doc_args = f"{args_signature}*, sign=True, raw=None"
     return (ldict["__init__"], doc_args)
@@ -3001,7 +3004,7 @@ class Predicate(object, metaclass=_PredicateMeta):
                 return None
             if cls.meta.name != raw.name:
                 return None
-            values = tuple(f.defn.cltopy(a) for f, a in zip(cls.meta, raw.arguments))
+            values = [f.defn.cltopy(a) for f, a in zip(cls.meta, raw.arguments)]
             instance = cls(*values, raw=raw, sign=raw.positive)
             return instance
         except (TypeError, ValueError):
