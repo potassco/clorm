@@ -2410,14 +2410,14 @@ def _expand_template(template, **kwargs):
             continue
         end = line.find("%}",start)
         if end == -1:
-            raise ValueError("But template expansion in {line}")
+            raise ValueError("Bad template expansion in {line}")
         kw = line[start+2:end]
         text = add_spaces(start, kwargs[kw])
         line = line[0:start] + text + line[end+2:]
         outlines.append(line)
     return "\n".join(outlines)
 
-PREDICATE_INIT_TEMPLATE = r"""
+PREDICATE_TEMPLATE = r"""
 def __init__(self,
              {{%args_signature%}}
              *, sign: bool=True, raw: AnySymbol=None):
@@ -2446,6 +2446,27 @@ def __init__(self,
     self._raw = _get_symbols().Function("{pdefn.name}",
                                         ({{%args_raw%}}),
                                         self._sign)
+
+@classmethod
+def _unify(cls: Predicate, raw: AnySymbol):
+    try:
+        raw_args = raw.arguments
+        if len(raw_args) != {pdefn.arity}:
+            return None
+
+        {{%sign_check_unify%}}
+
+        if raw.name != "{pdefn.name}":
+            return None
+
+        return cls({{%args_cltopy%}}
+                   raw=raw, sign=raw.positive)
+    except (TypeError, ValueError):
+        return None
+    except AttributeError as e:
+        raise ValueError((f"Cannot unify with object {{raw}} ({{type(raw)}}) as "
+                          "it is not a clingo Symbol Function object"))
+
 """
 
 CHECK_SIGN_TEMPLATE = r"""
@@ -2453,6 +2474,11 @@ CHECK_SIGN_TEMPLATE = r"""
 if self._sign != {sign}:
     raise ValueError(f"Predicate {{type(self).__name__}}"
                      f"is defined to only allow {pdefn.sign} instances")
+"""
+
+CHECK_SIGN_UNIFY_TEMPLATE = r"""
+if raw.positive != {sign}:
+    return None
 """
 
 NO_DEFAULTS_TEMPLATE = r"""
@@ -2474,16 +2500,25 @@ if not isinstance({arg}, {arg}_class):
     {arg} = _instance_from_tuple({arg}_class, {arg})
 """
 
-def _make_predicate_init(pdefn: PredicateDefn):
+PREDICATE_UNIFY_DOCSTRING = r"""
+    Unify a (raw) clingo.Symbol object with the class.
+
+    Returns None on failure to unify otherwise returns the new fact
+"""
+
+def _generate_dynamic_predicate_functions(class_name: str, namespace: Dict):
+    pdefn = namespace["_meta"]
 
     gdict = {"_instance_from_tuple": _instance_from_tuple,
-               "_get_symbols": _get_symbols,
-               "MISSING": MISSING,
-               "AnySymbol": AnySymbol}
+             "_get_symbols": _get_symbols,
+             "MISSING": MISSING,
+             "AnySymbol": AnySymbol,
+             "Predicate": Predicate}
 
     for f in pdefn:
         gdict[f"{f.name}_field"] = f.defn
         gdict[f"{f.name}_pytocl"] = f.defn.pytocl
+        gdict[f"{f.name}_cltopy"] = f.defn.cltopy
 
         if f.defn.complex:
             gdict[f"{f.name}_class"] = f.defn.complex
@@ -2493,6 +2528,9 @@ def _make_predicate_init(pdefn: PredicateDefn):
 
     sign_check = "" if pdefn.sign is None else \
         CHECK_SIGN_TEMPLATE.format(pdefn=pdefn, sign=str(pdefn.sign))
+
+    sign_check_unify = "" if pdefn.sign is None else \
+        CHECK_SIGN_UNIFY_TEMPLATE.format(sign=str(pdefn.sign))
 
     # Create the check for missing values that have no defaults
     tmp1 = "".join([f"{f.name}, " for f in pdefn if not f.defn.has_default])
@@ -2519,23 +2557,40 @@ def _make_predicate_init(pdefn: PredicateDefn):
     check_complex = "".join(tmp)
     args_raw = "".join(tmp2)
 
+    tmp = []
+    for idx, f in enumerate(pdefn):
+        tmp.append(f"{f.name}_cltopy(raw_args[{idx}]), ")
+    args_cltopy= "".join(tmp)
+
     expansions = {"args_signature": args_signature,
                   "sign_check": sign_check,
                   "args": args,
                   "check_no_defaults": check_no_defaults,
                   "assign_defaults": assign_defaults,
                   "check_complex": check_complex,
-                  "args_raw": args_raw}
+                  "args_raw": args_raw,
+                  "sign_check_unify": sign_check_unify,
+                  "args_cltopy": args_cltopy}
 
-    template = PREDICATE_INIT_TEMPLATE.format(pdefn=pdefn)
-    def_init = _expand_template(template, **expansions)
+    template = PREDICATE_TEMPLATE.format(pdefn=pdefn)
+    predicate_functions = _expand_template(template, **expansions)
+#    print(f"INIT:\n\n{predicate_functions}\n\n")
+
     ldict = {}
-    exec(def_init, gdict, ldict)
+    exec(predicate_functions, gdict, ldict)
 
-#    print(f"INIT:\n\n{def_init}\n\n")
+    init_doc_args = f"{args_signature}*, sign=True, raw=None"
+    predicate_init = ldict["__init__"]
+    predicate_init.__name__ = "__init__"
+    predicate_init.__doc__ = f"{class_name}({init_doc_args})"
+    predicate_unify = ldict["_unify"]
+    predicate_unify.__name__ = "_unify"
+    predicate_unify.__doc__ = PREDICATE_UNIFY_DOCSTRING
 
-    doc_args = f"{args_signature}*, sign=True, raw=None"
-    return (ldict["__init__"], doc_args)
+    namespace["__init__"] = predicate_init
+    namespace["_unify"] = predicate_unify
+
+
 
 #------------------------------------------------------------------------------
 # Metaclass constructor support functions to create the fields
@@ -2811,10 +2866,7 @@ class _PredicateMeta(type):
         namespace["_meta"] = _make_predicatedefn(cls_name, namespace, meta_dct)
         namespace["_field"] = _lateinit("{}._field".format(cls_name))
 
-        (predicate_init, doc_args) = _make_predicate_init(namespace["_meta"])
-        namespace["__init__"] = predicate_init
-        predicate_init.__name__ = "__init__"
-        predicate_init.__doc__ = f"{cls_name}({doc_args})"
+        _generate_dynamic_predicate_functions(cls_name, namespace)
 
         parents = [ b for b in bases if issubclass(b, Predicate) ]
         if len(parents) == 0:
@@ -2988,31 +3040,6 @@ class Predicate(object, metaclass=_PredicateMeta):
     def meta(cls) -> PredicateDefn:
         """The meta data (definitional information) for the Predicate/Complex-term"""
         return cls._meta
-
-
-    # Factory that returns a unified Predicate object
-    @classmethod
-    def _unify(cls, raw):
-        """Unify a (raw) clingo.Symbol object with the class.
-
-        Returns None on failure to unify otherwise returns the new fact
-        """
-        try:
-            if cls.meta.arity != len(raw.arguments):
-                return None
-            if cls.meta.sign is not None and cls.meta.sign != raw.positive:
-                return None
-            if cls.meta.name != raw.name:
-                return None
-            values = [f.defn.cltopy(a) for f, a in zip(cls.meta, raw.arguments)]
-            instance = cls(*values, raw=raw, sign=raw.positive)
-            return instance
-        except (TypeError, ValueError):
-            return None
-        except AttributeError as e:
-            raise ValueError((f"Cannot unify with object {raw} ({type(raw)}) as "
-                              "it is not a clingo Symbol Function object"))
-
 
     #--------------------------------------------------------------------------
     # Overloaded index operator to access the values and len operator

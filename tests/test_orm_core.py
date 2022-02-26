@@ -1695,7 +1695,7 @@ class PredicateInternalUnifyTestCase(unittest.TestCase):
     # Test that we can define predicates using the class syntax and test that
     # the getters and setters are connected properly to the predicate classes.
     # --------------------------------------------------------------------------
-    def test_predicate_init(self):
+    def test_predicate_init_basic(self):
 
         class Fact(Predicate):
             anum = IntegerField(default=1)
@@ -1731,14 +1731,18 @@ class PredicateInternalUnifyTestCase(unittest.TestCase):
         f=F(1)
         f_alt1=F(1,sign=True)
         f_alt2=F(a=1,sign=True)
+
         self.assertEqual(func, f.raw)
         self.assertEqual(func, f_alt1.raw)
         self.assertEqual(func, f_alt2.raw)
+
 
         neg_func=Function("f",[Number(1)],False)
         neg_f=F(1,sign=False)
         neg_f_alt1=F(a=1,sign=False)
         neg_f_alt2=F._unify(neg_func)
+
+
         self.assertEqual(neg_func, neg_f.raw)
         self.assertEqual(neg_func, neg_f_alt1.raw)
         self.assertEqual(neg_func, neg_f_alt2.raw)
