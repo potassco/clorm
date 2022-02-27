@@ -2845,10 +2845,10 @@ class Predicate(object, metaclass=_PredicateMeta):
          - named parameters corresponding to the field names.
 
     """
-    # sign and raw are specified here to be recognized from __dataclass_transform__
-    # they will be overriden later
+    # sign is specified here to be recognized from __dataclass_transform__
+    # will be overriden by metaclass
     sign: bool = field(IntegerField, default=True, kw_only=True)
-    raw: clingo.Symbol = field(IntegerField, default=MISSING, kw_only=True)
+
     if typing.TYPE_CHECKING:
         # populated by the metaclass, defined here to help IDEs only
         _meta: typing.ClassVar[PredicateDefn]
