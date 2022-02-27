@@ -2357,7 +2357,7 @@ class PredicateDefn(object):
 def _instance_from_tuple(predicate_cls, v):
     if isinstance(v, tuple) or (isinstance(v,Predicate) and v.meta.is_tuple):
         return predicate_cls(*v)
-    raise TypeError(f"Cannot map {v} ({type(v)}) to {predicate_cls.meta} object")
+    raise TypeError(f"Value {v} ({type(v)}) is not a tuple")
 
 
 def _generate_dynamic_predicate_functions(class_name: str, namespace: Dict):
