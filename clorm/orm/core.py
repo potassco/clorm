@@ -134,6 +134,22 @@ class _classproperty(object):
     def __get__(self, instance, owner):
         return self.getter(owner)
 
+# ------------------------------------------------------------------------------
+# PEP681 https://www.python.org/dev/peps/pep-0681/
+# https://github.com/microsoft/pyright/blob/main/specs/dataclass_transforms.md
+# tells a static type checker that the decorated function or metaclass performs runtime "magic"
+# that transforms a class, endowing it dataclass-like behaviors
+# ------------------------------------------------------------------------------
+
+def __dataclass_transform__(
+    *,
+    eq_default: bool = False,
+    order_default: bool = False,
+    kw_only_default: bool = False,
+    field_descriptors: Tuple[Union[type, Callable[..., Any]], ...] = (()),
+) -> Callable[[_T], _T]:
+    return lambda a: a
+
 #------------------------------------------------------------------------------
 # A descriptor for late initialisation of a read-only value. Helpful for delayed
 # initialisation in metaclasses where an object needs to be created in the
@@ -1291,7 +1307,7 @@ def field(basefield: _FieldDefinition,*, default: _T) -> _T: ...
 @overload
 def field(basefield: _FieldDefinition,*, default_factory: Callable[[], _T]) -> _T: ...
 
-def field(basefield,*, default=MISSING, default_factory=MISSING):
+def field(basefield: _FieldDefinition,*, default: Any=MISSING, default_factory: Any=MISSING, kw_only: bool=False) -> Any:
     if default is not MISSING and default_factory is not MISSING:
         raise ValueError('can not specify both default and default_factory')
     if isinstance(basefield, Tuple):
@@ -2713,6 +2729,7 @@ def _define_field_for_predicate(cls) -> Type[BaseField]:
 #------------------------------------------------------------------------------
 # A Metaclass for the Predicate base class
 #------------------------------------------------------------------------------
+@__dataclass_transform__(field_descriptors=(field,))
 class _PredicateMeta(type):
 
     #--------------------------------------------------------------------------
@@ -2828,6 +2845,10 @@ class Predicate(object, metaclass=_PredicateMeta):
          - named parameters corresponding to the field names.
 
     """
+    # sign is specified here to be recognized from __dataclass_transform__
+    # will be overriden by metaclass
+    sign: bool = field(IntegerField, default=True, kw_only=True)
+
     if typing.TYPE_CHECKING:
         # populated by the metaclass, defined here to help IDEs only
         _meta: typing.ClassVar[PredicateDefn]
