@@ -1241,6 +1241,11 @@ class BaseField(object, metaclass=_AbstractBaseFieldMeta):
         return self._default[0]
 
     @property
+    def has_default_factory(self):
+        """Returns whether a default value has been set"""
+        return self._default[0] and callable(self._default[1])
+
+    @property
     def default(self):
         """Returns the default value for the field (or ``None`` if no default was set).
 
@@ -2375,7 +2380,14 @@ def _generate_dynamic_predicate_functions(class_name: str, namespace: Dict):
         if f.defn.complex:
             gdict[f"{f.name}_class"] = f.defn.complex
 
-    args_signature = "".join([f"{f.name}=MISSING, " for f in pdefn])
+    tmp = []
+    for f in pdefn:
+        if f.defn.has_default and not f.defn.has_default_factory:
+            gdict[f"{f.name}_default"] = f.defn.default
+            tmp.append(f"{f.name}={f.name}_default, ")
+        else:
+            tmp.append(f"{f.name}=MISSING, ")
+    args_signature = "".join(tmp)
     args = "".join([f"{f.name}, " for f in pdefn])
 
     sign_check = "" if pdefn.sign is None else \
@@ -2389,10 +2401,10 @@ def _generate_dynamic_predicate_functions(class_name: str, namespace: Dict):
     tmp2 = "".join([f"({f.name}, '{f.name}'), " for f in pdefn if not f.defn.has_default])
     check_no_defaults = NO_DEFAULTS_TEMPLATE.format(args=tmp1, named_args=tmp2) if tmp1 else ""
 
-    # or assigning a default
+    # Assigning any default for the callable defaults
     tmp = []
     for f in pdefn:
-        if f.defn.has_default:
+        if f.defn.has_default and f.defn.has_default_factory:
             tmp.append(ASSIGN_DEFAULT_TEMPLATE.format(arg=f.name))
     assign_defaults = "".join(tmp)
 
@@ -2426,7 +2438,7 @@ def _generate_dynamic_predicate_functions(class_name: str, namespace: Dict):
 
     template = PREDICATE_TEMPLATE.format(pdefn=pdefn)
     predicate_functions = expand_template(template, **expansions)
-#    print(f"INIT:\n\n{predicate_functions}\n\n")
+    # print(f"INIT:\n\n{predicate_functions}\n\n")
 
     ldict = {}
     exec(predicate_functions, gdict, ldict)
