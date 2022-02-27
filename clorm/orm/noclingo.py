@@ -1,32 +1,37 @@
-#--------------------------------------------------------------------------------
-# A library to use instead of the clingo module when we want to convert to/from
-# clingo symbol objects without actually using clingo symbol objects. The
-# advantage is that it is just a basic python object and doesn't have the
-# garbage collection issues that the real clingo symbol objects have. Useful for
-# distributed applications.
+"""Hack for the persistence problem of clingo Symbols.
+
+Currently clingo Symbols cannot be freed once they have been created. This is
+potentially a problem for long running processes (such as a server). The
+solution in clorm is to provide a "noclingo" mode where a faked Symbol object
+can be used. The fake Symbol object can be passed around and freed. It is only
+when we need to call the solver that a real clingo Symbol needs to be used.
+
+So the idea is that you can run clorm in a server process using noclingo
+Symbols and clingo is only run in a sub-process where you can use real clingo
+Symbols.
+
+"""
 # --------------------------------------------------------------------------------
+# --------------------------------------------------------------------------------
+
 import functools
 import enum
 import clingo
-from clingo import SymbolType
+from clingo import SymbolType, Symbol
 
 __all__ = [
+    'SymbolType',
+    'Symbol',
     'Function',
     'String',
     'Number',
-    'Infimum',
-    'Supremum',
-    'SymbolType',
-    'is_Number',
-    'is_Function',
-    'is_String',
-    'is_Infimum',
-    'is_Supremum',
-    'is_Symbol',
+    'SymbolMode',
     'clingo_to_noclingo',
     'noclingo_to_clingo',
-    'SymbolMode',
-    'get_symbol_generator'
+    'get_Infimum',
+    'get_Supremum',
+    'get_symbol_mode',
+    'set_symbol_mode'
 ]
 
 
@@ -43,7 +48,7 @@ _SYMBOLTYPE_OID = {
     SymbolType.Supremum: 5
 }
 
-class Symbol(object):
+class NoSymbol(object):
     """A noclingo replacement for clingo.Symbol.
 
     noclingo is a replacement for clingo that provides basic Symbol object
@@ -206,27 +211,24 @@ class Symbol(object):
         return self.__str__()
 
 #--------------------------------------------------------------------------------
-# Constants
-#--------------------------------------------------------------------------------
-
-Infimum = Symbol(SymbolType.Infimum)
-Supremum = Symbol(SymbolType.Supremum)
-
-#--------------------------------------------------------------------------------
 # helper functions to create objects
 #--------------------------------------------------------------------------------
 
-def Function(name, args=[],sign=True):
-    return Symbol(SymbolType.Function,name,args,sign)
+def NoFunction(name, args=[],sign=True):
+    return NoSymbol(SymbolType.Function,name,args,sign)
 
-def String(string):
-    return Symbol(SymbolType.String,string)
+def NoString(string):
+    return NoSymbol(SymbolType.String,string)
 
-def Number(number):
-    return Symbol(SymbolType.Number,number)
+def NoNumber(number):
+    return NoSymbol(SymbolType.Number,number)
 
-def Tuple_(args=[]):
-    return Symbol(SymbolType.Function,"",args)
+def NoTuple_(args=[]):
+    return NoSymbol(SymbolType.Function,"",args)
+
+NoInfimum = NoSymbol(SymbolType.Infimum)
+
+NoSupremum = NoSymbol(SymbolType.Supremum)
 
 
 #--------------------------------------------------------------------------------
@@ -234,18 +236,18 @@ def Tuple_(args=[]):
 # --------------------------------------------------------------------------------
 
 def clingo_to_noclingo(clsym):
-    if isinstance(clsym, Symbol): return clsym
-    if clsym.type == clingo.SymbolType.Infimum: return Infimum
-    elif clsym.type == clingo.SymbolType.Supremum: return Supremum
-    elif clsym.type == clingo.SymbolType.Number: return Number(clsym.number)
-    elif clsym.type == clingo.SymbolType.String: return String(clsym.string)
+    if isinstance(clsym, NoSymbol): return clsym
+    if clsym.type == clingo.SymbolType.Infimum: return NoInfimum
+    elif clsym.type == clingo.SymbolType.Supremum: return NoSupremum
+    elif clsym.type == clingo.SymbolType.Number: return NoNumber(clsym.number)
+    elif clsym.type == clingo.SymbolType.String: return NoString(clsym.string)
     elif clsym.type != clingo.SymbolType.Function:
         raise TypeError(("Symbol '{}' ({}) is not of type clingo.SymbolType."
                          "Function").format(clsym,type(clsym)))
 
-    return Function(clsym.name,
-                    (clingo_to_noclingo(t) for t in clsym.arguments),
-                    clsym.positive)
+    return NoFunction(clsym.name,
+                      (clingo_to_noclingo(t) for t in clsym.arguments),
+                      clsym.positive)
 
 
 def noclingo_to_clingo(nclsym):
@@ -262,44 +264,6 @@ def noclingo_to_clingo(nclsym):
                     tuple(noclingo_to_clingo(t) for t in nclsym.arguments),
                     nclsym.positive)
 
-# ------------------------------------------------------------------------------
-# Functions to test the type of Symbol irrespective of clingo.Symbol or
-# noclingo.Symbol.
-# ------------------------------------------------------------------------------
-def is_Number(sym):
-    try:
-        return sym.type == SymbolType.Number
-    except:
-        return False
-
-def is_String(sym):
-    try:
-        return sym.type == SymbolType.String
-    except:
-        return False
-
-def is_Function(sym):
-    try:
-        return sym.type == SymbolType.Function
-    except:
-        return False
-
-def is_Supremum(sym):
-    try:
-        return sym.type == SymbolType.Supremum
-    except:
-        return False
-
-def is_Infimum(sym):
-    try:
-        return sym.type == SymbolType.Infimum
-    except:
-        return False
-
-def is_Symbol(sym):
-    return (isinstance(sym, clingo.Symbol) or
-            isinstance(sym, noclingo.Symbol))
-
 #------------------------------------------------------------------------------
 # A mechanism to group together the symbol generator functions for clingo or
 # noclingo.
@@ -309,61 +273,56 @@ class SymbolMode(enum.IntEnum):
     CLINGO=0
     NOCLINGO=1
 
-class SymbolGenerator(object):
-    __slots__ = ('mode', 'Function', 'String', 'Number', 'Infimum',
-                 'Supremum', 'SymbolType')
-    """Groups together the Symbol generators for clingo or noclingo.
+# ------------------------------------------------------------------------------
+# Globals to will change depending on clingo or noclingo mode
+# ------------------------------------------------------------------------------
 
-    noclingo is a mirror of the clingo ``Symbol`` class that creates a Python
-    only object. ``noclingo.Symbol`` objects can be used as a proxy for
-    ``clingo.Symbol`` in places where you don't need to pass the object to the
-    clingo solver. The advantage is that this object is not persistent
-    throughout the life time of the process.
+_infimum = clingo.Infimum
+_supremum = clingo.Supremum
+_string = clingo.String
+_number = clingo.Number
+_tuple_ = clingo.Tuple_
+_function = clingo.Function
+_mode = SymbolMode.CLINGO
 
-    The available member functions and properties are:
+def set_symbol_mode(sm: SymbolMode):
+    global _infimum, _supremum, _string, _number, _tuple_, _function, _mode
+    _mode = sm
+    if sm == SymbolMode.CLINGO:
+        _infimum = clingo.Infimum
+        _supremum = clingo.Supremum
+        _string = clingo.String
+        _number = clingo.Number
+        _tuple_ = clingo.Tuple_
+        _function = clingo.Function
+    else:
+        _infimum = NoInfimum
+        _supremum = NoSupremum
+        _string = NoString
+        _number = NoNumber
+        _tuple_ = NoTuple_
+        _function = NoFunction
 
-    * ``Infimum``
+def get_symbol_mode():
+    return _mode
 
-    * ``Supremum``
+def get_Infimum():
+    return _infimum
 
-    * ``String()``
+def get_Supremum():
+    return _supremum
 
-    * ``Number()``
+def Function(name, arguments=[],positive=True):
+    return _function(name, arguments, positive)
 
-    * ``Function()``
-    """
+def String(string):
+    return _string(string)
 
-    def __init__(self, mode, **kwargs):
-        self.mode = mode
-        self.Function = kwargs["Function"]
-        self.String = kwargs["String"]
-        self.Number = kwargs["Number"]
-        self.Infimum = kwargs["Infimum"]
-        self.Supremum = kwargs["Supremum"]
-        self.SymbolType = kwargs["SymbolType"]
+def Number(number):
+    return _number(number)
 
-
-clingo_symbol_generator = SymbolGenerator(SymbolMode.CLINGO,
-                                          Function=clingo.Function,
-                                          String=clingo.String,
-                                          Number=clingo.Number,
-                                          Infimum=clingo.Infimum,
-                                          Supremum=clingo.Supremum,
-                                          SymbolType=clingo.SymbolType)
-
-noclingo_symbol_generator = SymbolGenerator(SymbolMode.NOCLINGO,
-                                            Function=Function,
-                                            String=String,
-                                            Number=Number,
-                                            Infimum=Infimum,
-                                            Supremum=Supremum,
-                                            SymbolType=SymbolType)
-
-def get_symbol_generator(mode):
-    if mode == SymbolMode.CLINGO: return clingo_symbol_generator
-    if mode == SymbolMode.NOCLINGO: return noclingo_symbol_generator
-    raise ValueError("Unknown SymbolMode {}".format(mode))
-
+def Tuple_(arguments):
+    return _tuple_(arguments)
 
 #------------------------------------------------------------------------------
 # main

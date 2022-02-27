@@ -19,20 +19,20 @@ import collections.abc as cabc
 from .support import check_errmsg, check_errmsg_contains
 import pickle
 
-from clingo import Number, String, Function, SymbolType
+#from clingo import Number, String, Function, SymbolType
 # Official Clorm API imports
-from clorm import \
-    BaseField, Raw, RawField, IntegerField, StringField, ConstantField, SimpleField,  \
-    Predicate, ComplexTerm, refine_field, combine_fields, \
-    define_flat_list_field, define_nested_list_field, define_enum_field, \
-    simple_predicate, path, hashable_path, alias, \
-    not_, and_, or_, cross, in_, notin_, \
-    SymbolMode, set_symbol_mode, get_symbol_mode, symbols, \
-    ConstantStr, HeadList, HeadListReversed, TailList, TailListReversed
+from clorm import ( BaseField, Raw, RawField, IntegerField, StringField,
+                    ConstantField, SimpleField, Predicate, ComplexTerm,
+                    refine_field, combine_fields, define_flat_list_field,
+                    define_nested_list_field, define_enum_field,
+                    simple_predicate, path, hashable_path, alias, not_, and_,
+                    or_, cross, in_, notin_, SymbolMode, set_symbol_mode,
+                    get_symbol_mode, Function, Number, String, ConstantStr,
+                    HeadList, HeadListReversed, TailList, TailListReversed )
 
 # Implementation imports
-from clorm.orm.core import dealiased_path, field, get_field_definition, PredicatePath, \
-    QCondition, trueall, notcontains
+from clorm.orm.core import ( dealiased_path, field, get_field_definition,
+                             PredicatePath, QCondition, trueall, notcontains )
 
 import clingo
 import clorm.orm.noclingo as noclingo
@@ -116,17 +116,18 @@ class FieldTestCase(unittest.TestCase):
         check_errmsg("Symbol 'x(1)'",ctx)
 
     #--------------------------------------------------------------------------
-    # Test that the simple field unify functions work as expected
-    #--------------------------------------------------------------------------
-    def test_api_pytocl_and_cltopy(self):
+    # Test that the simple field unify functions work as expected for clingo
+    # symbols.
+    # --------------------------------------------------------------------------
+    def test_api_clingo_pytocl_and_cltopy(self):
         num1 = 1
         str1 = "string"
         sim1 = "name"
         sim2 = "-name"
-        cnum1 = Number(num1)
-        cstr1 = String(str1)
-        csim1 = Function(sim1)
-        csim2 = Function(sim1,[],False)
+        cnum1 = clingo.Number(num1)
+        cstr1 = clingo.String(str1)
+        csim1 = clingo.Function(sim1)
+        csim2 = clingo.Function(sim1,[],False)
 
         self.assertEqual(num1, IntegerField.cltopy(cnum1))
         self.assertEqual(str1, StringField.cltopy(cstr1))
@@ -151,10 +152,10 @@ class FieldTestCase(unittest.TestCase):
         str1 = "string"
         sim1 = "name"
         sim2 = "-name"
-        cnum1 = noclingo.Number(num1)
-        cstr1 = noclingo.String(str1)
-        csim1 = noclingo.Function(sim1)
-        csim2 = noclingo.Function(sim1,[],False)
+        cnum1 = noclingo.NoNumber(num1)
+        cstr1 = noclingo.NoString(str1)
+        csim1 = noclingo.NoFunction(sim1)
+        csim2 = noclingo.NoFunction(sim1,[],False)
 
         self.assertEqual(num1, IntegerField.cltopy(cnum1))
         self.assertEqual(str1, StringField.cltopy(cstr1))
@@ -285,14 +286,14 @@ class FieldTestCase(unittest.TestCase):
 
     #--------------------------------------------------------------------------
     # Test the behaviour of Raw object (which wraps clingo.Symbol and
-    # noclingo.Symbol).
+    # noclingo.NoSymbol).
     # --------------------------------------------------------------------------
     def test_api_raw_class(self):
 
         cl1 = clingo.Number(1)
-        ncl1 = noclingo.Number(1)
+        ncl1 = noclingo.NoNumber(1)
         cl3 = clingo.Number(3)
-        ncl3 = noclingo.Number(3)
+        ncl3 = noclingo.NoNumber(3)
 
         r_cl1 = Raw(cl1)
         r_ncl1 = Raw(ncl1)
@@ -340,16 +341,16 @@ class FieldTestCase(unittest.TestCase):
 
     #--------------------------------------------------------------------------
     # Test the behaviour of Raw object with pickling - it should always convert
-    # to a noclingo.Symbol object when pickling.
+    # to a noclingo.NoSymbol object when pickling.
     # --------------------------------------------------------------------------
     def test_api_raw_pickling(self):
 
         cln = clingo.Number(1)
         cls = clingo.String("bar")
         clf = clingo.Function("foo",[cln,cls])
-        ncln = noclingo.Number(1)
-        ncls = noclingo.String("bar")
-        nclf = noclingo.Function("foo",[ncln,ncls])
+        ncln = noclingo.NoNumber(1)
+        ncls = noclingo.NoString("bar")
+        nclf = noclingo.NoFunction("foo",[ncln,ncls])
 
         # Check that rawin uses raw/clingo while rawout uses noraw/noclingo.
 

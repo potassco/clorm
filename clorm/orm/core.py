@@ -23,14 +23,20 @@ import enum
 import functools
 import itertools
 import sys
-import clingo
 import typing
 import re
 import uuid
 
 from clorm.orm.types import ConstantStr, HeadList, HeadListReversed, TailList, TailListReversed
 
-from . import noclingo
+from .noclingo import (Symbol, NoSymbol, Function, String, Number, SymbolType, SymbolMode,
+                       NoSymbol, get_symbol_mode, clingo_to_noclingo, noclingo_to_clingo)
+
+from .templating import (expand_template, PREDICATE_TEMPLATE,
+                         CHECK_SIGN_TEMPLATE, CHECK_SIGN_UNIFY_TEMPLATE,
+                         NO_DEFAULTS_TEMPLATE, ASSIGN_DEFAULT_TEMPLATE,
+                         ASSIGN_COMPLEX_TEMPLATE, PREDICATE_UNIFY_DOCSTRING)
+
 from typing import ( Any, Callable, Dict, Iterator, List, Optional, Sequence, Tuple,
                      Type, TypeVar, Union, overload, cast )
 
@@ -81,9 +87,6 @@ elif sys.version_info < (3, 8):
 __all__ = [
     'ClormError',
     'Comparator',
-    'set_symbol_mode',
-    'get_symbol_mode',
-    'symbols',
     'BaseField',
     'Raw',
     'RawField',
@@ -123,6 +126,9 @@ class _MISSING_TYPE:
 MISSING = _MISSING_TYPE()
 
 _T = TypeVar('_T')
+_P = TypeVar('_P', bound='Predicate')
+
+AnySymbol = Union[Symbol, NoSymbol]
 
 #------------------------------------------------------------------------------
 # A _classproperty decorator. (see
@@ -1116,32 +1122,6 @@ class _BaseFieldMeta(type):
 
         return super(_BaseFieldMeta, meta).__new__(meta, name, bases, dct)
 
-
-#------------------------------------------------------------------------------
-# To deal with using Clorm in a long running processes we need to not use
-# clingo.Symbol objects (because they can't be freed). So we need to be able to
-# switch to using the mirror clorm.noclingo.Symbol objects. The idea is that a
-# main processes that creates problem instances and process models will use
-# Clorm objects which rely on noclingo.Symbol. But when these objects are passed
-# to solver sub-processes they will use switch to using clingo.Symbol objects.
-# So we introduce a global (per process) variable to switch between these two
-# modes. By default we deal with normal clingo.Symbols.
-#
-# symbols is a global variable that is accessible outside the package that
-# groups the symbol creation functions.
-# ------------------------------------------------------------------------------
-
-symbols = noclingo.get_symbol_generator(noclingo.SymbolMode.CLINGO)
-
-def set_symbol_mode(sm):
-    global symbols
-    if not isinstance(sm,noclingo.SymbolMode):
-        raise TypeError("Object '{}' ({}) is not a SymbolMode".format(sm,type(sm)))
-    symbols = noclingo.get_symbol_generator(sm)
-
-def get_symbol_mode():
-    return symbols.mode
-
 #------------------------------------------------------------------------------
 # Field definitions. All fields have the functions: pytocl, cltopy,
 # and unifies, and the properties: default and has_default
@@ -1231,7 +1211,7 @@ class BaseField(object, metaclass=_AbstractBaseFieldMeta):
                 if cmplx.meta.is_tuple:
                     self._default = (True, _instance_from_tuple(cmplx, default))
                 else:
-                    raise default
+                    raise ValueError("Bad default")
             else:
                 self.pytocl(default)
         except (TypeError,ValueError):
@@ -1328,26 +1308,25 @@ def field(basefield: _FieldDefinition,*, default: Any=MISSING, default_factory: 
     raise TypeError(f"{basefield} can just be of Type '{BaseField}' or '{Sequence}'")
 
 #------------------------------------------------------------------------------
-# RawField is a sub-class of BaseField for storing clingo.Symbol or
-# noclingo.Symbol objects. The behaviour of Raw with respect to using
-# clingo.Symbol or noclingo.Symbol is modified by the global variable
-# symbols.mode.
+# RawField is a sub-class of BaseField for storing Symbol or NoSymbol
+# objects. The behaviour of Raw with respect to using clingo.Symbol or
+# noclingo.NoSymbol is modified by the symbol mode (get_symbol_mode())
 # ------------------------------------------------------------------------------
 
 class Raw(object):
     __slots__ = ("_raw","_noraw")
-    def __init__(self,sym):
-        if isinstance(sym, clingo.Symbol):
+    def __init__(self, sym: AnySymbol):
+        if isinstance(sym, Symbol):
             self._raw = sym
             self._noraw = None
-        elif isinstance(sym, noclingo.Symbol):
+        elif isinstance(sym, NoSymbol):
             self._raw = None
             self._noraw = sym
         else:
             raise TypeError("Object '{}' ({}) is not a Symbol".format(sym,type(sym)))
 
     def __str__(self):
-        if symbols.mode == noclingo.SymbolMode.CLINGO:
+        if get_symbol_mode() == SymbolMode.CLINGO:
             return str(self.clingo)
         return str(self.noclingo)
 
@@ -1355,7 +1334,7 @@ class Raw(object):
         return self.__str__()
 
     def __hash__(self):
-        if symbols.mode == noclingo.SymbolMode.CLINGO:
+        if get_symbol_mode() == SymbolMode.CLINGO:
             return hash(self.clingo)
         else:
             return hash(self.noclingo)
@@ -1363,7 +1342,7 @@ class Raw(object):
     def __eq__(self,other):
         """Overloaded boolean operator."""
         if not isinstance(other, Raw): return NotImplemented
-        if symbols.mode == noclingo.SymbolMode.CLINGO:
+        if get_symbol_mode() == SymbolMode.CLINGO:
             return self.clingo == other.clingo
         return self.noclingo == other.noclingo
 
@@ -1376,7 +1355,7 @@ class Raw(object):
     def __gt__(self, other):
         """Overloaded boolean operator."""
         if not isinstance(other, Raw): return NotImplemented
-        if symbols.mode == noclingo.SymbolMode.CLINGO:
+        if get_symbol_mode() == SymbolMode.CLINGO:
             return self.clingo > other.clingo
         return self.noclingo > other.noclingo
 
@@ -1389,7 +1368,7 @@ class Raw(object):
     def __lt__(self, other):
         """Overloaded boolean operator."""
         if not isinstance(other, Raw): return NotImplemented
-        if symbols.mode == noclingo.SymbolMode.CLINGO:
+        if get_symbol_mode() == SymbolMode.CLINGO:
             return self.clingo < other.clingo
         return self.noclingo < other.noclingo
 
@@ -1409,18 +1388,18 @@ class Raw(object):
     @property
     def clingo(self):
         if self._raw is None:
-            self._raw=noclingo.noclingo_to_clingo(self._noraw)
+            self._raw=noclingo_to_clingo(self._noraw)
         return self._raw
 
     @property
     def noclingo(self):
         if self._noraw is None:
-            self._noraw=noclingo.clingo_to_noclingo(self._raw)
+            self._noraw=clingo_to_noclingo(self._raw)
         return self._noraw
 
     @property
     def symbol(self):
-        if symbols.mode == noclingo.SymbolMode.CLINGO:
+        if get_symbol_mode() == SymbolMode.CLINGO:
             return self.clingo
         return self.noclingo
 
@@ -1433,8 +1412,7 @@ class Raw(object):
 class RawField(BaseField):
     """A field to pass through an arbitrary Clingo.Symbol."""
 
-    def cltopy(v):
-        return Raw(v)
+    cltopy = Raw
 
     def pytocl(v):
         if not isinstance(v, Raw):
@@ -1457,8 +1435,7 @@ class StringField(BaseField):
                                 "Symbol").format(symbol,type(symbol)))
             raise TypeError(("Symbol '{}' ({}) is not a String "
                              "Symbol").format(symbol,symbol.type))
-    def pytocl(v):
-        return symbols.String(v)
+    pytocl = String
 
 class IntegerField(BaseField):
     """A field to convert between a Clingo.Number object and a Python integer."""
@@ -1472,8 +1449,7 @@ class IntegerField(BaseField):
             raise TypeError(("Symbol '{}' ({}) is not a Number "
                              "Symbol").format(symbol,symbol.type))
 
-    def pytocl(v):
-        return symbols.Number(v)
+    pytocl = Number
 
 #------------------------------------------------------------------------------
 # ConstantField is more complex than basic string or integer because the value
@@ -1515,8 +1491,8 @@ class ConstantField(BaseField):
     def pytocl(v):
         if not isinstance(v,str):
             raise TypeError("Value '{}' is not a string".format(v))
-        if v.startswith('-'): return symbols.Function(v[1:],[],False)
-        return symbols.Function(v,[])
+        if v.startswith('-'): return Function(v[1:],[],False)
+        return Function(v,[])
 
 
 #------------------------------------------------------------------------------
@@ -1557,13 +1533,13 @@ class SimpleField(BaseField):
 
     def pytocl(value):
         if isinstance(value,int):
-            return symbols.Number(value)
+            return Number(value)
         elif not isinstance(value,str):
             raise TypeError("No translation to a simple term")
         if g_constant_term_regex.match(value):
-            return symbols.Function(value,[])
+            return Function(value,[])
         else:
-            return symbols.String(value)
+            return String(value)
 
 #------------------------------------------------------------------------------
 # refine_field is a function that creates a sub-class of a BaseField (or BaseField
@@ -1779,13 +1755,13 @@ def define_flat_list_field(element_field,*,name=None):
         if isinstance(v,str) or not isinstance(v,cabc.Iterable):
             raise TypeError("'{}' is not a sequence".format(v))
     def _checkcl(func):
-        if not noclingo.is_Function(func) or func.name != "":
-            raise TypeError("'{}' is not an clingo.Symbol tuple".format(func))
+        if func.type != SymbolType.Function or func.name != "":
+            raise TypeError("'{}' is not a Symbol tuple".format(func))
 
     def _pytocl(pylist):
         _checkpy(pylist)
         cllist=[ efield.pytocl(e) for e in pylist ]
-        return symbols.Function("",cllist)
+        return Function("",cllist)
     def _cltopy(sym):
         _checkcl(sym)
         return tuple([ efield.cltopy(e) for e in sym.arguments ])
@@ -1886,7 +1862,7 @@ def define_nested_list_field(element_field,*,headlist=True,reverse=False,name=No
         if isinstance(v,str) or not isinstance(v,cabc.Iterable):
             raise TypeError("'{}' is not a sequence".format(v))
     def _checkcl(func):
-        if not noclingo.is_Function(func) or func.name != "":
+        if func.type != SymbolType.Function or func.name != "":
             raise TypeError("'{}' is not a nested sequence".format(func))
     def _get_next(func):
         _checkcl(func)
@@ -1899,9 +1875,9 @@ def define_nested_list_field(element_field,*,headlist=True,reverse=False,name=No
     # (head,list) standard mode
     def _headlist_pytocl(v):
         _checkpy(v)
-        nested=symbols.Function("",[])
+        nested = Function("",[])
         for ev in reversed(v):
-            nested=symbols.Function("",[efield.pytocl(ev),nested])
+            nested = Function("",[efield.pytocl(ev),nested])
         return nested
     def _headlist_cltopy(raw):
         elements=[]
@@ -1914,9 +1890,9 @@ def define_nested_list_field(element_field,*,headlist=True,reverse=False,name=No
     # (head,list) reverse
     def _headlist_pytocl_reverse(v):
         _checkpy(v)
-        nested=symbols.Function("",[])
+        nested = Function("",[])
         for ev in v:
-            nested=symbols.Function("",[efield.pytocl(ev),nested])
+            nested = Function("",[efield.pytocl(ev),nested])
         return nested
     def _headlist_cltopy_reverse(raw):
         elements=[]
@@ -1929,9 +1905,9 @@ def define_nested_list_field(element_field,*,headlist=True,reverse=False,name=No
     # (head,list) standard mode
     def _listtail_pytocl(v):
         _checkpy(v)
-        nested=symbols.Function("",[])
+        nested = Function("",[])
         for ev in v:
-            nested=symbols.Function("",[nested,efield.pytocl(ev)])
+            nested = Function("",[nested,efield.pytocl(ev)])
         return nested
     def _listtail_cltopy(raw):
         elements=[]
@@ -1944,9 +1920,9 @@ def define_nested_list_field(element_field,*,headlist=True,reverse=False,name=No
     # (head,list) reverse
     def _listtail_pytocl_reverse(v):
         _checkpy(v)
-        nested=symbols.Function("",[])
+        nested = Function("",[])
         for ev in reversed(v):
-            nested=symbols.Function("",[nested,efield.pytocl(ev)])
+            nested = Function("",[nested,efield.pytocl(ev)])
         return nested
     def _listtail_cltopy_reverse(raw):
         elements=[]
@@ -2378,142 +2354,18 @@ def _instance_from_tuple(predicate_cls, v):
         return predicate_cls(*v)
     raise TypeError(f"Cannot map {v} ({type(v)}) to {predicate_cls.meta} object")
 
-# ------------------------------------------------------------------------------
-# Helper functions for PredicateMeta class to create a Predicate
-# class constructor.
-# ------------------------------------------------------------------------------
-
-AnySymbol = Union[clingo.Symbol,noclingo.Symbol]
-
-def _get_symbols():
-    return symbols
-
-def _expand_template(template, **kwargs):
-    def add_spaces(num, text):
-        space = " " * num
-        out = []
-        for idx, l in enumerate(text.splitlines()):
-            if idx == 0:
-                out = [l]
-            else:
-                out.append(space+l)
-        return "\n".join(out)
-
-    if not template:
-        return ''
-    lines = template.expandtabs(4).splitlines()
-    outlines = []
-    for line in lines:
-        start = line.find("{%")
-        if start == -1:
-            outlines.append(line)
-            continue
-        end = line.find("%}",start)
-        if end == -1:
-            raise ValueError("Bad template expansion in {line}")
-        kw = line[start+2:end]
-        text = add_spaces(start, kwargs[kw])
-        line = line[0:start] + text + line[end+2:]
-        outlines.append(line)
-    return "\n".join(outlines)
-
-PREDICATE_TEMPLATE = r"""
-def __init__(self,
-             {{%args_signature%}}
-             *, sign: bool=True, raw: AnySymbol=None):
-
-    self._hash = None
-    self._sign = bool(sign)
-
-    # If raw is supplied then we're using the Internal unification API so we
-    # don't do any value checking. So be warned that mis-using this API can
-    # result in unexcpected behaviour.
-    if raw is not None:
-        self._raw = raw
-        self._field_values = ({{%args%}})
-        return
-
-    {{%sign_check%}}
-    {{%check_no_defaults%}}
-
-    # Assign defaults for missing values and apply map tuple transform for complex values
-    {{%assign_defaults%}}
-    {{%check_complex%}}
-
-    self._field_values = ({{%args%}})
-
-    # Create the raw symbol
-    self._raw = _get_symbols().Function("{pdefn.name}",
-                                        ({{%args_raw%}}),
-                                        self._sign)
-
-@classmethod
-def _unify(cls: Predicate, raw: AnySymbol):
-    try:
-        raw_args = raw.arguments
-        if len(raw_args) != {pdefn.arity}:
-            return None
-
-        {{%sign_check_unify%}}
-
-        if raw.name != "{pdefn.name}":
-            return None
-
-        return cls({{%args_cltopy%}}
-                   raw=raw, sign=raw.positive)
-    except (TypeError, ValueError):
-        return None
-    except AttributeError as e:
-        raise ValueError((f"Cannot unify with object {{raw}} ({{type(raw)}}) as "
-                          "it is not a clingo Symbol Function object"))
-
-"""
-
-CHECK_SIGN_TEMPLATE = r"""
-# Check if the sign is allowed
-if self._sign != {sign}:
-    raise ValueError(f"Predicate {{type(self).__name__}}"
-                     f"is defined to only allow {pdefn.sign} instances")
-"""
-
-CHECK_SIGN_UNIFY_TEMPLATE = r"""
-if raw.positive != {sign}:
-    return None
-"""
-
-NO_DEFAULTS_TEMPLATE = r"""
-# Check for missing values that have no defaults
-if MISSING in ({args}):
-    for arg, name in ({named_args}):
-        if arg == MISSING:
-            raise TypeError((f"Missing argument for field \"{{name}}\""
-                             f"(which has no default value)"))
-"""
-
-ASSIGN_DEFAULT_TEMPLATE = r"""
-if {arg} == MISSING:
-    {arg} = {arg}_field.default
-"""
-
-ASSIGN_COMPLEX_TEMPLATE = r"""
-if not isinstance({arg}, {arg}_class):
-    {arg} = _instance_from_tuple({arg}_class, {arg})
-"""
-
-PREDICATE_UNIFY_DOCSTRING = r"""
-    Unify a (raw) clingo.Symbol object with the class.
-
-    Returns None on failure to unify otherwise returns the new fact
-"""
 
 def _generate_dynamic_predicate_functions(class_name: str, namespace: Dict):
     pdefn = namespace["_meta"]
 
     gdict = {"_instance_from_tuple": _instance_from_tuple,
-             "_get_symbols": _get_symbols,
+             "Predicate": Predicate,
+             "Function": Function,
              "MISSING": MISSING,
              "AnySymbol": AnySymbol,
-             "Predicate": Predicate}
+             "Type": Type,
+             "Optional" : Optional,
+             "_P": _P}
 
     for f in pdefn:
         gdict[f"{f.name}_field"] = f.defn
@@ -2573,7 +2425,7 @@ def _generate_dynamic_predicate_functions(class_name: str, namespace: Dict):
                   "args_cltopy": args_cltopy}
 
     template = PREDICATE_TEMPLATE.format(pdefn=pdefn)
-    predicate_functions = _expand_template(template, **expansions)
+    predicate_functions = expand_template(template, **expansions)
 #    print(f"INIT:\n\n{predicate_functions}\n\n")
 
     ldict = {}
@@ -2762,7 +2614,7 @@ def _make_predicatedefn(class_name: str, namespace: Dict[str, Any], meta_dct: Di
             elif inspect.isclass(type_):
                 raise TypeError((f"Predicate '{pname}': Can't infer Field from annotation {type_} "
                                  f"of variable {name}"))
-    
+
     # TODO can this be done more elegantly
     set_anno = set(fields_from_annotations)
     set_dct = set(fields_from_dct)
@@ -2910,7 +2762,7 @@ class _PredicateMeta(type):
 #------------------------------------------------------------------------------
 # A base non-logical symbol that all predicate/complex-term declarations must
 # inherit from. The Metaclass creates the magic to create the fields and the
-# underlying clingo.Symbol object.
+# underlying Symbol object.
 # ------------------------------------------------------------------------------
 
 class Predicate(object, metaclass=_PredicateMeta):
@@ -2969,6 +2821,20 @@ class Predicate(object, metaclass=_PredicateMeta):
             raise TypeError(("Predicate/ComplexTerm must be sub-classed"))
         return super().__new__(cls)
 
+
+    # --------------------------------------------------------------------------
+    # Add type annotations for member functions that are generated dynamically
+    # when a Predicate sub-class is defined.
+    # --------------------------------------------------------------------------
+
+    if typing.TYPE_CHECKING:
+        def __init__(self: Type[_P], *args: Tuple[_, ...], **kwargs: Dict[str, _])-> None:
+            pass
+
+        @classmethod
+        def _unify(cls: Type[_P], raw: AnySymbol) -> Optional[_P]:
+            pass
+
     #--------------------------------------------------------------------------
     # Properties and functions for Predicate
     #--------------------------------------------------------------------------
@@ -2978,22 +2844,22 @@ class Predicate(object, metaclass=_PredicateMeta):
     def symbol(self):
         """Returns the Symbol object corresponding to the fact.
 
-        The type of the object maybe either a clingo.Symbol or noclingo.Symbol.
+        The type of the object maybe either a clingo.Symbol or noclingo.NoSymbol.
         """
         if self._raw is None:
             clingoargs=[]
             for f,v in zip(self.meta, self._field_values):
                 clingoargs.append(v.symbol if f.defn.complex else f.defn.pytocl(v))
-            self._raw = symbols.Function(self.meta.name, clingoargs, self._sign)
+            self._raw = Function(self.meta.name, clingoargs, self._sign)
         return self._raw
 
     # Get the underlying clingo.Symbol object
     @property
-    def raw(self) -> clingo.Symbol:
+    def raw(self) -> Symbol:
         """Returns the underlying clingo.Symbol object"""
         if self._raw is None: self.symbol
-        if isinstance(self._raw, noclingo.Symbol):
-            self._raw = noclingo.noclingo_to_clingo(self._raw)
+        if isinstance(self._raw, NoSymbol):
+            self._raw = noclingo_to_clingo(self._raw)
         return self._raw
 
     @_classproperty

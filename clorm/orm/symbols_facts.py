@@ -16,7 +16,7 @@ from collections import abc
 import clingo
 import clingo.ast as clast
 from .core import *
-from .noclingo import SymbolMode
+from .noclingo import SymbolMode, SymbolType, Function, Number, String
 from .factbase import *
 from .core import get_field_definition, PredicatePath, kwargs_check_keys, \
     get_symbol_mode
@@ -542,7 +542,7 @@ NEGATE = _NEGATE()
 
 class LarkFactTransformer(Transformer):
     def STRING(self, v):
-        return symbols.String(v.value.strip("\""))
+        return String(v.value.strip("\""))
     def END(self, v):
         return END
     def NEGATE(self, v):
@@ -550,7 +550,7 @@ class LarkFactTransformer(Transformer):
     def NAME(self, v):
         return str(v.value)
     def NUMBER(self, v):
-        return symbols.Number(int(v))
+        return Number(int(v))
     def function(self, v):
         if v[0] == NEGATE:
             positive = False
@@ -558,13 +558,13 @@ class LarkFactTransformer(Transformer):
         else:
             positive = True
         args = [] if len(v) == 1 else v[1]
-        return symbols.Function(v[0],args,positive=positive)
+        return Function(v[0],args,positive=positive)
     def fact(self, f):
         return f[0]
     def args(self,v):
         return v
     def tuple(self, v):
-        return symbols.Function("",v[0])
+        return Function("",v[0])
     def start(self, v):
         return v
 
