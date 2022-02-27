@@ -2840,9 +2840,6 @@ class Predicate(object, metaclass=_PredicateMeta):
     # --------------------------------------------------------------------------
 
     if typing.TYPE_CHECKING:
-        def __init__(self: Type[_P], *args: Tuple[_, ...], **kwargs: Dict[str, _])-> None:
-            pass
-
         @classmethod
         def _unify(cls: Type[_P], raw: AnySymbol) -> Optional[_P]:
             pass
