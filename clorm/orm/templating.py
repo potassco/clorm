@@ -89,8 +89,6 @@ def _unify(cls: Type[_P], raw: AnySymbol) -> Optional[_P]:
         instance._sign = raw.positive
         instance._field_values = ({{%args_cltopy%}})
         return instance
-        #        return cls({{%args_cltopy%}}
-        #           raw=raw, sign=raw.positive)
     except (TypeError, ValueError):
         return None
     except AttributeError as e:
