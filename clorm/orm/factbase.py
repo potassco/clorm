@@ -6,12 +6,12 @@
 import sys
 import io
 import operator
-import collections
 import bisect
 import inspect
 import abc
 import functools
 import itertools
+from typing import Iterable, Union
 
 from .core import *
 from .core import get_field_definition, PredicatePath, kwargs_check_keys, \
@@ -198,25 +198,24 @@ class FactBase(object):
     #
     #--------------------------------------------------------------------------
 
-    def _add(self, arg):
+    def _add(self, arg: Union[Predicate, Iterable[Predicate]]) -> None:
         if isinstance(arg, Predicate):
-            return self._add_fact(type(arg),arg)
-        elif isinstance(arg, str) or not isinstance(arg, collections.abc.Iterable):
+            ptype = arg.__class__
+            if not ptype  in self._factmaps:
+                self._factmaps[ptype] = FactMap(ptype)
+            return self._factmaps[ptype].add_fact(arg)
+
+        if isinstance(arg, str) or not isinstance(arg, Iterable):
             raise TypeError(f"'{arg}' is not a Predicate instance")
 
-        facts = sorted(arg, key=lambda x : type(x).__name__)
-        for ptype, g in itertools.groupby(facts, lambda x: type(x)):
-            self._add_facts(ptype, g)
-
-    def _add_fact(self, ptype, fact):
-        fm = self._factmaps.setdefault(ptype, FactMap(ptype))
-        fm.add_fact(fact)
-
-    def _add_facts(self, ptype, facts):
-        if not issubclass(ptype,Predicate):
-            raise TypeError(f"{list(facts)} are not Predicate instances")
-        fm = self._factmaps.setdefault(ptype, FactMap(ptype))
-        fm.add_facts(facts)
+        sorted_facts = sorted(arg, key=lambda x: x.__class__.__name__)
+        for ptype, grouped_facts in itertools.groupby(sorted_facts, lambda x: x.__class__):
+            if not issubclass(ptype, Predicate):
+                raise TypeError(f"{list(grouped_facts)} are not Predicate instances")
+            if not ptype in self._factmaps:
+                self._factmaps[ptype] = FactMap(ptype)
+            self._factmaps[ptype].add_facts(grouped_facts)
+        return
 
     def _remove(self, fact, raise_on_missing):
         ptype = type(fact)
@@ -249,7 +248,7 @@ class FactBase(object):
     #--------------------------------------------------------------------------
     # Set member functions
     #--------------------------------------------------------------------------
-    def add(self, arg):
+    def add(self, arg: Union[Predicate, Iterable[Predicate]]) -> None:
         """Add a single fact or a collection of facts.
 
         Because a ``FactBase`` can only hold :class:`~Predicate` sub-class
