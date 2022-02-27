@@ -200,21 +200,21 @@ class FactBase(object):
 
     def _add(self, arg: Union[Predicate, Iterable[Predicate]]) -> None:
         if isinstance(arg, Predicate):
-            type_ = arg.__class__
-            if not type_  in self._factmaps:
-                self._factmaps[type_] = FactMap(type_)
-            return self._factmaps[type_].add_fact(arg)
+            ptype = arg.__class__
+            if not ptype  in self._factmaps:
+                self._factmaps[ptype] = FactMap(ptype)
+            return self._factmaps[ptype].add_fact(arg)
 
         if isinstance(arg, str) or not isinstance(arg, Iterable):
             raise TypeError(f"'{arg}' is not a Predicate instance")
 
-        facts = sorted(arg, key=lambda x: x.__class__.__name__)
-        for ptype, g in itertools.groupby(facts, lambda x: x.__class__):
+        sorted_facts = sorted(arg, key=lambda x: x.__class__.__name__)
+        for ptype, grouped_facts in itertools.groupby(sorted_facts, lambda x: x.__class__):
             if not issubclass(ptype, Predicate):
-                raise TypeError(f"{list(facts)} are not Predicate instances")
+                raise TypeError(f"{list(grouped_facts)} are not Predicate instances")
             if not ptype in self._factmaps:
                 self._factmaps[ptype] = FactMap(ptype)
-            self._factmaps[ptype].add_facts(g)
+            self._factmaps[ptype].add_facts(grouped_facts)
         return
 
     def _remove(self, fact, raise_on_missing):
