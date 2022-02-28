@@ -1319,37 +1319,23 @@ def field(basefield: _FieldDefinition,*, default: Any=MISSING, default_factory: 
 # ------------------------------------------------------------------------------
 
 class Raw(object):
-    __slots__ = ("_raw","_noraw")
-    def __init__(self, sym: AnySymbol):
-        if isinstance(sym, Symbol):
-            self._raw = sym
-            self._noraw = None
-        elif isinstance(sym, NoSymbol):
-            self._raw = None
-            self._noraw = sym
-        else:
-            raise TypeError("Object '{}' ({}) is not a Symbol".format(sym,type(sym)))
+    __slots__ = ("_symbol", )
+    def __init__(self, symbol: AnySymbol):
+        self._symbol = symbol
 
     def __str__(self):
-        if get_symbol_mode() == SymbolMode.CLINGO:
-            return str(self.clingo)
-        return str(self.noclingo)
+        return str(self._symbol)
 
     def __repr__(self):
         return self.__str__()
 
     def __hash__(self):
-        if get_symbol_mode() == SymbolMode.CLINGO:
-            return hash(self.clingo)
-        else:
-            return hash(self.noclingo)
+        return hash(self._symbol)
 
     def __eq__(self,other):
         """Overloaded boolean operator."""
         if not isinstance(other, Raw): return NotImplemented
-        if get_symbol_mode() == SymbolMode.CLINGO:
-            return self.clingo == other.clingo
-        return self.noclingo == other.noclingo
+        return self._symbol == other._symbol
 
     def __ne__(self,other):
         """Overloaded boolean operator."""
@@ -1360,9 +1346,7 @@ class Raw(object):
     def __gt__(self, other):
         """Overloaded boolean operator."""
         if not isinstance(other, Raw): return NotImplemented
-        if get_symbol_mode() == SymbolMode.CLINGO:
-            return self.clingo > other.clingo
-        return self.noclingo > other.noclingo
+        return self._symbol > other._symbol
 
     def __le__(self, other):
         """Overloaded boolean operator."""
@@ -1373,9 +1357,7 @@ class Raw(object):
     def __lt__(self, other):
         """Overloaded boolean operator."""
         if not isinstance(other, Raw): return NotImplemented
-        if get_symbol_mode() == SymbolMode.CLINGO:
-            return self.clingo < other.clingo
-        return self.noclingo < other.noclingo
+        return self._symbol < other._symbol
 
     def __ge__(self, other):
         """Overloaded boolean operator."""
@@ -1384,29 +1366,25 @@ class Raw(object):
         return not result
 
     def __getstate__(self):
-        return {'_noraw' : self.noclingo}
+        return {'_symbol' : clingo_to_noclingo(self._symbol)}
 
     def __setstate__(self, newstate):
-        self._noraw = newstate["_noraw"]
-        self._raw = None
+        if get_symbol_mode() == SymbolMode.CLINGO:
+            self._symbol = noclingo_to_clingo(newstate["_symbol"])
+        else:
+            self._symbol = newstate["_symbol"]
 
     @property
     def clingo(self):
-        if self._raw is None:
-            self._raw=noclingo_to_clingo(self._noraw)
-        return self._raw
+        return noclingo_to_clingo(self._symbol)
 
     @property
     def noclingo(self):
-        if self._noraw is None:
-            self._noraw=clingo_to_noclingo(self._raw)
-        return self._noraw
+        return clingo_to_noclingo(self._symbol)
 
     @property
     def symbol(self):
-        if get_symbol_mode() == SymbolMode.CLINGO:
-            return self.clingo
-        return self.noclingo
+        return self._symbol
 
 
 #------------------------------------------------------------------------------

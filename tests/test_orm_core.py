@@ -352,23 +352,42 @@ class FieldTestCase(unittest.TestCase):
         ncls = noclingo.NoString("bar")
         nclf = noclingo.NoFunction("foo",[ncln,ncls])
 
-        # Check that rawin uses raw/clingo while rawout uses noraw/noclingo.
+        # Check for Symbol output
+        set_symbol_mode(SymbolMode.CLINGO)
 
-        # NOTE: This code examines the internal structure of a Raw object, so
-        # will need to change if the Raw implementation changes.
+        # Check pickling a raw with clingo.Symbol input - Symbol output
         rawin = Raw(clf)
-        self.assertTrue(rawin._noraw is None)
-        self.assertEqual(rawin._raw, clf)
         data = pickle.dumps(rawin)
         rawout = pickle.loads(data)
-        self.assertTrue(rawout._raw is None)
-        self.assertEqual(rawout._noraw, nclf)
-
-        # This still evaluate as equal
+        self.assertEqual(type(rawout.symbol), clingo.Symbol)
         self.assertEqual(rawin,rawout)
-        self.assertEqual(rawin.clingo,rawout.clingo)
-        self.assertEqual(rawin.noclingo,rawout.noclingo)
-        self.assertNotEqual(rawin.clingo,rawout.noclingo)
+
+        # Check pickling a raw with noclingo.NoSymbol input - Symbol output
+        rawin = Raw(nclf)
+        data = pickle.dumps(rawin)
+        rawout = pickle.loads(data)
+        self.assertEqual(type(rawout.symbol), clingo.Symbol)
+        self.assertEqual(rawin, rawout)
+
+        # Check for NoSymbol output
+        set_symbol_mode(SymbolMode.NOCLINGO)
+
+        # Check pickling a raw with noclingo.NoSymbol input - NoSymbol output
+        rawin = Raw(nclf)
+        data = pickle.dumps(rawin)
+        rawout = pickle.loads(data)
+        self.assertEqual(type(rawout.symbol), noclingo.NoSymbol)
+        self.assertEqual(rawin,rawout)
+
+        # Check pickling a raw with clingo.Symbol input - NoSymbol output
+        rawin = Raw(clf)
+        data = pickle.dumps(rawin)
+        rawout = pickle.loads(data)
+        self.assertEqual(type(rawout.symbol), noclingo.NoSymbol)
+        self.assertEqual(rawin,rawout)
+
+        # Set back to CLINGO mode
+        set_symbol_mode(SymbolMode.CLINGO)
 
     #--------------------------------------------------------------------------
     # When instantiating a field a default value can be given. It can also take
