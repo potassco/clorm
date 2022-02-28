@@ -20,8 +20,10 @@ import clingo
 import typing
 
 from clingo import SymbolType, Symbol
+from typing import Sequence, Union, Any
 
-from typing import Sequence, Union
+from clorm.noclingo import ENABLE_NOCLINGO
+
 
 __all__ = [
     'SymbolType',
@@ -71,7 +73,7 @@ class NoSymbol(object):
 
     __slots__=("_stype","_args","_value","_sign","_hash")
 
-    def __init__(self, stype, value=None, args=[],sign=True):
+    def __init__(self, stype: SymbolType, value: Any=None, args: Sequence[Any]=[],sign: bool=True):
         if not isinstance(stype, SymbolType):
             raise TypeError("{} is not a SymbolType".format(stype))
         self._stype = stype
@@ -144,16 +146,27 @@ class NoSymbol(object):
 
     def __eq__(self, other):
         """Overloaded boolean operator."""
-        if not isinstance(other, self.__class__): return NotImplemented
-        if self._stype != other._stype: return False
-        if self._stype == SymbolType.Infimum: return True
-        if self._stype == SymbolType.Supremum: return True
-        if self._stype != SymbolType.Function: return self._value == other._value
+        if not isinstance(other, self.__class__) and not isinstance(other, Symbol):
+            return NotImplemented
+        if self.type != other.type:
+            return False
+        if self.type == SymbolType.Infimum:
+            return True
+        if self.type == SymbolType.Supremum:
+            return True
+        if self.type == SymbolType.String:
+            return self.string == other.string
+        if self.type == SymbolType.Number:
+            return self.number == other.number
 
         # SymbolType.Function
-        if self._hash != other._hash: return False
-        if self._value != other._value: return False
-        return self._args == other._args
+        if self.positive != other.positive:
+            return False
+        if self.name != other.name:
+            return False
+        if len(self.arguments) != len(other.arguments):
+            return False
+        return self.arguments, tuple(other.arguments)
 
     def __ne__(self, other):
         """Overloaded boolean operator."""
@@ -163,15 +176,24 @@ class NoSymbol(object):
 
     def __gt__(self, other):
         """Overloaded boolean operator."""
-        if not isinstance(other, self.__class__): return NotImplemented
-        if self._stype != other._stype:
-            return _SYMBOLTYPE_OID[self._stype] > _SYMBOLTYPE_OID[other._stype]
-        if self._stype == SymbolType.Infimum: return False
-        if self._stype == SymbolType.Supremum: return False
+        if not isinstance(other, self.__class__) and not isinstance(other, Symbol):
+            return NotImplemented
+        if self.type != other.type:
+            return _SYMBOLTYPE_OID[self.type] > _SYMBOLTYPE_OID[other.type]
+        if self.type == SymbolType.Infimum:
+            return False
+        if self.type == SymbolType.Supremum:
+            return False
+        if self.type == SymbolType.Number:
+            return self.number > other.number
+        if self.type == SymbolType.String:
+            return self.string > other.string
+        if self.negative and other.positive:
+            return True
+        if self.positive and other.negative:
+            return False
+        return self.arguments > tuple(other.arguments)
 
-        if self._stype != SymbolType.Function: return self._value > other._value
-        if self._value != other._value: return self._value < other._value
-        return self._args > other._args
 
     def __le__(self, other):
         """Overloaded boolean operator."""
@@ -181,15 +203,23 @@ class NoSymbol(object):
 
     def __lt__(self, other):
         """Overloaded boolean operator."""
-        if not isinstance(other, self.__class__): return NotImplemented
-        if self._stype != other._stype:
-            return _SYMBOLTYPE_OID[self._stype] < _SYMBOLTYPE_OID[other._stype]
-        if self._stype == SymbolType.Infimum: return False
-        if self._stype == SymbolType.Supremum: return False
-
-        if self._stype != SymbolType.Function: return self._value < other._value
-        if self._value != other._value: return self._value < other._value
-        return self._args < other._args
+        if not isinstance(other, self.__class__) and not isinstance(other, Symbol):
+            return NotImplemented
+        if self.type != other.type:
+            return _SYMBOLTYPE_OID[self.type] < _SYMBOLTYPE_OID[other.type]
+        if self.type == SymbolType.Infimum:
+            return False
+        if self.type == SymbolType.Supremum:
+            return False
+        if self.type == SymbolType.Number:
+            return self.number < other.number
+        if self.type == SymbolType.String:
+            return self.string < other.string
+        if self.negative and other.positive:
+            return False
+        if self.positive and other.negative:
+            return True
+        return self.arguments < tuple(other.arguments)
 
     def __ge__(self, other):
         """Overloaded boolean operator."""
@@ -294,10 +324,7 @@ _mode = SymbolMode.CLINGO
 
 # ------------------------------------------------------------------------------
 
-CLORM_ENABLE_NOCLINGO=True
-
 AnySymbol = Union[Symbol, NoSymbol]
-
 
 # Forward function signature declaration
 def Function(name: str, arguments: Sequence[Symbol] = [], positive: bool=True) -> AnySymbol:
@@ -335,7 +362,7 @@ if typing.TYPE_CHECKING:
 
 # NoClingo introduces some overhead, with the indirection when creating
 # symbols. But if we don't need NoClingo then we can avoid this indirection
-if CLORM_ENABLE_NOCLINGO:
+if ENABLE_NOCLINGO:
 
     def set_symbol_mode(sm: SymbolMode):
         global _infimum, _supremum, _string, _number, _tuple_, _function, _mode

@@ -20,11 +20,12 @@ clingo_version = clingo.__version__
 #------------------------------------------------------------------------------
 
 __all__ = [
-    'NoClingoTestCase'
+    'NoClingoTestCase',
+    'NoClingoEnabledTestCase'
     ]
 
 #------------------------------------------------------------------------------
-#
+# Tests that don't require that NOCLINGO is enabled
 #------------------------------------------------------------------------------
 
 class NoClingoTestCase(unittest.TestCase):
@@ -228,7 +229,12 @@ class NoClingoTestCase(unittest.TestCase):
         compare_ordering(noclingo.NoSupremum, noclingo.NoString("2"))
         compare_ordering(noclingo.NoSupremum, noclingo.NoNumber(2))
 
-    def test_clingo_noclingo_difference(self):
+
+
+    # NOTE: I think in clingo 5.5 the comparison operators correctly return
+    # NotImplemented so that we can implement the comparison between Symbol and
+    # NoSymbol objects.
+    def _clingo_pre5_5_test_clingo_noclingo_difference(self):
         self.assertNotEqual(clingo.String("blah"), noclingo.NoString("blah"))
         self.assertNotEqual(clingo.Number(5), noclingo.NoNumber(5))
 
@@ -277,6 +283,62 @@ class NoClingoTestCase(unittest.TestCase):
         self.assertEqual(noclingo_to_clingo(cl1), cl1)
         self.assertTrue(clingo_to_noclingo(ncl1) is ncl1)
         self.assertTrue(noclingo_to_clingo(cl1) is cl1)
+
+
+    def test_comparison_nosymbol_and_symbol(self):
+        cl_infimum = clingo.Infimum
+        ncl_infimum = noclingo.NoInfimum
+        cl_supremum = clingo.Supremum
+        ncl_supremum = noclingo.NoSupremum
+        cl_constant1 = clingo.Function("const1")
+        ncl_constant1 = noclingo.NoFunction("const1")
+        cl_constant2 = clingo.Function("const2")
+        ncl_constant2 = noclingo.NoFunction("const2")
+        cl_number1 = clingo.Number(1)
+        ncl_number1 = noclingo.NoNumber(1)
+        cl_number2 = clingo.Number(2)
+        ncl_number2 = noclingo.NoNumber(2)
+        cl_string1 = clingo.String("No1")
+        ncl_string1 = noclingo.NoString("No1")
+        cl_string1 = clingo.String("No2")
+        ncl_string1 = noclingo.NoString("No2")
+
+        return
+
+        self.assertTrue(ncl_infimum == cl_infimum)
+        self.assertTrue(cl_infimum == ncl_infimum)
+        self.assertTrue(ncl_constant1 == cl_constant1)
+        self.assertTrue(cl_constant1 == ncl_constant1)
+        self.assertTrue(ncl_constant1 == cl_constant1)
+
+        x = clingo.Function("b", positive=False)
+        y = clingo.Function("a", positive=True)
+
+        print("HERE")
+        self.assertTrue(x > y)
+        return
+        
+
+        
+    def XXX_test_set_symbol_mode_when_noclingo_disabled(self):
+
+        with self.assertRaises(RuntimeError) as ctx:
+            set_symbol_mode(SymbolMode.CLINGO)
+
+        check_errmsg("NOCLINGO mode is disabled.",ctx)
+
+
+#------------------------------------------------------------------------------
+# Tests that require NOCLINGO is enabled and run from a new process
+#------------------------------------------------------------------------------
+
+
+class NoClingoEnabledTestCase(unittest.TestCase):
+    def setUp(self):
+        pass
+
+    def tearDown(self):
+        pass
 
 
     def test_symbol_generator(self):
@@ -339,6 +401,7 @@ class NoClingoTestCase(unittest.TestCase):
         self.assertEqual(ncl3, expect_ncl3)
         self.assertEqual(ncl4, expect_ncl4)
         self.assertEqual(ncl5, expect_ncl5)
+
 
 
 #------------------------------------------------------------------------------
