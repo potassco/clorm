@@ -1054,6 +1054,54 @@ class PredicateTestCase(unittest.TestCase):
         raw_p = Function("p",[Number(15), Function("",[Number(2),String("42")])])
         self.assertEqual(p.raw, raw_p)
 
+    #--------------------------------------------------------------------------
+    # Testing comparison between tuple fields
+    # --------------------------------------------------------------------------
+    def test_predicate_with_tuple_comparison(self):
+
+        class Tuple_(Predicate, is_tuple=True):
+            a = IntegerField
+            b = StringField
+
+        class P(Predicate):
+            tuple_ = (IntegerField,StringField)
+        class Q(Predicate):
+            tuple_ = (IntegerField,StringField)
+        class R(Predicate):
+            tuple_ = (StringField,IntegerField)
+        class S(Predicate):
+            tuple_ = (IntegerField,StringField,IntegerField)
+        class T(Predicate):
+            tuple_ = Tuple_.Field
+
+
+        p1 = P(tuple_=(1, "a"))
+        p1_alt = P(tuple_=(1, "a"))
+        p2 = P(tuple_=(2, "b"))
+        q1 = Q(tuple_=(1, "a"))
+        q2 = Q(tuple_=(2, "b"))
+        r2 = R(tuple_=("b", 2))
+        s2 = S(tuple_=(2, "b", 2))
+        t1 = T(tuple_=(1, "a"))
+        t2 = T(tuple_=(2, "b"))
+        tuple1 = tuple([1, "a"])
+        tuple2 = tuple([2, "b"])
+
+        # Equality works even when the types are different
+        self.assertTrue(p1.tuple_ == p1_alt.tuple_)
+        self.assertTrue(p1.tuple_ == q1.tuple_)
+        self.assertTrue(p1.tuple_ == t1.tuple_)
+        self.assertTrue(p1.tuple_ == tuple1)
+
+        self.assertNotEqual(type(p1.tuple_), type(t1.tuple_))
+#        self.assertNotEqual(type(p1.tuple_), type(t1))
+
+        self.assertTrue(p1.tuple_ != p2.tuple_)
+        self.assertTrue(p1.tuple_ != q2.tuple_)
+        self.assertTrue(p1.tuple_ != r2.tuple_)
+        self.assertTrue(p1.tuple_ != s2.tuple_)
+        self.assertTrue(p1.tuple_ != t2.tuple_)
+        self.assertTrue(p1.tuple_ != tuple2)
 
     #--------------------------------------------------------------------------
     # Test predicates with default fields

@@ -2904,9 +2904,9 @@ class Predicate(object, metaclass=_PredicateMeta):
                 self._sign == other._sign
         if self.meta.is_tuple:
             return self._field_values == other
-        elif not isinstance(other, Predicate):
-            return NotImplemented
-        return False
+        elif isinstance(other, Predicate):
+            return False
+        return NotImplemented
 
     def __lt__(self, other):
         """Overloaded boolean operator."""
