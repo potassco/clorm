@@ -125,7 +125,10 @@ if {arg} is MISSING:
 
 ASSIGN_COMPLEX_TEMPLATE = r"""
 if not isinstance({arg}, {arg}_class):
-    {arg} = _instance_from_tuple({arg}_class, {arg})
+    if isinstance({arg}, tuple) or (isinstance({arg}, Predicate) and {arg}.meta.is_tuple):
+        {arg} = {arg}_class(*{arg})
+    else:
+        raise TypeError(f"Value {{{arg}}} ({{type({arg})}}) is not a tuple")
 """
 
 PREDICATE_UNIFY_DOCSTRING = r"""

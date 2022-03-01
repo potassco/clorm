@@ -1193,6 +1193,7 @@ class BaseField(object, metaclass=_AbstractBaseFieldMeta):
     def __init__(self, default: Any=MISSING, index: Any=MISSING) -> None:
         self._index = index if index is not MISSING else False
 
+
         if default is MISSING:
             self._default = (False, None)
             return
@@ -1208,8 +1209,13 @@ class BaseField(object, metaclass=_AbstractBaseFieldMeta):
 
         try:
             if cmplx:
+                def _instance_from_tuple(v):
+                    if isinstance(v, tuple) or (isinstance(v,Predicate) and v.meta.is_tuple):
+                        return cmplx(*v)
+                    raise TypeError(f"Value {v} ({type(v)}) is not a tuple")
+
                 if cmplx.meta.is_tuple:
-                    self._default = (True, _instance_from_tuple(cmplx, default))
+                    self._default = (True, _instance_from_tuple(default))
                 else:
                     raise ValueError("Bad default")
             else:
@@ -2332,17 +2338,10 @@ class PredicateDefn(object):
 # tuple. Otherwise simply returns the value.
 # ------------------------------------------------------------------------------
 
-def _instance_from_tuple(predicate_cls, v):
-    if isinstance(v, tuple) or (isinstance(v,Predicate) and v.meta.is_tuple):
-        return predicate_cls(*v)
-    raise TypeError(f"Value {v} ({type(v)}) is not a tuple")
-
-
 def _generate_dynamic_predicate_functions(class_name: str, namespace: Dict):
     pdefn = namespace["_meta"]
 
-    gdict = {"_instance_from_tuple": _instance_from_tuple,
-             "Predicate": Predicate,
+    gdict = {"Predicate": Predicate,
              "Function": Function,
              "MISSING": MISSING,
              "AnySymbol": AnySymbol,
