@@ -63,7 +63,6 @@ class UnifyTestCase(unittest.TestCase):
         rf1 = RawField()
         rt1 = Function("tmp", [Number(1), raw1])
         rt2 = Function("tmp", [Number(1), raw2])
-        self.assertTrue(rf1.unifies(raw1))
 
         class Tmp(Predicate):
             n1 = IntegerField()
@@ -194,14 +193,12 @@ class UnifyTestCase(unittest.TestCase):
         r2 = Function("fact",[Number(1), Function("", [Function("bob",[]),Number(1)])])
 
         # r1 only unifies with Fact1 and r2 only unifies with Fact2
-        f1 = Fact1(raw=r1)
+        f1 = Fact1._unify(r1)
         self.assertEqual(f1.raw, r1)
-        with self.assertRaises(ValueError) as ctx:
-            f2 = Fact1(raw=r2)
-        f2 = Fact2(raw=r2)
+        self.assertEqual(Fact1._unify(r2), None)
+        f2 = Fact2._unify(r2)
         self.assertEqual(f2.raw, r2)
-        with self.assertRaises(ValueError) as ctx:
-            f1 = Fact2(raw=r1)
+        self.assertEqual(Fact2._unify(r1), None)
 
         # The unify() function should correctly unify both facts
         res = unify([Fact1,Fact2],[r1,r2])
@@ -228,13 +225,12 @@ class UnifyTestCase(unittest.TestCase):
         r2 = Function("fact",[Number(1), Function("", [Function("bob",[]),Number(1)])])
 
         # r1 only unifies with Fact1 but both r1 and r2 unify with Fact2
-        f1 = Fact1(raw=r1)
+        f1 = Fact1._unify(r1)
         self.assertEqual(f1.raw, r1)
-        with self.assertRaises(ValueError) as ctx:
-            f2 = Fact1(raw=r2)
-        f1_alt = Fact2(raw=r1)
+        self.assertEqual(Fact1._unify(r2), None)
+        f1_alt = Fact2._unify(r1)
         self.assertEqual(f1_alt.raw, r1)
-        f2 = Fact2(raw=r2)
+        f2 = Fact2._unify(r2)
         self.assertEqual(f2.raw, r2)
 
         # unify() unifies r1 with Fact1 (f1) and r2 with Fact2 (f2)

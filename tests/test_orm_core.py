@@ -8,6 +8,8 @@
 # to be completed.
 # ------------------------------------------------------------------------------
 
+import clorm.noclingo; clorm.noclingo.enable_noclingo()
+
 import inspect
 from typing import Tuple, Union
 import unittest
@@ -19,20 +21,20 @@ import collections.abc as cabc
 from .support import check_errmsg, check_errmsg_contains
 import pickle
 
-from clingo import Number, String, Function, SymbolType
+#from clingo import Number, String, Function, SymbolType
 # Official Clorm API imports
-from clorm import \
-    BaseField, Raw, RawField, IntegerField, StringField, ConstantField, SimpleField,  \
-    Predicate, ComplexTerm, refine_field, combine_fields, \
-    define_flat_list_field, define_nested_list_field, define_enum_field, \
-    simple_predicate, path, hashable_path, alias, \
-    not_, and_, or_, cross, in_, notin_, \
-    SymbolMode, set_symbol_mode, get_symbol_mode, symbols, \
-    ConstantStr, HeadList, HeadListReversed, TailList, TailListReversed
+from clorm import ( BaseField, Raw, RawField, IntegerField, StringField,
+                    ConstantField, SimpleField, Predicate, ComplexTerm,
+                    refine_field, combine_fields, define_flat_list_field,
+                    define_nested_list_field, define_enum_field,
+                    simple_predicate, path, hashable_path, alias, not_, and_,
+                    or_, cross, in_, notin_, SymbolMode, set_symbol_mode,
+                    get_symbol_mode, Function, Number, String, ConstantStr,
+                    HeadList, HeadListReversed, TailList, TailListReversed )
 
 # Implementation imports
-from clorm.orm.core import dealiased_path, field, get_field_definition, PredicatePath, \
-    QCondition, trueall, notcontains
+from clorm.orm.core import ( dealiased_path, field, get_field_definition,
+                             PredicatePath, QCondition, trueall, notcontains )
 
 import clingo
 import clorm.orm.noclingo as noclingo
@@ -63,6 +65,7 @@ def hpaths(paths):
 
 class FieldTestCase(unittest.TestCase):
     def setUp(self):
+
         pass
 
     def tearDown(self):
@@ -116,17 +119,18 @@ class FieldTestCase(unittest.TestCase):
         check_errmsg("Symbol 'x(1)'",ctx)
 
     #--------------------------------------------------------------------------
-    # Test that the simple field unify functions work as expected
-    #--------------------------------------------------------------------------
-    def test_api_pytocl_and_cltopy_and_unifies(self):
+    # Test that the simple field unify functions work as expected for clingo
+    # symbols.
+    # --------------------------------------------------------------------------
+    def test_api_clingo_pytocl_and_cltopy(self):
         num1 = 1
         str1 = "string"
         sim1 = "name"
         sim2 = "-name"
-        cnum1 = Number(num1)
-        cstr1 = String(str1)
-        csim1 = Function(sim1)
-        csim2 = Function(sim1,[],False)
+        cnum1 = clingo.Number(num1)
+        cstr1 = clingo.String(str1)
+        csim1 = clingo.Function(sim1)
+        csim2 = clingo.Function(sim1,[],False)
 
         self.assertEqual(num1, IntegerField.cltopy(cnum1))
         self.assertEqual(str1, StringField.cltopy(cstr1))
@@ -138,37 +142,23 @@ class FieldTestCase(unittest.TestCase):
         self.assertEqual(csim1, ConstantField.pytocl(sim1))
         self.assertEqual(csim2, ConstantField.pytocl(sim2))
 
-        self.assertTrue(IntegerField.unifies(cnum1))
-        self.assertTrue(StringField.unifies(cstr1))
-        self.assertTrue(ConstantField.unifies(csim1))
-        self.assertTrue(ConstantField.unifies(csim2))
-
-        self.assertFalse(IntegerField.unifies(csim1))
-        self.assertFalse(StringField.unifies(cnum1))
-        self.assertFalse(ConstantField.unifies(cstr1))
-
         fint = IntegerField()
         fstr = StringField()
         fconst = ConstantField()
-
-        self.assertTrue(fint.unifies(cnum1))
-        self.assertTrue(fstr.unifies(cstr1))
-        self.assertTrue(fconst.unifies(csim1))
-        self.assertTrue(fconst.unifies(csim2))
 
 
     #--------------------------------------------------------------------------
     # Test that the simple field unify functions works for noclingo symbols.
     #--------------------------------------------------------------------------
-    def test_api_noclingo_pytocl_and_cltopy_and_unifies(self):
+    def test_api_noclingo_pytocl_and_cltopy(self):
         num1 = 1
         str1 = "string"
         sim1 = "name"
         sim2 = "-name"
-        cnum1 = noclingo.Number(num1)
-        cstr1 = noclingo.String(str1)
-        csim1 = noclingo.Function(sim1)
-        csim2 = noclingo.Function(sim1,[],False)
+        cnum1 = noclingo.NoNumber(num1)
+        cstr1 = noclingo.NoString(str1)
+        csim1 = noclingo.NoFunction(sim1)
+        csim2 = noclingo.NoFunction(sim1,[],False)
 
         self.assertEqual(num1, IntegerField.cltopy(cnum1))
         self.assertEqual(str1, StringField.cltopy(cstr1))
@@ -180,23 +170,9 @@ class FieldTestCase(unittest.TestCase):
         self.assertEqual(csim1.name, ConstantField.pytocl(sim1).name)
         self.assertEqual(csim2.name, ConstantField.pytocl(sim2).name)
 
-        self.assertTrue(IntegerField.unifies(cnum1))
-        self.assertTrue(StringField.unifies(cstr1))
-        self.assertTrue(ConstantField.unifies(csim1))
-        self.assertTrue(ConstantField.unifies(csim2))
-
-        self.assertFalse(IntegerField.unifies(csim1))
-        self.assertFalse(StringField.unifies(cnum1))
-        self.assertFalse(ConstantField.unifies(cstr1))
-
         fint = IntegerField()
         fstr = StringField()
         fconst = ConstantField()
-
-        self.assertTrue(fint.unifies(cnum1))
-        self.assertTrue(fstr.unifies(cstr1))
-        self.assertTrue(fconst.unifies(csim1))
-        self.assertTrue(fconst.unifies(csim2))
 
     #--------------------------------------------------------------------------
     #--------------------------------------------------------------------------
@@ -313,14 +289,14 @@ class FieldTestCase(unittest.TestCase):
 
     #--------------------------------------------------------------------------
     # Test the behaviour of Raw object (which wraps clingo.Symbol and
-    # noclingo.Symbol).
+    # noclingo.NoSymbol).
     # --------------------------------------------------------------------------
     def test_api_raw_class(self):
 
         cl1 = clingo.Number(1)
-        ncl1 = noclingo.Number(1)
+        ncl1 = noclingo.NoNumber(1)
         cl3 = clingo.Number(3)
-        ncl3 = noclingo.Number(3)
+        ncl3 = noclingo.NoNumber(3)
 
         r_cl1 = Raw(cl1)
         r_ncl1 = Raw(ncl1)
@@ -341,7 +317,6 @@ class FieldTestCase(unittest.TestCase):
         self.assertTrue(Raw(cl3) >= Raw(cl3))
         self.assertTrue(Raw(cl3) >= Raw(cl1))
 
-        set_symbol_mode(SymbolMode.NOCLINGO)
         self.assertEqual(Raw(ncl1), Raw(cl1))
         self.assertNotEqual(Raw(ncl1), Raw(cl3))
         self.assertTrue(Raw(ncl1) < Raw(ncl3))
@@ -350,7 +325,6 @@ class FieldTestCase(unittest.TestCase):
         self.assertTrue(Raw(ncl3) > Raw(ncl1))
         self.assertTrue(Raw(ncl3) >= Raw(ncl3))
         self.assertTrue(Raw(ncl3) >= Raw(ncl1))
-        set_symbol_mode(SymbolMode.CLINGO)
 
         self.assertTrue(Raw(cl1) < Raw(ncl3))
         self.assertTrue(Raw(cl1) <= Raw(ncl1))
@@ -368,34 +342,53 @@ class FieldTestCase(unittest.TestCase):
 
     #--------------------------------------------------------------------------
     # Test the behaviour of Raw object with pickling - it should always convert
-    # to a noclingo.Symbol object when pickling.
+    # to a noclingo.NoSymbol object when pickling.
     # --------------------------------------------------------------------------
     def test_api_raw_pickling(self):
 
         cln = clingo.Number(1)
         cls = clingo.String("bar")
         clf = clingo.Function("foo",[cln,cls])
-        ncln = noclingo.Number(1)
-        ncls = noclingo.String("bar")
-        nclf = noclingo.Function("foo",[ncln,ncls])
+        ncln = noclingo.NoNumber(1)
+        ncls = noclingo.NoString("bar")
+        nclf = noclingo.NoFunction("foo",[ncln,ncls])
 
-        # Check that rawin uses raw/clingo while rawout uses noraw/noclingo.
+        # Check for Symbol output
+        set_symbol_mode(SymbolMode.CLINGO)
 
-        # NOTE: This code examines the internal structure of a Raw object, so
-        # will need to change if the Raw implementation changes.
+        # Check pickling a raw with clingo.Symbol input - Symbol output
         rawin = Raw(clf)
-        self.assertTrue(rawin._noraw is None)
-        self.assertEqual(rawin._raw, clf)
         data = pickle.dumps(rawin)
         rawout = pickle.loads(data)
-        self.assertTrue(rawout._raw is None)
-        self.assertEqual(rawout._noraw, nclf)
-
-        # This still evaluate as equal
+        self.assertEqual(type(rawout.symbol), clingo.Symbol)
         self.assertEqual(rawin,rawout)
-        self.assertEqual(rawin.clingo,rawout.clingo)
-        self.assertEqual(rawin.noclingo,rawout.noclingo)
-        self.assertNotEqual(rawin.clingo,rawout.noclingo)
+
+        # Check pickling a raw with noclingo.NoSymbol input - Symbol output
+        rawin = Raw(nclf)
+        data = pickle.dumps(rawin)
+        rawout = pickle.loads(data)
+        self.assertEqual(type(rawout.symbol), clingo.Symbol)
+        self.assertEqual(rawin, rawout)
+
+        # Check for NoSymbol output
+        set_symbol_mode(SymbolMode.NOCLINGO)
+
+        # Check pickling a raw with noclingo.NoSymbol input - NoSymbol output
+        rawin = Raw(nclf)
+        data = pickle.dumps(rawin)
+        rawout = pickle.loads(data)
+        self.assertEqual(type(rawout.symbol), noclingo.NoSymbol)
+        self.assertEqual(rawin,rawout)
+
+        # Check pickling a raw with clingo.Symbol input - NoSymbol output
+        rawin = Raw(clf)
+        data = pickle.dumps(rawin)
+        rawout = pickle.loads(data)
+        self.assertEqual(type(rawout.symbol), noclingo.NoSymbol)
+        self.assertEqual(rawin,rawout)
+
+        # Set back to CLINGO mode
+        set_symbol_mode(SymbolMode.CLINGO)
 
     #--------------------------------------------------------------------------
     # When instantiating a field a default value can be given. It can also take
@@ -549,12 +542,6 @@ class FieldTestCase(unittest.TestCase):
         self.assertEqual(ABCField.cltopy(r_b), "b")
         self.assertEqual(ABCField.cltopy(r_c), "c")
 
-        self.assertTrue(ABCField.unifies(r_a))
-        self.assertTrue(ABCField.unifies(r_b))
-        self.assertTrue(ABCField.unifies(r_c))
-        self.assertFalse(ABCField.unifies(r_d))
-        self.assertFalse(ABCField.unifies(r_1))
-
         # Test a version with no class name
         ABCField2 = rf(ConstantField, ["a","b","c"])
         self.assertEqual(ABCField2.pytocl("a"), r_a)
@@ -623,10 +610,6 @@ class FieldTestCase(unittest.TestCase):
         with self.assertRaises(TypeError) as ctx:
             v = PosIntField.cltopy(r_a)
 
-        self.assertTrue(PosIntField.unifies(r_0))
-        self.assertTrue(PosIntField.unifies(r_1))
-        self.assertFalse(PosIntField.unifies(r_neg1))
-        self.assertFalse(PosIntField.unifies(r_a))
 
     #--------------------------------------------------------------------------
     # Test making a new field that is a combination of other fields
@@ -1257,7 +1240,6 @@ class PredicateTestCase(unittest.TestCase):
         raw_f1 = Function("f",[Number(101),raw_1st, Number(202)])
 
         self.assertEqual(f1.raw, raw_f1)
-        self.assertEqual(F(raw=raw_f1), f1)
         self.assertEqual(F._unify(raw_f1), f1)
 
         self.assertEqual(str(F(101,tuple([]),202)), """f(101,(),202)""")
@@ -1734,7 +1716,7 @@ class PredicateInternalUnifyTestCase(unittest.TestCase):
     # Test that we can define predicates using the class syntax and test that
     # the getters and setters are connected properly to the predicate classes.
     # --------------------------------------------------------------------------
-    def test_predicate_init(self):
+    def test_predicate_init_basic(self):
 
         class Fact(Predicate):
             anum = IntegerField(default=1)
@@ -1749,55 +1731,12 @@ class PredicateInternalUnifyTestCase(unittest.TestCase):
         self.assertEqual(f1.raw, func)
 
         func2=Function("fact",[String("1"),String("test")])
-        with self.assertRaises(ValueError) as ctx:
-            f=Fact(raw=func2)
         self.assertEqual(Fact._unify(func2), None)
-
-        with self.assertRaises(ValueError) as ctx:
-            f=Fact(raw=[1,2,3])
 
         with self.assertRaises(ValueError) as ctx:
             Fact._unify([1,2,3])
         check_errmsg("Cannot unify with object ", ctx)
 
-
-    # --------------------------------------------------------------------------
-    # Test initialising a predicate with a raw with some bad input
-    # --------------------------------------------------------------------------
-    def test_predicate_init_with_raw(self):
-
-        class Fact(Predicate):
-            anum = IntegerField
-            astr = StringField
-
-        good = Function("fact",[Number(1),String("test")])
-        bad = [1,2]
-
-#        f=Fact(raw=bad)
-
-#        with self.assertRaises(ValueError) as ctx:
-#            func2=Function("fact",[String("1"),String("test")])
-#            f=Fact(raw=func2)
-
-
-
-    # --------------------------------------------------------------------------
-    # Test unifies for Predicate.Field function
-    # --------------------------------------------------------------------------
-
-    def test_rawfield_unifies(self):
-
-        class Fact(Predicate):
-            astr = StringField()
-
-        good=Function("fact",[String("astring")])
-        bad=Function("fact",[Number(1)])
-
-        self.assertTrue(RawField.unifies(good))
-        self.assertTrue(ConstantField.unifies(Function("fact",[])))
-        self.assertFalse(ConstantField.unifies(String("fact")))
-        self.assertTrue(Fact.Field.unifies(good))
-        self.assertFalse(Fact.Field.unifies(bad))
 
 
     #--------------------------------------------------------------------------
@@ -1813,14 +1752,18 @@ class PredicateInternalUnifyTestCase(unittest.TestCase):
         f=F(1)
         f_alt1=F(1,sign=True)
         f_alt2=F(a=1,sign=True)
+
         self.assertEqual(func, f.raw)
         self.assertEqual(func, f_alt1.raw)
         self.assertEqual(func, f_alt2.raw)
 
+
         neg_func=Function("f",[Number(1)],False)
         neg_f=F(1,sign=False)
         neg_f_alt1=F(a=1,sign=False)
-        neg_f_alt2=F(raw=neg_func)
+        neg_f_alt2=F._unify(neg_func)
+
+
         self.assertEqual(neg_func, neg_f.raw)
         self.assertEqual(neg_func, neg_f_alt1.raw)
         self.assertEqual(neg_func, neg_f_alt2.raw)
@@ -1885,22 +1828,21 @@ class PredicateInternalUnifyTestCase(unittest.TestCase):
 
         # F1 handles all
         pos_f1=F1(1,sign=True) ; neg_f1=F1(1,sign=False)
-        pos_f1_alt=F1(raw=pos_raw) ; neg_f1_alt=F1(raw=neg_raw)
+        pos_f1_alt=F1._unify(pos_raw) ; neg_f1_alt=F1._unify(neg_raw)
         self.assertEqual(pos_f1,pos_f1_alt)
         self.assertEqual(neg_f1,neg_f1_alt)
         self.assertEqual(pos_f1.clone(sign=False).raw, neg_f1.raw)
 
         # F2 handles positive only
         pos_f1=F2(1,sign=True) ;
-        pos_f1_alt=F2(raw=pos_raw) ;
+        pos_f1_alt=F2._unify(pos_raw) ;
         self.assertEqual(pos_f1,pos_f1_alt)
 
         with self.assertRaises(ValueError) as ctx:
             neg_f1=F2(a=1,sign=False)
         with self.assertRaises(ValueError) as ctx:
             neg_f1=F2(1,sign=False)
-        with self.assertRaises(ValueError) as ctx:
-            neg_f1=F2(raw=neg_raw)
+        self.assertEqual(F2._unify(neg_raw), None)
 
         with self.assertRaises(ValueError) as ctx:
             neg_tuple_g = G(1,2,sign=False)
@@ -1912,15 +1854,14 @@ class PredicateInternalUnifyTestCase(unittest.TestCase):
 
         # F3 handles negative only
         neg_f1=F3(1,sign=False) ;
-        neg_f1_alt=F3(raw=neg_raw) ;
+        neg_f1_alt=F3._unify(neg_raw) ;
         self.assertEqual(neg_f1,neg_f1_alt)
 
         with self.assertRaises(ValueError) as ctx:
             pos_f1=F3(a=1,sign=True)
         with self.assertRaises(ValueError) as ctx:
             pos_f1=F3(1,sign=True)
-        with self.assertRaises(ValueError) as ctx:
-            pos_f1=F3(raw=pos_raw)
+        self.assertEqual(F3._unify(pos_raw), None)
 
     #--------------------------------------------------------------------------
     # Test predicate equality
@@ -1994,13 +1935,13 @@ class PredicateInternalUnifyTestCase(unittest.TestCase):
 
         # Test trying to initialise with the wrong number of arguments - note
         # cannot use default values when initialising with positional arguments.
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(TypeError) as ctx:
             f4=Fact(1,"test",2)
 
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(TypeError) as ctx:
             f2=Fact(1)
 
-        with self.assertRaises(ValueError) as ctx:
+        with self.assertRaises(TypeError) as ctx:
             f3=Fact("test")
 
     #--------------------------------------------------------------------------
@@ -2101,9 +2042,8 @@ class PredicateInternalUnifyTestCase(unittest.TestCase):
             aint = IntegerField()
             # note: don't need to specify defn keyword
             atup = MyTuple.Field(default=MyTuple(aint=2,astr="str"))
+            atup2 = MyTuple.Field(default=(2,"str"))
             afunc = Fun.Field(default=Fun(aint=2.0,astr="str"))
-#            atup = ComplexField(MyTuple,default=MyTuple(aint=2,astr="str"))
-#            afunc = ComplexField(defn=Fun,default=Fun(aint=2.0,astr="str"))
 
         af1=Fact(aint=1)
         af2=Fact(aint=2, atup=MyTuple(aint=4,astr="XXX"),
@@ -2111,15 +2051,22 @@ class PredicateInternalUnifyTestCase(unittest.TestCase):
 
         f1 = Function("fact",[Number(1),
                               Function("",[Number(2),String("str")]),
+                              Function("",[Number(2),String("str")]),
                               Function("fun",[Number(200),String("str")])])
         f2 = Function("fact",[Number(2),
                               Function("",[Number(4),String("XXX")]),
+                              Function("",[Number(2),String("str")]),
                               Function("fun",[Number(550),String("YYY")])])
 
         self.assertEqual(f1, af1.raw)
         self.assertEqual(f2, af2.raw)
         self.assertEqual(af2.atup.aint,4)
 
+        # Define a predicate with a bad default value
+        with self.assertRaises(TypeError) as ctx:
+            class Fact2(Predicate):
+                afun = Fun.Field(default=(1,"str"))
+        check_errmsg("""Invalid default value "(1, 'str')" for FunField""", ctx)
 
     #--------------------------------------------------------------------------
     # Test the simple_predicate function as a mechanism for defining
@@ -2149,7 +2096,7 @@ class PredicateInternalUnifyTestCase(unittest.TestCase):
         AnonPred3 = simple_predicate("predicate",3)
 
         # Should unify
-        ap3 = AnonPred3(raw=p3.raw)
+        ap3 = AnonPred3._unify(p3.raw)
         self.assertEqual(ap3.raw, p3.raw)
         self.assertEqual(ap3.arg1.symbol, String("string1"))
         self.assertEqual(ap3[0].symbol, String("string1"))
@@ -2157,18 +2104,16 @@ class PredicateInternalUnifyTestCase(unittest.TestCase):
         self.assertEqual(ap3[1].symbol, Number(10))
 
         # Mismatched arity so unify will fail
-        with self.assertRaises(ValueError) as ctx:
-            fail1 = AnonPred3(raw=p2.raw)
+        self.assertEqual(AnonPred3._unify(p2.raw), None)
         # Mismatched predicate name so unify will fail
-        with self.assertRaises(ValueError) as ctx:
-            fail2 = AnonPred3(raw=b3.raw)
+        self.assertEqual(AnonPred3._unify(b3.raw), None)
 
 
         # Define predicate with a class name
         AnonPred4 = simple_predicate("predicate",3,name="AnonPred4")
 
         # Should unify
-        ap4 = AnonPred4(raw=p3.raw)
+        ap4 = AnonPred4._unify(p3.raw)
         self.assertEqual(ap4.raw, p3.raw)
 
     #--------------------------------------------------------------------------

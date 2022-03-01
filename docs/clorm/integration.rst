@@ -7,7 +7,9 @@ objects are integrated and interact with the Clingo ASP solver.
 
 As detailed in :ref:`raw-symbol-label`, at its most basic level a Clingo
 ``Symbol`` object can be extracted from a Clorm ``Predicate`` object using the
-``raw`` property and conversely a ``Symbol`` object can be passed as the ``raw``
+``raw`` property.
+
+and conversely a ``Symbol`` object can be passed as the ``raw``
 parameter in the ``Predicate`` constructor.
 
 Wrapper classes

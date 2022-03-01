@@ -192,7 +192,7 @@ class FactBaseCoder(object):
         if not "clorm.Predicate" in obj: return obj
         pname = obj["clorm.Predicate"]
         if pname not in self._name2pred: return obj
-        return self._name2pred[pname](raw=symbol_decoder(obj["raw"]))
+        return self._name2pred[pname]._unify(symbol_decoder(obj["raw"]))
 
     #-------------------------------------------------------------------------
     # Convenience functions to call the JSON encoder and decoder

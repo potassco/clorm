@@ -7,11 +7,15 @@ import unittest
 import datetime
 import calendar
 import operator
+
+from .support import check_errmsg, check_errmsg_contains
+
 import clingo
 import clorm.orm.noclingo as noclingo
-from clorm.orm.noclingo import clingo_to_noclingo, noclingo_to_clingo, \
-    SymbolMode, get_symbol_generator,\
-    is_Number, is_String, is_Function, is_Supremum, is_Infimum
+from clorm.orm.noclingo import ( SymbolType, Symbol, Function, String, Number,
+                                 get_Infimum, get_Supremum, clingo_to_noclingo,
+                                 noclingo_to_clingo, SymbolMode,
+                                 get_symbol_mode, set_symbol_mode )
 
 clingo_version = clingo.__version__
 
@@ -19,11 +23,12 @@ clingo_version = clingo.__version__
 #------------------------------------------------------------------------------
 
 __all__ = [
-    'NoClingoTestCase'
+    'NoClingoTestCase',
+    'NoClingoEnabledTestCase'
     ]
 
 #------------------------------------------------------------------------------
-#
+# Tests that don't require that NOCLINGO is enabled
 #------------------------------------------------------------------------------
 
 class NoClingoTestCase(unittest.TestCase):
@@ -41,31 +46,31 @@ class NoClingoTestCase(unittest.TestCase):
 
         # The symbol type needs to be valid
         with self.assertRaises(TypeError) as ctx:
-            noclingo.Symbol(6, 4)
+            noclingo.NoSymbol(6, 4)
 
     #--------------------------------------------------------------------------
     #
     #--------------------------------------------------------------------------
     def test_string(self):
-        nc = noclingo.String("atest")
+        nc = noclingo.NoString("atest")
         c =  clingo.String("atest")
         self.assertEqual(nc.string, c.string)
         self.assertEqual(str(nc), str(c))
         self.assertEqual(nc.type, noclingo.SymbolType.String)
 
     def test_number(self):
-        nc = noclingo.Number(1)
+        nc = noclingo.NoNumber(1)
         c =  clingo.Number(1)
         self.assertEqual(nc.number, c.number)
         self.assertEqual(str(nc), str(c))
         self.assertEqual(nc.type, noclingo.SymbolType.Number)
 
     def test_infimum_supremum(self):
-        nc1 = noclingo.Infimum
-        nc2 = noclingo.Number(1)
-        nc3 = noclingo.String("a")
-        nc4 = noclingo.Function("a")
-        nc5 = noclingo.Supremum
+        nc1 = noclingo.NoInfimum
+        nc2 = noclingo.NoNumber(1)
+        nc3 = noclingo.NoString("a")
+        nc4 = noclingo.NoFunction("a")
+        nc5 = noclingo.NoSupremum
 
         self.assertTrue(nc1 == nc1)
         self.assertTrue(nc1 <= nc1)
@@ -87,19 +92,19 @@ class NoClingoTestCase(unittest.TestCase):
 
 
     def test_function(self):
-        nc = noclingo.Function("atest")
+        nc = noclingo.NoFunction("atest")
         c =  clingo.Function("atest")
         self.assertEqual(str(nc), str(c))
         self.assertEqual(nc.type, noclingo.SymbolType.Function)
 
-        nc1 = noclingo.Function("aaaa")
-        nc2 = noclingo.String("bbb")
-        nc3 = noclingo.Function("ccc",[noclingo.Number(10)])
+        nc1 = noclingo.NoFunction("aaaa")
+        nc2 = noclingo.NoString("bbb")
+        nc3 = noclingo.NoFunction("ccc",[noclingo.NoNumber(10)])
         c1 = clingo.Function("aaaa")
         c2 = clingo.String("bbb")
         c3 = clingo.Function("ccc",[clingo.Number(10)])
 
-        nc = noclingo.Function("atest",[nc1,nc2,nc3])
+        nc = noclingo.NoFunction("atest",[nc1,nc2,nc3])
         c =  clingo.Function("atest", [c1,c2,c3])
 
         self.assertEqual(str(nc), str(c))
@@ -110,98 +115,110 @@ class NoClingoTestCase(unittest.TestCase):
         self.assertEqual(nc.arguments[0].name, "aaaa")
         self.assertEqual(nc.arguments[1].string, c.arguments[1].string)
 
-        nc4 = noclingo.Function("ccc",[noclingo.Number(10)],False)
+        nc4 = noclingo.NoFunction("ccc",[noclingo.NoNumber(10)],False)
         c4 = clingo.Function("ccc",[clingo.Number(10)],False)
         self.assertEqual(str(nc4), str(c4))
         self.assertEqual(nc4.positive, c4.positive)
         self.assertEqual(nc4.negative, c4.negative)
 
     def test_tuple(self):
-        nc1 = noclingo.Function("aaaa")
-        nc2 = noclingo.String("bbb")
-        c1 = clingo.Function("aaaa")
-        c2 = clingo.String("bbb")
-        nc = noclingo.Function("", [nc1,nc2])
-        c =  clingo.Function("", [c1,c2])
-
-        self.assertEqual(str(nc), str(c))
-
-        # Check that a tuple with a single element is represented correctly
-        nc_one_tuple = noclingo.Function("", [nc2])
-        c_one_tuple = clingo.Function("", [c2])
-        self.assertEqual(str(nc_one_tuple), str(c_one_tuple))
+        c_const = clingo.Function("aaaa")
+        nc_const = noclingo.NoFunction("aaaa")
+        c_string = clingo.String("bbb")
+        nc_string = noclingo.NoString("bbb")
 
         # Check using the convenience Tuple_() function
-        self.assertEqual(noclingo.Tuple_([nc2]), nc_one_tuple)
-        self.assertEqual(noclingo.Tuple_([nc1,nc2]), nc)
+        self.assertEqual(noclingo.NoTuple_([]), noclingo.NoFunction("", []))
+        self.assertEqual(noclingo.NoTuple_([c_const]), noclingo.NoFunction("", [c_const]))
+
+        # clingo.NoTuple_() has no default so noclingo.NoTuple_() acts the same
+        # self.assertEqual(clingo.NoTuple_(), clingo.NoTuple_([]))
+        with self.assertRaises(TypeError) as ctx:
+            self.assertEqual(noclingo.NoTuple_(), noclingo.NoTuple_([]))
+
+        check_errmsg("NoTuple_() missing 1 required positional argument: 'arguments'",ctx)
+
+        c_empty_tuple = clingo.Tuple_([])
+        nc_empty_tuple = noclingo.NoTuple_([])
+        c_one_tuple = clingo.Tuple_([c_const])
+        nc_one_tuple = noclingo.NoTuple_([nc_const])
+
+        # Check special cases of empty and singleton tuples
+        self.assertEqual(str(c_empty_tuple), str(nc_empty_tuple))
+        self.assertEqual(str(nc_one_tuple), str(c_one_tuple))
+
+        # tuple with two or more elements
+        self.assertEqual(str(clingo.Tuple_([c_const, c_string])),
+                         str(noclingo.NoTuple_([nc_const, nc_string])))
+
 
     def test_hash_and_equality_comparison_ops(self):
-        nc1 = noclingo.String("aaaGGDFa")
-        nc2 = noclingo.String("aaaGGDFa")
+        nc1 = noclingo.NoString("aaaGGDFa")
+        nc2 = noclingo.NoString("aaaGGDFa")
         self.assertEqual(hash(nc1),hash(nc2))
         self.assertTrue(nc1 == nc2)
         self.assertTrue(nc1 <= nc2)
         self.assertTrue(nc1 >= nc2)
 
-        nc1 = noclingo.Number(34068390)
-        nc2 = noclingo.Number(34068390)
+        nc1 = noclingo.NoNumber(34068390)
+        nc2 = noclingo.NoNumber(34068390)
         self.assertEqual(hash(nc1),hash(nc2))
         self.assertTrue(nc1 == nc2)
         self.assertTrue(nc1 <= nc2)
         self.assertTrue(nc1 >= nc2)
 
-        nc1 = noclingo.Function("aaaa")
-        nc2 = noclingo.Function("aaaa")
+        nc1 = noclingo.NoFunction("aaaa")
+        nc2 = noclingo.NoFunction("aaaa")
         self.assertEqual(hash(nc1),hash(nc2))
         self.assertTrue(nc1 == nc2)
         self.assertTrue(nc1 <= nc2)
         self.assertTrue(nc1 >= nc2)
 
-        nc1 = noclingo.Function("aaaa",[],False)
-        nc2 = noclingo.Function("aaaa",[],False)
+        nc1 = noclingo.NoFunction("aaaa",[],False)
+        nc2 = noclingo.NoFunction("aaaa",[],False)
         self.assertEqual(hash(nc1),hash(nc2))
         self.assertTrue(nc1 == nc2)
         self.assertTrue(nc1 <= nc2)
         self.assertTrue(nc1 >= nc2)
 
-        a1 = noclingo.Function("aaaa")
-        a2 = noclingo.Function("aaaa")
-        b1 = noclingo.String("bbb")
-        b2 = noclingo.String("bbb")
-        c1 = noclingo.Number(45)
-        c2 = noclingo.Number(45)
-        d1 = noclingo.Function("dfdf",[c1])
-        d2 = noclingo.Function("dfdf",[c2])
-        nc1 = noclingo.Function("ccc",[a1,b1,c1,d1])
-        nc2 = noclingo.Function("ccc",[a2,b2,c2,d2])
+        a1 = noclingo.NoFunction("aaaa")
+        a2 = noclingo.NoFunction("aaaa")
+        b1 = noclingo.NoString("bbb")
+        b2 = noclingo.NoString("bbb")
+        c1 = noclingo.NoNumber(45)
+        c2 = noclingo.NoNumber(45)
+        d1 = noclingo.NoFunction("dfdf",[c1])
+        d2 = noclingo.NoFunction("dfdf",[c2])
+        nc1 = noclingo.NoFunction("ccc",[a1,b1,c1,d1])
+        nc2 = noclingo.NoFunction("ccc",[a2,b2,c2,d2])
         self.assertEqual(hash(nc1),hash(nc2))
         self.assertTrue(nc1 == nc2)
         self.assertTrue(nc1 <= nc2)
         self.assertTrue(nc1 >= nc2)
 
     def test_comparison_ops(self):
-        nc1 = noclingo.Number(34)
-        nc2 = noclingo.Number(43)
+        nc1 = noclingo.NoNumber(34)
+        nc2 = noclingo.NoNumber(43)
         self.assertTrue(nc1 <= nc2)
         self.assertTrue(nc1 < nc2)
         self.assertTrue(nc2 >= nc1)
         self.assertTrue(nc2 > nc1)
 
-        nc3 = noclingo.String("abcd")
-        nc4 = noclingo.String("bcde")
+        nc3 = noclingo.NoString("abcd")
+        nc4 = noclingo.NoString("bcde")
         self.assertTrue(nc3 <= nc4)
         self.assertTrue(nc3 < nc4)
         self.assertTrue(nc4 >= nc3)
         self.assertTrue(nc4 > nc3)
 
-        nc5 = noclingo.Function("abc",[noclingo.Number(45)])
-        nc6 = noclingo.Function("abc",[noclingo.String("45")])
+        nc5 = noclingo.NoFunction("abc",[noclingo.NoNumber(45)])
+        nc6 = noclingo.NoFunction("abc",[noclingo.NoString("45")])
         c5 = clingo.Function("abc",[clingo.Number(45)])
         c6 = clingo.Function("abc",[clingo.String("45")])
         if c5 < c6: self.assertTrue(nc5 < nc6)
         else: self.assertTrue(nc5 > nc6)
 
-        nc7 = noclingo.Function("abc",[noclingo.String("45"), noclingo.Number(5)])
+        nc7 = noclingo.NoFunction("abc",[noclingo.NoString("45"), noclingo.NoNumber(5)])
         self.assertTrue(nc6 < nc7)
 
         def compare_ordering(a, b):
@@ -212,46 +229,73 @@ class NoClingoTestCase(unittest.TestCase):
             else:
                 self.assertEqual(a, b)
 
-        compare_ordering(noclingo.String("1"), noclingo.Number(2))
-        compare_ordering(noclingo.Number(1), noclingo.String("2"))
-        compare_ordering(noclingo.String("1"), noclingo.Function("2"))
-        compare_ordering(noclingo.Function("2"), noclingo.String("1"))
-        compare_ordering(noclingo.Number(1), noclingo.Function("2"))
-        compare_ordering(noclingo.Function("1"), noclingo.Number(2))
-        compare_ordering(noclingo.Infimum, noclingo.Supremum)
-        compare_ordering(noclingo.Supremum, noclingo.Infimum)
-        compare_ordering(noclingo.Infimum, noclingo.Number(2))
-        compare_ordering(noclingo.Infimum, noclingo.String("2"))
-        compare_ordering(noclingo.Infimum, noclingo.Function("2"))
-        compare_ordering(noclingo.Supremum, noclingo.Function("2"))
-        compare_ordering(noclingo.Supremum, noclingo.String("2"))
-        compare_ordering(noclingo.Supremum, noclingo.Number(2))
+        compare_ordering(noclingo.NoString("1"), noclingo.NoNumber(2))
+        compare_ordering(noclingo.NoNumber(1), noclingo.NoString("2"))
+        compare_ordering(noclingo.NoString("1"), noclingo.NoFunction("2"))
+        compare_ordering(noclingo.NoFunction("2"), noclingo.NoString("1"))
+        compare_ordering(noclingo.NoNumber(1), noclingo.NoFunction("2"))
+        compare_ordering(noclingo.NoFunction("1"), noclingo.NoNumber(2))
+        compare_ordering(noclingo.NoInfimum, noclingo.NoSupremum)
+        compare_ordering(noclingo.NoSupremum, noclingo.NoInfimum)
+        compare_ordering(noclingo.NoInfimum, noclingo.NoNumber(2))
+        compare_ordering(noclingo.NoInfimum, noclingo.NoString("2"))
+        compare_ordering(noclingo.NoInfimum, noclingo.NoFunction("2"))
+        compare_ordering(noclingo.NoSupremum, noclingo.NoFunction("2"))
+        compare_ordering(noclingo.NoSupremum, noclingo.NoString("2"))
+        compare_ordering(noclingo.NoSupremum, noclingo.NoNumber(2))
 
-    def test_clingo_noclingo_difference(self):
-        self.assertNotEqual(clingo.String("blah"), noclingo.String("blah"))
-        self.assertNotEqual(clingo.Number(5), noclingo.Number(5))
+
+
+    def test_same_error_messages(self):
+
+        def _get_error(func, *args):
+            try:
+                func(*args)
+            except (TypeError, AttributeError, ValueError) as e:
+                return e
+
+        def _assertEqualError(c_error, nc_error):
+            self.assertEqual(type(c_error), type(nc_error))
+            self.assertEqual(str(c_error), str(nc_error))
+
+        _assertEqualError(_get_error(clingo.Number, "a"),
+                          _get_error(noclingo.NoNumber, "a"))
+        _assertEqualError(_get_error(clingo.Number, ["a"]),
+                          _get_error(noclingo.NoNumber, ["a"]))
+        _assertEqualError(_get_error(clingo.String, 1),
+                          _get_error(noclingo.String, 1))
+        _assertEqualError(_get_error(clingo.String, [1]),
+                          _get_error(noclingo.String, [1]))
+
+
+    # NOTE: I think in clingo 5.5 the comparison operators correctly return
+    # NotImplemented so that we can implement the comparison between Symbol and
+    # NoSymbol objects.
+    def _clingo_pre5_5_test_clingo_noclingo_difference(self):
+        self.assertNotEqual(clingo.String("blah"), noclingo.NoString("blah"))
+        self.assertNotEqual(clingo.Number(5), noclingo.NoNumber(5))
 
 
     def test_clingo_to_noclingo(self):
 
         # Converting the Infimum and Supremum
         cli = clingo.Infimum
-        ncli = noclingo.Infimum
+        ncli = noclingo.NoInfimum
         cls = clingo.Supremum
-        ncls = noclingo.Supremum
+        ncls = noclingo.NoSupremum
 
-        self.assertEqual(clingo_to_noclingo(cli),ncli)
-        self.assertEqual(clingo_to_noclingo(cls),ncls)
-        self.assertEqual(noclingo_to_clingo(ncli),cli)
-        self.assertEqual(noclingo_to_clingo(ncls),cls)
+        self.assertEqual(clingo_to_noclingo(cli), ncli)
+        self.assertEqual(clingo_to_noclingo(cls), ncls)
+        self.assertEqual(noclingo_to_clingo(ncli), cli)
+        self.assertEqual(noclingo_to_clingo(ncls), cls)
 
         # Converting simple structures
         cl1 = clingo.Function("const")
-        ncl1 = noclingo.Function("const")
+        ncl1 = noclingo.NoFunction("const")
         cl2 = clingo.Number(3)
-        ncl2 = noclingo.Number(3)
+        ncl2 = noclingo.NoNumber(3)
         cl3 = clingo.String("No")
-        ncl3 = noclingo.String("No")
+        ncl3 = noclingo.NoString("No")
 
         self.assertEqual(clingo_to_noclingo(cl1),ncl1)
         self.assertEqual(clingo_to_noclingo(cl2),ncl2)
@@ -262,12 +306,12 @@ class NoClingoTestCase(unittest.TestCase):
 
         # More complex function structures
         cl4 = clingo.Function("",[cl1,cl2])
-        ncl4 = noclingo.Function("",[ncl1,ncl2])
+        ncl4 = noclingo.NoFunction("",[ncl1,ncl2])
         self.assertEqual(clingo_to_noclingo(cl4),ncl4)
         self.assertEqual(noclingo_to_clingo(ncl4),cl4)
 
         cl5 = clingo.Function("f",[cl3,cl4,cl1],False)
-        ncl5 = noclingo.Function("f",[ncl3,ncl4,ncl1],False)
+        ncl5 = noclingo.NoFunction("f",[ncl3,ncl4,ncl1],False)
         self.assertEqual(clingo_to_noclingo(cl5),ncl5)
         self.assertEqual(noclingo_to_clingo(ncl5),cl5)
 
@@ -278,51 +322,64 @@ class NoClingoTestCase(unittest.TestCase):
         self.assertTrue(noclingo_to_clingo(cl1) is cl1)
 
 
-    def test_is_functions(self):
-        cli = clingo.Infimum
-        cls = clingo.Supremum
-        cl1 = clingo.Function("const")
-        cl2 = clingo.Number(3)
-        cl3 = clingo.String("No")
-        cl4 = clingo.Function("",[cl1,cl2])
-
-        ncli = noclingo.Infimum
-        ncls = noclingo.Supremum
-        ncl1 = noclingo.Function("const")
-        ncl2 = noclingo.Number(3)
-        ncl3 = noclingo.String("No")
-        ncl4 = noclingo.Function("",[ncl1,ncl2])
-
-        self.assertTrue(is_Infimum(cli))
-        self.assertTrue(is_Infimum(ncli))
-
-        self.assertTrue(is_Supremum(cls))
-        self.assertTrue(is_Supremum(ncls))
-
-        self.assertTrue(is_Number(cl2))
-        self.assertTrue(is_Number(ncl2))
-
-        self.assertTrue(is_String(cl3))
-        self.assertTrue(is_String(ncl3))
-
-        self.assertTrue(is_Function(cl4))
-        self.assertTrue(is_Function(ncl4))
-
-        self.assertFalse(is_Infimum(cls))
-        self.assertFalse(is_Supremum(cli))
-        self.assertFalse(is_Function(cli))
-        self.assertFalse(is_Number(cli))
-        self.assertFalse(is_String(cli))
-        self.assertFalse(is_Supremum(4))
+    def test_comparison_nosymbol_and_symbol(self):
+        cl_infimum = clingo.Infimum
+        ncl_infimum = noclingo.NoInfimum
+        cl_supremum = clingo.Supremum
+        ncl_supremum = noclingo.NoSupremum
+        cl_constant1 = clingo.Function("const1")
+        ncl_constant1 = noclingo.NoFunction("const1")
+        cl_constant2 = clingo.Function("const2")
+        ncl_constant2 = noclingo.NoFunction("const2")
+        cl_number1 = clingo.Number(1)
+        ncl_number1 = noclingo.NoNumber(1)
+        cl_number2 = clingo.Number(2)
+        ncl_number2 = noclingo.NoNumber(2)
+        cl_string1 = clingo.String("No1")
+        ncl_string1 = noclingo.NoString("No1")
+        cl_string1 = clingo.String("No2")
+        ncl_string1 = noclingo.NoString("No2")
 
 
+        self.assertTrue(ncl_infimum == cl_infimum)
+        self.assertTrue(cl_infimum == ncl_infimum)
+        self.assertTrue(ncl_constant1 == cl_constant1)
+        self.assertTrue(cl_constant1 == ncl_constant1)
+        self.assertTrue(ncl_constant1 == cl_constant1)
 
-    def test_symbol_generator(self):
-        csg = get_symbol_generator(SymbolMode.CLINGO)
-        ncsg = get_symbol_generator(SymbolMode.NOCLINGO)
+        c_x = clingo.Function("b", positive=False)
+        c_y = clingo.Function("a", positive=True)
+        nc_x = noclingo.NoFunction("b", positive=False)
+        nc_y = noclingo.NoFunction("a", positive=True)
 
-        self.assertEqual(csg.mode,SymbolMode.CLINGO)
-        self.assertEqual(ncsg.mode,SymbolMode.NOCLINGO)
+        self.assertTrue(c_x > c_y)
+        self.assertTrue(nc_x > nc_y)
+        self.assertTrue(c_x > nc_y)
+
+    def XXX_test_set_symbol_mode_when_noclingo_disabled(self):
+
+        with self.assertRaises(RuntimeError) as ctx:
+            set_symbol_mode(SymbolMode.CLINGO)
+
+        check_errmsg("NOCLINGO mode is disabled.",ctx)
+
+
+#------------------------------------------------------------------------------
+# Tests that require NOCLINGO is enabled and run from a new process
+#------------------------------------------------------------------------------
+
+
+class NoClingoEnabledTestCase(unittest.TestCase):
+    def setUp(self):
+        pass
+
+    def tearDown(self):
+        pass
+
+
+    def test_symbol_modes(self):
+        # By default CLINGO mode
+#        self.assertEqual(get_symbol_mode(), SymbolMode.CLINGO)
 
         cli = clingo.Infimum
         cls = clingo.Supremum
@@ -332,45 +389,55 @@ class NoClingoTestCase(unittest.TestCase):
         cl4 = clingo.Function("",[cl1,cl2])
         cl5 = clingo.Function("f",[cl3,cl4,cl1],False)
 
-        ncli = noclingo.Infimum
-        ncls = noclingo.Supremum
-        ncl1 = noclingo.Function("const")
-        ncl2 = noclingo.Number(3)
-        ncl3 = noclingo.String("No")
-        ncl4 = noclingo.Function("",[ncl1,ncl2])
-        ncl5 = noclingo.Function("f",[ncl3,ncl4,ncl1],False)
+        ncli = noclingo.NoInfimum
+        ncls = noclingo.NoSupremum
+        ncl1 = noclingo.NoFunction("const")
+        ncl2 = noclingo.NoNumber(3)
+        ncl3 = noclingo.NoString("No")
+        ncl4 = noclingo.NoFunction("",[ncl1,ncl2])
+        ncl5 = noclingo.NoFunction("f",[ncl3,ncl4,ncl1],False)
 
-        csg_cli = csg.Infimum
-        csg_cls = csg.Supremum
-        csg_cl1 = csg.Function("const")
-        csg_cl2 = csg.Number(3)
-        csg_cl3 = csg.String("No")
-        csg_cl4 = csg.Function("",[cl1,cl2])
-        csg_cl5 = csg.Function("f",[cl3,cl4,cl1],False)
+        set_symbol_mode(SymbolMode.CLINGO)
+        self.assertEqual(get_symbol_mode(), SymbolMode.CLINGO)
 
-        ncsg_ncli = ncsg.Infimum
-        ncsg_ncls = ncsg.Supremum
-        ncsg_ncl1 = ncsg.Function("const")
-        ncsg_ncl2 = ncsg.Number(3)
-        ncsg_ncl3 = ncsg.String("No")
-        ncsg_ncl4 = ncsg.Function("",[ncsg_ncl1,ncsg_ncl2])
-        ncsg_ncl5 = ncsg.Function("f",[ncsg_ncl3,ncsg_ncl4,ncsg_ncl1],False)
+        expect_cli = get_Infimum()
+        expect_cls = get_Supremum()
+        expect_cl1 = Function("const")
+        expect_cl2 = Number(3)
+        expect_cl3 = String("No")
+        expect_cl4 = Function("",[expect_cl1, expect_cl2])
+        expect_cl5 = Function("f",[expect_cl3,expect_cl4,expect_cl1], False)
 
-        self.assertEqual(cli,csg_cli)
-        self.assertEqual(cls,csg_cls)
-        self.assertEqual(cl1,csg_cl1)
-        self.assertEqual(cl2,csg_cl2)
-        self.assertEqual(cl3,csg_cl3)
-        self.assertEqual(cl4,csg_cl4)
-        self.assertEqual(cl5,csg_cl5)
+        set_symbol_mode(SymbolMode.NOCLINGO)
+        self.assertEqual(get_symbol_mode(), SymbolMode.NOCLINGO)
 
-        self.assertEqual(ncli,ncsg_ncli)
-        self.assertEqual(ncls,ncsg_ncls)
-        self.assertEqual(ncl1,ncsg_ncl1)
-        self.assertEqual(ncl2,ncsg_ncl2)
-        self.assertEqual(ncl3,ncsg_ncl3)
-        self.assertEqual(ncl4,ncsg_ncl4)
-        self.assertEqual(ncl5,ncsg_ncl5)
+        expect_ncli = get_Infimum()
+        expect_ncls = get_Supremum()
+        expect_ncl1 = Function("const")
+        expect_ncl2 = Number(3)
+        expect_ncl3 = String("No")
+        expect_ncl4 = Function("",[expect_ncl1, expect_ncl2])
+        expect_ncl5 = Function("f",[expect_ncl3, expect_ncl4, expect_ncl1], False)
+
+        # Set back to the default
+        set_symbol_mode(SymbolMode.CLINGO)
+
+        self.assertEqual(cli, expect_cli)
+        self.assertEqual(cls, expect_cls)
+        self.assertEqual(cl1, expect_cl1)
+        self.assertEqual(cl2, expect_cl2)
+        self.assertEqual(cl3, expect_cl3)
+        self.assertEqual(cl4, expect_cl4)
+        self.assertEqual(cl5, expect_cl5)
+
+        self.assertEqual(ncli, expect_ncli)
+        self.assertEqual(ncls, expect_ncls)
+        self.assertEqual(ncl1, expect_ncl1)
+        self.assertEqual(ncl2, expect_ncl2)
+        self.assertEqual(ncl3, expect_ncl3)
+        self.assertEqual(ncl4, expect_ncl4)
+        self.assertEqual(ncl5, expect_ncl5)
+
 
 
 #------------------------------------------------------------------------------
