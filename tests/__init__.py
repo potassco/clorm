@@ -1,5 +1,3 @@
-import clorm.noclingo; clorm.noclingo.enable_noclingo()
-
 from .test_util_oset import OrderedSetTestCase
 from .test_util_wrapper import *
 from .test_util_tools import *
