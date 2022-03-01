@@ -1,3 +1,5 @@
+import clorm.noclingo; clorm.noclingo.enable_noclingo()
+
 from .test_util_oset import OrderedSetTestCase
 from .test_util_wrapper import *
 from .test_util_tools import *
@@ -14,3 +16,4 @@ from .test_monkey import *
 from .test_json import *
 from .test_libdate import LibDateTestCase
 from .test_libtimeslot import *
+

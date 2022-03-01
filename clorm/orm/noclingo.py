@@ -24,7 +24,6 @@ from typing import Sequence, Union, Any
 
 from clorm.noclingo import ENABLE_NOCLINGO
 
-
 __all__ = [
     'SymbolType',
     'Symbol',
@@ -85,12 +84,17 @@ class NoSymbol(object):
         elif stype == SymbolType.Supremum:
             self._hash = hash(100)
         elif stype == SymbolType.Number:
+            if not isinstance(value, int):
+                raise TypeError("an integer is required")
             self._value = int(value)
             self._hash = hash(self._value)
         elif stype == SymbolType.String:
-            self._value = str(value)
+            _ = value.encode()
+            self._value = value
             self._hash = hash(self._value)
         elif stype == SymbolType.Function:
+            if not isinstance(value, str):
+                raise TypeError("{value} is not a str")
             self._sign = bool(sign)
             self._value = str(value)
             self._args = tuple(args)
@@ -228,13 +232,19 @@ class NoSymbol(object):
         return not result
 
     def __str__(self):
-        if self._stype == SymbolType.Number: return str(self._value)
-        if self._stype == SymbolType.String: return '"' + self._value + '"'
+        if self._stype == SymbolType.Number:
+            return f"{self._value}"
+        if self._stype == SymbolType.String:
+            return f'"{self._value}"'
         if self._stype == SymbolType.Infimum: return "#inf"
         if self._stype == SymbolType.Supremum: return "#sup"
 
-        # SymbolType.Function
-        if not self._args: return str(self._value)
+        # SymbolType.Function - Note: tuples have special cases: empty tuple
+        # "()" and a singleton "(a, )"
+        if not self._args:
+            return str(self._value) if self._value else "()"
+
+        # A function or constant
         if self._value or len(self._args) > 1:
             return "{}{}({})".format("" if self._sign else "-", self._value,
                                      ",".join([str(a) for a in self._args]))
@@ -242,23 +252,35 @@ class NoSymbol(object):
         return "({},)".format(str(self._args[0]))
 
     def __repr__(self):
-        return self.__str__()
+        return __str__()
+        if self._stype == SymbolType.Infimum:
+            return "Infimum"
+        if self._stype == SymbolType.Supremum:
+            return "Supremum"
+        if self._stype == SymbolType.Number:
+            return f"Number({self.number!r})"
+        if self._stype == SymbolType.String:
+            return f"String({self.string!r})"
+        assert self._stype == SymbolType.Function
+        return f"Function({self.name!r}, {self.arguments!r}, {self.positive!r})"
 
 #--------------------------------------------------------------------------------
 # helper functions to create objects
 #--------------------------------------------------------------------------------
 
-def NoFunction(name, args=[],sign=True):
-    return NoSymbol(SymbolType.Function,name,args,sign)
+AnySymbol = Union[Symbol, NoSymbol]
 
-def NoString(string):
+def NoFunction(name: str, arguments: Sequence[Symbol] = [], positive: bool=True) -> AnySymbol:
+    return NoSymbol(SymbolType.Function, name, arguments, positive)
+
+def NoString(string: str) -> AnySymbol:
     return NoSymbol(SymbolType.String,string)
 
-def NoNumber(number):
+def NoNumber(number: int) -> AnySymbol:
     return NoSymbol(SymbolType.Number,number)
 
-def NoTuple_(args=[]):
-    return NoSymbol(SymbolType.Function,"",args)
+def NoTuple_(arguments: Sequence[Symbol]) -> AnySymbol:
+    return NoSymbol(SymbolType.Function,"", arguments)
 
 NoInfimum = NoSymbol(SymbolType.Infimum)
 
@@ -324,8 +346,6 @@ _mode = SymbolMode.CLINGO
 
 # ------------------------------------------------------------------------------
 
-AnySymbol = Union[Symbol, NoSymbol]
-
 # Forward function signature declaration
 def Function(name: str, arguments: Sequence[Symbol] = [], positive: bool=True) -> AnySymbol:
     pass
@@ -357,7 +377,7 @@ if typing.TYPE_CHECKING:
         pass
     def Number(number: int) -> AnySymbol:
         pass
-    def Tuple_(arguments: Sequence[Symbol] = []) -> AnySymbol:
+    def Tuple_(arguments: Sequence[Symbol]) -> AnySymbol:
         pass
 
 # NoClingo introduces some overhead, with the indirection when creating
@@ -391,7 +411,8 @@ if ENABLE_NOCLINGO:
     def Number(number: int) -> Symbol:
         return _number(number)
 
-    def Tuple_(arguments: Sequence[Symbol] = []) -> Symbol:
+    # clingo.Tuple_() doesn't have default parameters so follow the same here
+    def Tuple_(arguments: Sequence[Symbol]) -> Symbol:
         return _tuple_(arguments)
 
 else:
@@ -403,6 +424,7 @@ else:
     String=clingo.String
     Number=clingo.Number
     Tuple_=clingo.Tuple_
+
 
 #------------------------------------------------------------------------------
 # main

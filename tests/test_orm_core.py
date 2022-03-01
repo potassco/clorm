@@ -8,6 +8,8 @@
 # to be completed.
 # ------------------------------------------------------------------------------
 
+import clorm.noclingo; clorm.noclingo.enable_noclingo()
+
 import inspect
 from typing import Tuple, Union
 import unittest
@@ -63,6 +65,7 @@ def hpaths(paths):
 
 class FieldTestCase(unittest.TestCase):
     def setUp(self):
+
         pass
 
     def tearDown(self):
@@ -314,7 +317,6 @@ class FieldTestCase(unittest.TestCase):
         self.assertTrue(Raw(cl3) >= Raw(cl3))
         self.assertTrue(Raw(cl3) >= Raw(cl1))
 
-        set_symbol_mode(SymbolMode.NOCLINGO)
         self.assertEqual(Raw(ncl1), Raw(cl1))
         self.assertNotEqual(Raw(ncl1), Raw(cl3))
         self.assertTrue(Raw(ncl1) < Raw(ncl3))
@@ -323,7 +325,6 @@ class FieldTestCase(unittest.TestCase):
         self.assertTrue(Raw(ncl3) > Raw(ncl1))
         self.assertTrue(Raw(ncl3) >= Raw(ncl3))
         self.assertTrue(Raw(ncl3) >= Raw(ncl1))
-        set_symbol_mode(SymbolMode.CLINGO)
 
         self.assertTrue(Raw(cl1) < Raw(ncl3))
         self.assertTrue(Raw(cl1) <= Raw(ncl1))

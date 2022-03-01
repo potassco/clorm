@@ -7,6 +7,9 @@ import unittest
 import datetime
 import calendar
 import operator
+
+from .support import check_errmsg, check_errmsg_contains
+
 import clingo
 import clorm.orm.noclingo as noclingo
 from clorm.orm.noclingo import ( SymbolType, Symbol, Function, String, Number,
@@ -119,23 +122,35 @@ class NoClingoTestCase(unittest.TestCase):
         self.assertEqual(nc4.negative, c4.negative)
 
     def test_tuple(self):
-        nc1 = noclingo.NoFunction("aaaa")
-        nc2 = noclingo.NoString("bbb")
-        c1 = clingo.Function("aaaa")
-        c2 = clingo.String("bbb")
-        nc = noclingo.NoFunction("", [nc1,nc2])
-        c =  clingo.Function("", [c1,c2])
-
-        self.assertEqual(str(nc), str(c))
-
-        # Check that a tuple with a single element is represented correctly
-        nc_one_tuple = noclingo.NoFunction("", [nc2])
-        c_one_tuple = clingo.Function("", [c2])
-        self.assertEqual(str(nc_one_tuple), str(c_one_tuple))
+        c_const = clingo.Function("aaaa")
+        nc_const = noclingo.NoFunction("aaaa")
+        c_string = clingo.String("bbb")
+        nc_string = noclingo.NoString("bbb")
 
         # Check using the convenience Tuple_() function
-        self.assertEqual(noclingo.NoTuple_([nc2]), nc_one_tuple)
-        self.assertEqual(noclingo.NoTuple_([nc1,nc2]), nc)
+        self.assertEqual(noclingo.NoTuple_([]), noclingo.NoFunction("", []))
+        self.assertEqual(noclingo.NoTuple_([c_const]), noclingo.NoFunction("", [c_const]))
+
+        # clingo.NoTuple_() has no default so noclingo.NoTuple_() acts the same
+        # self.assertEqual(clingo.NoTuple_(), clingo.NoTuple_([]))
+        with self.assertRaises(TypeError) as ctx:
+            self.assertEqual(noclingo.NoTuple_(), noclingo.NoTuple_([]))
+
+        check_errmsg("NoTuple_() missing 1 required positional argument: 'arguments'",ctx)
+
+        c_empty_tuple = clingo.Tuple_([])
+        nc_empty_tuple = noclingo.NoTuple_([])
+        c_one_tuple = clingo.Tuple_([c_const])
+        nc_one_tuple = noclingo.NoTuple_([nc_const])
+
+        # Check special cases of empty and singleton tuples
+        self.assertEqual(str(c_empty_tuple), str(nc_empty_tuple))
+        self.assertEqual(str(nc_one_tuple), str(c_one_tuple))
+
+        # tuple with two or more elements
+        self.assertEqual(str(clingo.Tuple_([c_const, c_string])),
+                         str(noclingo.NoTuple_([nc_const, nc_string])))
+
 
     def test_hash_and_equality_comparison_ops(self):
         nc1 = noclingo.NoString("aaaGGDFa")
@@ -231,6 +246,28 @@ class NoClingoTestCase(unittest.TestCase):
 
 
 
+    def test_same_error_messages(self):
+
+        def _get_error(func, *args):
+            try:
+                func(*args)
+            except (TypeError, AttributeError, ValueError) as e:
+                return e
+
+        def _assertEqualError(c_error, nc_error):
+            self.assertEqual(type(c_error), type(nc_error))
+            self.assertEqual(str(c_error), str(nc_error))
+
+        _assertEqualError(_get_error(clingo.Number, "a"),
+                          _get_error(noclingo.NoNumber, "a"))
+        _assertEqualError(_get_error(clingo.Number, ["a"]),
+                          _get_error(noclingo.NoNumber, ["a"]))
+        _assertEqualError(_get_error(clingo.String, 1),
+                          _get_error(noclingo.String, 1))
+        _assertEqualError(_get_error(clingo.String, [1]),
+                          _get_error(noclingo.String, [1]))
+
+
     # NOTE: I think in clingo 5.5 the comparison operators correctly return
     # NotImplemented so that we can implement the comparison between Symbol and
     # NoSymbol objects.
@@ -303,7 +340,6 @@ class NoClingoTestCase(unittest.TestCase):
         cl_string1 = clingo.String("No2")
         ncl_string1 = noclingo.NoString("No2")
 
-        return
 
         self.assertTrue(ncl_infimum == cl_infimum)
         self.assertTrue(cl_infimum == ncl_infimum)
@@ -311,15 +347,15 @@ class NoClingoTestCase(unittest.TestCase):
         self.assertTrue(cl_constant1 == ncl_constant1)
         self.assertTrue(ncl_constant1 == cl_constant1)
 
-        x = clingo.Function("b", positive=False)
-        y = clingo.Function("a", positive=True)
+        c_x = clingo.Function("b", positive=False)
+        c_y = clingo.Function("a", positive=True)
+        nc_x = noclingo.NoFunction("b", positive=False)
+        nc_y = noclingo.NoFunction("a", positive=True)
 
-        print("HERE")
-        self.assertTrue(x > y)
-        return
-        
+        self.assertTrue(c_x > c_y)
+        self.assertTrue(nc_x > nc_y)
+        self.assertTrue(c_x > nc_y)
 
-        
     def XXX_test_set_symbol_mode_when_noclingo_disabled(self):
 
         with self.assertRaises(RuntimeError) as ctx:
@@ -341,9 +377,9 @@ class NoClingoEnabledTestCase(unittest.TestCase):
         pass
 
 
-    def test_symbol_generator(self):
+    def test_symbol_modes(self):
         # By default CLINGO mode
-        self.assertEqual(get_symbol_mode(), SymbolMode.CLINGO)
+#        self.assertEqual(get_symbol_mode(), SymbolMode.CLINGO)
 
         cli = clingo.Infimum
         cls = clingo.Supremum
