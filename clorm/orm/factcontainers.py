@@ -220,12 +220,6 @@ class FactIndex(object):
         if hashable_path(self._path) != hashable_path(other._path): return False
         return self._key2values == other._key2values
 
-    def __ne__(self, other):
-        """Overloaded boolean operator."""
-        result = self.__eq__(other)
-        if result is NotImplemented: return NotImplemented
-        return not result
-
     def __str__(self):
         if not self: return "{}"
         tmp = []

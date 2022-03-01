@@ -61,9 +61,6 @@ class Placeholder(abc.ABC):
     def __eq__(self, other): pass
 
     @abc.abstractmethod
-    def __ne__(self, other): pass
-
-    @abc.abstractmethod
     def __hash__(self): pass
 
 
@@ -103,10 +100,6 @@ class NamedPlaceholder(Placeholder):
         if self.name != other.name: return False
         if self._default != other._default: return False
         return True
-    def __ne__(self, other):
-        result = self.__eq__(other)
-        if result is NotImplemented: return NotImplemented
-        return not result
     def __hash__(self):
         return hash(self._name)
 
@@ -123,10 +116,6 @@ class PositionalPlaceholder(Placeholder):
     def __eq__(self, other):
         if not isinstance(other, PositionalPlaceholder): return NotImplemented
         return self._posn == other._posn
-    def __ne__(self, other):
-        result = self.__eq__(other)
-        if result is NotImplemented: return NotImplemented
-        return not result
     def __hash__(self):
         return hash(self._posn)
 
@@ -284,11 +273,6 @@ class MembershipSeq(object):
     def __eq__(self,other):
         if not isinstance(other, MembershipSeq): return NotImplemented
         return self._src is other._src
-
-    def __ne__(self,other):
-        result = self.__eq__(other)
-        if result is NotImplemented: return NotImplemented
-        return not result
 
     def __hash__(self):
         return hash(id(self._src))
@@ -673,11 +657,6 @@ class StandardComparator(Comparator):
                 return False
         return True
 
-    def __ne__(self,other):
-        result = self.__eq__(other)
-        if result is NotImplemented: return NotImplemented
-        return not result
-
     def __hash__(self):
         return hash((self._operator,) + self._hashableargs)
 
@@ -871,10 +850,6 @@ class FunctionComparator(Comparator):
         if self._negative != other._negative: return False
         if self._assignment != other._assignment: return False
         return True
-    def __ne__(self, other):
-        result = self.__eq__(other)
-        if result is NotImplemented: return NotImplemented
-        return not result
 
     def __hash__(self):
         return hash((self._func,) + self._pathsig + self._assignment_tuple)
@@ -1276,11 +1251,6 @@ class Clause(object):
         if not isinstance(other, self.__class__): return NotImplemented
         return self._comparators == other._comparators
 
-    def __ne__(self, other):
-        result = self.__eq__(other)
-        if result is NotImplemented: return NotImplemented
-        return not result
-
     def __len__(self):
         return len(self._comparators)
 
@@ -1386,11 +1356,6 @@ class ClauseBlock(object):
     def __eq__(self, other):
         if not isinstance(other, self.__class__): return NotImplemented
         return self._clauses == other._clauses
-
-    def __ne__(self, other):
-        result = self.__eq__(other)
-        if result is NotImplemented: return NotImplemented
-        return not result
 
     def __len__(self):
         return len(self._clauses)
@@ -1628,11 +1593,6 @@ class OrderBy(object):
         if hashable_path(self._path) != hashable_path(other._path): return False
         return self._asc == other._asc
 
-    def __ne__(self, other):
-        result = self.__eq__(other)
-        if result is NotImplemented: return NotImplemented
-        return not result
-
     def __hash__(self):
         return hash((hashable_path(self._path),self._asc))
 
@@ -1685,11 +1645,6 @@ class OrderByBlock(object):
         if isinstance(other, list):
             return self._orderbys == tuple(other)
         return NotImplemented
-
-    def __ne__(self, other):
-        result = self.__eq__(other)
-        if result is NotImplemented: return NotImplemented
-        return not result
 
     def __len__(self):
         return len(self._orderbys)
@@ -2053,11 +2008,6 @@ class JoinQueryPlan(object):
         if self._postjoincb != other._postjoincb: return False
         return True
 
-    def __ne__(self, other):
-        result = self.__eq__(other)
-        if result is NotImplemented: return NotImplemented
-        return not result
-
     def __str__(self):
         out = io.StringIO()
         self.print(out)
@@ -2111,11 +2061,6 @@ class QueryPlan(object):
     def __eq__(self, other):
         if not isinstance(other, self.__class__): return NotImplemented
         return self._jqps == other._jqps
-
-    def __ne__(self, other):
-        result = self.__eq__(other)
-        if result is NotImplemented: return NotImplemented
-        return not result
 
     def __len__(self):
         return len(self._jqps)

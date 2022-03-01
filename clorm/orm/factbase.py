@@ -478,12 +478,6 @@ class FactBase(object):
 
         return True
 
-    def __ne__(self, other):
-        """Overloaded boolean operator."""
-        result = self.__eq__(other)
-        if result is NotImplemented: return NotImplemented
-        return not result
-
     def __lt__(self,other):
         """Implemement set < operator."""
 

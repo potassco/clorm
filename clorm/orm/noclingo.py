@@ -172,12 +172,6 @@ class NoSymbol(object):
             return False
         return self.arguments, tuple(other.arguments)
 
-    def __ne__(self, other):
-        """Overloaded boolean operator."""
-        result = self.__eq__(other)
-        if result is NotImplemented: return NotImplemented
-        return not result
-
     def __gt__(self, other):
         """Overloaded boolean operator."""
         if not isinstance(other, self.__class__) and not isinstance(other, Symbol):

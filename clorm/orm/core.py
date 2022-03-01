@@ -239,9 +239,6 @@ class Comparator(abc.ABC):
     def __eq__(self, other): pass
 
     @abc.abstractmethod
-    def __ne__(self, other): pass
-
-    @abc.abstractmethod
     def __hash__(self): pass
 
 
@@ -410,11 +407,6 @@ class QCondition(object):
         for a,b in zip(self.args,other.args):
             if getval(a) != getval(b): return False
         return True
-
-    def __ne__(self,other):
-        result = self.__eq__(other)
-        if result is NotImplemented: return NotImplemented
-        return not result
 
     def __bool__(self):
         raise ValueError(("Invalid boolean test of query expression \'{}\'. "
@@ -605,11 +597,6 @@ class PredicatePath(object, metaclass=_PredicatePathMeta):
         def __eq__(self, other):
             if not isinstance(other, self.__class__): return NotImplemented
             return self._path._pathseq == other._path._pathseq
-
-        def __ne__(self, other):
-            result = self.__eq__(other)
-            if result is NotImplemented: return NotImplemented
-            return not result
 
         def __lt__(self,other):
             if not isinstance(other, self.__class__): return NotImplemented
@@ -1342,12 +1329,6 @@ class Raw(object):
         """Overloaded boolean operator."""
         if not isinstance(other, Raw): return NotImplemented
         return self._symbol == other._symbol
-
-    def __ne__(self,other):
-        """Overloaded boolean operator."""
-        result = self.__eq__(other)
-        if result is NotImplemented: return NotImplemented
-        return not result
 
     def __gt__(self, other):
         """Overloaded boolean operator."""
@@ -2926,12 +2907,6 @@ class Predicate(object, metaclass=_PredicateMeta):
         elif not isinstance(other, Predicate):
             return NotImplemented
         return False
-
-    def __ne__(self, other):
-        """Overloaded boolean operator."""
-        result = self.__eq__(other)
-        if result is NotImplemented: return NotImplemented
-        return not result
 
     def __lt__(self, other):
         """Overloaded boolean operator."""
