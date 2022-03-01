@@ -2832,21 +2832,13 @@ class Predicate(object, metaclass=_PredicateMeta):
 
         The type of the object maybe either a clingo.Symbol or noclingo.NoSymbol.
         """
-        if self._raw is None:
-            clingoargs=[]
-            for f,v in zip(self.meta, self._field_values):
-                clingoargs.append(v.symbol if f.defn.complex else f.defn.pytocl(v))
-            self._raw = Function(self.meta.name, clingoargs, self._sign)
         return self._raw
 
     # Get the underlying clingo.Symbol object
     @property
     def raw(self) -> Symbol:
         """Returns the underlying clingo.Symbol object"""
-        if self._raw is None: self.symbol
-        if isinstance(self._raw, NoSymbol):
-            self._raw = noclingo_to_clingo(self._raw)
-        return self._raw
+        return self._raw if isinstance(self._raw, Symbol) else noclingo_to_clingo(self._raw)
 
     @_classproperty
     def Field(cls) -> BaseField:
@@ -3007,10 +2999,15 @@ class Predicate(object, metaclass=_PredicateMeta):
                 '_sign' : self._sign}
 
     def __setstate__(self, newstate):
+        self._hash = None
         self._field_values = newstate["_field_values"]
         self._sign = newstate["_sign"]
-        self._raw = None
-        self._hash = None
+
+        clingoargs=[]
+        for f,v in zip(self.meta, self._field_values):
+            clingoargs.append(v.symbol if f.defn.complex else f.defn.pytocl(v))
+        self._raw = Function(self.meta.name, clingoargs, self._sign)
+
 
 #------------------------------------------------------------------------------
 # Predicate and ComplexTerm are simply aliases for Predicate.
