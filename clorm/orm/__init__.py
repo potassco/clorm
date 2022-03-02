@@ -71,6 +71,7 @@ __all__ = [
     'get_Supremum',
     'Symbol',
     'Function',
+    'Tuple_',
     'String',
     'Number',
     'control_add_facts',

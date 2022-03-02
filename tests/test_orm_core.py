@@ -8,8 +8,6 @@
 # to be completed.
 # ------------------------------------------------------------------------------
 
-import clorm.noclingo; clorm.noclingo.enable_noclingo()
-
 import inspect
 from typing import Tuple, Union
 import unittest
