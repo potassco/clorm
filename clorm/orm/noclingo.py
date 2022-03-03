@@ -51,7 +51,6 @@ will raise an exception.
 # --------------------------------------------------------------------------------
 
 import os
-import functools
 import enum
 import clingo
 import typing
@@ -388,91 +387,86 @@ _mode = SymbolMode.CLINGO
 
 
 # ------------------------------------------------------------------------------
-
-# ------------------------------------------------------------------------------
-
-# Forward function signature declaration
-def Function(name: str, arguments: Sequence[Symbol] = [], positive: bool=True) -> AnySymbol:
-    pass
-def String(string: str) -> AnySymbol:
-    pass
-def Number(number: int) -> AnySymbol:
-    pass
-def Tuple_(arguments: Sequence[Symbol] = []) -> AnySymbol:
-    pass
-
-# ------------------------------------------------------------------------------
 # Common functions that are valid even if NOCLINGO is disabled
 # ------------------------------------------------------------------------------
 
 def get_symbol_mode() -> SymbolMode:
     return _mode
 
+
 def get_Infimum() -> AnySymbol:
     return _infimum
+
 
 def get_Supremum() -> AnySymbol:
     return _supremum
 
 
 if typing.TYPE_CHECKING:
-    def Function(name: str, arguments: Sequence[Symbol] = [], positive: bool=True) -> AnySymbol:
-        pass
+    def set_symbol_mode(sm: SymbolMode) -> None:
+        ...
+
+    def Function(name: str, arguments: Sequence[Symbol] = [], positive: bool = True) -> AnySymbol:
+        ...
+
     def String(string: str) -> AnySymbol:
-        pass
+        ...
+
     def Number(number: int) -> AnySymbol:
-        pass
+        ...
+
     def Tuple_(arguments: Sequence[Symbol]) -> AnySymbol:
-        pass
-
-# NoClingo introduces some overhead, with the indirection when creating
-# symbols. But if we don't need NoClingo then we can avoid this indirection
-if ENABLE_NOCLINGO:
-
-    def set_symbol_mode(sm: SymbolMode):
-        global _infimum, _supremum, _string, _number, _tuple_, _function, _mode
-        _mode = sm
-        if sm == SymbolMode.CLINGO:
-            _infimum = clingo.Infimum
-            _supremum = clingo.Supremum
-            _string = clingo.String
-            _number = clingo.Number
-            _tuple_ = clingo.Tuple_
-            _function = clingo.Function
-        else:
-            _infimum = NoInfimum
-            _supremum = NoSupremum
-            _string = NoString
-            _number = NoNumber
-            _tuple_ = NoTuple_
-            _function = NoFunction
-
-    def Function(name: str, arguments: Sequence[Symbol] = [], positive: bool=True) -> Symbol:
-        return _function(name, arguments, positive)
-
-    def String(string: str) -> Symbol:
-        return _string(string)
-
-    def Number(number: int) -> Symbol:
-        return _number(number)
-
-    # clingo.Tuple_() doesn't have default parameters so follow the same here
-    def Tuple_(arguments: Sequence[Symbol]) -> Symbol:
-        return _tuple_(arguments)
+        ...
 
 else:
+    # NoClingo introduces some overhead, with the indirection when creating
+    # symbols. But if we don't need NoClingo then we can avoid this indirection
+    if ENABLE_NOCLINGO:
 
-    def set_symbol_mode(sm: SymbolMode):
-        raise RuntimeError("NOCLINGO mode is disabled.")
+        def set_symbol_mode(sm: SymbolMode):
+            global _infimum, _supremum, _string, _number, _tuple_, _function, _mode
+            _mode = sm
+            if sm == SymbolMode.CLINGO:
+                _infimum = clingo.Infimum
+                _supremum = clingo.Supremum
+                _string = clingo.String
+                _number = clingo.Number
+                _tuple_ = clingo.Tuple_
+                _function = clingo.Function
+            else:
+                _infimum = NoInfimum
+                _supremum = NoSupremum
+                _string = NoString
+                _number = NoNumber
+                _tuple_ = NoTuple_
+                _function = NoFunction
 
-    Function=clingo.Function
-    String=clingo.String
-    Number=clingo.Number
-    Tuple_=clingo.Tuple_
+        def Function(name: str, arguments: Sequence[Symbol] = [], positive: bool = True) -> Symbol:
+            return _function(name, arguments, positive)
+
+        def String(string: str) -> Symbol:
+            return _string(string)
+
+        def Number(number: int) -> Symbol:
+            return _number(number)
+
+        # clingo.Tuple_() doesn't have default parameters so follow the same here
+        def Tuple_(arguments: Sequence[Symbol]) -> Symbol:
+            return _tuple_(arguments)
+
+    else:
+
+        def set_symbol_mode(sm: SymbolMode):
+            raise RuntimeError("NOCLINGO mode is disabled.")
+
+        Function = clingo.Function
+        String = clingo.String
+        Number = clingo.Number
+        Tuple_ = clingo.Tuple_
 
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # main
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 if __name__ == "__main__":
     raise RuntimeError('Cannot run modules')
