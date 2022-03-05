@@ -4,9 +4,10 @@
 When `clingo.Symbol` objects are created they cannot be freed and will persist
 until the process ends. This works fine for many applications where the process
 is short-lived. For example when running the solver once to find a solution and
-present it to the user. However, for long running processes, such as a server,
-not being able to free `clingo.Symbol` objects can be a memory problems if many
-new objects are being created.
+present it to the user and then exit. However, for long running processes, such
+as a server that needs to solve many problems, not being able to free
+`clingo.Symbol` objects can cause memory problems if many new objects are being
+created.
 
 Clorm solves this problem by allow for an internal `clorm.NoSymbol` object to
 be used instead of `clingo.Symbol` objects when creating clorm facts. These
@@ -14,20 +15,20 @@ objects behave the same as `clingo.Symbol` objects except that they cannot be
 passed to the solver. NOCLINGO mode is when Clorm is configured to create
 NoSymbol facts.
 
-The idea is that a long-running process would run in NOCLINGO mode, while the
-clingo solver would be run in spawned sub-processes that are operating in in
-"normal" CLINGO mode. The sub-process would be relatively short-lived so have
-less concern for memory management. Any `clingo.Symbol` data that needs to be
-communicated back to the main process can be converted to `clorm.NoSymbol`
-objects, which are then serialised and sent to the main process. If clorm fact
-objects are serialized this conversion process happens transparently to the
-user.
+The idea is that a long-running process would be run in NOCLINGO mode, while
+the clingo solver would be run in a, relatively short-lived, spawned
+sub-process that is operating in "normal" CLINGO mode.  Any `clingo.Symbol`
+data that needs to be communicated back to the main process can be converted to
+`clorm.NoSymbol` objects, which can then be serialised and sent to the main
+process. If clorm fact objects are serialized this conversion process happens
+transparently to the user.
 
-In many, and maybe most, use-cases there is no need for long running
-process. In such cases the small, but non-zero, overhead of NOCLINGO can be
-undesirable. Because of this NOCLINGO is disabled by default and must be
-explictly enabled with an environment variable CLORM_NOCLINGO that must be set
-before the clorm libraries are loaded. For example in a bash environment:
+However, despite the potential usefulness of NOCLINGO, in many, and perhaps
+most, use-cases there is no need for long running process. In such cases the
+small, but non-zero, overhead of NOCLINGO can be undesirable. Because of this
+NOCLINGO is disabled by default and must be explictly enabled with an
+environment variable CLORM_NOCLINGO that must be set before the clorm libraries
+are loaded. For example in a bash environment:
 
     export CLORM_NOCLINGO = True
 
@@ -36,10 +37,14 @@ Or from within a Python process (but before clorm is imported) set:
     import os
     os.environ["CLORM_NOCLINGO"] = "True"
 
-Once NOCLINGO is enabled then depending on the current symbol mode clorm will
-(internally) create `clingo.Symbol` or `noclingo.NoSymbol` objects when clorm
+Once CLORM_NOCLINGO is enabled then depending on the current symbol mode Clorm
+will (internally) create `clingo.Symbol` or `noclingo.NoSymbol` objects when
 facts are created. The current symbol mode can be set and viewed with the
-function `set_symbol_mode()` and `get_symbol_mode()`.
+function `set_symbol_mode()` and `get_symbol_mode()`. If the CLORM_NOCLINGO
+environment variable is not set, or is set to one of "0", "False", "No",
+"Disable" (case-insensitive), then the NOCLINGO mechanism is disabled and it is
+not possible to switch between modes. In this case calling `set_symbol_mode()`
+will raise an exception.
 
 """
 # --------------------------------------------------------------------------------
