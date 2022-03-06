@@ -1,3 +1,11 @@
+# -----------------------------------------------------------------------------
+# By default being able to switch to NOCLINGO mode is disabled. But for the
+# unittests we enable it.
+# -----------------------------------------------------------------------------
+
+import os
+os.environ["CLORM_NOCLINGO"] = "True"
+
 from .test_util_oset import OrderedSetTestCase
 from .test_util_wrapper import *
 from .test_util_tools import *

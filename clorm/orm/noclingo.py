@@ -1,19 +1,56 @@
-"""Hack for the persistence problem of clingo Symbols.
+"""Dealing with the persistence problem of clingo Symbols.
 
-Currently clingo Symbols cannot be freed once they have been created. This is
-potentially a problem for long running processes (such as a server). The
-solution in clorm is to provide a "noclingo" mode where a faked Symbol object
-can be used. The fake Symbol object can be passed around and freed. It is only
-when we need to call the solver that a real clingo Symbol needs to be used.
 
-So the idea is that you can run clorm in a server process using noclingo
-Symbols and clingo is only run in a sub-process where you can use real clingo
-Symbols.
+When `clingo.Symbol` objects are created they cannot be freed and will persist
+until the process ends. This works fine for many applications where the process
+is short-lived. For example when running the solver once to find a solution and
+present it to the user and then exit. However, for long running processes, such
+as a server that needs to solve many problems, not being able to free
+`clingo.Symbol` objects can cause memory problems if many new objects are being
+created.
+
+Clorm solves this problem by allow for an internal `clorm.NoSymbol` object to
+be used instead of `clingo.Symbol` objects when creating clorm facts. These
+objects behave the same as `clingo.Symbol` objects except that they cannot be
+passed to the solver. NOCLINGO mode is when Clorm is configured to create
+NoSymbol facts.
+
+The idea is that a long-running process would be run in NOCLINGO mode, while
+the clingo solver would be run in a, relatively short-lived, spawned
+sub-process that is operating in "normal" CLINGO mode.  Any `clingo.Symbol`
+data that needs to be communicated back to the main process can be converted to
+`clorm.NoSymbol` objects, which can then be serialised and sent to the main
+process. If clorm fact objects are serialized this conversion process happens
+transparently to the user.
+
+However, despite the potential usefulness of NOCLINGO, in many, and perhaps
+most, use-cases there is no need for long running process. In such cases the
+small, but non-zero, overhead of NOCLINGO can be undesirable. Because of this
+NOCLINGO is disabled by default and must be explictly enabled with an
+environment variable CLORM_NOCLINGO that must be set before the clorm libraries
+are loaded. For example in a bash environment:
+
+    export CLORM_NOCLINGO = True
+
+Or from within a Python process (but before clorm is imported) set:
+
+    import os
+    os.environ["CLORM_NOCLINGO"] = "True"
+
+Once CLORM_NOCLINGO is enabled then depending on the current symbol mode Clorm
+will (internally) create `clingo.Symbol` or `noclingo.NoSymbol` objects when
+facts are created. The current symbol mode can be set and viewed with the
+function `set_symbol_mode()` and `get_symbol_mode()`. If the CLORM_NOCLINGO
+environment variable is not set, or is set to one of "0", "False", "No",
+"Disable" (case-insensitive), then the NOCLINGO mechanism is disabled and it is
+not possible to switch between modes. In this case calling `set_symbol_mode()`
+will raise an exception.
 
 """
 # --------------------------------------------------------------------------------
 # --------------------------------------------------------------------------------
 
+import os
 import functools
 import enum
 import clingo
@@ -22,12 +59,11 @@ import typing
 from clingo import SymbolType, Symbol
 from typing import Sequence, Union, Any
 
-from clorm.noclingo import ENABLE_NOCLINGO
-
 __all__ = [
     'SymbolType',
     'Symbol',
     'Function',
+    'Tuple_',
     'String',
     'Number',
     'SymbolMode',
@@ -39,7 +75,22 @@ __all__ = [
     'set_symbol_mode'
 ]
 
+# --------------------------------------------------------------------------------
+# Get and sanitise the value of the CLORM_NOCLINGO environment variable. If the
+# environment variable is not defined or if it is any one of "0", "False",
+# "No", "Disable" (case-insensitive) then NOCLINGO mode is disabled. Any other
+# input is treated as True.
+# --------------------------------------------------------------------------------
 
+CLORM_NOCLINGO_DEFAULT = 'False'
+
+def _get_CLORM_NOCLINGO():
+    tmp = os.environ.get('CLORM_NOCLINGO', CLORM_NOCLINGO_DEFAULT).lower()
+    if tmp in ('0', 'false', 'no', 'disable'):
+        return False
+    return True
+
+ENABLE_NOCLINGO=_get_CLORM_NOCLINGO()
 
 # --------------------------------------------------------------------------------
 # Note: the ordering between symbols is manually determined to match clingo 5.5
