@@ -2,6 +2,9 @@
 # Unit tests for the clorm ORM interface
 #------------------------------------------------------------------------------
 
+import clingo
+import os
+import importlib
 import inspect
 import unittest
 import datetime
@@ -10,7 +13,6 @@ import operator
 
 from .support import check_errmsg, check_errmsg_contains
 
-import clingo
 import clorm.orm.noclingo as noclingo
 from clorm.orm.noclingo import ( SymbolType, Symbol, Function, String, Number,
                                  get_Infimum, get_Supremum, clingo_to_noclingo,
@@ -24,7 +26,7 @@ clingo_version = clingo.__version__
 
 __all__ = [
     'NoClingoTestCase',
-    'NoClingoEnabledTestCase'
+    'NoClingoDisabledTestCase'
     ]
 
 #------------------------------------------------------------------------------
@@ -356,27 +358,6 @@ class NoClingoTestCase(unittest.TestCase):
         self.assertTrue(nc_x > nc_y)
         self.assertTrue(c_x > nc_y)
 
-    def XXX_test_set_symbol_mode_when_noclingo_disabled(self):
-
-        with self.assertRaises(RuntimeError) as ctx:
-            set_symbol_mode(SymbolMode.CLINGO)
-
-        check_errmsg("NOCLINGO mode is disabled.",ctx)
-
-
-#------------------------------------------------------------------------------
-# Tests that require NOCLINGO is enabled and run from a new process
-#------------------------------------------------------------------------------
-
-
-class NoClingoEnabledTestCase(unittest.TestCase):
-    def setUp(self):
-        pass
-
-    def tearDown(self):
-        pass
-
-
     def test_symbol_modes(self):
         # By default CLINGO mode
 #        self.assertEqual(get_symbol_mode(), SymbolMode.CLINGO)
@@ -437,6 +418,44 @@ class NoClingoEnabledTestCase(unittest.TestCase):
         self.assertEqual(ncl3, expect_ncl3)
         self.assertEqual(ncl4, expect_ncl4)
         self.assertEqual(ncl5, expect_ncl5)
+
+
+#------------------------------------------------------------------------------
+# Tests that require CLORM_NOCLINGO to be disabled. When CLORM_NOCLINGO is
+# disabled then set_symbol_mode() raises an error. And noclingo.Function(),
+# noclingo.Tuple_(), noclingo.String(), noclingo.Number() all point directly to
+# the clingo functions.
+#------------------------------------------------------------------------------
+
+class NoClingoDisabledTestCase(unittest.TestCase):
+    def setUp(self):
+        pass
+
+    def tearDown(self):
+        pass
+
+    def test_noclingo_switch_disabled(self):
+        os.environ["CLORM_NOCLINGO"] = "False"
+        import clorm.orm.noclingo
+        importlib.reload(clorm.orm.noclingo)
+
+        self.assertFalse(clorm.orm.noclingo.ENABLE_NOCLINGO)
+
+        # set_symbol_mode will raise an error
+        with self.assertRaises(RuntimeError) as ctx:
+            clorm.orm.noclingo.set_symbol_mode(SymbolMode.CLINGO)
+        check_errmsg("NOCLINGO mode is disabled.",ctx)
+
+        # The various noclingo functions point to the real clingo functions
+        self.assertEqual(clorm.orm.noclingo.Function, clingo.Function)
+        self.assertEqual(clorm.orm.noclingo.Tuple_, clingo.Tuple_)
+        self.assertEqual(clorm.orm.noclingo.String, clingo.String)
+        self.assertEqual(clorm.orm.noclingo.Number, clingo.Number)
+
+
+        os.environ["CLORM_NOCLINGO"] = "True"
+        import clorm.orm.noclingo
+        importlib.reload(clorm.orm.noclingo)
 
 
 
