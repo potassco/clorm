@@ -2877,22 +2877,22 @@ class Predicate(object, metaclass=_PredicateMeta):
 
     def __getitem__(self, idx):
         """Allows for index based access to field elements."""
-        return self.meta[idx].__get__(self)
+        return self._meta[idx].__get__(self)
 
     def __bool__(self):
         '''Behaves like a tuple: returns False if the predicate/complex-term has no elements'''
-        return len(self.meta) > 0
+        return len(self._meta) > 0
 
     def __len__(self):
         '''Returns the number of fields in the object'''
-        return len(self.meta)
+        return len(self._meta)
 
     #--------------------------------------------------------------------------
     # Overload the unary minus operator to return the complement of this literal
     # (if its positive return a negative equivaent and vice-versa)
     # --------------------------------------------------------------------------
     def __neg__(self):
-        return self.clone(sign=not self.sign)
+        return self.clone(sign=not self._sign)
 
     #--------------------------------------------------------------------------
     # Overloaded operators
@@ -2902,7 +2902,7 @@ class Predicate(object, metaclass=_PredicateMeta):
         if isinstance(other, self.__class__):
             return self._field_values == other._field_values and \
                 self._sign == other._sign
-        if self.meta.is_tuple:
+        if self._meta.is_tuple:
             return self._field_values == other
         elif isinstance(other, Predicate):
             return False
@@ -2915,13 +2915,13 @@ class Predicate(object, metaclass=_PredicateMeta):
         if isinstance(other, self.__class__):
 
              # Negative literals are less than positive literals
-            if self.sign != other.sign: return self.sign < other.sign
+            if self._sign != other._sign: return self._sign < other._sign
 
             return self._field_values < other._field_values
 
         # If different predicates then compare the raw value
         elif isinstance(other, Predicate):
-            return self.raw < other.raw
+            return self._raw < other._raw
 
         # Else an error
         return NotImplemented
@@ -2938,13 +2938,13 @@ class Predicate(object, metaclass=_PredicateMeta):
         # If it is the same predicate class then compare the sign and fields
         if isinstance(other, self.__class__):
             # Positive literals are greater than negative literals
-            if self.sign != other.sign: return self.sign > other.sign
+            if self._sign != other._sign: return self._sign > other._sign
 
             return self._field_values > other._field_values
 
         # If different predicates then compare the raw value
         if not isinstance(other, Predicate):
-            return self.raw > other.raw
+            return self._raw > other._raw
 
         # Else an error
         return NotImplemented
@@ -2957,14 +2957,14 @@ class Predicate(object, metaclass=_PredicateMeta):
 
     def __hash__(self):
         if self._hash is None:
-            if self.meta.is_tuple: self._hash = hash(self._field_values)
-            else: self._hash = hash((self.meta.name,self._field_values))
+            if self._meta.is_tuple: self._hash = hash(self._field_values)
+            else: self._hash = hash((self._meta.name,self._field_values))
         return self._hash
 
     def __str__(self):
         """Returns the Predicate as the string representation of an ASP fact.
         """
-        return str(self.raw)
+        return str(self._raw)
 
     def __repr__(self):
         return self.__str__()
@@ -2979,9 +2979,9 @@ class Predicate(object, metaclass=_PredicateMeta):
         self._sign = newstate["_sign"]
 
         clingoargs=[]
-        for f,v in zip(self.meta, self._field_values):
+        for f,v in zip(self._meta, self._field_values):
             clingoargs.append(v.symbol if f.defn.complex else f.defn.pytocl(v))
-        self._raw = Function(self.meta.name, clingoargs, self._sign)
+        self._raw = Function(self._meta.name, clingoargs, self._sign)
 
 
 #------------------------------------------------------------------------------
