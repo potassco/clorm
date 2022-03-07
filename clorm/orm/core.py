@@ -35,7 +35,8 @@ from .noclingo import (Symbol, NoSymbol, Function, String, Number, SymbolType, S
 from .templating import (expand_template, PREDICATE_TEMPLATE,
                          CHECK_SIGN_TEMPLATE, CHECK_SIGN_UNIFY_TEMPLATE,
                          NO_DEFAULTS_TEMPLATE, ASSIGN_DEFAULT_TEMPLATE,
-                         ASSIGN_COMPLEX_TEMPLATE, PREDICATE_UNIFY_DOCSTRING)
+                         ASSIGN_COMPLEX_TEMPLATE, PREDICATE_UNIFY_DOCSTRING,
+                         PREDICATE_BOOL_DOCSTRING, PREDICATE_LEN_DOCSTRING)
 
 from typing import ( Any, Callable, Dict, Iterator, List, Optional, Sequence, Tuple,
                      Type, TypeVar, Union, overload, cast )
@@ -2296,7 +2297,6 @@ class PredicateDefn(object):
             name = "({}.alias.{})".format(classname,uuid.uuid4().hex)
         return self._path_class([PathIdentity(self._parent_cls,name)])
 
-
     def __len__(self):
         '''Returns the number of fields'''
         return len(self._byidx)
@@ -2384,6 +2384,8 @@ def _generate_dynamic_predicate_functions(class_name: str, namespace: Dict):
         tmp.append(f"{f.name}_cltopy(raw_args[{idx}]), ")
     args_cltopy= "".join(tmp)
 
+    bool_status = not pdefn.is_tuple or len(pdefn) > 0
+
     expansions = {"args_signature": args_signature,
                   "sign_check": sign_check,
                   "args": args,
@@ -2394,9 +2396,9 @@ def _generate_dynamic_predicate_functions(class_name: str, namespace: Dict):
                   "sign_check_unify": sign_check_unify,
                   "args_cltopy": args_cltopy}
 
-    template = PREDICATE_TEMPLATE.format(pdefn=pdefn)
+    template = PREDICATE_TEMPLATE.format(pdefn=pdefn, bool_status=bool_status)
     predicate_functions = expand_template(template, **expansions)
-    # print(f"INIT:\n\n{predicate_functions}\n\n")
+#    print(f"INIT:\n\n{predicate_functions}\n\n")
 
     ldict = {}
     exec(predicate_functions, gdict, ldict)
@@ -2408,10 +2410,17 @@ def _generate_dynamic_predicate_functions(class_name: str, namespace: Dict):
     predicate_unify = ldict["_unify"]
     predicate_unify.__name__ = "_unify"
     predicate_unify.__doc__ = PREDICATE_UNIFY_DOCSTRING
+    predicate_bool = ldict["__bool__"]
+    predicate_bool.__name__ = "__bool__"
+    predicate_bool.__doc__ = PREDICATE_BOOL_DOCSTRING
+    predicate_len = ldict["__len__"]
+    predicate_len.__name__ = "__len__"
+    predicate_len.__doc__ = PREDICATE_LEN_DOCSTRING
 
     namespace["__init__"] = predicate_init
     namespace["_unify"] = predicate_unify
-
+    namespace["__bool__"] = predicate_bool
+    namespace["__len__"] = predicate_len
 
 
 #------------------------------------------------------------------------------
@@ -2879,13 +2888,8 @@ class Predicate(object, metaclass=_PredicateMeta):
         """Allows for index based access to field elements."""
         return self._meta[idx].__get__(self)
 
-    def __bool__(self):
-        '''Behaves like a tuple: returns False if the predicate/complex-term has no elements'''
-        return len(self._meta) > 0
-
-    def __len__(self):
-        '''Returns the number of fields in the object'''
-        return len(self._meta)
+    ### NOTE: __bool__() and __len__() are generated dynamically with
+    ### __init__().
 
     #--------------------------------------------------------------------------
     # Overload the unary minus operator to return the complement of this literal

@@ -1366,10 +1366,18 @@ class PredicateTestCase(unittest.TestCase):
     # Test that we can return access the Predicate class fields using positional
     # arguments as well as iterating over them (for both the class itself as
     # well as an instance).
+    #
+    # If the predicate sub-class is declared as a tuple then __bool__() will
+    # treat it as a tuple and return False if it is empty. But otherwise
+    # __bool__() will always be true.
     # --------------------------------------------------------------------------
     def test_iter_bool_nonlogicalsymbol(self):
-        class Empty(ComplexTerm):
+        class EmptyPredicate(ComplexTerm):
             pass
+
+        class EmptyTuple(ComplexTerm):
+            class Meta:
+                is_tuple = True
 
         class Blah(ComplexTerm):
             a = IntegerField()
@@ -1393,8 +1401,13 @@ class PredicateTestCase(unittest.TestCase):
             self.assertEqual(v,b[idx])
 
         self.assertTrue(b)
-        e = Empty()
+
+        # The behaviour of __bool__() when there are no fields
+        e = EmptyPredicate()
+        self.assertTrue(e)
+        e = EmptyTuple()
         self.assertFalse(e)
+
 
     #--------------------------------------------------------------------------
     # Test to infer FieldDefinition based on given annotation

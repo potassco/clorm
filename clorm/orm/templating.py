@@ -95,6 +95,13 @@ def _unify(cls: Type[_P], raw: AnySymbol) -> Optional[_P]:
         raise ValueError((f"Cannot unify with object {{raw}} ({{type(raw)}}) as "
                           "it is not a clingo Symbol Function object"))
 
+
+def __bool__(self):
+    return {bool_status}
+
+def __len__(self):
+    return {pdefn.arity}
+
 """
 
 CHECK_SIGN_TEMPLATE = r"""
@@ -135,6 +142,18 @@ PREDICATE_UNIFY_DOCSTRING = r"""
     Unify a (raw) Symbol object with the class.
 
     Returns None on failure to unify otherwise returns the new fact
+"""
+
+PREDICATE_BOOL_DOCSTRING = r"""
+    Returns the boolean status of the fact.
+
+    If Predicate is declared as a tuple then it behaves like a tuple and will
+return False only if there are no defined fields. Otherwise it always returns
+True.
+ """
+
+PREDICATE_LEN_DOCSTRING = r"""
+    Returns the number of fields in the predicate.
 """
 
 # ------------------------------------------------------------------------------
