@@ -54,7 +54,6 @@ def __init__(self,
              {{%args_signature%}}
              *, sign: bool=True) -> None:
 
-    self._hash = None
     self._sign = bool(sign)
 
     {{%sign_check%}}
@@ -65,6 +64,8 @@ def __init__(self,
     {{%check_complex%}}
 
     self._field_values = ({{%args%}})
+
+    self._hash = {{%hash_evaluation_self%}}
 
     # Create the raw symbol
     self._raw = Function("{pdefn.name}",
@@ -88,6 +89,7 @@ def _unify(cls: Type[_P], raw: AnySymbol) -> Optional[_P]:
         instance._hash = None
         instance._sign = raw.positive
         instance._field_values = ({{%args_cltopy%}})
+        instance._hash = {{%hash_evaluation_instance%}}
         return instance
     except (TypeError, ValueError):
         return None
