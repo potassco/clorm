@@ -14,11 +14,11 @@ import bisect
 import functools
 import itertools
 import clingo
-import typing
+from typing import Any, Callable, List, Type
 import re
 
 from .core import *
-from .core import get_field_definition
+from .core import get_field_definition, infer_field_definition
 
 __all__ = [
     'TypeCastSignature',
@@ -34,11 +34,12 @@ __all__ = [
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # When calling Python functions from ASP you need to do some type
 # conversions. The TypeCastSignature class can be used to generate a wrapper
 # function that does the type conversion for you.
 # ------------------------------------------------------------------------------
+
 
 class TypeCastSignature(object):
     r"""Defines a signature for converting to/from Clingo data types.
@@ -85,7 +86,7 @@ class TypeCastSignature(object):
         return inspect.isclass(se) and issubclass(se, BaseField)
 
     @staticmethod
-    def is_return_element(se):
+    def is_return_element(se: Any) -> bool:
         """An output element must be an output field or a singleton iterable containing
            an output fields; where an output field is a BaseField sub-class or
            tuple that recursively reduces to a BaseField sub-class.
@@ -102,14 +103,24 @@ class TypeCastSignature(object):
             return _is_output_field(se[0])
         return _is_output_field(se)
 
-    def __init__(self, *sigs):
+    def __init__(self, *sigs: Any) -> None:
         def _validate_basic_sig(sig):
             if TypeCastSignature._is_input_element(sig): return True
             raise TypeError(("TypeCastSignature element {} must be a BaseField "
                              "subclass".format(sig)))
 
-        self._insigs = [ type(get_field_definition(s)) for s in sigs[:-1]]
-        self._outsig = sigs[-1]
+        self._insigs: List[Type[BaseField]] = []
+        for s in sigs[:-1]:
+            field = None
+            try:
+                field = infer_field_definition(s, "")
+            except Exception:
+                pass
+            self._insigs.append(field if field else type(get_field_definition(s)))
+        try:
+            self._outsig = infer_field_definition(sigs[-1], "") or sigs[-1]
+        except Exception:
+            self._outsig = sigs[-1]
 
         # A tuple is a special case that we want to convert into a complex field
         if isinstance(self._outsig, tuple):
@@ -217,12 +228,13 @@ class TypeCastSignature(object):
     def __repr__(self):
         return self.__str__()
 
-#------------------------------------------------------------------------------
+
+# ------------------------------------------------------------------------------
 # return and check that function has complete signature
 # annotations. ignore_first is useful when dealing with member functions.
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
-def _get_annotations(fn, ignore_first=False):
+def _get_annotations(fn: Callable[..., Any], ignore_first: bool = False) -> List[Any]:
     fsig = inspect.signature(fn)
     qname = fn.__qualname__
     fsigparam = fsig.parameters
@@ -237,7 +249,8 @@ def _get_annotations(fn, ignore_first=False):
                          "{}").format(qname))
 
     # Remove any ignore first and add the return value annotation
-    if ignore_first: annotations.pop(0)
+    if ignore_first:
+        annotations.pop(0)
     annotations.append(fsig.return_annotation)
 
     if inspect.Signature.empty in annotations:
@@ -249,7 +262,7 @@ def _get_annotations(fn, ignore_first=False):
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
 
-def make_function_asp_callable(*args):
+def make_function_asp_callable(*args: Any):
     r"""A decorator for making a function callable from within an ASP program.
 
     Can be called in a number of ways. Can be called as a decorator with or
@@ -284,17 +297,19 @@ def make_function_asp_callable(*args):
     signature profile.
 
     """
-    if len(args) == 0: raise ValueError("Invalid call to decorator")
-    fn = None ; sigs = None
+    if not args:
+        raise ValueError("Invalid call to decorator")
 
     # If the last element is not a function to be wrapped then a signature has
     # been specified.
     if TypeCastSignature.is_return_element(args[-1]):
         sigs = args
+        fn = None
     else:
         # Last element needs to be a function
         fn = args[-1]
-        if not callable(fn): raise ValueError("Invalid call to decorator")
+        if not callable(fn):
+            raise ValueError("Invalid call to decorator")
 
         # if exactly one element then use function annonations
         if len(args) == 1:

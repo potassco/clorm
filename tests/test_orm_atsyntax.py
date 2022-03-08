@@ -8,6 +8,7 @@
 # ------------------------------------------------------------------------------
 
 import inspect
+from typing import Tuple
 import unittest
 import datetime
 import calendar
@@ -76,11 +77,6 @@ class TypeCastSignatureTestCase(unittest.TestCase):
 
         sig4 = TypeCastSignature(EDate.Field,EDate.Field)    # takes an EDate and returns an EDate
 
-        # Some bad declarations
-        with self.assertRaises(TypeError) as ctx:
-            sig5 = TypeCastSignature(int)
-        with self.assertRaises(TypeError) as ctx:
-            sig5 = TypeCastSignature(DateField, int)
         with self.assertRaises(TypeError) as ctx:
             sig5 = TypeCastSignature(DateField, [int])
         with self.assertRaises(TypeError) as ctx:
@@ -224,6 +220,13 @@ class TypeCastSignatureTestCase(unittest.TestCase):
         self.assertEqual(getdates2(String("20180101"), edate1.raw),
                          [String("20180101"), String("20190202")])
         self.assertEqual(getdates2.__doc__, '''GETDATES2''')
+
+        # Test wrapper as a decorator and use python type annotations
+        @make_function_asp_callable
+        def method(x: int, y: str) -> Tuple[int, int]:
+            return (x, int(y))
+        self.assertEqual(method(Number(42), String("24")),
+                         Function("", [Number(42), Number(24)]))
 
         with self.assertRaises(TypeError) as ctx:
             @make_function_asp_callable
