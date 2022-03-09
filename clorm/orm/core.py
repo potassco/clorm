@@ -2385,11 +2385,11 @@ def _generate_dynamic_predicate_functions(class_name: str, namespace: Dict):
     args_cltopy= "".join(tmp)
 
     if pdefn.is_tuple:
-        hash_evaluation_self = "hash(self._field_values)"
-        hash_evaluation_instance = "hash(instance._field_values)"
+        hash_eval_self = "hash(self._field_values)"
+        hash_eval_instance = "hash(instance._field_values)"
     else:
-        hash_evaluation_self = f"""hash(("{pdefn.name}", self._field_values))"""
-        hash_evaluation_instance = f"""hash(("{pdefn.name}", instance._field_values))"""
+        hash_eval_self = f"""hash((self._sign, "{pdefn.name}", self._field_values))"""
+        hash_eval_instance = f"""hash((instance._sign, "{pdefn.name}", instance._field_values))"""
 
     expansions = {"args_signature": args_signature,
                   "sign_check": sign_check,
@@ -2400,8 +2400,8 @@ def _generate_dynamic_predicate_functions(class_name: str, namespace: Dict):
                   "args_raw": args_raw,
                   "sign_check_unify": sign_check_unify,
                   "args_cltopy": args_cltopy,
-                  "hash_evaluation_self": hash_evaluation_self,
-                  "hash_evaluation_instance": hash_evaluation_instance}
+                  "hash_evaluation_self": hash_eval_self,
+                  "hash_evaluation_instance": hash_eval_instance}
 
     bool_status = not pdefn.is_tuple or len(pdefn) > 0
     template = PREDICATE_TEMPLATE.format(pdefn=pdefn, bool_status=bool_status)
@@ -2986,7 +2986,7 @@ class Predicate(object, metaclass=_PredicateMeta):
         self._field_values = newstate["_field_values"]
         self._sign = newstate["_sign"]
         if self._meta.is_tuple: self._hash = hash(self._field_values)
-        else: self._hash = hash((self._meta.name,self._field_values))
+        else: self._hash = hash((self._sign, self._meta.name, self._field_values))
 
         clingoargs=[]
         for f,v in zip(self._meta, self._field_values):
