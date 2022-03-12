@@ -2066,7 +2066,7 @@ class SignAccessor(object):
 # ClormAnonTuple).
 # ------------------------------------------------------------------------------
 
-def get_field_definition(defn, module=None):
+def get_field_definition(defn, module=None) -> BaseField:
     errmsg = ("Unrecognised field definition object '{}'. Expecting: "
               "1) BaseField (sub-)class, 2) BaseField (sub-)class instance, "
               "3) a tuple containing a field definition")
@@ -2458,32 +2458,32 @@ def _is_bad_predicate_inner_class_declaration(name,obj):
     return obj.__name__ == name
 
 # infer fielddefinition based on a given type
-def _infer_field_definition(type_: Type, module: str) -> Optional[BaseField]:
+def infer_field_definition(type_: Type[Any], module: str) -> Optional[Type[BaseField]]:
     origin = get_origin(type_)
     args = get_args(type_)
 
     if origin is HeadList:
-        return define_nested_list_field(_infer_field_definition(args[0], module))
+        return define_nested_list_field(infer_field_definition(args[0], module))
     if origin is HeadListReversed:
-        return define_nested_list_field(_infer_field_definition(args[0], module),reverse=True)
+        return define_nested_list_field(infer_field_definition(args[0], module),reverse=True)
     if origin is TailList:
-        return define_nested_list_field(_infer_field_definition(args[0], module),headlist=False)
+        return define_nested_list_field(infer_field_definition(args[0], module),headlist=False)
     if origin is TailListReversed:
-        return define_nested_list_field(_infer_field_definition(args[0], module),headlist=False, reverse=True)
+        return define_nested_list_field(infer_field_definition(args[0], module),headlist=False, reverse=True)
     if origin is Union:
-        return combine_fields([_infer_field_definition(arg, module) for arg in args])
+        return combine_fields([infer_field_definition(arg, module) for arg in args])
     if len(args) > 1 and issubclass(origin, Tuple):
         if len(args) == 2 and args[1] is Ellipsis: # e.g. Tuple[int, ...]
-            return define_flat_list_field(_infer_field_definition(args[0], module))
+            return define_flat_list_field(infer_field_definition(args[0], module))
 
         # not just return a tuple of Fields, but create a Field-Instance and take the type so
         # Tuple[...] can be used within Union
-        return type(get_field_definition(tuple(_infer_field_definition(arg, module) for arg in args), module))
+        return type(get_field_definition(tuple(infer_field_definition(arg, module) for arg in args), module))
     if issubclass(type_, ConstantStr):
         return ConstantField
     if issubclass(type_, enum.Enum):
         # if type_ just inherits from Enum is IntegerField, otherwise find appropriate Field
-        field = IntegerField if len(type_.__bases__) == 1 else _infer_field_definition(type_.__bases__[0], module)
+        field = IntegerField if len(type_.__bases__) == 1 else infer_field_definition(type_.__bases__[0], module)
         return define_enum_field(field, type_)
     if issubclass(type_, int):
         return IntegerField
@@ -2578,7 +2578,7 @@ def _make_predicatedefn(class_name: str, namespace: Dict[str, Any], meta_dct: Di
         if name in fields_from_dct: # first check if FieldDefinition was assigned 
             fields_from_annotations[name] = fields_from_dct[name]
         else:
-            fdefn = _infer_field_definition(type_, module) # if not try to infer the definition based on the type
+            fdefn = infer_field_definition(type_, module) # if not try to infer the definition based on the type
             if fdefn:
                 fields_from_annotations[name] = fdefn
             elif inspect.isclass(type_):
