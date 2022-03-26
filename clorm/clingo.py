@@ -10,7 +10,7 @@ for more details.
 
 import functools
 import itertools
-from typing import TYPE_CHECKING, Any, ClassVar, Iterable, List, Optional, Sequence, Tuple, Union, cast, overload
+from typing import TYPE_CHECKING, Any, Iterable, List, Optional, Sequence, Tuple, Type, Union, cast, overload
 from .orm import *
 from .util.wrapper import init_wrapper, make_class_wrapper
 
@@ -42,9 +42,9 @@ __version__ = oclingo.__version__
 # Helper function to smartly build a unifier if only a list of predicates have
 # been provided.
 # ------------------------------------------------------------------------------
+_Unifier = Union[List[Type[Predicate]], SymbolPredicateUnifier]
 
-
-def _build_unifier(unifier: Optional[Union[List[Predicate], SymbolPredicateUnifier]]) -> Optional[SymbolPredicateUnifier]:
+def _build_unifier(unifier: Optional[_Unifier]) -> Optional[SymbolPredicateUnifier]:
     if unifier is None:
         return None
     if isinstance(unifier, SymbolPredicateUnifier):
@@ -80,7 +80,7 @@ class ModelOverride(object):
     if TYPE_CHECKING:
         _wrapped: OModel  # will be set through init_wrapper
 
-    def __init__(self, model: OModel, unifier: Optional[Union[List[Predicate], SymbolPredicateUnifier]] = None) -> None:
+    def __init__(self, model: OModel, unifier: Optional[_Unifier] = None) -> None:
         self._unifier = _build_unifier(unifier)
         _check_is_func(model, "symbols")
         init_wrapper(self, wrapped_=model)
@@ -182,7 +182,7 @@ class SolveHandleOverride(object):
     if TYPE_CHECKING:
         _wrapped: OSolveHandle  # will be set through init_wrapper
 
-    def __init__(self, handle: OSolveHandle, unifier: Optional[Union[List[Predicate], SymbolPredicateUnifier]] = None) -> None:
+    def __init__(self, handle: OSolveHandle, unifier: Optional[_Unifier] = None) -> None:
         init_wrapper(self, wrapped_=handle)
         self._unifier = _build_unifier(unifier)
 
@@ -200,14 +200,14 @@ class SolveHandleOverride(object):
 
     def __iter__(self):
         for model in self.solvehandle_:
-            yield Model(model, unifier=self._unifier)  # type: ignore
+            yield Model(model, unifier=self._unifier)
 
     def __enter__(self):
-        self.solvehandle_.__enter__()  # type: ignore
+        self.solvehandle_.__enter__()
         return self
 
     def __exit__(self, exception_type, exception_value, traceback):
-        self.solvehandle_.__exit__(exception_type, exception_value, traceback)  # type: ignore
+        self.solvehandle_.__exit__(exception_type, exception_value, traceback)
         return None
 
 
@@ -344,7 +344,7 @@ class ControlOverride(object):
         return self._unifier
 
     @unifier.setter
-    def unifier(self, unifier: Union[List[Predicate], SymbolPredicateUnifier]) -> None:
+    def unifier(self, unifier: _Unifier) -> None:
         self._unifier = _build_unifier(unifier)
 
     # ------------------------------------------------------------------------------
@@ -472,7 +472,7 @@ class ControlOverride(object):
 
             @functools.wraps(on_model)
             def on_model_wrapper(model):
-                return on_model(Model(model, self.unifier))  # type: ignore
+                return on_model(Model(model, self.unifier))
             nkwargs["on_model"] = on_model_wrapper
 
         # Call the wrapped solve function and handle the return value
