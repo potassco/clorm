@@ -31,7 +31,7 @@ from clorm import ( BaseField, Raw, RawField, IntegerField, StringField,
                     HeadList, HeadListReversed, TailList, TailListReversed )
 
 # Implementation imports
-from clorm.orm.core import ( dealiased_path, field, get_field_definition,
+from clorm.orm.core import ( BooleanField, dealiased_path, field, get_field_definition,
                              PredicatePath, QCondition, trueall, notcontains )
 
 import clingo
@@ -103,6 +103,20 @@ class FieldTestCase(unittest.TestCase):
         self.assertEqual(RawField.pytocl(Raw(symstr)), symstr)
         self.assertEqual(RawField.pytocl(symstr), symstr)
 
+        symstr = Number(0)
+        self.assertEqual(type(BooleanField.cltopy(symstr)), bool)
+        self.assertEqual(BooleanField.cltopy(symstr), False)
+        self.assertEqual(BooleanField.pytocl(0), symstr)
+
+        symstr = String("false")
+        self.assertEqual(type(BooleanField.cltopy(symstr)), bool)
+        self.assertEqual(BooleanField.cltopy(symstr), False)
+
+        self.assertEqual(BooleanField.pytocl("false"), Number(0))
+        self.assertEqual(BooleanField.pytocl("TrUe"), Number(1))
+        self.assertEqual(BooleanField.pytocl("on"), Number(1))
+        self.assertEqual(BooleanField.pytocl("off"), Number(0))
+
         # Now some bad conversions
         with self.assertRaises(TypeError) as ctx:
             x=StringField.cltopy(Number(1))
@@ -115,6 +129,10 @@ class FieldTestCase(unittest.TestCase):
         with self.assertRaises(TypeError) as ctx:
             x=ConstantField.cltopy(Function("x",[Number(1)]))
         check_errmsg("Symbol 'x(1)'",ctx)
+
+        with self.assertRaises(TypeError) as ctx:
+            x=BooleanField.cltopy(String("2"))
+        check_errmsg("value '2'",ctx)
 
     #--------------------------------------------------------------------------
     # Test that the simple field unify functions work as expected for clingo
