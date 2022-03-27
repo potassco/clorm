@@ -2528,6 +2528,8 @@ def infer_field_definition(type_: Type[Any], module: str) -> Optional[Type[BaseF
         # if type_ just inherits from Enum is IntegerField, otherwise find appropriate Field
         field = IntegerField if len(type_.__bases__) == 1 else infer_field_definition(type_.__bases__[0], module)
         return define_enum_field(field, type_)
+    if issubclass(type_, bool):
+        return BooleanField
     if issubclass(type_, int):
         return IntegerField
     if issubclass(type_, str):
