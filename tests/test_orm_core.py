@@ -28,11 +28,11 @@ from clorm import ( BaseField, Raw, RawField, IntegerField, StringField,
                     define_nested_list_field, define_enum_field,
                     simple_predicate, path, hashable_path, alias, not_, and_,
                     or_, cross, in_, notin_, SymbolMode, set_symbol_mode,
-                    get_symbol_mode, Function, Number, String, ConstantStr,
+                    get_symbol_mode, Function, Number, String, StrictBool, ConstantStr,
                     HeadList, HeadListReversed, TailList, TailListReversed )
 
 # Implementation imports
-from clorm.orm.core import ( BooleanField, dealiased_path, field, get_field_definition,
+from clorm.orm.core import ( BooleanField, StrictBooleanField, dealiased_path, field, get_field_definition,
                              PredicatePath, QCondition, trueall, notcontains )
 
 import clingo
@@ -118,6 +118,11 @@ class FieldTestCase(unittest.TestCase):
         self.assertEqual(BooleanField.pytocl("on"), Number(1))
         self.assertEqual(BooleanField.pytocl("off"), Number(0))
 
+        symstr = Number(1)
+        self.assertEqual(type(StrictBooleanField.cltopy(symstr)), bool)
+        self.assertEqual(StrictBooleanField.cltopy(symstr), True)
+        self.assertEqual(StrictBooleanField.pytocl(True), symstr)
+
         # Now some bad conversions
         with self.assertRaises(TypeError) as ctx:
             x=StringField.cltopy(Number(1))
@@ -134,6 +139,10 @@ class FieldTestCase(unittest.TestCase):
         with self.assertRaises(TypeError) as ctx:
             x=BooleanField.cltopy(String("2"))
         check_errmsg("value '2'",ctx)
+
+        with self.assertRaises(TypeError) as ctx:
+            x=StrictBooleanField.cltopy(Number(2))
+        check_errmsg("value must be either",ctx)
 
     #--------------------------------------------------------------------------
     # Test that the simple field unify functions work as expected for clingo
@@ -1572,6 +1581,20 @@ class PredicateTestCase(unittest.TestCase):
             self.assertEqual(p.a, False)
             p = P._unify(Function("p",[Number(-1)]))
             self.assertEqual(p.a, -1)
+
+    def test_predicate_annotated_fields_union_StrictBool_int(self):
+            class P(Predicate):
+                a: Union[StrictBool, int]
+
+            p = P(True)
+            self.assertEqual(str(p), "p(1)")
+            p = P(2)
+            self.assertEqual(str(p), "p(2)")
+            p = P._unify(Function("p",[Number(0)]))
+            self.assertEqual(p.a, False)
+            p = P._unify(Function("p",[Number(-1)]))
+            self.assertEqual(p.a, -1)
+
 
     def test_predicate_with_wrong_mixed_annotations_and_Fields(self):
         with self.assertRaises(TypeError, msg="order of fields can't be determined"):

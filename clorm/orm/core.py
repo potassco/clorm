@@ -27,7 +27,7 @@ import typing
 import re
 import uuid
 
-from clorm.orm.types import ConstantStr, HeadList, HeadListReversed, TailList, TailListReversed
+from clorm.orm.types import ConstantStr, HeadList, HeadListReversed, StrictBool, TailList, TailListReversed
 
 from .noclingo import (Symbol, NoSymbol, Function, String, Number, SymbolType, SymbolMode,
                        NoSymbol, get_symbol_mode, clingo_to_noclingo, noclingo_to_clingo)
@@ -1554,6 +1554,27 @@ class BooleanField(BaseField):
         val = int(bool_validator(v))
         return Number(val)
 
+
+class StrictBooleanField(IntegerField):
+    """A field to convert between a Clingo.Number object and a Python bool
+    - Clingo.Number(0) will be converted to 'False'
+    - Clingo.Number(1) will be converted to 'True'
+
+    For everything else the conversion fails
+    """
+    def cltopy(symbol) -> bool:
+        if symbol == 1:
+            return True
+        if symbol == 0:
+            return False
+        raise TypeError("value must be either '0' or '1'")
+
+    def pytocl(v):
+        if isinstance(v, bool):
+            return int(v)
+        raise TypeError("value is not a valid boolean")
+
+
 #------------------------------------------------------------------------------
 # refine_field is a function that creates a sub-class of a BaseField (or BaseField
 # sub-class). It restricts the set of allowable values based on a functor or an
@@ -2530,6 +2551,8 @@ def infer_field_definition(type_: Type[Any], module: str) -> Optional[Type[BaseF
         return define_enum_field(field, type_)
     if issubclass(type_, bool):
         return BooleanField
+    if issubclass(type_, StrictBool):
+        return StrictBooleanField
     if issubclass(type_, int):
         return IntegerField
     if issubclass(type_, str):
