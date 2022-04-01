@@ -65,12 +65,11 @@ def __init__(self,
 
     self._field_values = ({{%args%}})
 
-    self._hash = {{%hash_evaluation_self%}}
-
-    # Create the raw symbol
+    # Create the raw symbol and cache the hash
     self._raw = Function("{pdefn.name}",
                          ({{%args_raw%}}),
                          self._sign)
+    self._hash = hash(self._raw)
 
 @classmethod
 def _unify(cls: Type[_P], raw: AnySymbol) -> Optional[_P]:
@@ -86,10 +85,9 @@ def _unify(cls: Type[_P], raw: AnySymbol) -> Optional[_P]:
 
         instance = cls.__new__(cls)
         instance._raw = raw
-        instance._hash = None
+        instance._hash = hash(raw)
         instance._sign = raw.positive
         instance._field_values = ({{%args_cltopy%}})
-        instance._hash = {{%hash_evaluation_instance%}}
         return instance
     except (TypeError, ValueError):
         return None
@@ -104,7 +102,66 @@ def __bool__(self):
 def __len__(self):
     return {pdefn.arity}
 
+
+def __eq__(self, other):
+    if self.__class__ == other.__class__:
+        return (self._sign == other._sign) and (self._field_values == other._field_values)
+
+    return NotImplemented
+
+def __lt__(self, other):
+    if self.__class__ == other.__class__:
+        return (self._sign < other._sign) or (self._field_values < other._field_values)
+
+    return NoImplemented
 """
+
+PREDICATE_EQ_NON_TUPLE ="""
+def __eq__(self, other):
+    if self.__class__ == other.__class__:
+        return (self._sign == other._sign) and (self._field_values == other._field_values)
+    return False if ininstance(other, Predicate) else NotImplemented
+"""
+
+PREDICATE_EQ_TUPLE ="""
+def __eq__(self, other):
+    if self.__class__ == other.__class__:
+        return self._field_values == other._field_values
+    if isinstance(other, Predicate):
+        return self._field_values == other._field_values if other._meta.is_tuple else False
+    return other == self._field_values
+"""
+
+PREDICATE_CMP_NON_TUPLE=r"""
+def __{name}__(self, other):
+    if self.__class__ == other.__class__:
+        # Note: rely on False < True (True > False) and evaluation order
+        return (self._sign {op} other._sign) or (self._field_values {op} other._field_values)
+
+    if isinstance(other, Predicate):
+        return self._raw {op} other._raw
+
+    return NotImplemented
+"""
+
+PREDICATE_CMP_TUPLE=r"""
+def __{name}__(self, other):
+    if self.__class__ == other.__class__:
+        self._field_values {op} other._field_values
+
+    if isinstance(other, Predicate):
+        return self._raw {op} other._raw
+
+    return other {op} self._field_values
+"""
+
+def make_predicate_cmp(name, op, is_tuple=False):
+    if is_tuple:
+        return PREDICATE_CMP_NON_TUPLE.format(name=name, op=op)
+    return PREDICATE_CMP_TUPLE.format(name=name, op=op)
+
+
+
 
 CHECK_SIGN_TEMPLATE = r"""
 # Check if the sign is allowed

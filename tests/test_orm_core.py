@@ -13,6 +13,7 @@ from typing import Tuple, Union
 import unittest
 import datetime
 import operator
+import itertools
 import enum
 import collections.abc as cabc
 
@@ -242,13 +243,13 @@ class FieldTestCase(unittest.TestCase):
             self.assertIsInstance(t, BaseField)
             self.assertIsInstance(t.complex[0].meta.field, StringField)
             self.assertIsInstance(t.complex[1].meta.field, IntegerField)
-            self.assertEqual(t.default, ("3",4))
+            self.assertEqual(tuple([*t.default]), ("3",4))
 
         with self.subTest("with custom field"):
             INLField = define_flat_list_field(IntegerField,name="INLField")
             t = field(INLField,default=[3,4,5])
             self.assertTrue(isinstance(t, INLField))
-            self.assertEqual(t.default, [3,4,5])
+            self.assertEqual([*t.default], [3,4,5])
 
         with self.subTest("with default factory"):
             t = field(IntegerField, default_factory=lambda: 42)
@@ -267,10 +268,11 @@ class FieldTestCase(unittest.TestCase):
             self.assertEqual(t, (StringField,(StringField,IntegerField)))
 
             t = field((StringField,(StringField,IntegerField)),default=("3",("1",4)))
+            tval = t.cltopy(t.pytocl(("3",("1",4))))
             self.assertIsInstance(t, BaseField)
             self.assertIsInstance(t.complex[0].meta.field, StringField)
             self.assertIsInstance(t.complex[1].meta.field, BaseField)
-            self.assertEqual(t.default, ("3",("1",4)))
+            self.assertEqual(t.default, tval)
 
     def test_api_field_function_illegal_arguments(self):
         with self.subTest("illegal basefield type"):
@@ -1089,17 +1091,16 @@ class PredicateTestCase(unittest.TestCase):
         self.assertTrue(p1.tuple_ == p1_alt.tuple_)
         self.assertTrue(p1.tuple_ == q1.tuple_)
         self.assertTrue(p1.tuple_ == t1.tuple_)
-        self.assertTrue(p1.tuple_ == tuple1)
+
+        self.assertFalse(p1.tuple_ == tuple1)
 
         self.assertNotEqual(type(p1.tuple_), type(t1.tuple_))
-#        self.assertNotEqual(type(p1.tuple_), type(t1))
 
         self.assertTrue(p1.tuple_ != p2.tuple_)
         self.assertTrue(p1.tuple_ != q2.tuple_)
         self.assertTrue(p1.tuple_ != r2.tuple_)
         self.assertTrue(p1.tuple_ != s2.tuple_)
         self.assertTrue(p1.tuple_ != t2.tuple_)
-        self.assertTrue(p1.tuple_ != tuple2)
 
     #--------------------------------------------------------------------------
     # Test predicates with default fields
@@ -1918,35 +1919,6 @@ class PredicateInternalUnifyTestCase(unittest.TestCase):
             pos_f1=F3(1,sign=True)
         self.assertEqual(F3._unify(pos_raw), None)
 
-    #--------------------------------------------------------------------------
-    # Test predicate equality
-    # --------------------------------------------------------------------------
-    def test_predicate_comparison_operator_overload_signed(self):
-        class P(Predicate):
-            a = IntegerField
-        class Q(Predicate):
-            a = IntegerField
-
-        p1 = P(1) ; neg_p1=P(1,sign=False) ; p2 = P(2) ; neg_p2=P(2,sign=False)
-        q1 = Q(1)
-
-        self.assertTrue(neg_p1 < neg_p2)
-        self.assertTrue(neg_p1 < p1)
-        self.assertTrue(neg_p1 < p2)
-        self.assertTrue(neg_p2 < p1)
-        self.assertTrue(neg_p2 < p2)
-        self.assertTrue(p1 < p2)
-
-        self.assertTrue(p2 > p1)
-        self.assertTrue(p2 > neg_p2)
-        self.assertTrue(p2 > neg_p1)
-        self.assertTrue(p1 > neg_p2)
-        self.assertTrue(p1 > neg_p1)
-        self.assertTrue(neg_p2 > neg_p1)
-
-        # Different predicate sub-classes are incomparable
-#        with self.assertRaises(TypeError) as ctx:
-#            self.assertTrue(p1 < q1)
 
     #--------------------------------------------------------------------------
     # Test a simple predicate with a field that has a function default
@@ -2214,41 +2186,7 @@ class PredicateInternalUnifyTestCase(unittest.TestCase):
     #--------------------------------------------------------------------------
     # Test predicate equality
     # --------------------------------------------------------------------------
-    def test_predicate_comparison_operator_overloads(self):
-
-        f1 = Function("fact", [Number(1)])
-        f2 = Function("fact", [Number(2)])
-
-        class Fact(Predicate):
-            anum = IntegerField()
-
-        af1 = Fact(anum=1)
-        af2 = Fact(anum=2)
-        af1_c = Fact(anum=1)
-
-        self.assertEqual(f1, af1.raw)
-        self.assertEqual(af1, af1_c)
-        self.assertNotEqual(af1, af2)
-        self.assertEqual(str(f1), str(af1))
-
-        # comparing predicates of different types or to a raw should return
-        # false even if the underlying raw symbol is identical
-        class Fact2(Predicate):
-            anum = IntegerField()
-            class Meta: name = "fact"
-        ag1 = Fact2(anum=1)
-
-        self.assertEqual(f1, af1.raw)
-        self.assertEqual(af1.raw, f1)
-        self.assertEqual(af1.raw, ag1.raw)
-        self.assertNotEqual(af1, ag1)
-        self.assertNotEqual(af1, f1)
-        self.assertNotEqual(f1, af1)
-
-        self.assertTrue(af1 <  af2)
-        self.assertTrue(af1 <=  af2)
-        self.assertTrue(af2 >  af1)
-        self.assertTrue(af2 >=  af1)
+    def test_predicate_comparison_operator_overloads_with_symbol(self):
 
         # clingo.Symbol currently does not implement NotImplemented for
         # comparison between Symbol and some unknown type so the following
@@ -2263,40 +2201,29 @@ class PredicateInternalUnifyTestCase(unittest.TestCase):
             self.assertTrue(af1 <=  f2)
             self.assertTrue(f2 >=  af1)
 
+
     #--------------------------------------------------------------------------
-    # Test predicate equality
+    # Test predicate equality - comparison between predicate instances is just
+    # following the comparison of the underlying symbol objects.
     # --------------------------------------------------------------------------
-    def test_comparison_operator_overloads_complex(self):
+    def test_predicate_comparison_operator_overloads(self):
+        class P(Predicate):
+            a = IntegerField
+        class Q(Predicate):
+            a = (IntegerField, StringField)
 
-        class SwapField(IntegerField):
-            pytocl = lambda x: 100 - x
-            cltopy = lambda x: 100 - x
+        p1 = P(1) ; neg_p1=P(1,sign=False) ; p2 = P(2) ; neg_p2=P(2,sign=False)
+        q1 = Q((1,"a")) ; neg_q1=q1.clone(sign=False)
+        q2 = Q((2,"b")) ; neg_q2=q2.clone(sign=False)
 
-        class AComplex(ComplexTerm):
-            swap=SwapField()
-            norm=IntegerField()
+        operators = (operator.lt, operator.le, operator.eq,
+                     operator.ne, operator.ge, operator.gt)
+        facts = (p1, neg_p1, p2, neg_p2, q1, neg_q1, q2, neg_q2)
 
-        f1 = AComplex(swap=99,norm=1)
-        f2 = AComplex(swap=98,norm=2)
-        f3 = AComplex(swap=97,norm=3)
-        f4 = AComplex(swap=97,norm=3)
+        for x,y in itertools.product(facts, repeat=2):
+            for op in operators:
+                self.assertTrue(op(x,y) == op(x.raw,y.raw))
 
-        rf1 = f1.raw
-        rf2 = f2.raw
-        rf3 = f3.raw
-        for rf in [rf1,rf2,rf3]:
-            self.assertEqual(rf.arguments[0],rf.arguments[1])
-
-        # Test the the comparison operator for the complex term is using the
-        # swapped values so that the comparison is opposite to what the raw
-        # field says.
-        self.assertTrue(rf1 < rf2)
-        self.assertTrue(rf2 < rf3)
-        self.assertTrue(f1 > f2)
-        self.assertTrue(f2 > f3)
-        self.assertTrue(f2 < f1)
-        self.assertTrue(f3 < f2)
-        self.assertEqual(f3,f4)
     #--------------------------------------------------------------------------
     # Test unifying a symbol with a predicate
     # --------------------------------------------------------------------------

@@ -2384,13 +2384,6 @@ def _generate_dynamic_predicate_functions(class_name: str, namespace: Dict):
         tmp.append(f"{f.name}_cltopy(raw_args[{idx}]), ")
     args_cltopy= "".join(tmp)
 
-    if pdefn.is_tuple:
-        hash_eval_self = "hash(self._field_values)"
-        hash_eval_instance = "hash(instance._field_values)"
-    else:
-        hash_eval_self = f"""hash((self._sign, "{pdefn.name}", self._field_values))"""
-        hash_eval_instance = f"""hash((instance._sign, "{pdefn.name}", instance._field_values))"""
-
     expansions = {"args_signature": args_signature,
                   "sign_check": sign_check,
                   "args": args,
@@ -2399,9 +2392,7 @@ def _generate_dynamic_predicate_functions(class_name: str, namespace: Dict):
                   "check_complex": check_complex,
                   "args_raw": args_raw,
                   "sign_check_unify": sign_check_unify,
-                  "args_cltopy": args_cltopy,
-                  "hash_evaluation_self": hash_eval_self,
-                  "hash_evaluation_instance": hash_eval_instance}
+                  "args_cltopy": args_cltopy}
 
     bool_status = not pdefn.is_tuple or len(pdefn) > 0
     template = PREDICATE_TEMPLATE.format(pdefn=pdefn, bool_status=bool_status)
@@ -2911,61 +2902,33 @@ class Predicate(object, metaclass=_PredicateMeta):
     #--------------------------------------------------------------------------
     def __eq__(self, other):
         """Overloaded boolean operator."""
-        if isinstance(other, self.__class__):
-            return self._field_values == other._field_values and \
-                self._sign == other._sign
-        if self._meta.is_tuple:
-            return self._field_values == other
-        elif isinstance(other, Predicate):
-            return False
+        if isinstance(other, Predicate):
+            return self._raw == other._raw
         return NotImplemented
 
     def __lt__(self, other):
         """Overloaded boolean operator."""
-
-        # If it is the same predicate class then compare the sign and fields
-        if isinstance(other, self.__class__):
-
-             # Negative literals are less than positive literals
-            if self._sign != other._sign: return self._sign < other._sign
-
-            return self._field_values < other._field_values
-
-        # If different predicates then compare the raw value
-        elif isinstance(other, Predicate):
+        if isinstance(other, Predicate):
             return self._raw < other._raw
-
-        # Else an error
-        return NotImplemented
-
-    def __ge__(self, other):
-        """Overloaded boolean operator."""
-        result = self.__lt__(other)
-        if result is NotImplemented: return NotImplemented
-        return not result
-
-    def __gt__(self, other):
-        """Overloaded boolean operator."""
-
-        # If it is the same predicate class then compare the sign and fields
-        if isinstance(other, self.__class__):
-            # Positive literals are greater than negative literals
-            if self._sign != other._sign: return self._sign > other._sign
-
-            return self._field_values > other._field_values
-
-        # If different predicates then compare the raw value
-        if not isinstance(other, Predicate):
-            return self._raw > other._raw
-
-        # Else an error
         return NotImplemented
 
     def __le__(self, other):
         """Overloaded boolean operator."""
-        result = self.__gt__(other)
-        if result is NotImplemented: return NotImplemented
-        return not result
+        if isinstance(other, Predicate):
+            return self._raw <= other._raw
+        return NotImplemented
+
+    def __gt__(self, other):
+        """Overloaded boolean operator."""
+        if isinstance(other, Predicate):
+            return self._raw > other._raw
+        return NotImplemented
+
+    def __ge__(self, other):
+        """Overloaded boolean operator."""
+        if isinstance(other, Predicate):
+            return self._raw >= other._raw
+        return NotImplemented
 
     def __hash__(self):
         return self._hash
@@ -2985,13 +2948,12 @@ class Predicate(object, metaclass=_PredicateMeta):
     def __setstate__(self, newstate):
         self._field_values = newstate["_field_values"]
         self._sign = newstate["_sign"]
-        if self._meta.is_tuple: self._hash = hash(self._field_values)
-        else: self._hash = hash((self._sign, self._meta.name, self._field_values))
 
         clingoargs=[]
         for f,v in zip(self._meta, self._field_values):
             clingoargs.append(v.symbol if f.defn.complex else f.defn.pytocl(v))
         self._raw = Function(self._meta.name, clingoargs, self._sign)
+        self._hash = hash(self._raw)
 
 
 #------------------------------------------------------------------------------
