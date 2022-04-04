@@ -1061,6 +1061,13 @@ class QueryAPI1TestCase(unittest.TestCase):
     #   Test that select works with order_by for complex term
     #--------------------------------------------------------------------------
     def test_api_factbase_select_order_by_complex_term(self):
+        """NOTE: Behave change due to change in predicate semantics.
+
+        Previous the semantics would have used compared the individual python
+        values of `AComplex`. Now all complex terms simply map to their
+        underlying clingo Symbol object.
+
+        """
 
         class SwapField(IntegerField):
             pytocl = lambda x: 100 - x
@@ -1089,10 +1096,10 @@ class QueryAPI1TestCase(unittest.TestCase):
         self.assertEqual([f1,f2,f3,f4], list(q.get()))
 
         q = fb.select(AFact).order_by(AFact.cmplx, AFact.astr)
-        self.assertEqual([f3,f4,f2,f1], list(q.get()))
+        self.assertEqual([f1,f2,f3,f4], list(q.get()))
 
-        q = fb.select(AFact).where(AFact.cmplx <= ph1_).order_by(AFact.cmplx, AFact.astr)
-        self.assertEqual([f3,f4,f2], list(q.get(cmplx2)))
+        q = fb.select(AFact).where(AFact.cmplx <= ph1_).order_by(AFact.cmplx)
+        self.assertEqual([f1,f2], list(q.get(cmplx2)))
 
     #--------------------------------------------------------------------------
     #   Test that select works with order_by for complex term
@@ -1208,23 +1215,28 @@ class QueryAPI1TestCase(unittest.TestCase):
 
         fb.add(f1); fb.add(f2); fb.add(f3); fb.add(f4);
 
-        # Three queries that uses index
-        s1 = fb.select(Fact).where(Fact.ct1.num1 <= ph1_).order_by(Fact.ct2)
-        s2 = fb.select(Fact).where(Fact.ct1 == ph1_)
-        s3 = fb.select(Fact).where(Fact.ct2 == ph1_)
-        s4 = fb.select(Fact).where(Fact.ct3 == ph1_)
+        # A query with a complex term tuple in the where clause
+        s1 = fb.select(Fact).where(Fact.ct2 == (3,4))
+        self.assertEqual(list(s1.get()), [f1])
 
-        self.assertEqual(list(s1.get(20)), [f2,f1])
-        self.assertEqual(list(s2.get(CT(20,"b"))), [f2])
+        # An ordered query
+        s2 = fb.select(Fact).where(Fact.ct1.num1 <= ph1_).order_by(Fact.ct2)
+        self.assertEqual(list(s2.get(20)), [f2,f1])
+
+        s3 = fb.select(Fact).where(Fact.ct1 == ph1_)
+        self.assertEqual(list(s3.get(CT(20,"b"))), [f2])
 
         # NOTE: Important test as it requires tuple complex terms to have the
         # same hash as the corresponding python tuple.
-        self.assertEqual(list(s3.get((1,2))), [f2])
-        self.assertEqual(list(s4.get((2,1))), [f2])
+        s4 = fb.select(Fact).where(Fact.ct2 == ph1_)
+        self.assertEqual(list(s4.get((1,2))), [f2])
+
+        s5 = fb.select(Fact).where(Fact.ct3 == ph1_)
+        self.assertEqual(list(s5.get((2,1))), [f2])
 
         # One query doesn't use the index
-        s4 = fb.select(Fact).where(Fact.ct1.str1 == ph1_)
-        self.assertEqual(list(s4.get("c")), [f3])
+        s6 = fb.select(Fact).where(Fact.ct1.str1 == ph1_)
+        self.assertEqual(list(s6.get("c")), [f3])
 
     #--------------------------------------------------------------------------
     #   Test badly formed select/delete statements where the where clause (or

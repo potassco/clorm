@@ -88,6 +88,7 @@ elif sys.version_info < (3, 8):
 __all__ = [
     'ClormError',
     'Comparator',
+    'Placeholder',
     'BaseField',
     'Raw',
     'RawField',
@@ -286,8 +287,35 @@ def _wqc(a):
     except:
         return str(_wsce(a))
 
+
+#------------------------------------------------------------------------------
+# Placeholder allows for variable substituion of a query. Placeholder is
+# an abstract class that exposes no API other than its existence.
 # ------------------------------------------------------------------------------
-# ------------------------------------------------------------------------------
+class Placeholder(abc.ABC):
+
+    r"""An abstract class for defining parameterised queries.
+
+    Currently, Clorm supports 4 placeholders: ph1\_, ph2\_, ph3\_, ph4\_. These
+    correspond to the positional arguments of the query execute function call.
+
+    """
+    def __init__(self):
+        self._cmplx = None
+
+    @abc.abstractmethod
+    def __eq__(self, other): pass
+
+    @abc.abstractmethod
+    def __hash__(self): pass
+
+    @abc.abstractmethod
+    def make_complex_tuple_clone(self, cmplx):
+        pass
+
+    @abc.abstractmethod
+    def ground(self, ctx, *args, **kwargs):
+        pass
 
 # ------------------------------------------------------------------------------
 #
@@ -457,6 +485,27 @@ def in_(path, seq):
 def notin_(path, seq):
     '''Return a query operator to test non-membership  of an item in a collection'''
     return QCondition(notcontains, seq, path)
+
+
+# ------------------------------------------------------------------------------
+# A Helper function that attaches the complex tuple type if the QCondition path
+# is for a complex tuple field
+# ------------------------------------------------------------------------------
+
+def _qcondition_tuple_value(ppath, value):
+    if isinstance(value, PredicatePath):
+        return value
+    field = ppath.meta.field
+    if field is None:
+        return value
+    cmplx = field.complex
+    if cmplx is None:
+        return value
+    if not cmplx.meta.is_tuple:
+        return value
+    if not isinstance(value, Placeholder):
+        return cmplx(*value)
+    return value.make_complex_tuple_clone(cmplx)
 
 #------------------------------------------------------------------------------
 # PredicatePath class and supporting metaclass and functions. The PredicatePath
@@ -822,17 +871,17 @@ class PredicatePath(object, metaclass=_PredicatePathMeta):
     # Overload the boolean operators to return a functor
     #--------------------------------------------------------------------------
     def __eq__(self, other):
-        return QCondition(operator.eq, self, other)
+        return QCondition(operator.eq, self, _qcondition_tuple_value(self, other))
     def __ne__(self, other):
-        return QCondition(operator.ne, self, other)
+        return QCondition(operator.ne, self, _qcondition_tuple_value(self, other))
     def __lt__(self, other):
-        return QCondition(operator.lt, self, other)
+        return QCondition(operator.lt, self, _qcondition_tuple_value(self, other))
     def __le__(self, other):
-        return QCondition(operator.le, self, other)
+        return QCondition(operator.le, self, _qcondition_tuple_value(self, other))
     def __gt__(self, other):
-        return QCondition(operator.gt, self, other)
+        return QCondition(operator.gt, self, _qcondition_tuple_value(self, other))
     def __ge__(self, other):
-        return QCondition(operator.ge, self, other)
+        return QCondition(operator.ge, self, _qcondition_tuple_value(self, other))
 
     #--------------------------------------------------------------------------
     # Overload the bitwise operators to catch user-mistakes
@@ -1021,7 +1070,6 @@ def dealiased_path(path):
     cleanpath = getpath()
     if cleanpath is None: return None
     return cleanpath.meta.dealiased
-
 
 #------------------------------------------------------------------------------
 # Helper function to check if a second set of keys is a subset of a first

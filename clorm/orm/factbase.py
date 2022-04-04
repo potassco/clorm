@@ -139,8 +139,9 @@ class FactBase(object):
     and allows for certain fields to be indexed in order to perform more
     efficient queries.
 
-    The initaliser can be given a collection of predicates. If it is passed
-    another FactBase then it simply makes a copy (including the indexed fields).
+    The initialiser can be given a collection of predicates. If it is passed
+    another FactBase then it simply makes a copy (including the indexed
+    fields).
 
     FactBase also has a special mode when it is passed a functor instead of a
     collection. In this case it performs a delayed initialisation. This means
@@ -178,6 +179,9 @@ class FactBase(object):
             indexes = facts.indexes
         if indexes is None: indexes=[]
 
+        # Create a set to store all facts
+        self._facts = set()
+
         # Create FactMaps for the predicate types with indexed fields
         grouped = {}
 
@@ -200,6 +204,8 @@ class FactBase(object):
 
     def _add(self, arg: Union[Predicate, Iterable[Predicate]]) -> None:
         if isinstance(arg, Predicate):
+            if arg in self._facts:
+                return None
             ptype = arg.__class__
             if not ptype  in self._factmaps:
                 self._factmaps[ptype] = FactMap(ptype)
@@ -208,7 +214,9 @@ class FactBase(object):
         if isinstance(arg, str) or not isinstance(arg, Iterable):
             raise TypeError(f"'{arg}' is not a Predicate instance")
 
-        sorted_facts = sorted(arg, key=lambda x: x.__class__.__name__)
+        sorted_facts = sorted(filter(lambda f: f not in self._facts, arg),
+                              key=lambda x: x.__class__.__name__)
+        self._facts.update(sorted_facts)
         for ptype, grouped_facts in itertools.groupby(sorted_facts, lambda x: x.__class__):
             if not issubclass(ptype, Predicate):
                 raise TypeError(f"{list(grouped_facts)} are not Predicate instances")
