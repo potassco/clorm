@@ -79,6 +79,7 @@ __all__ = [
     'parse_fact_string',
     'parse_fact_files',
     "ConstantStr",
+    "StrictBool",
     "HeadList",
     "HeadListReversed",
     "TailList",

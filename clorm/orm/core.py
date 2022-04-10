@@ -27,7 +27,7 @@ import typing
 import re
 import uuid
 
-from clorm.orm.types import ConstantStr, HeadList, HeadListReversed, TailList, TailListReversed
+from clorm.orm.types import ConstantStr, HeadList, HeadListReversed, StrictBool, TailList, TailListReversed
 
 from .noclingo import (Symbol, NoSymbol, Function, String, Number, SymbolType, SymbolMode,
                        NoSymbol, get_symbol_mode, clingo_to_noclingo, noclingo_to_clingo)
@@ -2485,6 +2485,12 @@ def infer_field_definition(type_: Type[Any], module: str) -> Optional[Type[BaseF
         # if type_ just inherits from Enum is IntegerField, otherwise find appropriate Field
         field = IntegerField if len(type_.__bases__) == 1 else infer_field_definition(type_.__bases__[0], module)
         return define_enum_field(field, type_)
+    if issubclass(type_, bool):
+        from clorm.lib.boolean import BooleanField
+        return BooleanField
+    if issubclass(type_, StrictBool):
+        from clorm.lib.boolean import StrictBooleanField
+        return StrictBooleanField
     if issubclass(type_, int):
         return IntegerField
     if issubclass(type_, str):

@@ -6,6 +6,7 @@ __all__ = [
     "ConstantStr",
     "HeadList",
     "HeadListReversed",
+    "StrictBool",
     "TailList",
     "TailListReversed",
 ]
@@ -32,4 +33,13 @@ else:
     class TailList(Generic[_T]):
         pass
     class TailListReversed(Generic[_T]):
+        pass
+
+if TYPE_CHECKING:
+    StrictBool = bool
+else:
+    class StrictBool(int):
+        """
+        StrictBool to allow for bools which are not type-coerced.
+        """
         pass

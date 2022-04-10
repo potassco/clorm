@@ -9,6 +9,7 @@
 # ------------------------------------------------------------------------------
 
 import inspect
+import sys
 from typing import Tuple, Union
 import unittest
 import datetime
@@ -27,7 +28,7 @@ from clorm import ( BaseField, Raw, RawField, IntegerField, StringField,
                     define_nested_list_field, define_enum_field,
                     simple_predicate, path, hashable_path, alias, not_, and_,
                     or_, cross, in_, notin_, SymbolMode, set_symbol_mode,
-                    get_symbol_mode, Function, Number, String, ConstantStr,
+                    get_symbol_mode, Function, Number, String, StrictBool, ConstantStr,
                     HeadList, HeadListReversed, TailList, TailListReversed )
 
 # Implementation imports
@@ -1531,6 +1532,42 @@ class PredicateTestCase(unittest.TestCase):
         with self.subTest("raw symbol annotations"):
             p10 = P10(Raw(Function("test",[String("1")])))
             self.assertEqual(str(p10), "p10(test(\"1\"))")
+
+        with self. subTest("bool variable"):
+            class P11(Predicate):
+                a: bool
+
+            p11 = P11(True)
+            self.assertEqual(str(p11), "p11(1)")
+        
+
+    @unittest.skipIf(sys.version_info < (3,7), "because of Union simplification in < 3.7")
+    def test_predicate_annotated_fields_union_bool_int(self):
+            class P(Predicate):
+                a: Union[bool, int]
+
+            p = P(True)
+            self.assertEqual(str(p), "p(1)")
+            p = P(2)
+            self.assertEqual(str(p), "p(2)")
+            p = P._unify(Function("p",[String("off")]))
+            self.assertEqual(p.a, False)
+            p = P._unify(Function("p",[Number(-1)]))
+            self.assertEqual(p.a, -1)
+
+    def test_predicate_annotated_fields_union_StrictBool_int(self):
+            class P(Predicate):
+                a: Union[StrictBool, int]
+
+            p = P(True)
+            self.assertEqual(str(p), "p(1)")
+            p = P(2)
+            self.assertEqual(str(p), "p(2)")
+            p = P._unify(Function("p",[Number(0)]))
+            self.assertEqual(p.a, False)
+            p = P._unify(Function("p",[Number(-1)]))
+            self.assertEqual(p.a, -1)
+
 
     def test_predicate_with_wrong_mixed_annotations_and_Fields(self):
         with self.assertRaises(TypeError, msg="order of fields can't be determined"):
