@@ -93,9 +93,10 @@ class Unifier(object):
         fb=FactBase() if factbase is None else factbase
         for sym in symbols:
             matched = False
-            mpredicates = self._pgroups.get((len(sym.arguments),sym.name),[])
+            sym_args, sym_name = sym.arguments, sym.name
+            mpredicates = self._pgroups.get((len(sym_args),sym_name),[])
             for pred in mpredicates:
-                instance = pred._unify(sym)
+                instance = pred._unify(sym, sym_args, sym_name)
                 if instance is not None:
                     fb.add(instance)
                     matched = True
@@ -124,10 +125,11 @@ def _unify(predicates, symbols):
 
     # Loop through symbols and yield when we have a match
     for raw in symbols:
-        classes = types.get((len(raw.arguments), raw.name))
+        raw_args, raw_name = raw.arguments, raw.name
+        classes = types.get((len(raw_args), raw_name))
         if not classes: continue
         for cls in classes:
-            f = cls._unify(raw)
+            f = cls._unify(raw, raw_args, raw_name)
             if f is not None:
                 yield f
                 break
