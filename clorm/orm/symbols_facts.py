@@ -78,11 +78,14 @@ class Unifier(object):
         self._add_predicates([predicate])
 
     def unify_symbol(self,sym,*,raise_nomatch=False):
-        sym_args, sym_name = sym.arguments, sym.name
-        for pred in self._pgroups[(len(sym_args),sym_name)]:
-            instance = pred._unify(sym, sym_args, sym_name)
-            if instance is not None:
-                return instance
+        known_names = set([name for _, name in self._pgroups.keys()])
+        sym_name = sym.name
+        if sym_name in known_names:
+            sym_args = sym.arguments
+            for pred in self._pgroups[(len(sym_args),sym_name)]:
+                instance = pred._unify(sym, sym_args, sym_name)
+                if instance is not None:
+                    return instance
         if raise_nomatch:
             raise UnifierNoMatchError(
                 f"Cannot unify symbol '{sym}' to predicates in {self._predicates}",
@@ -92,18 +95,21 @@ class Unifier(object):
     def unify(self,symbols,*,factbase=None,raise_nomatch=False):
         fb=FactBase() if factbase is None else factbase
         facts = []
+        known_names = set([name for _, name in self._pgroups.keys()])
         for sym in symbols:
-            sym_args, sym_name = sym.arguments, sym.name
-            for pred in self._pgroups[(len(sym_args),sym_name)]:
-                instance = pred._unify(sym, sym_args, sym_name)
-                if instance is not None:
-                    facts.append(instance)
-                    break
-            else:
-                if raise_nomatch:
-                    raise UnifierNoMatchError(
-                        f"Cannot unify symbol '{sym}' to predicates in {self._predicates}",
-                        sym, self._predicates)
+            sym_name = sym.name
+            instance = None
+            if sym_name in known_names:
+                sym_args = sym.arguments
+                for pred in self._pgroups[(len(sym_args),sym_name)]:
+                    instance = pred._unify(sym, sym_args, sym_name)
+                    if instance is not None:
+                        facts.append(instance)
+                        break
+            if raise_nomatch and instance is None:
+                raise UnifierNoMatchError(
+                    f"Cannot unify symbol '{sym}' to predicates in {self._predicates}",
+                    sym, self._predicates)
         fb.add(facts)
         return fb
 
@@ -120,10 +126,14 @@ def _unify(predicates, symbols):
     types = defaultdict(list)
     for cls in predicates:
         types[(len(cls.meta), cls.meta.name)].append(cls)
+    known_names = set([name for _, name in types.keys()])
     
     # Loop through symbols and yield when we have a match
     for raw in symbols:
-        raw_args, raw_name = raw.arguments, raw.name
+        raw_name = raw.name
+        if raw_name not in known_names:
+            continue
+        raw_args = raw.arguments
         classes = types[(len(raw_args), raw_name)]
         if not classes: continue
         for cls in classes:
