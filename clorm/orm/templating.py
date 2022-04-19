@@ -72,15 +72,16 @@ def __init__(self,
                          self._sign)
 
 @classmethod
-def _unify(cls: Type[_P], raw: AnySymbol) -> Optional[_P]:
+def _unify(cls: Type[_P], raw: AnySymbol, raw_args: Optional[List[AnySymbol]]=None, raw_name: Optional[str]=None) -> Optional[_P]:
     try:
-        raw_args = raw.arguments
+        raw_args = raw_args if raw_args else raw.arguments
+        raw_name = raw_name if raw_name else raw.name
         if len(raw_args) != {pdefn.arity}:
             return None
 
         {{%sign_check_unify%}}
 
-        if raw.name != "{pdefn.name}":
+        if raw_name != "{pdefn.name}":
             return None
 
         instance = cls.__new__(cls)

@@ -72,6 +72,7 @@ class UnifyTestCase(unittest.TestCase):
         self.assertTrue(Tmp._unify(rt2) is not None)
         t1 = Tmp(1,Raw(raw1))
         t2 = Tmp(1,Raw(raw2))
+        self.assertTrue(Tmp._unify(rt2, rt2.arguments, rt2.name) == t2)
 
         self.assertEqual(set([f for f in unify([Tmp], [rt1,rt2])]),set([t1,t2]))
         self.assertEqual(t1.r1.symbol, raw1)

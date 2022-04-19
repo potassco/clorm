@@ -10,12 +10,13 @@
 # ------------------------------------------------------------------------------
 
 import itertools
-from typing import Any, Iterable, Union
-from collections import abc
+from typing import Iterable, Iterator, Optional, Union
+from collections import abc, defaultdict
 
 import clingo
 import clingo.ast as clast
 from .core import *
+from .core import AnySymbol
 from .noclingo import SymbolMode, SymbolType, Function, Number, String
 from .factbase import *
 from .core import get_field_definition, PredicatePath, kwargs_check_keys, \
@@ -67,43 +68,39 @@ class FactParserError(ClormError):
 class Unifier(object):
     def __init__(self,predicates=[]):
         self._predicates=tuple(predicates)
-        self._pgroups = {}
+        self._pgroups = defaultdict(list)
         self._add_predicates(predicates)
 
     def _add_predicates(self,predicates=[]):
         for p in predicates:
-            self._pgroups.setdefault((p.meta.arity,p.meta.name),[]).append(p)
+            self._pgroups[(p.meta.arity,p.meta.name)].append(p)
 
     def add_predicate(self,predicate):
-        self._add_predicates([predicates])
+        self._add_predicates([predicate])
 
-    def unify_symbol(self,sym,*,raise_nomatch=False):
-        mpredicates = self._pgroups.get((len(sym.arguments),sym.name),[])
-        for pred in mpredicates:
-            instance = pred._unify(sym)
-            if instance is not None:
-                return instance
-        if raise_nomatch:
-            raise UnifierNoMatchError(
-                f"Cannot unify symbol '{sym}' to predicates in {self._predicates}",
-                sym, self._predicates)
-        return None
-
-    def unify(self,symbols,*,factbase=None,raise_nomatch=False):
-        fb=FactBase() if factbase is None else factbase
+    def iter_unify(self, symbols: Iterable[AnySymbol], raise_nomatch: bool) -> Iterator[Predicate]:
+        known_names = set([name for _, name in self._pgroups.keys()])
         for sym in symbols:
-            matched = False
-            mpredicates = self._pgroups.get((len(sym.arguments),sym.name),[])
-            for pred in mpredicates:
-                instance = pred._unify(sym)
-                if instance is not None:
-                    fb.add(instance)
-                    matched = True
-                    break
-            if not matched and raise_nomatch:
+            sym_name = sym.name
+            instance = None
+            if sym_name in known_names:
+                sym_args = sym.arguments
+                for pred in self._pgroups[(len(sym_args),sym_name)]:
+                    instance = pred._unify(sym, sym_args, sym_name)
+                    if instance is not None:
+                        yield instance
+                        break
+            if raise_nomatch and instance is None:
                 raise UnifierNoMatchError(
                     f"Cannot unify symbol '{sym}' to predicates in {self._predicates}",
                     sym, self._predicates)
+
+    def unify_symbol(self, sym: AnySymbol, *, raise_nomatch: bool=False) -> Optional[Predicate]:
+        return next(self.iter_unify([sym], raise_nomatch), None)
+
+    def unify(self, symbols: Iterable[AnySymbol], *, factbase: Optional[FactBase]=None, raise_nomatch: bool=False) -> FactBase:
+        fb=FactBase() if factbase is None else factbase
+        fb.add(list(self.iter_unify(symbols, raise_nomatch)))
         return fb
 
 #------------------------------------------------------------------------------
@@ -112,25 +109,7 @@ class Unifier(object):
 # ------------------------------------------------------------------------------
 
 def _unify(predicates, symbols):
-    # To make things a little more efficient use the arity-name signature as a
-    # filter. However, Python doesn't have a built in multidict class, and I
-    # don't want to add a dependency to an external library just for one small
-    # feature, so implement a simple structure here.
-    sigs = [((len(cls.meta), cls.meta.name),cls) for cls in predicates]
-    types = {}
-    for sig,cls in sigs:
-        if sig not in types: types[sig] = [cls]
-        else: types[sig].append(cls)
-
-    # Loop through symbols and yield when we have a match
-    for raw in symbols:
-        classes = types.get((len(raw.arguments), raw.name))
-        if not classes: continue
-        for cls in classes:
-            f = cls._unify(raw)
-            if f is not None:
-                yield f
-                break
+    return Unifier(predicates).iter_unify(symbols, raise_nomatch=False) 
 
 
 #------------------------------------------------------------------------------
