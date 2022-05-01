@@ -11,6 +11,7 @@ import inspect
 import abc
 import functools
 import itertools
+from typing import Type
 
 from .core import *
 from .core import notcontains, PredicatePath, \
@@ -264,7 +265,7 @@ def _fm_iterable(other):
     else: return other
 
 class FactMap(object):
-    def __init__(self, ptype: Predicate, indexes=[]):
+    def __init__(self, ptype: Type[Predicate], indexes=[]):
         def clean_path(p):
             p = path(p)
             if hashable_path(p) != hashable_path(p.meta.dealiased):
