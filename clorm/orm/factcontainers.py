@@ -3,19 +3,14 @@
 # FactMap.
 # ------------------------------------------------------------------------------
 
-import io
 import operator
 import collections
 import bisect
-import inspect
-import abc
-import functools
 import itertools
-from typing import Type
+from typing import Any, Iterable, List, Type
 
 from .core import *
-from .core import notcontains, PredicatePath, \
-    get_field_definition, kwargs_check_keys
+from .core import notcontains, PredicatePath
 
 # ------------------------------------------------------------------------------
 # In order to implement FactBase I originally used the built in 'set'
@@ -265,7 +260,7 @@ def _fm_iterable(other):
     else: return other
 
 class FactMap(object):
-    def __init__(self, ptype: Type[Predicate], indexes=[]):
+    def __init__(self, ptype: Type[Predicate], indexes: Iterable[Any]=[]) -> None:
         def clean_path(p):
             p = path(p)
             if hashable_path(p) != hashable_path(p.meta.dealiased):
@@ -282,11 +277,10 @@ class FactMap(object):
         self._ptype = ptype
         self._factset = FactSet()
         self._path2factindex = collections.OrderedDict()
-        self._factindexes = []
 
         # Validate the paths to be indexed
         allindexes = set([clean_path(p) for p in indexes])
-
+        factindexes: List[FactIndex] = []
         for pth in allindexes:
             tmppath=path(pth)
             if hashable_path(tmppath.meta.dealiased) != hashable_path(tmppath):
@@ -297,8 +291,8 @@ class FactMap(object):
                                   "'{}'").format(tmppath, path(ptype)))
             tmpfi = FactIndex(tmppath)
             self._path2factindex[hashable_path(tmppath)] = tmpfi
-            self._factindexes.append(tmpfi)
-        self._factindexes = tuple(self._factindexes)
+            factindexes.append(tmpfi)
+        self._factindexes = tuple(factindexes)
 
     def add_facts(self, facts):
         for f in facts:
@@ -329,7 +323,7 @@ class FactMap(object):
         for fi in self._factindexes: fi.clear()
 
     @property
-    def predicate(self) -> Predicate:
+    def predicate(self) -> Type[Predicate]:
         return self._ptype
 
     @property

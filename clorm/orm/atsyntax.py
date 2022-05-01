@@ -5,17 +5,10 @@
 
 #import logging
 #import os
-import io
-import contextlib
 import inspect
-import operator
 import collections.abc as cabc
-import bisect
 import functools
-import itertools
-import clingo
-from typing import Any, Callable, List, Type
-import re
+from typing import Any, Callable, List, Sequence, Tuple, Type
 
 from .core import *
 from .core import get_field_definition, infer_field_definition
@@ -30,6 +23,7 @@ __all__ = [
 #------------------------------------------------------------------------------
 # Global
 #------------------------------------------------------------------------------
+_AnyCallable = Callable[..., Any]
 
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
@@ -98,7 +92,7 @@ class TypeCastSignature(object):
                 return True
             return inspect.isclass(o) and issubclass(o, BaseField)
 
-        if isinstance(se, cabc.Iterable):
+        if isinstance(se, Sequence):
             if len(se) != 1: return False
             return _is_output_field(se[0])
         return _is_output_field(se)
@@ -109,14 +103,14 @@ class TypeCastSignature(object):
             raise TypeError(("TypeCastSignature element {} must be a BaseField "
                              "subclass".format(sig)))
 
-        self._insigs: List[Type[BaseField]] = []
+        insigs: List[Type[BaseField]] = []
         for s in sigs[:-1]:
             field = None
             try:
                 field = infer_field_definition(s, "")
             except Exception:
                 pass
-            self._insigs.append(field if field else type(get_field_definition(s)))
+            insigs.append(field if field else type(get_field_definition(s)))
         try:
             self._outsig = infer_field_definition(sigs[-1], "") or sigs[-1]
         except Exception:
@@ -125,21 +119,21 @@ class TypeCastSignature(object):
         # A tuple is a special case that we want to convert into a complex field
         if isinstance(self._outsig, tuple):
             self._outsig = type(get_field_definition(self._outsig))
-        elif isinstance(self._outsig, cabc.Iterable):
+        elif isinstance(self._outsig, list):
             if len(self._outsig) != 1:
                 raise TypeError("Return value list signature not a singleton")
             if isinstance(self._outsig[0], tuple):
                 self._outsig[0] = type(get_field_definition(self._outsig[0]))
 
         # Validate the signature
-        for s in self._insigs: _validate_basic_sig(s)
-        if isinstance(self._outsig, cabc.Iterable):
+        for s in insigs: _validate_basic_sig(s)
+        if isinstance(self._outsig, Sequence):
             _validate_basic_sig(self._outsig[0])
         else:
             _validate_basic_sig(self._outsig)
 
         # Turn the signature into a tuple
-        self._insigs = tuple(self._insigs)
+        self._insigs = tuple(insigs)
 
     def _input(self, sig, arg):
         return sig.cltopy(arg)
@@ -150,7 +144,7 @@ class TypeCastSignature(object):
             return sig.pytocl(arg)
 
         # Deal with a list
-        if isinstance(sig, cabc.Iterable) and isinstance(arg, cabc.Iterable):
+        if isinstance(sig, Sequence) and isinstance(arg, cabc.Iterable):
             return [ self._output(sig[0], v) for v in arg ]
         raise ValueError("Value {} does not match signature {}".format(arg, sig))
 
@@ -234,7 +228,7 @@ class TypeCastSignature(object):
 # annotations. ignore_first is useful when dealing with member functions.
 # ------------------------------------------------------------------------------
 
-def _get_annotations(fn: Callable[..., Any], ignore_first: bool = False) -> List[Any]:
+def _get_annotations(fn: Callable[..., Any], ignore_first: bool = False) -> Tuple[Any, ...]:
     fsig = inspect.signature(fn)
     qname = fn.__qualname__
     fsigparam = fsig.parameters
@@ -256,13 +250,13 @@ def _get_annotations(fn: Callable[..., Any], ignore_first: bool = False) -> List
     if inspect.Signature.empty in annotations:
         raise TypeError(("Missing type cast annotations in function "
                          "arguments: {} ").format(qname))
-    return annotations
+    return tuple(annotations)
 
 
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
 
-def make_function_asp_callable(*args: Any):
+def make_function_asp_callable(*args: Any) -> _AnyCallable:
     r"""A decorator for making a function callable from within an ASP program.
 
     Can be called in a number of ways. Can be called as a decorator with or
@@ -330,7 +324,7 @@ def make_function_asp_callable(*args: Any):
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------
 
-def make_method_asp_callable(*args):
+def make_method_asp_callable(*args: Any) -> _AnyCallable:
     """A decorator for making a member function callable from within an ASP program.
 
     See ``make_function_asp_callable`` for details. The only difference is that

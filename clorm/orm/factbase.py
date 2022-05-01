@@ -7,7 +7,7 @@ import sys
 import io
 import abc
 import itertools
-from typing import Callable, Iterable, Iterator, List, Optional, TextIO, Tuple, Type, Union
+from typing import Callable, Iterable, Iterator, List, Optional, TextIO, Tuple, Type, Union, cast
 
 from .core import *
 from .core import PredicatePath, validate_root_paths
@@ -101,11 +101,11 @@ def _format_commented(fm: FactMap, out: TextIO) -> None:
     if pm.arity == 0:
         lines = [ "Unary predicate signature:", indent + pm.name ]
     else:
-        def build_signature(p: Predicate) -> str:
+        def build_signature(p: Type[Predicate]) -> str:
             args = []
             for pp in p:
                 complex = pp.meta.field.complex
-                args.append(pp._pathseq[1] if not complex else build_signature(complex))
+                args.append(cast(str, pp._pathseq[1]) if not complex else build_signature(complex))
             return f"{p.meta.name}({','.join(args)})"
 
         lines = [ "Predicate signature:",
