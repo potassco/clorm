@@ -11,17 +11,13 @@
 #import logging
 #import os
 import datetime
-import io
 import abc
-import contextlib
 import inspect
 import operator
 import collections
 import collections.abc as cabc
-import bisect
 import enum
 import functools
-import itertools
 import sys
 import typing
 import re
@@ -37,7 +33,7 @@ from .templating import (expand_template, PREDICATE_TEMPLATE,
                          NO_DEFAULTS_TEMPLATE, ASSIGN_DEFAULT_TEMPLATE,
                          ASSIGN_COMPLEX_TEMPLATE, PREDICATE_UNIFY_DOCSTRING)
 
-from typing import ( Any, Callable, Dict, Iterator, List, Optional, Sequence, Tuple,
+from typing import ( TYPE_CHECKING, Any, Callable, Dict, Iterable, Iterator, List, Optional, Sequence, Tuple,
                      Type, TypeVar, Union, overload, cast )
 
 
@@ -127,6 +123,7 @@ MISSING = _MISSING_TYPE()
 
 _T = TypeVar('_T')
 _P = TypeVar('_P', bound='Predicate')
+_BF = TypeVar('_BF', bound='BaseField')
 
 AnySymbol = Union[Symbol, NoSymbol]
 
@@ -492,7 +489,7 @@ def notin_(path, seq):
 #
 # ------------------------------------------------------------------------------
 
-def _define_predicate_path_subclass(predicate_class: 'Predicate') -> Type['PredicatePath']:
+def _define_predicate_path_subclass(predicate_class: 'Type[Predicate]') -> Type['PredicatePath']:
     class_name = predicate_class.__name__ + "_PredicatePath"
     return type(class_name, (PredicatePath,), { "_predicate_class" : predicate_class })
 
@@ -570,6 +567,10 @@ class PredicatePath(object, metaclass=_PredicatePathMeta):
     this property.
 
     '''
+    if TYPE_CHECKING:
+        _predicate_class: Type['Predicate']
+        _complexterm_classes: Dict[str, Type['Predicate']]
+
 
     #--------------------------------------------------------------------------
     # An inner class that provides a hashable variant of a path. Because
@@ -673,7 +674,7 @@ class PredicatePath(object, metaclass=_PredicatePathMeta):
         @property
         def root(self):
             if len(self._parent._pathseq) == 1: return self._parent
-            pi = self._parent._pathseq[0]
+            pi = cast(PathIdentity, self._parent._pathseq[0])
             if pi.predicate.__name__ == pi.name: return self.predicate.meta.path
             return pi.predicate.meta.path_class([pi])
 
@@ -682,14 +683,14 @@ class PredicatePath(object, metaclass=_PredicatePathMeta):
         # --------------------------------------------------------------------------
         @property
         def predicate(self):
-            return self._parent._pathseq[0].predicate
+            return cast(PathIdentity, self._parent._pathseq[0]).predicate
 
         # --------------------------------------------------------------------------
         # Return a dealiased version of this path
         # --------------------------------------------------------------------------
         @property
         def dealiased(self):
-            pi = self._parent._pathseq[0]
+            pi = cast(PathIdentity, self._parent._pathseq[0])
             if pi.predicate.__name__ == pi.name: return self._parent
             dealised = pi.predicate.meta.path
             for key in self._parent._pathseq[1:]:
@@ -710,7 +711,7 @@ class PredicatePath(object, metaclass=_PredicatePathMeta):
         # All the subpaths of this path
         #--------------------------------------------------------------------------
         @property
-        def subpaths(self) -> Tuple['PredicatePath']:
+        def subpaths(self) -> Tuple['PredicatePath', ...]:
             return self._parent._allsubpaths
 
         #--------------------------------------------------------------------------
@@ -722,7 +723,7 @@ class PredicatePath(object, metaclass=_PredicatePathMeta):
         # --------------------------------------------------------------------------
         def resolve(self, fact):
             pseq = self._parent._pathseq
-            if type(fact) != pseq[0].predicate:
+            if type(fact) != cast(PathIdentity, pseq[0]).predicate:
                 raise TypeError("{} is not of type {}".format(fact, pseq[0]))
             return self._parent._attrgetter(fact)
 
@@ -743,12 +744,12 @@ class PredicatePath(object, metaclass=_PredicatePathMeta):
         self._meta = PredicatePath.Meta(self)
         self._pathseq = tuple(pathseq)
         self._subpath = {}
-        self._allsubpaths = tuple([])
+        self._allsubpaths: Tuple[Any, ...] = tuple([])
         self._field = self._get_field()
         self._hashable = PredicatePath.Hashable(self)
         tmp = pathseq[1:]
         if not tmp: self._attrgetter = lambda x: x
-        else: self._attrgetter = operator.attrgetter(".".join(tmp))
+        else: self._attrgetter = operator.attrgetter(".".join(tmp)) # type: ignore
 
 
         if not pathseq or not isinstance(pathseq[0], PathIdentity) or \
@@ -953,8 +954,13 @@ def hashable_path(arg,exception=True):
 #------------------------------------------------------------------------------
 # API function to return the an alias path for a predicate
 # ------------------------------------------------------------------------------
+@overload
+def alias(predicate: Type[_P], name: str = "") -> Type[_P]: ...
 
-def alias(predicate, name=None):
+@overload
+def alias(predicate: Union[PredicatePath, PredicatePath.Hashable], name: str = "") -> Type['Predicate']: ...
+
+def alias(predicate: Any, name: str = "") -> Type['Predicate']:
     '''Return an alias :class:`PredicatePath` instance for a :class:`Predicate` sub-class.
 
     A predicate alias can be used to support self joins in queries. The alias
@@ -994,7 +1000,7 @@ def alias(predicate, name=None):
     errormsg = ("predicate argument must refer to a Predicate sub-class "
                 "or the root path corresponding to a Predicate sub-class")
     arg = predicate
-    if isinstance(arg,PredicatePath.Hashable): arg = predicate.path
+    if isinstance(arg,PredicatePath.Hashable): arg = arg.path
     if isinstance(arg, PredicatePath):
         if not arg.meta.is_root:
             raise ValueError("Invalid argument {}: {}".format(arg,errormsg))
@@ -1225,7 +1231,7 @@ class BaseField(object, metaclass=_AbstractBaseFieldMeta):
 
     # Internal property - not part of official API
     @_classproperty
-    def complex(cls) -> 'Predicate':
+    def complex(cls) -> Optional['Predicate']:
         return None
 
     @property
@@ -1271,7 +1277,7 @@ class BaseField(object, metaclass=_AbstractBaseFieldMeta):
 # https://github.com/python/cpython/blob/0b58bac3e7877d722bdbd3c38913dba2cb212f13/Lib/dataclasses.py#L346
 # https://github.com/python/typeshed/blob/e434b23741a5e3f2ea899ccfb0ef2a15f168ebf1/stubs/dataclasses/dataclasses.pyi#L45
 
-_FieldDefinition = Union[Type[BaseField], Tuple['_FieldDefinition']]
+_FieldDefinition = Union[Type[BaseField], Tuple['_FieldDefinition', ...]]  # type: ignore
 
 @overload
 def field(basefield: _FieldDefinition) -> Any: ...
@@ -1280,12 +1286,15 @@ def field(basefield: _FieldDefinition) -> Any: ...
 def field(basefield: _FieldDefinition,*, default: _T) -> _T: ...
 
 @overload
+def field(basefield: _FieldDefinition,*, default: _T, kw_only: bool) -> _T: ...
+
+@overload
 def field(basefield: _FieldDefinition,*, default_factory: Callable[[], _T]) -> _T: ...
 
 def field(basefield: _FieldDefinition,*, default: Any=MISSING, default_factory: Any=MISSING, kw_only: bool=False) -> Any:
     if default is not MISSING and default_factory is not MISSING:
         raise ValueError('can not specify both default and default_factory')
-    if isinstance(basefield, Tuple):
+    if isinstance(basefield, tuple):
         try:
             module = sys._getframe(1).f_globals.get('__name__', '__main__')
         except (AttributeError, ValueError):
@@ -1313,7 +1322,7 @@ def field(basefield: _FieldDefinition,*, default: Any=MISSING, default_factory: 
 
 class Raw(object):
     __slots__ = ("_symbol", )
-    def __init__(self, symbol: AnySymbol):
+    def __init__(self, symbol: AnySymbol) -> None:
         self._symbol = symbol
 
     def __str__(self):
@@ -1555,7 +1564,9 @@ def _refine_field_collection(subclass_name, field_class, values):
                 { "pytocl": _test_value,
                   "cltopy": _test_value})
 
-def refine_field(field_class,values,*,name=None):
+def refine_field(field_class: Type[_BF],
+                 values: Union[Iterable[_T], Callable[[_T], bool]], *,
+                 name: Optional[str]=None) -> Type[_BF]:
     """Factory function that returns a field sub-class with restricted values.
 
     A helper factory function to define a sub-class of a BaseField (or sub-class)
@@ -1624,7 +1635,7 @@ def refine_field(field_class,values,*,name=None):
 # helper function.
 # ------------------------------------------------------------------------------
 
-def combine_fields(fields,*,name=None):
+def combine_fields(fields: Sequence[Type[BaseField]], *, name: str="") -> Type[BaseField]:
     """Factory function that returns a field sub-class that combines other fields
 
     A helper factory function to define a sub-class of BaseField that combines
@@ -1685,7 +1696,7 @@ def combine_fields(fields,*,name=None):
 # deals with a list/tuple encoded and an asp basic tuple.
 # ------------------------------------------------------------------------------
 
-def define_flat_list_field(element_field,*,name=None):
+def define_flat_list_field(element_field: Type[BaseField], *, name: str="") -> Type[BaseField]:
     """Factory function that returns a BaseField sub-class for flat lists
 
     This function is a helper factory function to define a sub-class of
@@ -1747,7 +1758,10 @@ def define_flat_list_field(element_field,*,name=None):
 # deals with nested list encoded asp.
 # ------------------------------------------------------------------------------
 
-def define_nested_list_field(element_field,*,headlist=True,reverse=False,name=None):
+def define_nested_list_field(element_field: Type[BaseField], *,
+                             headlist: bool=True,
+                             reverse: bool=False,
+                             name: str="") -> Type[BaseField]:
     """Factory function that returns a BaseField sub-class for nested lists
 
     This function is a helper factory function to define a sub-class of
@@ -1925,7 +1939,9 @@ def define_nested_list_field(element_field,*,headlist=True,reverse=False,name=No
 # deals with nested list encoded asp.
 # ------------------------------------------------------------------------------
 
-def define_enum_field(parent_field,enum_class,*,name=None):
+def define_enum_field(parent_field: Type[BaseField],
+                      enum_class: Type[enum.Enum], *,
+                      name: str="") -> Type[BaseField]:
     """Factory function that returns a BaseField sub-class for an Enum
 
     Enums are part of the standard library since Python 3.4. This method
@@ -2066,7 +2082,14 @@ class SignAccessor(object):
 # ClormAnonTuple).
 # ------------------------------------------------------------------------------
 
-def get_field_definition(defn, module=None) -> BaseField:
+@overload
+def get_field_definition(defn: Type[_BF]) -> _BF: ...
+@overload
+def get_field_definition(defn: _BF) -> _BF: ...
+@overload
+def get_field_definition(defn: Tuple[Any, ...], module: str = "") -> BaseField: ...
+
+def get_field_definition(defn: Any, module: str="") -> BaseField:
     errmsg = ("Unrecognised field definition object '{}'. Expecting: "
               "1) BaseField (sub-)class, 2) BaseField (sub-)class instance, "
               "3) a tuple containing a field definition")
@@ -2084,7 +2107,7 @@ def get_field_definition(defn, module=None) -> BaseField:
 
     return _create_complex_term(defn, module=module)
 
-def _create_complex_term(defn, default_value=MISSING, module=None) -> BaseField:
+def _create_complex_term(defn: Any, default_value: Any = MISSING, module: str = "") -> BaseField:
     # NOTE: I was using a dict rather than OrderedDict which just happened to
     # work. Apparently, in Python 3.6 this was an implmentation detail and
     # Python 3.7 it is a language specification (see:
@@ -2092,8 +2115,8 @@ def _create_complex_term(defn, default_value=MISSING, module=None) -> BaseField:
     # However, since Clorm is meant to be Python 3.5 compatible change this to
     # use an OrderedDict.
     # proto = { "arg{}".format(i+1) : get_field_definition(d) for i,d in enumerate(defn) }
-    proto = collections.OrderedDict([(f"arg{i+1}", get_field_definition(d, module))
-                                     for i,d in enumerate(defn)])
+    proto: Dict[str, Any] = collections.OrderedDict([(f"arg{i+1}", get_field_definition(d, module))
+                                                      for i,d in enumerate(defn)])
     class_name = f'ClormAnonTuple({",".join(f"{arg[0]}={repr(arg[1])}" for arg in proto.items())})'
 
     if default_value is not MISSING:
@@ -2110,7 +2133,7 @@ def _create_complex_term(defn, default_value=MISSING, module=None) -> BaseField:
     # where the named tuple is created.
     if module is not None:
         proto['__module__'] = module
-    ct = type(class_name, (Predicate,), proto)
+    ct: Type[Predicate] = type(class_name, (Predicate,), proto)
     # For pickling to work, the frame must know the class
     if module is not None:
         try:
@@ -2134,7 +2157,7 @@ def _create_complex_term(defn, default_value=MISSING, module=None) -> BaseField:
 # Return the list of field_paths associated with a predicate (ignoring the base
 # predicate path itself).
 # ------------------------------------------------------------------------------
-def _get_paths(predicate: 'Predicate'):
+def _get_paths(predicate: Type['Predicate']) -> List[PredicatePath]:
     def get_subpaths(path: 'PredicatePath') -> List[PredicatePath]:
         paths=[]
         for subpath in path.meta.subpaths:
@@ -2147,12 +2170,12 @@ def _get_paths(predicate: 'Predicate'):
 #------------------------------------------------------------------------------
 # Return the list of field_paths that are specified as indexed
 #------------------------------------------------------------------------------
-def _get_paths_for_default_indexed_fields(predicate: 'Predicate') -> Iterator[PredicatePath]:
-    def is_indexed(path: PredicatePath):
+def _get_paths_for_default_indexed_fields(cls: Type['Predicate']) -> Iterator[PredicatePath]:
+    def is_indexed(path: PredicatePath) -> bool:
         field = path.meta.field
-        if field and field.index: return True
-        return False
-    return filter(is_indexed, _get_paths(predicate))
+        return field and field.index
+
+    return filter(is_indexed, _get_paths(cls))
 
 # ------------------------------------------------------------------------------
 # Determine if an attribute name has the pattern of an official attribute
@@ -2192,7 +2215,7 @@ class PredicateDefn(object):
 
     """
 
-    def __init__(self, name, field_accessors: List[FieldAccessor], anon=False,sign=None):
+    def __init__(self, name: str, field_accessors: List[FieldAccessor], anon: bool=False,sign: Optional[bool]=None) -> None:
         self._name = name
         self._byidx = tuple(field_accessors)
         self._byname = { f.name : f for f in field_accessors }
@@ -2200,7 +2223,7 @@ class PredicateDefn(object):
         self._anon = anon
         self._key2canon = { f.index : f.name for f in field_accessors }
         self._key2canon.update({f.name : f.name for f in field_accessors })
-        self._parent_cls = None
+        self._parent_cls: Type[Predicate] = None  # type: ignore
         self._indexed_fields = ()
         self._sign = sign
 
@@ -2265,7 +2288,7 @@ class PredicateDefn(object):
 
     # Internal property
     @parent.setter
-    def parent(self, pc: 'Predicate'):
+    def parent(self, pc: Type['Predicate']) -> None:
         if self._parent_cls:
             raise RuntimeError(("Trying to reset the parent for a "
                                 "PredicateDefn doesn't make sense"))
@@ -2319,7 +2342,7 @@ class PredicateDefn(object):
 # tuple. Otherwise simply returns the value.
 # ------------------------------------------------------------------------------
 
-def _generate_dynamic_predicate_functions(class_name: str, namespace: Dict):
+def _generate_dynamic_predicate_functions(class_name: str, namespace: Dict) -> None:
     pdefn = namespace["_meta"]
 
     gdict = {"Predicate": Predicate,
@@ -2369,16 +2392,16 @@ def _generate_dynamic_predicate_functions(class_name: str, namespace: Dict):
 
     # Create the check for dealing with complex assignment
     tmp = []
-    tmp2 = []
+    tmp3 = []
     for f in pdefn:
         cmplx = f.defn.complex
         if cmplx and cmplx.meta.is_tuple:
             tmp.append(ASSIGN_COMPLEX_TEMPLATE.format(arg=f.name))
-            tmp2.append(f"{f.name}.symbol, ")
+            tmp3.append(f"{f.name}.symbol, ")
         else:
-            tmp2.append(f"{f.name}_pytocl({f.name}), ")
+            tmp3.append(f"{f.name}_pytocl({f.name}), ")
     check_complex = "".join(tmp)
-    args_raw = "".join(tmp2)
+    args_raw = "".join(tmp3)
 
     tmp = []
     for idx, f in enumerate(pdefn):
@@ -2399,7 +2422,7 @@ def _generate_dynamic_predicate_functions(class_name: str, namespace: Dict):
     predicate_functions = expand_template(template, **expansions)
     # print(f"INIT:\n\n{predicate_functions}\n\n")
 
-    ldict = {}
+    ldict: Dict[str, Any] = {}
     exec(predicate_functions, gdict, ldict)
 
     init_doc_args = f"{args_signature}*, sign=True, raw=None"
@@ -2464,18 +2487,29 @@ def infer_field_definition(type_: Type[Any], module: str) -> Optional[Type[BaseF
     args = get_args(type_)
 
     if origin is HeadList:
-        return define_nested_list_field(infer_field_definition(args[0], module))
+        field = infer_field_definition(args[0], module)
+        return define_nested_list_field(field) if field else None
     if origin is HeadListReversed:
-        return define_nested_list_field(infer_field_definition(args[0], module),reverse=True)
+        field = infer_field_definition(args[0], module)
+        return define_nested_list_field(field, reverse=True) if field else None
     if origin is TailList:
-        return define_nested_list_field(infer_field_definition(args[0], module),headlist=False)
+        field = infer_field_definition(args[0], module)
+        return define_nested_list_field(field, headlist=False) if field else None
     if origin is TailListReversed:
-        return define_nested_list_field(infer_field_definition(args[0], module),headlist=False, reverse=True)
+        field = infer_field_definition(args[0], module)
+        return define_nested_list_field(field, headlist=False, reverse=True) if field else None
     if origin is Union:
-        return combine_fields([infer_field_definition(arg, module) for arg in args])
-    if len(args) > 1 and issubclass(origin, Tuple):
+        fields: List[Type[BaseField]] = []
+        for arg in args:
+            field = infer_field_definition(arg, module)
+            if field is None:
+                return None
+            fields.append(field)
+        return combine_fields(fields)
+    if len(args) > 1 and origin and issubclass(origin, tuple):
         if len(args) == 2 and args[1] is Ellipsis: # e.g. Tuple[int, ...]
-            return define_flat_list_field(infer_field_definition(args[0], module))
+            field = infer_field_definition(args[0], module)
+            return define_flat_list_field(field) if field else None
 
         # not just return a tuple of Fields, but create a Field-Instance and take the type so
         # Tuple[...] can be used within Union
@@ -2485,7 +2519,7 @@ def infer_field_definition(type_: Type[Any], module: str) -> Optional[Type[BaseF
     if issubclass(type_, enum.Enum):
         # if type_ just inherits from Enum is IntegerField, otherwise find appropriate Field
         field = IntegerField if len(type_.__bases__) == 1 else infer_field_definition(type_.__bases__[0], module)
-        return define_enum_field(field, type_)
+        return define_enum_field(field, type_) if field else None
     if issubclass(type_, bool):
         from clorm.lib.boolean import BooleanField
         return BooleanField
@@ -2626,12 +2660,13 @@ def _make_predicatedefn(class_name: str, namespace: Dict[str, Any], meta_dct: Di
 # instances and clingo symbol objects.
 # ------------------------------------------------------------------------------
 
-def _define_field_for_predicate(cls) -> Type[BaseField]:
-    if not issubclass(cls, Predicate):
+def _define_field_for_predicate(cls_meta: '_PredicateMeta') -> Type[BaseField]:
+    if not isinstance(cls_meta, _PredicateMeta):
         raise TypeError(("Class {} is not a Predicate/ComplexTerm "
-                         "sub-class").format(cls))
+                         "sub-class").format(cls_meta))
 
-    field_name = "{}Field".format(cls.__name__)
+    field_name = "{}Field".format(cls_meta.__name__)
+    cls = cast(Type['Predicate'], cls_meta)
     def _pytocl(v):
         if isinstance(v,cls): return v.raw
         if isinstance(v,tuple):
@@ -2720,7 +2755,7 @@ class _PredicateMeta(type):
         md.parent = cls
         for field in md:
             dct[field.name].parent = cls
-        md.indexes=_get_paths_for_default_indexed_fields(cls)
+        md.indexes=_get_paths_for_default_indexed_fields(cast(Type[Predicate], cls))
 
         # Assign the parent for the SignAccessor
         dct["sign"].parent = cls
@@ -3006,7 +3041,7 @@ ComplexTerm=Predicate
 # for easy display/printing.
 # ------------------------------------------------------------------------------
 
-def simple_predicate(predicate_name,arity,*,name=None,module=None):
+def simple_predicate(predicate_name: str, arity: int, *,name: str="", module: str="") -> Type[Predicate]:
     """Factory function to define a predicate with only RawField arguments.
 
     A helper factory function that takes a name and an arity and returns a
@@ -3036,8 +3071,8 @@ def simple_predicate(predicate_name,arity,*,name=None,module=None):
     subclass_name = name if name else "AnonSimplePredicate"
 
     # Use an OrderedDict to ensure the correct order of the field arguments
-    proto = collections.OrderedDict([("arg{}".format(i+1), RawField())
-                                     for i in range(0,arity)])
+    proto: Dict[str, Any] = collections.OrderedDict([("arg{}".format(i+1), RawField())
+                                                     for i in range(0,arity)])
     proto['Meta'] = type("Meta", (object,),
                          {"name" : predicate_name,
                           "is_tuple" : False, "_anon" : True})

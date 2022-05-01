@@ -205,12 +205,12 @@ class FactBase(object):
             raise TypeError(f"'{arg}' is not a Predicate instance")
 
         sorted_facts = sorted(arg, key=lambda x: x.__class__.__name__)
-        for ptype, grouped_facts in itertools.groupby(sorted_facts, lambda x: x.__class__):
-            if not issubclass(ptype, Predicate):
+        for type_, grouped_facts in itertools.groupby(sorted_facts, lambda x: x.__class__):
+            if not issubclass(type_, Predicate):
                 raise TypeError(f"{list(grouped_facts)} are not Predicate instances")
-            if not ptype in self._factmaps:
-                self._factmaps[ptype] = FactMap(ptype)
-            self._factmaps[ptype].add_facts(grouped_facts)
+            if not type_ in self._factmaps:
+                self._factmaps[type_] = FactMap(type_)
+            self._factmaps[type_].add_facts(grouped_facts)
         return
 
     def _remove(self, fact, raise_on_missing):
