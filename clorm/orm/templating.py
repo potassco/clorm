@@ -71,7 +71,7 @@ def __init__(self,
                          self._sign)
 
 @classmethod
-def _unify(cls: Type[_P], raw: AnySymbol, raw_args: Optional[List[AnySymbol]]=None, raw_name: Optional[str]=None) -> Optional[_P]:
+def _unify(cls: Type[_P], raw: AnySymbol, raw_args: Optional[Sequence[AnySymbol]]=None, raw_name: Optional[str]=None) -> Optional[_P]:
     try:
         raw_args = raw_args if raw_args else raw.arguments
         raw_name = raw_name if raw_name else raw.name

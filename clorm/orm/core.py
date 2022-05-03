@@ -2351,7 +2351,7 @@ def _generate_dynamic_predicate_functions(class_name: str, namespace: Dict) -> N
              "AnySymbol": AnySymbol,
              "Type": Type,
              "Optional" : Optional,
-             "List": List,
+             "Sequence": Sequence,
              "_P": _P}
 
     for f in pdefn:
@@ -2843,7 +2843,7 @@ class Predicate(object, metaclass=_PredicateMeta):
         @classmethod
         def _unify(cls: Type[_P],
                    raw: AnySymbol,
-                   raw_args: Optional[List[AnySymbol]]=None,
+                   raw_args: Optional[Sequence[AnySymbol]]=None,
                    raw_name: Optional[str]=None) -> Optional[_P]:
             pass
 
