@@ -10,7 +10,8 @@
 # ------------------------------------------------------------------------------
 
 import itertools
-from typing import Iterable, Iterator, List, Optional, Sequence, Type, Union, cast
+import sys
+from typing import Dict, Iterable, Iterator, List, Optional, Sequence, Set, Tuple, Type, TypeVar, Union, cast, overload
 from collections import defaultdict
 
 import clingo
@@ -20,6 +21,10 @@ from .noclingo import SymbolMode, Function, Number, String
 from .factbase import *
 from .core import AnySymbol, PredicatePath, get_symbol_mode
 
+if sys.version_info < (3, 8):
+    from typing_extensions import Literal
+else:
+    from typing import Literal
 
 __all__ = [
     'SymbolPredicateUnifier',
@@ -36,6 +41,8 @@ __all__ = [
 #------------------------------------------------------------------------------
 # Global
 #------------------------------------------------------------------------------
+_PredicateGroups = Dict[Tuple[int, str], List[Type[Predicate]]]
+_P = TypeVar("_P", bound=Predicate)
 
 #------------------------------------------------------------------------------
 # Clorm exception subclasses
@@ -64,16 +71,16 @@ class FactParserError(ClormError):
 # ------------------------------------------------------------------------------
 
 class Unifier(object):
-    def __init__(self,predicates=[]):
+    def __init__(self,predicates: Iterable[Type[Predicate]]) -> None:
         self._predicates=tuple(predicates)
-        self._pgroups = defaultdict(list)
+        self._pgroups: _PredicateGroups = defaultdict(list)
         self._add_predicates(predicates)
 
-    def _add_predicates(self,predicates=[]):
+    def _add_predicates(self,predicates: Iterable[Type[Predicate]]) -> None:
         for p in predicates:
             self._pgroups[(p.meta.arity,p.meta.name)].append(p)
 
-    def add_predicate(self,predicate):
+    def add_predicate(self,predicate: Type[Predicate]) -> None:
         self._add_predicates([predicate])
 
     def iter_unify(self, symbols: Iterable[AnySymbol], raise_nomatch: bool) -> Iterator[Predicate]:
@@ -106,7 +113,7 @@ class Unifier(object):
 # matters) and a set of raw clingo symbols against this list.
 # ------------------------------------------------------------------------------
 
-def _unify(predicates, symbols):
+def _unify(predicates: Iterable[Type[Predicate]], symbols: Iterable[AnySymbol]) -> Iterator[Predicate]:
     return Unifier(predicates).iter_unify(symbols, raise_nomatch=False) 
 
 
@@ -121,14 +128,15 @@ class SymbolPredicateUnifier(object):
     decorator.
     """
 
-    def __init__(self, predicates=[], indexes=[], suppress_auto_index=False):
-        self._predicates = ()
-        self._indexes = ()
+    def __init__(self,
+                 predicates: Iterable[Type[Predicate]] = [],
+                 indexes: Iterable[PredicatePath] = [],
+                 suppress_auto_index: bool = False) -> None:
         self._suppress_auto_index = suppress_auto_index
-        tmppreds = []
-        tmpinds = []
-        tmppredset = set()
-        tmpindset = set()
+        tmppreds: List[Type[Predicate]] = []
+        tmpinds: List[PredicatePath] = []
+        tmppredset: Set[Type[Predicate]] = set()
+        tmpindset: Set[PredicatePath.Hashable] = set()
         for pred in predicates:
                 self._register_predicate(pred,tmppreds,tmpinds,tmppredset,tmpindset)
         for fld in indexes:
@@ -136,7 +144,12 @@ class SymbolPredicateUnifier(object):
         self._predicates = tuple(tmppreds)
         self._indexes = tuple(tmpinds)
 
-    def _register_predicate(self, cls, predicates, indexes, predicateset, indexset):
+    def _register_predicate(self,
+                            cls: Type[Predicate],
+                            predicates: List[Type[Predicate]],
+                            indexes: List[PredicatePath],
+                            predicateset: Set[Type[Predicate]],
+                            indexset: Set[PredicatePath.Hashable]) -> None:
         if not issubclass(cls, Predicate):
             raise TypeError("{} is not a Predicate sub-class".format(cls))
         if cls in predicateset: return
@@ -148,7 +161,12 @@ class SymbolPredicateUnifier(object):
         for fp in cls.meta.indexes:
             self._register_index(fp,predicates,indexes,predicateset,indexset)
 
-    def _register_index(self, path, predicates, indexes, predicateset, indexset):
+    def _register_index(self,
+                        path: PredicatePath,
+                        predicates: Iterable[Type[Predicate]],
+                        indexes: List[PredicatePath],
+                        predicateset: Set[Type[Predicate]],
+                        indexset: Set[PredicatePath.Hashable]) -> None:
         if path.meta.hashable in indexset: return
         if isinstance(path, PredicatePath) and path.meta.predicate in predicateset:
             indexset.add(path.meta.hashable)
@@ -157,7 +175,7 @@ class SymbolPredicateUnifier(object):
             raise TypeError("{} is not a predicate field for one of {}".format(
                 path, [ p.__name__ for p in predicates ]))
 
-    def register(self, cls):
+    def register(self, cls: Type[_P])-> Type[_P]:
         if cls in self._predicates: return cls
         predicates = list(self._predicates)
         indexes = list(self._indexes)
@@ -168,7 +186,10 @@ class SymbolPredicateUnifier(object):
         self._indexes = tuple(indexes)
         return cls
 
-    def unify(self, symbols, delayed_init=False, raise_on_empty=False):
+    def unify(self,
+              symbols: Iterable[AnySymbol],
+              delayed_init: bool=False,
+              raise_on_empty: bool=False) -> FactBase:
         def _populate():
             facts=list(_unify(self.predicates, symbols))
             if not facts and raise_on_empty:
@@ -191,7 +212,20 @@ class SymbolPredicateUnifier(object):
 # the symbol object contained in `symbols`.
 # ------------------------------------------------------------------------------
 
-def unify(unifier,symbols,ordered=False):
+@overload
+def unify(unifier: Union[Iterable[Type[Predicate]], SymbolPredicateUnifier],
+          symbols: Iterable[AnySymbol],
+          ordered: Literal[True]) -> List[Predicate]: ...
+
+
+@overload
+def unify(unifier: Union[Iterable[Type[Predicate]], SymbolPredicateUnifier],
+          symbols: Iterable[AnySymbol]) -> FactBase: ...
+
+
+def unify(unifier: Union[Iterable[Type[Predicate]], SymbolPredicateUnifier],
+          symbols: Iterable[AnySymbol],
+          ordered: bool=False) -> Union[FactBase, List[Predicate]]:
     '''Unify raw symbols against a list of predicates or a SymbolPredicateUnifier.
 
     Symbols are tested against each predicate unifier until a match is
@@ -213,9 +247,8 @@ def unify(unifier,symbols,ordered=False):
         raise ValueError(("The unifier must be a list of predicates "
                           "or a SymbolPredicateUnifier"))
     if ordered:
-        if isinstance(unifier, SymbolPredicateUnifier):
-            unifier=unifier.predicates
-        return list(_unify(unifier,symbols))
+        predicates = unifier.predicates if isinstance(unifier, SymbolPredicateUnifier) else unifier
+        return list(_unify(predicates, symbols))
     else:
         if not isinstance(unifier, SymbolPredicateUnifier):
             unifier=SymbolPredicateUnifier(predicates=unifier)
