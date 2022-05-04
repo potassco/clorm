@@ -3556,6 +3556,14 @@ class QueryExecutor(object):
                               "must be a subset of the query roots "
                               "'{}'").format(selection, roots))
 
+        # Special case for deleting all facts of a predicate
+        if (len(roots) == 1 and len(subroots) == 1 and
+            not self._qspec.where and not self._qspec.join):
+            fm = self._factmaps[path(roots[0]).meta.predicate]
+            count = len(fm)
+            fm.clear()
+            return count
+
         # Find the roots to delete and generate a set of actions that are
         # executed to add to a delete set
         deletesets = {}

@@ -2988,7 +2988,7 @@ class QueryExecutorTestCase(unittest.TestCase):
     #--------------------------------------------------------------------------
     # Test delete
     #--------------------------------------------------------------------------
-    def test_api_QueryOutput_delete(self):
+    def test_api_QueryExecutor_delete(self):
         F = self.F
         G = self.G
         bjoh = basic_join_order
@@ -3058,6 +3058,27 @@ class QueryExecutorTestCase(unittest.TestCase):
         with self.assertRaises(ValueError) as ctx:
             fb,count = delete(F,G,FA)
         check_errmsg("For a 'delete' query",ctx)
+
+
+    #--------------------------------------------------------------------------
+    # Test special case delete of a single root item with no where clause
+    #--------------------------------------------------------------------------
+    def test_api_QueryExecutor_delete_nowhere_clause(self):
+        F = self.F
+        G = self.G
+
+        def clean_factmaps():
+            tmp = factmaps_to_factsets(self.factmaps)
+            facts = [f for p, fs in tmp.items() for f in fs]
+            return factmaps_dict(facts)
+
+        original_fm = clean_factmaps()
+
+        qe = QueryExecutor(clean_factmaps(), QuerySpec(roots=[F]))
+        self.assertEqual(len(original_fm[F]), qe.delete())
+
+        qe = QueryExecutor(clean_factmaps(), QuerySpec(roots=[G]))
+        self.assertEqual(len(original_fm[G]), qe.delete())
 
 
 #------------------------------------------------------------------------------

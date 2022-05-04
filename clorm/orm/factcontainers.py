@@ -339,6 +339,9 @@ class FactMap(object):
     def path2factindex(self):
         return self._path2factindex
 
+    def __len__(self):
+        return len(self._factset)
+
     def __bool__(self):
         return bool(self._factset)
 
