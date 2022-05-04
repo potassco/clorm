@@ -45,7 +45,7 @@ __all__ = [
 class TypeCastSignatureTestCase(unittest.TestCase):
     def setUp(self):
         class DateField(StringField):
-            pytocl = lambda dt: dt.strftime("%Y%m%d")
+            pytocl = lambda dt: datetime.datetime.strftime(dt,"%Y%m%d")
             cltopy = lambda s: datetime.datetime.strptime(s,"%Y%m%d").date()
 
         class DowField(ConstantField):
