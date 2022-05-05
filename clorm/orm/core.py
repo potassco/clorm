@@ -35,7 +35,8 @@ from .noclingo import (Symbol, NoSymbol, Function, String, Number, SymbolType, S
 from .templating import (expand_template, PREDICATE_TEMPLATE,
                          CHECK_SIGN_TEMPLATE, CHECK_SIGN_UNIFY_TEMPLATE,
                          NO_DEFAULTS_TEMPLATE, ASSIGN_DEFAULT_TEMPLATE,
-                         ASSIGN_COMPLEX_TEMPLATE, PREDICATE_UNIFY_DOCSTRING)
+                         ASSIGN_COMPLEX_TEMPLATE, PREDICATE_UNIFY_DOCSTRING,
+                         PREDICATE_BOOL_DOCSTRING, PREDICATE_LEN_DOCSTRING)
 
 from typing import ( Any, Callable, Dict, Iterator, List, Optional, Sequence, Tuple,
                      Type, TypeVar, Union, overload, cast )
@@ -87,6 +88,7 @@ elif sys.version_info < (3, 8):
 __all__ = [
     'ClormError',
     'Comparator',
+    'Placeholder',
     'BaseField',
     'Raw',
     'RawField',
@@ -285,8 +287,35 @@ def _wqc(a):
     except:
         return str(_wsce(a))
 
+
+#------------------------------------------------------------------------------
+# Placeholder allows for variable substituion of a query. Placeholder is
+# an abstract class that exposes no API other than its existence.
 # ------------------------------------------------------------------------------
-# ------------------------------------------------------------------------------
+class Placeholder(abc.ABC):
+
+    r"""An abstract class for defining parameterised queries.
+
+    Currently, Clorm supports 4 placeholders: ph1\_, ph2\_, ph3\_, ph4\_. These
+    correspond to the positional arguments of the query execute function call.
+
+    """
+    def __init__(self):
+        self._cmplx = None
+
+    @abc.abstractmethod
+    def __eq__(self, other): pass
+
+    @abc.abstractmethod
+    def __hash__(self): pass
+
+    @abc.abstractmethod
+    def make_complex_tuple_clone(self, cmplx):
+        pass
+
+    @abc.abstractmethod
+    def ground(self, ctx, *args, **kwargs):
+        pass
 
 # ------------------------------------------------------------------------------
 #
@@ -456,6 +485,27 @@ def in_(path, seq):
 def notin_(path, seq):
     '''Return a query operator to test non-membership  of an item in a collection'''
     return QCondition(notcontains, seq, path)
+
+
+# ------------------------------------------------------------------------------
+# A Helper function that attaches the complex tuple type if the QCondition path
+# is for a complex tuple field
+# ------------------------------------------------------------------------------
+
+def _qcondition_tuple_value(ppath, value):
+    if isinstance(value, PredicatePath):
+        return value
+    field = ppath.meta.field
+    if field is None:
+        return value
+    cmplx = field.complex
+    if cmplx is None:
+        return value
+    if not cmplx.meta.is_tuple:
+        return value
+    if not isinstance(value, Placeholder):
+        return cmplx(*value)
+    return value.make_complex_tuple_clone(cmplx)
 
 #------------------------------------------------------------------------------
 # PredicatePath class and supporting metaclass and functions. The PredicatePath
@@ -821,17 +871,17 @@ class PredicatePath(object, metaclass=_PredicatePathMeta):
     # Overload the boolean operators to return a functor
     #--------------------------------------------------------------------------
     def __eq__(self, other):
-        return QCondition(operator.eq, self, other)
+        return QCondition(operator.eq, self, _qcondition_tuple_value(self, other))
     def __ne__(self, other):
-        return QCondition(operator.ne, self, other)
+        return QCondition(operator.ne, self, _qcondition_tuple_value(self, other))
     def __lt__(self, other):
-        return QCondition(operator.lt, self, other)
+        return QCondition(operator.lt, self, _qcondition_tuple_value(self, other))
     def __le__(self, other):
-        return QCondition(operator.le, self, other)
+        return QCondition(operator.le, self, _qcondition_tuple_value(self, other))
     def __gt__(self, other):
-        return QCondition(operator.gt, self, other)
+        return QCondition(operator.gt, self, _qcondition_tuple_value(self, other))
     def __ge__(self, other):
-        return QCondition(operator.ge, self, other)
+        return QCondition(operator.ge, self, _qcondition_tuple_value(self, other))
 
     #--------------------------------------------------------------------------
     # Overload the bitwise operators to catch user-mistakes
@@ -1020,7 +1070,6 @@ def dealiased_path(path):
     cleanpath = getpath()
     if cleanpath is None: return None
     return cleanpath.meta.dealiased
-
 
 #------------------------------------------------------------------------------
 # Helper function to check if a second set of keys is a subset of a first
@@ -2296,7 +2345,6 @@ class PredicateDefn(object):
             name = "({}.alias.{})".format(classname,uuid.uuid4().hex)
         return self._path_class([PathIdentity(self._parent_cls,name)])
 
-
     def __len__(self):
         '''Returns the number of fields'''
         return len(self._byidx)
@@ -2395,9 +2443,10 @@ def _generate_dynamic_predicate_functions(class_name: str, namespace: Dict):
                   "sign_check_unify": sign_check_unify,
                   "args_cltopy": args_cltopy}
 
-    template = PREDICATE_TEMPLATE.format(pdefn=pdefn)
+    bool_status = not pdefn.is_tuple or len(pdefn) > 0
+    template = PREDICATE_TEMPLATE.format(pdefn=pdefn, bool_status=bool_status)
     predicate_functions = expand_template(template, **expansions)
-    # print(f"INIT:\n\n{predicate_functions}\n\n")
+#    print(f"INIT:\n\n{predicate_functions}\n\n")
 
     ldict = {}
     exec(predicate_functions, gdict, ldict)
@@ -2409,10 +2458,17 @@ def _generate_dynamic_predicate_functions(class_name: str, namespace: Dict):
     predicate_unify = ldict["_unify"]
     predicate_unify.__name__ = "_unify"
     predicate_unify.__doc__ = PREDICATE_UNIFY_DOCSTRING
+    predicate_bool = ldict["__bool__"]
+    predicate_bool.__name__ = "__bool__"
+    predicate_bool.__doc__ = PREDICATE_BOOL_DOCSTRING
+    predicate_len = ldict["__len__"]
+    predicate_len.__name__ = "__len__"
+    predicate_len.__doc__ = PREDICATE_LEN_DOCSTRING
 
     namespace["__init__"] = predicate_init
     namespace["_unify"] = predicate_unify
-
+    namespace["__bool__"] = predicate_bool
+    namespace["__len__"] = predicate_len
 
 
 #------------------------------------------------------------------------------
@@ -2887,94 +2943,58 @@ class Predicate(object, metaclass=_PredicateMeta):
 
     def __getitem__(self, idx):
         """Allows for index based access to field elements."""
-        return self.meta[idx].__get__(self)
+        return self._meta[idx].__get__(self)
 
-    def __bool__(self):
-        '''Behaves like a tuple: returns False if the predicate/complex-term has no elements'''
-        return len(self.meta) > 0
-
-    def __len__(self):
-        '''Returns the number of fields in the object'''
-        return len(self.meta)
+    ### NOTE: __bool__() and __len__() are generated dynamically with
+    ### __init__().
 
     #--------------------------------------------------------------------------
     # Overload the unary minus operator to return the complement of this literal
     # (if its positive return a negative equivaent and vice-versa)
     # --------------------------------------------------------------------------
     def __neg__(self):
-        return self.clone(sign=not self.sign)
+        return self.clone(sign=not self._sign)
 
     #--------------------------------------------------------------------------
     # Overloaded operators
     #--------------------------------------------------------------------------
     def __eq__(self, other):
         """Overloaded boolean operator."""
-        if isinstance(other, self.__class__):
-            return self._field_values == other._field_values and \
-                self._sign == other._sign
-        if self.meta.is_tuple:
-            return self._field_values == other
-        elif isinstance(other, Predicate):
-            return False
+        if isinstance(other, Predicate):
+            return self._raw == other._raw
         return NotImplemented
 
     def __lt__(self, other):
         """Overloaded boolean operator."""
-
-        # If it is the same predicate class then compare the sign and fields
-        if isinstance(other, self.__class__):
-
-             # Negative literals are less than positive literals
-            if self.sign != other.sign: return self.sign < other.sign
-
-            return self._field_values < other._field_values
-
-        # If different predicates then compare the raw value
-        elif isinstance(other, Predicate):
-            return self.raw < other.raw
-
-        # Else an error
-        return NotImplemented
-
-    def __ge__(self, other):
-        """Overloaded boolean operator."""
-        result = self.__lt__(other)
-        if result is NotImplemented: return NotImplemented
-        return not result
-
-    def __gt__(self, other):
-        """Overloaded boolean operator."""
-
-        # If it is the same predicate class then compare the sign and fields
-        if isinstance(other, self.__class__):
-            # Positive literals are greater than negative literals
-            if self.sign != other.sign: return self.sign > other.sign
-
-            return self._field_values > other._field_values
-
-        # If different predicates then compare the raw value
-        if not isinstance(other, Predicate):
-            return self.raw > other.raw
-
-        # Else an error
+        if isinstance(other, Predicate):
+            return self._raw < other._raw
         return NotImplemented
 
     def __le__(self, other):
         """Overloaded boolean operator."""
-        result = self.__gt__(other)
-        if result is NotImplemented: return NotImplemented
-        return not result
+        if isinstance(other, Predicate):
+            return self._raw <= other._raw
+        return NotImplemented
+
+    def __gt__(self, other):
+        """Overloaded boolean operator."""
+        if isinstance(other, Predicate):
+            return self._raw > other._raw
+        return NotImplemented
+
+    def __ge__(self, other):
+        """Overloaded boolean operator."""
+        if isinstance(other, Predicate):
+            return self._raw >= other._raw
+        return NotImplemented
 
     def __hash__(self):
-        if self._hash is None:
-            if self.meta.is_tuple: self._hash = hash(self._field_values)
-            else: self._hash = hash((self.meta.name,self._field_values))
         return self._hash
 
     def __str__(self):
         """Returns the Predicate as the string representation of an ASP fact.
         """
-        return str(self.raw)
+        return str(self._raw)
 
     def __repr__(self):
         return self.__str__()
@@ -2984,14 +3004,14 @@ class Predicate(object, metaclass=_PredicateMeta):
                 '_sign' : self._sign}
 
     def __setstate__(self, newstate):
-        self._hash = None
         self._field_values = newstate["_field_values"]
         self._sign = newstate["_sign"]
 
         clingoargs=[]
-        for f,v in zip(self.meta, self._field_values):
+        for f,v in zip(self._meta, self._field_values):
             clingoargs.append(v.symbol if f.defn.complex else f.defn.pytocl(v))
-        self._raw = Function(self.meta.name, clingoargs, self._sign)
+        self._raw = Function(self._meta.name, clingoargs, self._sign)
+        self._hash = hash(self._raw)
 
 
 #------------------------------------------------------------------------------

@@ -22,7 +22,6 @@ from .factcontainers import FactSet, FactIndex, FactMap
 
 __all__ = [
     'Query',
-    'Placeholder',
     'desc',
     'asc',
     'ph_',
@@ -42,33 +41,15 @@ __all__ = [
 
 
 #------------------------------------------------------------------------------
-# Defining and manipulating conditional elements
+# Sub-classes of the Placeholder abstract class
 #------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-# Placeholder allows for variable substituion of a query. Placeholder is
-# an abstract class that exposes no API other than its existence.
-# ------------------------------------------------------------------------------
-class Placeholder(abc.ABC):
-
-    r"""An abstract class for defining parameterised queries.
-
-    Currently, Clorm supports 4 placeholders: ph1\_, ph2\_, ph3\_, ph4\_. These
-    correspond to the positional arguments of the query execute function call.
-
-    """
-    @abc.abstractmethod
-    def __eq__(self, other): pass
-
-    @abc.abstractmethod
-    def __hash__(self): pass
-
 
 class NamedPlaceholder(Placeholder):
 
     # Only keyword arguments are allowd. Note: None could be a legitimate value
     # so cannot use it to test for default
     def __init__(self, *, name, **kwargs):
+        super().__init__()
         self._name = name
         # Check for unexpected arguments
         badkeys = kwargs_check_keys(set(["default"]), set(kwargs.keys()))
@@ -89,7 +70,24 @@ class NamedPlaceholder(Placeholder):
         return self._default[0]
     @property
     def default(self):
-        return self._default[1]
+        return self._cmplx(*self._default[1]) if self._cmplx else self._default[1]
+
+    def ground(self, ctx, *_, **kwargs):
+        v = kwargs.get(self._name, None)
+        if v:
+            return self._cmplx(*v) if self._cmplx else v
+        if self.has_default:
+            return self.default
+        raise ValueError((f"Missing named placeholder argument '{self}' when grounding "
+                          "'{ctx}' with arguments: {kwargs}"))
+
+    def make_complex_tuple_clone(self, cmplx):
+        ph = NamedPlaceholder.__new__(NamedPlaceholder)
+        ph._name = self._name
+        ph._default = self._default
+        ph._cmplx = cmplx
+        return ph
+
     def __str__(self):
         tmpstr = "" if not self._default[0] else ",{}".format(self._default[1])
         return "ph_(\"{}\"{})".format(self._name, tmpstr)
@@ -105,10 +103,25 @@ class NamedPlaceholder(Placeholder):
 
 class PositionalPlaceholder(Placeholder):
     def __init__(self, *, posn):
+        super().__init__()
         self._posn = posn
+
     @property
     def posn(self):
         return self._posn
+
+    def ground(self, ctx, *args, **_):
+        if self._posn < len(args):
+            return self._cmplx(*args[self._posn]) if self._cmplx else args[self._posn]
+        raise ValueError((f"Missing positional placeholder argument '{self}' when "
+                          "grounding '{ctx}' with positional arguments: {args}"))
+
+    def make_complex_tuple_clone(self, cmplx):
+        ph = PositionalPlaceholder.__new__(PositionalPlaceholder)
+        ph._posn = self._posn
+        ph._cmplx = cmplx
+        return ph
+
     def __str__(self):
         return "ph{}_".format(self._posn+1)
     def __repr__(self):
@@ -240,19 +253,7 @@ class MembershipSeq(object):
     def ground(self,*args,**kwargs):
         def get(arg):
             if not isinstance(arg,Placeholder): return arg
-            if isinstance(arg,PositionalPlaceholder):
-                if arg.posn < len(args): return args[arg.posn]
-                raise ValueError(("Missing positional placeholder argument '{}' "
-                                  "when grounding '{}' with positional arguments: "
-                                  "{}").format(arg,self,args))
-            elif isinstance(arg,NamedPlaceholder):
-                v = kwargs.get(arg.name,None)
-                if v: return v
-                if arg.has_default: return arg.default
-                raise ValueError(("Missing named placeholder argument '{}' "
-                                  "when grounding '{}' with arguments: "
-                                  "{}").format(arg,self,kwargs))
-
+            return arg.ground(self, *args, **kwargs)
 
         if isinstance(self._src, Query):
             where = self._src.qspec.where
@@ -548,18 +549,7 @@ class StandardComparator(Comparator):
     def ground(self,*args,**kwargs):
         def get(arg):
             if not isinstance(arg,Placeholder): return arg
-            if isinstance(arg,PositionalPlaceholder):
-                if arg.posn < len(args): return args[arg.posn]
-                raise ValueError(("Missing positional placeholder argument '{}' "
-                                  "when grounding '{}' with positional arguments: "
-                                  "{}").format(arg,self,args))
-            elif isinstance(arg,NamedPlaceholder):
-                v = kwargs.get(arg.name,None)
-                if v: return v
-                if arg.has_default: return arg.default
-                raise ValueError(("Missing named placeholder argument '{}' "
-                                  "when grounding '{}' with arguments: "
-                                  "{}").format(arg,self,kwargs))
+            return arg.ground(self, *args, **kwargs)
 
         if self._operator not in [ operator.contains, notcontains] or \
            not isinstance(self._args[0],MembershipSeq):
@@ -2277,8 +2267,15 @@ class QuerySpec(object):
         np = {}
         pp = {}
         for p in where.placeholders:
-            if isinstance(p, NamedPlaceholder): np[p.name] = p
-            elif isinstance(p, PositionalPlaceholder): pp[p.posn] = p
+            if isinstance(p, NamedPlaceholder):
+                np[p.name] = p
+            elif isinstance(p, PositionalPlaceholder):
+                pp[p.posn] = p
+            elif isinstance(p.ph, NamedPlaceholder):
+                np[p.ph.name] = p
+            else:
+                pp[p.ph.posn] = p
+
         for idx, v in enumerate(args):
             if idx not in pp:
                 raise ValueError(("Trying to bind value '{}' to positional "
@@ -2291,6 +2288,7 @@ class QuerySpec(object):
                                   "argument '{}' but there is no corresponding "
                                   "named placeholder in where clause "
                                   "'{}'").format(v,k,where))
+
         nwhere = where.ground(*args, **kwargs)
         return self.modp(where=nwhere,bind=True)
 

@@ -384,8 +384,7 @@ class ComparatorTestCase(unittest.TestCase):
         # FIXUP
         getter = make_input_alignment_functor([F], [F.acomplex])
         result = getter((f1,))
-        tmp=((1,2),)
-        self.assertEqual(result, tmp)
+        self.assertEqual(result[0], type(result[0])(1,2))
 
     # ------------------------------------------------------------------------------
     # ------------------------------------------------------------------------------
@@ -489,11 +488,13 @@ class ComparatorTestCase(unittest.TestCase):
         f1 = F(1,(1,2))
         f2 = F(1,(1,3))
 
+        t1 = type(f1.acomplex)(1,2)
+
         getter = make_input_alignment_functor([F], [F.acomplex])
         result = getter((f1,))
-        self.assertEqual(result, ((1,2),))
+        self.assertEqual(result[0], t1)
 
-        sc = SC(operator.eq,[F.acomplex,(1,2)])
+        sc = SC(operator.eq,[F.acomplex,t1])
         cmp = sc.make_callable([F])
         self.assertTrue(cmp((f1,)))
         self.assertFalse(cmp((f2,)))
