@@ -33,9 +33,18 @@ if oclingo.__version__ >= "5.5.0":
 else:
     from clingo import parse_program  # type: ignore
 
-from clingo import *
+from clingo import ( core, Logger, MessageCode, TruthValue, version, symbol, Function, Infimum, 
+                     Number, String, Supremum, Symbol, SymbolType, Tuple_, parse_term,
+                     symbolic_atoms, SymbolicAtom, SymbolicAtoms, theory_atoms, TheoryAtom,
+                     TheoryElement, TheoryTerm, TheoryTermType, util, solving, ModelType,
+                     SolveControl, SolveResult, propagator, Assignment, PropagateControl,
+                     PropagateInit, Propagator, PropagatorCheckMode, Trail, backend, Backend,
+                     HeuristicType, Observer, configuration, Configuration, statistics,
+                     StatisticsArray, StatisticsMap, StatisticsValue, control,
+                     application, Application, ApplicationOptions, Flag, clingo_main)
 
 __all__ = list([k for k in oclingo.__dict__.keys() if k[0] != '_'])
+
 __version__ = oclingo.__version__
 
 # ------------------------------------------------------------------------------
@@ -156,12 +165,11 @@ class ModelOverride(object):
         return self.model_.contains(atom)
 
 
-__clorm_Model = make_class_wrapper(OModel, ModelOverride)
 if TYPE_CHECKING:
-    class Model(__clorm_Model, OModel):  # type: ignore
+    class Model(ModelOverride, OModel):
         pass
 else:
-    Model = __clorm_Model
+    Model = make_class_wrapper(OModel, ModelOverride)
 
 # ------------------------------------------------------------------------------
 # Wrap clingo.SolveHandle and override some functions
@@ -211,12 +219,11 @@ class SolveHandleOverride(object):
         return None
 
 
-__clorm_SolveHandle = make_class_wrapper(OSolveHandle, SolveHandleOverride)
 if TYPE_CHECKING:
-    class SolveHandle(__clorm_SolveHandle, OSolveHandle):  # type: ignore
+    class SolveHandle(SolveHandleOverride, OSolveHandle):
         pass
 else:
-    SolveHandle = __clorm_SolveHandle
+    SolveHandle = make_class_wrapper(OSolveHandle, SolveHandleOverride)
 
 
 # ------------------------------------------------------------------------------
@@ -287,18 +294,12 @@ class ControlOverride(object):
 
     @overload
     def __init__(self, arguments: Sequence[str] = [],
-                 logger: Optional[Logger] = None, message_limit: int = 20) -> None: ...
+                 logger: Optional[oclingo.Logger] = None, message_limit: int = 20,
+                 unifier: Optional[Union[List[Predicate], SymbolPredicateUnifier]] = None) -> None: ...
 
     @overload
     def __init__(self, control_: OControl) -> None: ...
 
-    @overload
-    def __init__(
-        self,
-        *args: Any,
-        unifier: Union[List[Predicate], SymbolPredicateUnifier],
-        **kwargs: Any
-    ) -> None: ...
 
     @overload
     def __init__(self, *args: Any, **kwargs: Any) -> None: ...
@@ -422,7 +423,7 @@ class ControlOverride(object):
     # function parameters. At some point will drop support for older clingo and
     # can simplify this function.
     # ---------------------------------------------------------------------------
-    def solve(self, *args: Any, **kwargs: Any) -> Union[SolveHandle, SolveResult]:
+    def solve(self, *args: Any, **kwargs: Any) -> Union[SolveHandle, oclingo.SolveResult]:
         '''Run the clingo solver.
 
         This function extends ``clingo.Control.solve()`` in two ways:
@@ -480,20 +481,19 @@ class ControlOverride(object):
         result = self.control_.solve(**nkwargs)
         if ("yield_" in nkwargs and nkwargs["yield_"]) or \
            (async_keyword in nkwargs and nkwargs[async_keyword]):
-            return SolveHandle(cast(OSolveHandle, result), unifier=self._unifier)  # type: ignore
+            return SolveHandle(cast(OSolveHandle, result), unifier=self._unifier)
         else:
-            return cast(SolveResult, result)
+            return cast(oclingo.SolveResult, result)
 
     def __getattr__(self, attr):
         return getattr(self.control_, attr)
 
 
-__clorm_control = make_class_wrapper(OControl, ControlOverride)
 if TYPE_CHECKING:
-    class Control(__clorm_control, OControl):  # type: ignore
+    class Control(ControlOverride, OControl):  # type: ignore
         pass
 else:
-    Control = __clorm_control
+    Control = make_class_wrapper(OControl, ControlOverride)
 
 
 # ------------------------------------------------------------------------------

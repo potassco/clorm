@@ -26,7 +26,7 @@ import functools
 import inspect
 from typing import Any, Optional, Type, TypeVar, Union, overload
 
-_T = TypeVar("_T", bound=object)
+_T = TypeVar("_T", bound=type)
 
 # ------------------------------------------------------------------------------
 # Make proxy member functions and properties
@@ -114,10 +114,10 @@ def make_class_wrapper(inputclass: Type[object]) -> Type[object]: ...
 
 
 @overload
-def make_class_wrapper(inputclass: Type[object], override: Type[_T]) -> Type[_T]: ...
+def make_class_wrapper(inputclass: Type[object], override: _T) -> _T: ...
 
 
-def make_class_wrapper(inputclass: Type[object], override: Optional[Type[_T]] = None) -> Type[Union[object, _T]]:
+def make_class_wrapper(inputclass: Type[object], override: Optional[_T] = None) -> Union[Type[object], _T]:
     def getattrdoc(cls, key):
         if not cls: return None
         try:
