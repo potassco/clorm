@@ -128,14 +128,14 @@ _BF = TypeVar('_BF', bound='BaseField')
 AnySymbol = Union[Symbol, NoSymbol]
 
 #------------------------------------------------------------------------------
-# A _classproperty decorator. (see
-# https://stackoverflow.com/questions/3203286/how-to-create-a-read-only-class-property-in-python)
+# A _classproperty decorator used in combination with @classmethod. (see
+# https://stackoverflow.com/a/2544313)
 #------------------------------------------------------------------------------
-class _classproperty(object):
-    def __init__(self, getter):
-        self.getter= getter
-    def __get__(self, instance, owner):
-        return self.getter(owner)
+class _classproperty(property):
+    def __get__(self, obj, type_):
+        return self.fget.__get__(None, type_)()
+    def __set__(self, obj, value):
+        return self.fset.__get__(None, type(obj))(value)
 
 # ------------------------------------------------------------------------------
 # PEP681 https://www.python.org/dev/peps/pep-0681/
@@ -1109,9 +1109,9 @@ class _BaseFieldMeta(type):
         # For complex-terms provide an interface to the underlying complex term
         # object
         if "complex" in dct:
-            dct["complex"] = _classproperty(dct["complex"])
+            dct["complex"] = _classproperty(classmethod(dct["complex"]))
         else:
-            dct["complex"] = _classproperty(lambda cls: None)
+            dct["complex"] = _classproperty(classmethod(lambda cls: None))
 
         return super(_BaseFieldMeta, meta).__new__(meta, name, bases, dct)
 
@@ -1231,6 +1231,7 @@ class BaseField(object, metaclass=_AbstractBaseFieldMeta):
 
     # Internal property - not part of official API
     @_classproperty
+    @classmethod
     def complex(cls) -> Optional['Predicate']:
         return None
 
@@ -2869,6 +2870,7 @@ class Predicate(object, metaclass=_PredicateMeta):
         return self._raw if isinstance(self._raw, Symbol) else noclingo_to_clingo(self._raw)
 
     @_classproperty
+    @classmethod
     def Field(cls) -> BaseField:
         """A BaseField sub-class corresponding to a Field for this class."""
         return cls._field
@@ -2909,6 +2911,7 @@ class Predicate(object, metaclass=_PredicateMeta):
 
     # Get the metadata for the Predicate definition
     @_classproperty
+    @classmethod
     def meta(cls) -> PredicateDefn:
         """The meta data (definitional information) for the Predicate/Complex-term"""
         return cls._meta
