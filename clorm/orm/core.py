@@ -2700,6 +2700,8 @@ def _define_field_for_predicate(cls_meta: '_PredicateMeta') -> Type[BaseField]:
 #------------------------------------------------------------------------------
 @__dataclass_transform__(field_descriptors=(field,))
 class _PredicateMeta(type):
+    if TYPE_CHECKING:
+        meta: PredicateDefn
 
     #--------------------------------------------------------------------------
     # Allocate the new metaclass
@@ -2768,7 +2770,7 @@ class _PredicateMeta(type):
     def __getitem__(self, idx):
         return self.meta.path[idx]
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[PredicatePath]:
         return iter([self[k] for k in self.meta.keys()])
 
 #------------------------------------------------------------------------------
@@ -2872,7 +2874,7 @@ class Predicate(object, metaclass=_PredicateMeta):
         return cls._field
 
     # Clone the object with some differences
-    def clone(self, **kwargs):
+    def clone(self: _P, **kwargs: Any) -> _P:
         """Clone the object with some differences.
 
         For any field name that is not one of the parameter keywords the clone
@@ -2915,12 +2917,12 @@ class Predicate(object, metaclass=_PredicateMeta):
     # Overloaded index operator to access the values and len operator
     #--------------------------------------------------------------------------
 
-    def __iter__(self) -> Iterator[PredicatePath]:
+    def __iter__(self) -> Iterator[Any]:
         # The number of parameters in a predicate are always small so convenient
         # to generate a list of values rather than have a specialised iterator.
         return iter([self[idx] for idx in range(0,len(self))])
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx: int) -> Any:
         """Allows for index based access to field elements."""
         return self.meta[idx].__get__(self)
 
