@@ -33,15 +33,7 @@ if oclingo.__version__ >= "5.5.0":
 else:
     from clingo import parse_program  # type: ignore
 
-from clingo import ( core, Logger, MessageCode, TruthValue, version, symbol, Function, Infimum, 
-                     Number, String, Supremum, Symbol, SymbolType, Tuple_, parse_term,
-                     symbolic_atoms, SymbolicAtom, SymbolicAtoms, theory_atoms, TheoryAtom,
-                     TheoryElement, TheoryTerm, TheoryTermType, util, solving, ModelType,
-                     SolveControl, SolveResult, propagator, Assignment, PropagateControl,
-                     PropagateInit, Propagator, PropagatorCheckMode, Trail, backend, Backend,
-                     HeuristicType, Observer, configuration, Configuration, statistics,
-                     StatisticsArray, StatisticsMap, StatisticsValue, control,
-                     application, Application, ApplicationOptions, Flag, clingo_main)
+from clingo import *
 
 __all__ = list([k for k in oclingo.__dict__.keys() if k[0] != '_'])
 
@@ -166,7 +158,7 @@ class ModelOverride(object):
 
 
 if TYPE_CHECKING:
-    class Model(ModelOverride, OModel):
+    class Model(ModelOverride, OModel):  # type: ignore
         pass
 else:
     Model = make_class_wrapper(OModel, ModelOverride)
@@ -220,7 +212,7 @@ class SolveHandleOverride(object):
 
 
 if TYPE_CHECKING:
-    class SolveHandle(SolveHandleOverride, OSolveHandle):
+    class SolveHandle(SolveHandleOverride, OSolveHandle):  # type: ignore
         pass
 else:
     SolveHandle = make_class_wrapper(OSolveHandle, SolveHandleOverride)
@@ -481,7 +473,7 @@ class ControlOverride(object):
         result = self.control_.solve(**nkwargs)
         if ("yield_" in nkwargs and nkwargs["yield_"]) or \
            (async_keyword in nkwargs and nkwargs[async_keyword]):
-            return SolveHandle(cast(OSolveHandle, result), unifier=self._unifier)
+            return SolveHandle(cast(OSolveHandle, result), unifier=self._unifier)  # type: ignore
         else:
             return cast(oclingo.SolveResult, result)
 
