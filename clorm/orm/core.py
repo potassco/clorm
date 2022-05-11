@@ -2515,12 +2515,12 @@ def infer_field_definition(type_: Type[Any], module: str) -> Optional[Type[BaseF
         # not just return a tuple of Fields, but create a Field-Instance and take the type so
         # Tuple[...] can be used within Union
         return type(get_field_definition(tuple(infer_field_definition(arg, module) for arg in args), module))
-    if issubclass(type_, ConstantStr):
-        return ConstantField
     if issubclass(type_, enum.Enum):
         # if type_ just inherits from Enum is IntegerField, otherwise find appropriate Field
         field = IntegerField if len(type_.__bases__) == 1 else infer_field_definition(type_.__bases__[0], module)
         return define_enum_field(field, type_) if field else None
+    if issubclass(type_, ConstantStr):
+        return ConstantField
     if issubclass(type_, bool):
         from clorm.lib.boolean import BooleanField
         return BooleanField
@@ -2826,7 +2826,7 @@ class Predicate(object, metaclass=_PredicateMeta):
     if typing.TYPE_CHECKING:
         # populated by the metaclass, defined here to help IDEs only
         _meta: typing.ClassVar[PredicateDefn]
-        _field: typing.ClassVar[BaseField]
+        _field: typing.ClassVar[Type[BaseField]]
 
     #--------------------------------------------------------------------------
     #
@@ -2871,7 +2871,7 @@ class Predicate(object, metaclass=_PredicateMeta):
 
     @_classproperty
     @classmethod
-    def Field(cls) -> BaseField:
+    def Field(cls) -> Type[BaseField]:
         """A BaseField sub-class corresponding to a Field for this class."""
         return cls._field
 

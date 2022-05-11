@@ -1481,6 +1481,10 @@ class PredicateTestCase(unittest.TestCase):
             self.assertTrue(isinstance(P5.d.meta.field, IntegerField))
             self.assertEqual(str(p5), "p5(\"a\",1,c,42)")
 
+        with self.subTest("check that field for EnumConstStr is created correctly"):
+            self.assertTrue(P5.c.meta.field.__class__ is not ConstantField)
+            self.assertEqual(str(P5.c.meta.field), "ConstantField_Restriction(index=False)")
+
         class P6(Predicate):
             a: Tuple[int,...]
         class P61(Predicate):
