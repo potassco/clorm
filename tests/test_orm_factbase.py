@@ -1545,7 +1545,7 @@ class QueryAPI2TestCase(unittest.TestCase):
     #--------------------------------------------------------------------------
     #   Improve error message for bad join statement
     #--------------------------------------------------------------------------
-    def test_api_complex_query_join_ordered(self):
+    def test_api_bad_join_statement(self):
         F = self.F
         G = self.G
         fb = self.factbase

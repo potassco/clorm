@@ -10,7 +10,7 @@ for more details.
 
 import functools
 import itertools
-from typing import TYPE_CHECKING, Any, ClassVar, Iterable, List, Optional, Sequence, Tuple, Union, cast, overload
+from typing import TYPE_CHECKING, Any, Iterable, List, Optional, Sequence, Tuple, Type, Union, cast, overload
 from .orm import *
 from .util.wrapper import init_wrapper, make_class_wrapper
 
@@ -36,15 +36,16 @@ else:
 from clingo import *
 
 __all__ = list([k for k in oclingo.__dict__.keys() if k[0] != '_'])
+
 __version__ = oclingo.__version__
 
 # ------------------------------------------------------------------------------
 # Helper function to smartly build a unifier if only a list of predicates have
 # been provided.
 # ------------------------------------------------------------------------------
+_Unifier = Union[List[Type[Predicate]], SymbolPredicateUnifier]
 
-
-def _build_unifier(unifier: Optional[Union[List[Predicate], SymbolPredicateUnifier]]) -> Optional[SymbolPredicateUnifier]:
+def _build_unifier(unifier: Optional[_Unifier]) -> Optional[SymbolPredicateUnifier]:
     if unifier is None:
         return None
     if isinstance(unifier, SymbolPredicateUnifier):
@@ -80,7 +81,7 @@ class ModelOverride(object):
     if TYPE_CHECKING:
         _wrapped: OModel  # will be set through init_wrapper
 
-    def __init__(self, model: OModel, unifier: Optional[Union[List[Predicate], SymbolPredicateUnifier]] = None) -> None:
+    def __init__(self, model: OModel, unifier: Optional[_Unifier] = None) -> None:
         self._unifier = _build_unifier(unifier)
         _check_is_func(model, "symbols")
         init_wrapper(self, wrapped_=model)
@@ -156,12 +157,11 @@ class ModelOverride(object):
         return self.model_.contains(atom)
 
 
-__clorm_Model = make_class_wrapper(OModel, ModelOverride)
 if TYPE_CHECKING:
-    class Model(__clorm_Model, OModel):  # type: ignore
+    class Model(ModelOverride, OModel):  # type: ignore
         pass
 else:
-    Model = __clorm_Model
+    Model = make_class_wrapper(OModel, ModelOverride)
 
 # ------------------------------------------------------------------------------
 # Wrap clingo.SolveHandle and override some functions
@@ -182,7 +182,7 @@ class SolveHandleOverride(object):
     if TYPE_CHECKING:
         _wrapped: OSolveHandle  # will be set through init_wrapper
 
-    def __init__(self, handle: OSolveHandle, unifier: Optional[Union[List[Predicate], SymbolPredicateUnifier]] = None) -> None:
+    def __init__(self, handle: OSolveHandle, unifier: Optional[_Unifier] = None) -> None:
         init_wrapper(self, wrapped_=handle)
         self._unifier = _build_unifier(unifier)
 
@@ -200,23 +200,22 @@ class SolveHandleOverride(object):
 
     def __iter__(self):
         for model in self.solvehandle_:
-            yield Model(model, unifier=self._unifier)  # type: ignore
+            yield Model(model, unifier=self._unifier)
 
     def __enter__(self):
-        self.solvehandle_.__enter__()  # type: ignore
+        self.solvehandle_.__enter__()
         return self
 
     def __exit__(self, exception_type, exception_value, traceback):
-        self.solvehandle_.__exit__(exception_type, exception_value, traceback)  # type: ignore
+        self.solvehandle_.__exit__(exception_type, exception_value, traceback)
         return None
 
 
-__clorm_SolveHandle = make_class_wrapper(OSolveHandle, SolveHandleOverride)
 if TYPE_CHECKING:
-    class SolveHandle(__clorm_SolveHandle, OSolveHandle):  # type: ignore
+    class SolveHandle(SolveHandleOverride, OSolveHandle):  # type: ignore
         pass
 else:
-    SolveHandle = __clorm_SolveHandle
+    SolveHandle = make_class_wrapper(OSolveHandle, SolveHandleOverride)
 
 
 # ------------------------------------------------------------------------------
@@ -287,18 +286,12 @@ class ControlOverride(object):
 
     @overload
     def __init__(self, arguments: Sequence[str] = [],
-                 logger: Optional[Logger] = None, message_limit: int = 20) -> None: ...
+                 logger: Optional[oclingo.Logger] = None, message_limit: int = 20,
+                 unifier: Optional[Union[List[Predicate], SymbolPredicateUnifier]] = None) -> None: ...
 
     @overload
     def __init__(self, control_: OControl) -> None: ...
 
-    @overload
-    def __init__(
-        self,
-        *args: Any,
-        unifier: Union[List[Predicate], SymbolPredicateUnifier],
-        **kwargs: Any
-    ) -> None: ...
 
     @overload
     def __init__(self, *args: Any, **kwargs: Any) -> None: ...
@@ -344,7 +337,7 @@ class ControlOverride(object):
         return self._unifier
 
     @unifier.setter
-    def unifier(self, unifier: Union[List[Predicate], SymbolPredicateUnifier]) -> None:
+    def unifier(self, unifier: _Unifier) -> None:
         self._unifier = _build_unifier(unifier)
 
     # ------------------------------------------------------------------------------
@@ -422,7 +415,7 @@ class ControlOverride(object):
     # function parameters. At some point will drop support for older clingo and
     # can simplify this function.
     # ---------------------------------------------------------------------------
-    def solve(self, *args: Any, **kwargs: Any) -> Union[SolveHandle, SolveResult]:
+    def solve(self, *args: Any, **kwargs: Any) -> Union[SolveHandle, oclingo.SolveResult]:
         '''Run the clingo solver.
 
         This function extends ``clingo.Control.solve()`` in two ways:
@@ -472,7 +465,7 @@ class ControlOverride(object):
 
             @functools.wraps(on_model)
             def on_model_wrapper(model):
-                return on_model(Model(model, self.unifier))  # type: ignore
+                return on_model(Model(model, self.unifier))
             nkwargs["on_model"] = on_model_wrapper
 
         # Call the wrapped solve function and handle the return value
@@ -482,18 +475,17 @@ class ControlOverride(object):
            (async_keyword in nkwargs and nkwargs[async_keyword]):
             return SolveHandle(cast(OSolveHandle, result), unifier=self._unifier)  # type: ignore
         else:
-            return cast(SolveResult, result)
+            return cast(oclingo.SolveResult, result)
 
     def __getattr__(self, attr):
         return getattr(self.control_, attr)
 
 
-__clorm_control = make_class_wrapper(OControl, ControlOverride)
 if TYPE_CHECKING:
-    class Control(__clorm_control, OControl):  # type: ignore
+    class Control(ControlOverride, OControl):  # type: ignore
         pass
 else:
-    Control = __clorm_control
+    Control = make_class_wrapper(OControl, ControlOverride)
 
 
 # ------------------------------------------------------------------------------

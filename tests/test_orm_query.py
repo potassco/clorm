@@ -1803,12 +1803,12 @@ class QueryPlanTestCase(unittest.TestCase):
         joins = pj([F.anum == G.anum, F.anum < GA.anum, cross(G,FA)],[F,G,FA,GA])
         qspec = QuerySpec(roots=[F,G,FA,GA],join=joins,where=[],order_by=[])
         qorder = oppref_join_order([], qspec)
-        self.assertEqual(qorder,[FA,GA,G,F])
+        self.assertEqual(qorder,[F,G,GA,FA])
 
     # ------------------------------------------------------------------------------
     # Test the basic heuristic for generating the join order
     # ------------------------------------------------------------------------------
-    def test_nonapi_oppref_join_order(self):
+    def test_nonapi_basic_join_order(self):
         F = path(self.F)
         G = path(self.G)
         FA = alias(F)

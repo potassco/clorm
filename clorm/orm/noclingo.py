@@ -140,7 +140,8 @@ class NoSymbol(object):
             self._value = int(value)
             self._hash = hash(self._value)
         elif stype == SymbolType.String:
-            _ = value.encode()
+            if not isinstance(value, str):
+                raise TypeError("{value} is not a str")
             self._value = value
             self._hash = hash(self._value)
         elif stype == SymbolType.Function:
@@ -241,7 +242,7 @@ class NoSymbol(object):
             return True
         if self.positive and other.negative:
             return False
-        return self.arguments > tuple(other.arguments)
+        return self.arguments > tuple(clingo_to_noclingo(arg) for arg in other.arguments)
 
     def __le__(self, other: object) -> bool:
         """Overloaded boolean operator."""
@@ -268,7 +269,7 @@ class NoSymbol(object):
             return False
         if self.positive and other.negative:
             return True
-        return self.arguments < tuple(other.arguments)
+        return self.arguments < tuple(clingo_to_noclingo(arg) for arg in other.arguments)
 
     def __ge__(self, other: object) -> bool:
         """Overloaded boolean operator."""
@@ -335,7 +336,7 @@ NoSupremum = NoSymbol(SymbolType.Supremum)
 # Functions to convert between clingo.Symbol and noclingo.Symbol
 # --------------------------------------------------------------------------------
 
-def clingo_to_noclingo(clsym: Symbol) -> NoSymbol:
+def clingo_to_noclingo(clsym: AnySymbol) -> NoSymbol:
     if isinstance(clsym, NoSymbol):
         return clsym
     if clsym.type == clingo.SymbolType.Infimum:
@@ -355,7 +356,7 @@ def clingo_to_noclingo(clsym: Symbol) -> NoSymbol:
                       clsym.positive)
 
 
-def noclingo_to_clingo(nclsym: NoSymbol) -> Symbol:
+def noclingo_to_clingo(nclsym: AnySymbol) -> Symbol:
     if isinstance(nclsym, clingo.Symbol):
         return nclsym
     if nclsym.type == SymbolType.Infimum:
