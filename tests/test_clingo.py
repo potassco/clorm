@@ -227,6 +227,13 @@ class ClingoTestCase(unittest.TestCase):
             m=cclingo.Model(model=bad)
         check_errmsg("'Bad' object has no attribute 'symbols'", ctx)
 
+    def test_class_defs_are_equal(self):
+        from clorm.clingo import ClormSolveHandle, ClormControl, ClormModel
+        from clorm.clingo import SolveHandle, Control, Model
+        self.assertEqual(Control, ClormControl)
+        self.assertEqual(Model, ClormModel)
+        self.assertEqual(SolveHandle, ClormSolveHandle)
+
 #------------------------------------------------------------------------------
 #
 #------------------------------------------------------------------------------

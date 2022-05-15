@@ -13,7 +13,7 @@ from .util.wrapper import init_wrapper, make_class_wrapper
 from typing import TYPE_CHECKING, Any, Iterable, List, Optional, Sequence, Tuple, Type, Union, cast, overload
 from .orm import *
 
-__all__ = ["Control", "Model", "SolveHandle", "_expand_assumptions"]
+__all__ = ["ClormControl", "ClormModel", "ClormSolveHandle", "_expand_assumptions"]
 
 OModel = oclingo.Model
 OSolveHandle = oclingo.SolveHandle
@@ -141,10 +141,10 @@ class ModelOverride(object):
 
 
 if TYPE_CHECKING:
-    class Model(ModelOverride, OModel):
+    class ClormModel(ModelOverride, OModel):
         pass
 else:
-    Model = make_class_wrapper(OModel, ModelOverride)
+    ClormModel = make_class_wrapper(OModel, ModelOverride)
 
 # ------------------------------------------------------------------------------
 # Wrap clingo.SolveHandle and override some functions
@@ -183,7 +183,7 @@ class SolveHandleOverride(object):
 
     def __iter__(self):
         for model in self.solvehandle_:
-            yield Model(model, unifier=self._unifier)
+            yield ClormModel(model, unifier=self._unifier)
 
     def __enter__(self):
         self.solvehandle_.__enter__()
@@ -195,10 +195,10 @@ class SolveHandleOverride(object):
 
 
 if TYPE_CHECKING:
-    class SolveHandle(SolveHandleOverride, OSolveHandle):
+    class ClormSolveHandle(SolveHandleOverride, OSolveHandle):
         pass
 else:
-    SolveHandle = make_class_wrapper(OSolveHandle, SolveHandleOverride)
+    ClormSolveHandle = make_class_wrapper(OSolveHandle, SolveHandleOverride)
 
 
 # ------------------------------------------------------------------------------
@@ -398,7 +398,7 @@ class ControlOverride(object):
     # function parameters. At some point will drop support for older clingo and
     # can simplify this function.
     # ---------------------------------------------------------------------------
-    def solve(self, *args: Any, **kwargs: Any) -> Union[SolveHandle, oclingo.SolveResult]:
+    def solve(self, *args: Any, **kwargs: Any) -> Union[ClormSolveHandle, oclingo.SolveResult]:
         '''Run the clingo solver.
 
         This function extends ``clingo.Control.solve()`` in two ways:
@@ -448,7 +448,7 @@ class ControlOverride(object):
 
             @functools.wraps(on_model)
             def on_model_wrapper(model):
-                return on_model(Model(model, self.unifier))
+                return on_model(ClormModel(model, self.unifier))
             nkwargs["on_model"] = on_model_wrapper
 
         # Call the wrapped solve function and handle the return value
@@ -456,7 +456,7 @@ class ControlOverride(object):
         result = self.control_.solve(**nkwargs)
         if ("yield_" in nkwargs and nkwargs["yield_"]) or \
            (async_keyword in nkwargs and nkwargs[async_keyword]):
-            return SolveHandle(cast(OSolveHandle, result), unifier=self._unifier)
+            return ClormSolveHandle(cast(OSolveHandle, result), unifier=self._unifier)
         else:
             return cast(oclingo.SolveResult, result)
 
@@ -465,10 +465,10 @@ class ControlOverride(object):
 
 
 if TYPE_CHECKING:
-    class Control(ControlOverride, OControl):  # type: ignore
+    class ClormControl(ControlOverride, OControl):  # type: ignore
         pass
 else:
-    Control = make_class_wrapper(OControl, ControlOverride)
+    ClormControl = make_class_wrapper(OControl, ControlOverride)
 
 # ------------------------------------------------------------------------------
 # This is probably bad practice... Modify the original clingo docstrings so that
@@ -479,13 +479,13 @@ else:
 # sure I had it working but now seems to be failing. Adding more hacks :(
 # ------------------------------------------------------------------------------
 
-Control.__doc__ += OControl.__doc__  # type: ignore
-Control.assign_external.__doc__ += OControl.assign_external.__doc__  # type: ignore
-Control.release_external.__doc__ += OControl.release_external.__doc__  # type: ignore
-Control.solve.__doc__ += OControl.solve.__doc__  # type: ignore
-Model.__doc__ += OModel.__doc__  # type: ignore
-Model.contains.__doc__ += OModel.contains.__doc__  # type: ignore
-SolveHandle.__doc__ += OSolveHandle.__doc__  # type: ignore
+ClormControl.__doc__ += OControl.__doc__  # type: ignore
+ClormControl.assign_external.__doc__ += OControl.assign_external.__doc__  # type: ignore
+ClormControl.release_external.__doc__ += OControl.release_external.__doc__  # type: ignore
+ClormControl.solve.__doc__ += OControl.solve.__doc__  # type: ignore
+ClormModel.__doc__ += OModel.__doc__  # type: ignore
+ClormModel.contains.__doc__ += OModel.contains.__doc__  # type: ignore
+ClormSolveHandle.__doc__ += OSolveHandle.__doc__  # type: ignore
 
 # ------------------------------------------------------------------------------
 # main
