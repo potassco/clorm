@@ -7,7 +7,7 @@ import sys
 import io
 import abc
 import itertools
-from typing import Callable, Iterable, Iterator, List, Optional, TextIO, Tuple, Type, Union, cast
+from typing import Generator, Callable, Any, Generic, Iterable, Iterator, List, Optional, TextIO, Tuple, Type, TypeVar, Union, cast, overload
 
 from .core import *
 from .core import PredicatePath, validate_root_paths
@@ -22,6 +22,10 @@ from .query import process_where, process_join, process_orderby, \
 
 from .factcontainers import FactMap, factset_equality
 
+from .._typing import _TP, _T0, _T1, _T2, _T3, _T4
+from typing_extensions import TypeVarTuple, Unpack
+
+
 __all__ = [
     'FactBase',
     'Select',
@@ -32,6 +36,9 @@ __all__ = [
 # Global
 #------------------------------------------------------------------------------
 _Facts = Union[Iterable[Predicate], Callable[[], Iterable[Predicate]]]
+SelfQuery = TypeVar("SelfQuery", bound="QueryImpl[Any]")
+_TVT = TypeVarTuple("_TVT")
+_T = TypeVar("_T")
 
 #------------------------------------------------------------------------------
 # Support function for printing ASP facts: Note: _trim_docstring() is taken from
@@ -321,6 +328,15 @@ class FactBase(object):
         for ptype in ptypes: self._factmaps.setdefault(ptype, FactMap(ptype))
 
         return _Delete(self, QuerySpec(roots=roots))
+
+    @overload
+    def query(self, __p1: Type[_T0]) -> 'QueryImpl[_T0]': ...
+    @overload
+    def query(self, __p1: Type[_T0], __p2: Type[_T1]) -> 'QueryImpl[Tuple[_T0, _T1]]': ... 
+    @overload
+    def query(self, __p1: Type[_T0], __p2: Type[_T1], __p3: Type[_T2]) -> 'QueryImpl[Tuple[_T0, _T1, _T2]]': ...
+    @overload
+    def query(self, *roots: Any) -> 'QueryImpl[Any]': ...
 
     def query(self, *roots):
         """Define a query using the new Query API :class:`Query`.
@@ -941,7 +957,7 @@ class _Delete(Delete):
 # - factmaps             - dictionary mapping predicate types to FactMap objects
 # - qspec                - a dictionary with query parameters
 #------------------------------------------------------------------------------
-class QueryImpl(Query):
+class QueryImpl(Query, Generic[_T]):
 
     def __init__(self, factmaps, qspec):
         self._factmaps = factmaps
@@ -960,14 +976,14 @@ class QueryImpl(Query):
     #--------------------------------------------------------------------------
     # Add a join expression
     #--------------------------------------------------------------------------
-    def join(self, *expressions):
+    def join(self: SelfQuery, *expressions: Any) -> SelfQuery:
         join=process_join(expressions, self._qspec.roots)
-        return QueryImpl(self._factmaps, self._qspec.newp(join=join))
+        return cast(SelfQuery, QueryImpl(self._factmaps, self._qspec.newp(join=join)))
 
     #--------------------------------------------------------------------------
     # Add an order_by expression
     #--------------------------------------------------------------------------
-    def where(self, *expressions):
+    def where(self: SelfQuery, *expressions: Any) -> SelfQuery:
         self._check_join_called_first("where")
 
         if not expressions:
@@ -979,23 +995,23 @@ class QueryImpl(Query):
             where = process_where(and_(*expressions), self._qspec.roots)
 
         nqspec = self._qspec.newp(where=where)
-        return QueryImpl(self._factmaps, nqspec)
+        return cast(SelfQuery, QueryImpl(self._factmaps, nqspec))
 
     #--------------------------------------------------------------------------
     # Add an orderered() flag
     #--------------------------------------------------------------------------
-    def ordered(self, *expressions):
+    def ordered(self: SelfQuery, *expressions: Any) -> SelfQuery:
         self._check_join_called_first("ordered")
         if self._qspec.getp("order_by",None) is not None:
             raise ValueError(("Invalid query 'ordered' declaration conflicts "
                               "with previous 'order_by' declaration"))
         nqspec = self._qspec.newp(ordered=True)
-        return QueryImpl(self._factmaps, nqspec)
+        return cast(SelfQuery, QueryImpl(self._factmaps, nqspec))
 
     #--------------------------------------------------------------------------
     # Add an order_by expression
     #--------------------------------------------------------------------------
-    def order_by(self, *expressions):
+    def order_by(self: SelfQuery, *expressions: Any) -> SelfQuery:
         self._check_join_called_first("order_by")
         if not expressions:
             nqspec = self._qspec.newp(order_by=None)   # raise exception
@@ -1006,12 +1022,15 @@ class QueryImpl(Query):
         else:
             nqspec = self._qspec.newp(
                 order_by=process_orderby(expressions,self._qspec.roots))
-        return QueryImpl(self._factmaps, nqspec)
+        return cast(SelfQuery, QueryImpl(self._factmaps, nqspec))
 
     #--------------------------------------------------------------------------
     # Add a group_by expression
     #--------------------------------------------------------------------------
-    def group_by(self, *expressions):
+    def group_by(
+        self,
+        *expressions: Unpack[_TVT] # type: ignore
+    ) -> 'QueryImpl[Tuple[Tuple[Unpack[_TVT]], Iterator[_T]]]': # type: ignore
         if not expressions:
             nqspec = self._qspec.newp(group_by=None)   # raise exception
         else:
@@ -1085,7 +1104,7 @@ class QueryImpl(Query):
     #--------------------------------------------------------------------------
     # Select to display all the output of the query
     # --------------------------------------------------------------------------
-    def all(self):
+    def all(self) -> Generator[_T, None, None]:
         self._check_join_called_first("all",endpoint=True)
 
         qe = QueryExecutor(self._factmaps, self._qspec)
@@ -1094,7 +1113,7 @@ class QueryImpl(Query):
     #--------------------------------------------------------------------------
     # Show the single element and throw an exception if there is more than one
     # --------------------------------------------------------------------------
-    def singleton(self):
+    def singleton(self) -> _T:
         self._check_join_called_first("singleton",endpoint=True)
 
         qe = QueryExecutor(self._factmaps, self._qspec)
@@ -1131,7 +1150,7 @@ class QueryImpl(Query):
     #--------------------------------------------------------------------------
     # Return the first element of the query
     # --------------------------------------------------------------------------
-    def first(self):
+    def first(self) -> _T:
         self._check_join_called_first("first",endpoint=True)
 
         qe = QueryExecutor(self._factmaps, self._qspec)
