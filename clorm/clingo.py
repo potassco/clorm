@@ -31,9 +31,8 @@ from clingo import *
 # once how they are defined and once with original name (clingo)
 # this give the possibility to either replace the original classes with clorm's ones
 # or use clorm's classes explicitly which also works better with static type checkers
-from ._clingo import (ClormControl as Control, ClormModel as Model, ClormSolveHandle as SolveHandle,
-                      _expand_assumptions)
-from ._clingo import ClormControl, ClormModel, ClormSolveHandle
+from ._clingo import ClormControl as Control, ClormModel as Model, ClormSolveHandle as SolveHandle
+from ._clingo import *
 
 __all__ = list([k for k in oclingo.__dict__.keys() if k[0] != '_'])
 
