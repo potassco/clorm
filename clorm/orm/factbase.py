@@ -1041,7 +1041,40 @@ class QueryImpl(Query, Generic[_T]):
     #--------------------------------------------------------------------------
     # Explicitly select the elements to output or delete
     #--------------------------------------------------------------------------
-    def select(self,*outsig):
+    @overload
+    def select(self, __ent0: _T0) -> 'QueryImpl[_T0]': ...
+
+    @overload
+    def select(self, __ent0: _T0, __ent1: _T1) -> 'QueryImpl[Tuple[_T0,_T1]]': ...
+
+    @overload
+    def select(self, __ent0: _T0, __ent1: _T1, __ent2: _T2) -> 'QueryImpl[Tuple[_T0,_T1, _T2]]': ...
+
+    @overload
+    def select(
+        self,
+        __ent0: _T0,
+        __ent1: _T1,
+        __ent2: _T2,
+        __ent3: _T3
+    ) -> 'QueryImpl[Tuple[_T0,_T1, _T2, _T3]]':
+        ...
+
+    @overload
+    def select(
+        self,
+        __ent0: _T0,
+        __ent1: _T1,
+        __ent2: _T2,
+        __ent3: _T3,
+        __ent4: _T4
+    ) -> 'QueryImpl[Tuple[_T0,_T1, _T2, _T3, _T4]]':
+        ...
+
+    @overload
+    def select(self, *outsig: Any) -> 'QueryImpl[Any]': ...
+
+    def select(self, *outsig):
         self._check_join_called_first("select")
         if not outsig:
             raise ValueError("An empty 'select' signature is invalid")
@@ -1051,23 +1084,23 @@ class QueryImpl(Query, Generic[_T]):
     #--------------------------------------------------------------------------
     # The distinct flag
     #--------------------------------------------------------------------------
-    def distinct(self):
+    def distinct(self: SelfQuery) -> SelfQuery:
         self._check_join_called_first("distinct")
         nqspec = self._qspec.newp(distinct=True)
-        return QueryImpl(self._factmaps, nqspec)
+        return cast(SelfQuery, QueryImpl(self._factmaps, nqspec))
 
     #--------------------------------------------------------------------------
     # Ground - bind
     #--------------------------------------------------------------------------
-    def bind(self,*args,**kwargs):
+    def bind(self: SelfQuery, *args: Any,**kwargs: Any) -> SelfQuery:
         self._check_join_called_first("bind")
         nqspec = self._qspec.bindp(*args, **kwargs)
-        return QueryImpl(self._factmaps, nqspec)
+        return cast(SelfQuery, QueryImpl(self._factmaps, nqspec))
 
     #--------------------------------------------------------------------------
     # The tuple flag
     #--------------------------------------------------------------------------
-    def tuple(self):
+    def tuple(self): # don't know how to add proper type annotations...
         self._check_join_called_first("tuple")
         nqspec = self._qspec.newp(tuple=True)
         return QueryImpl(self._factmaps, nqspec)
@@ -1075,9 +1108,9 @@ class QueryImpl(Query, Generic[_T]):
     #--------------------------------------------------------------------------
     # Overide the default heuristic
     #--------------------------------------------------------------------------
-    def heuristic(self, join_order):
+    def heuristic(self: SelfQuery, join_order: Any) -> SelfQuery:
         nqspec = self._qspec.newp(heuristic=True, joh=join_order)
-        return QueryImpl(self._factmaps, nqspec)
+        return cast(SelfQuery, QueryImpl(self._factmaps, nqspec))
 
     #--------------------------------------------------------------------------
     # End points that do something useful
@@ -1130,6 +1163,12 @@ class QueryImpl(Query, Generic[_T]):
     # Return the count of elements - Note: the behaviour of what is counted
     # changes if group_by() has been specified.
     # --------------------------------------------------------------------------
+    @overload
+    def count(self: 'QueryImpl[Tuple[_T0, Iterator[_T1]]]') -> Iterator[Tuple[_T0, int]]: ... # type: ignore
+    
+    @overload
+    def count(self: 'QueryImpl[_T1]') -> int: ...
+
     def count(self):
         self._check_join_called_first("count",endpoint=True)
 
@@ -1162,7 +1201,7 @@ class QueryImpl(Query, Generic[_T]):
     #--------------------------------------------------------------------------
     # Delete a selection of fact
     #--------------------------------------------------------------------------
-    def delete(self):
+    def delete(self) -> int:
         self._check_join_called_first("delete",endpoint=True)
 
         qe = QueryExecutor(self._factmaps, self._qspec)
