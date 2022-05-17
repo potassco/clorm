@@ -1150,14 +1150,14 @@ class QueryImpl(Query, Generic[_T]):
         self._check_join_called_first("singleton",endpoint=True)
 
         qe = QueryExecutor(self._factmaps, self._qspec)
-        count = 0
-        for out in qe.all():
-            count += 1
-            if count > 1:
-                raise ValueError("Query returned more than a single element")
-        if count == 0:
+        gen = qe.all()
+        first = next(gen, None)
+        if first is None:
             raise ValueError("Query has no matching elements")
-        return out
+        second = next(gen, None)
+        if second is not None:
+            raise ValueError("Query returned more than a single element")
+        return first
 
     #--------------------------------------------------------------------------
     # Return the count of elements - Note: the behaviour of what is counted
