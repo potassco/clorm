@@ -27,6 +27,7 @@ import shutil
 import sys
 from tempfile import NamedTemporaryFile
 import textwrap
+import itertools
 
 is_posix = os.name == "posix"
 
@@ -47,7 +48,7 @@ def process_module(modname: str, filename: str) -> str:
         current_fnname = given_fnname = None
         for line in orig_py:
             m = re.match(
-                r"^( *)# START OVERLOADED FUNCTIONS ([\.\w_]+) ([\w_]+) (\d+)-(\d+) ?([\w_]+)?$",  # noqa: E501
+                r"^( *)# START OVERLOADED FUNCTIONS ([\.\w_]+) ([\w_]+) (\d+)-(\d+) ?([\w_]+)? ?(P)?$",  # noqa: E501
                 line,
             )
             if m:
@@ -61,7 +62,8 @@ def process_module(modname: str, filename: str) -> str:
                 return_type = m.group(3)
                 start_index = int(m.group(4))
                 end_index = int(m.group(5))
-                generic_ = m.group(6)
+                generic_ = m.group(6) # _Tx is argument of generic_ like Type[_T1]
+                product = bool(m.group(7)) # whether product of generic and non-generic arguments should be created
 
                 sys.stderr.write(
                     f"Generating {start_index}-{end_index} overloads "
@@ -78,18 +80,19 @@ def process_module(modname: str, filename: str) -> str:
                     f" {os.path.basename(__file__)}\n\n"
                 )
 
-                arg_template = "__ent{0}:"+generic_+"[_T{1}]" if generic_ else "__ent{0}: _T{1}"
+                if generic_:
+                    arg_template = ["__ent{0}: "+generic_+"[_T{0}]"]
+                else:
+                    arg_template = ["__ent{0}: _T{0}"]
+                if product:
+                    arg_template.append("__ent{0}: _T{0}")
                 for num_args in range(start_index, end_index + 1):
-                    returned_generic = ', '.join(f'_T{i}' for i in range(num_args))
-                    returned_generic_arg = returned_generic if num_args==1 else f"Tuple[{returned_generic}]"
-                    combinations = [
-                        [
-                            arg_template.format(arg, arg)
-                            for arg in range(num_args)
-                        ]
-                    ]
-                    for combination in combinations:
-                        entities = ",\n\t".join(combination)
+                    typevars = ', '.join(f'_T{i}' for i in range(num_args))
+                    # for a single argument we return just a scalar instead of a tuple
+                    return_type_arg = typevars if num_args==1 else f"Tuple[{typevars}]"
+                    
+                    for combination in itertools.product(arg_template,repeat=num_args):
+                        entities = ",\n\t".join(arg_t.format(i) for i, arg_t in enumerate(combination,0))
                         buf.write(
                             textwrap.indent(
                                 f"""
@@ -97,10 +100,10 @@ def process_module(modname: str, filename: str) -> str:
 def {current_fnname}(
     {'self,' if use_self else ''}
     {entities}
-) -> '{return_type}[{returned_generic_arg}]':
+) -> '{return_type}[{return_type_arg}]':
     ...
 
-""",  # noqa: E501
+""",
                                 indent,
                             )
                         )
