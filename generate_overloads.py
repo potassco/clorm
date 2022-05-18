@@ -157,7 +157,8 @@ def main(args):
 
 
 entries = [
-    "clorm.orm.factbase"
+    "clorm.orm.factbase",
+    "clorm.orm._queryimpl"
 ]
 
 if __name__ == "__main__":
