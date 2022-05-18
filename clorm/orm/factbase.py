@@ -329,12 +329,63 @@ class FactBase(object):
 
         return _Delete(self, QuerySpec(roots=roots))
 
+    # START OVERLOADED FUNCTIONS self.query QueryImpl 1-5 Type
+
+    # code within this block is **programmatically, 
+    # statically generated** by generate_overloads.py
+
+
     @overload
-    def query(self, __p1: Type[_T0]) -> 'QueryImpl[_T0]': ...
+    def query(
+        self,
+        __ent0:Type[_T0]
+    ) -> 'QueryImpl[_T0]':
+        ...
+
+
     @overload
-    def query(self, __p1: Type[_T0], __p2: Type[_T1]) -> 'QueryImpl[Tuple[_T0, _T1]]': ... 
+    def query(
+        self,
+        __ent0:Type[_T0],
+    	__ent1:Type[_T1]
+    ) -> 'QueryImpl[Tuple[_T0, _T1]]':
+        ...
+
+
     @overload
-    def query(self, __p1: Type[_T0], __p2: Type[_T1], __p3: Type[_T2]) -> 'QueryImpl[Tuple[_T0, _T1, _T2]]': ...
+    def query(
+        self,
+        __ent0:Type[_T0],
+    	__ent1:Type[_T1],
+    	__ent2:Type[_T2]
+    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2]]':
+        ...
+
+
+    @overload
+    def query(
+        self,
+        __ent0:Type[_T0],
+    	__ent1:Type[_T1],
+    	__ent2:Type[_T2],
+    	__ent3:Type[_T3]
+    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2, _T3]]':
+        ...
+
+
+    @overload
+    def query(
+        self,
+        __ent0:Type[_T0],
+    	__ent1:Type[_T1],
+    	__ent2:Type[_T2],
+    	__ent3:Type[_T3],
+    	__ent4:Type[_T4]
+    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2, _T3, _T4]]':
+        ...
+
+    # END OVERLOADED FUNCTIONS self.query
+   
     @overload
     def query(self, *roots: Any) -> 'QueryImpl[Any]': ...
 
@@ -1042,8 +1093,60 @@ class QueryImpl(Query, Generic[_T]):
     # Explicitly select the elements to output or delete
     #--------------------------------------------------------------------------
     # START OVERLOADED FUNCTIONS self.select QueryImpl 1-5
-    
-    
+
+    # code within this block is **programmatically, 
+    # statically generated** by generate_overloads.py
+
+
+    @overload
+    def select(
+        self,
+        __ent0: _T0
+    ) -> 'QueryImpl[_T0]':
+        ...
+
+
+    @overload
+    def select(
+        self,
+        __ent0: _T0,
+    	__ent1: _T1
+    ) -> 'QueryImpl[Tuple[_T0, _T1]]':
+        ...
+
+
+    @overload
+    def select(
+        self,
+        __ent0: _T0,
+    	__ent1: _T1,
+    	__ent2: _T2
+    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2]]':
+        ...
+
+
+    @overload
+    def select(
+        self,
+        __ent0: _T0,
+    	__ent1: _T1,
+    	__ent2: _T2,
+    	__ent3: _T3
+    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2, _T3]]':
+        ...
+
+
+    @overload
+    def select(
+        self,
+        __ent0: _T0,
+    	__ent1: _T1,
+    	__ent2: _T2,
+    	__ent3: _T3,
+    	__ent4: _T4
+    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2, _T3, _T4]]':
+        ...
+
     # END OVERLOADED FUNCTIONS self.select
 
     @overload

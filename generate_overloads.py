@@ -47,7 +47,7 @@ def process_module(modname: str, filename: str) -> str:
         current_fnname = given_fnname = None
         for line in orig_py:
             m = re.match(
-                r"^( *)# START OVERLOADED FUNCTIONS ([\.\w_]+) ([\w_]+) (\d+)-(\d+)$",  # noqa: E501
+                r"^( *)# START OVERLOADED FUNCTIONS ([\.\w_]+) ([\w_]+) (\d+)-(\d+) ?([\w_]+)?$",  # noqa: E501
                 line,
             )
             if m:
@@ -61,6 +61,7 @@ def process_module(modname: str, filename: str) -> str:
                 return_type = m.group(3)
                 start_index = int(m.group(4))
                 end_index = int(m.group(5))
+                generic_ = m.group(6)
 
                 sys.stderr.write(
                     f"Generating {start_index}-{end_index} overloads "
@@ -74,15 +75,16 @@ def process_module(modname: str, filename: str) -> str:
                     "\n    # code within this block is "
                     "**programmatically, \n"
                     "    # statically generated** by"
-                    f" tools/{os.path.basename(__file__)}\n\n"
+                    f" {os.path.basename(__file__)}\n\n"
                 )
 
+                arg_template = "__ent{0}:"+generic_+"[_T{1}]" if generic_ else "__ent{0}: _T{1}"
                 for num_args in range(start_index, end_index + 1):
                     returned_generic = ', '.join(f'_T{i}' for i in range(num_args))
                     returned_generic_arg = returned_generic if num_args==1 else f"Tuple[{returned_generic}]"
                     combinations = [
                         [
-                            f"__ent{arg}: _T{arg}"
+                            arg_template.format(arg, arg)
                             for arg in range(num_args)
                         ]
                     ]
@@ -95,7 +97,7 @@ def process_module(modname: str, filename: str) -> str:
 def {current_fnname}(
     {'self,' if use_self else ''}
     {entities}
-) -> {return_type}[{returned_generic_arg}]:
+) -> '{return_type}[{returned_generic_arg}]':
     ...
 
 """,  # noqa: E501
