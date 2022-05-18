@@ -1041,35 +1041,10 @@ class QueryImpl(Query, Generic[_T]):
     #--------------------------------------------------------------------------
     # Explicitly select the elements to output or delete
     #--------------------------------------------------------------------------
-    @overload
-    def select(self, __ent0: _T0) -> 'QueryImpl[_T0]': ...
-
-    @overload
-    def select(self, __ent0: _T0, __ent1: _T1) -> 'QueryImpl[Tuple[_T0,_T1]]': ...
-
-    @overload
-    def select(self, __ent0: _T0, __ent1: _T1, __ent2: _T2) -> 'QueryImpl[Tuple[_T0,_T1, _T2]]': ...
-
-    @overload
-    def select(
-        self,
-        __ent0: _T0,
-        __ent1: _T1,
-        __ent2: _T2,
-        __ent3: _T3
-    ) -> 'QueryImpl[Tuple[_T0,_T1, _T2, _T3]]':
-        ...
-
-    @overload
-    def select(
-        self,
-        __ent0: _T0,
-        __ent1: _T1,
-        __ent2: _T2,
-        __ent3: _T3,
-        __ent4: _T4
-    ) -> 'QueryImpl[Tuple[_T0,_T1, _T2, _T3, _T4]]':
-        ...
+    # START OVERLOADED FUNCTIONS self.select QueryImpl 1-5
+    
+    
+    # END OVERLOADED FUNCTIONS self.select
 
     @overload
     def select(self, *outsig: Any) -> 'QueryImpl[Any]': ...
