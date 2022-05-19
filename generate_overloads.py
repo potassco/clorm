@@ -48,7 +48,7 @@ def process_module(modname: str, filename: str) -> str:
         current_fnname = given_fnname = None
         for line in orig_py:
             m = re.match(
-                r"^( *)# START OVERLOADED FUNCTIONS ([\.\w_]+) ([\w_]+) (\d+)-(\d+) ?([\w_]+)? ?(P)?$",  # noqa: E501
+                r"^( *)# START OVERLOADED FUNCTIONS ([\.\w_]+) ([\w_]+)(\[[\w{}\[\], ]+\])? (\d+)-(\d+) ?([\w_]+)? ?(P)?$",  # noqa: E501
                 line,
             )
             if m:
@@ -60,10 +60,12 @@ def process_module(modname: str, filename: str) -> str:
                 else:
                     use_self = False
                 return_type = m.group(3)
-                start_index = int(m.group(4))
-                end_index = int(m.group(5))
-                generic_ = m.group(6) # _Tx is argument of generic_ like Type[_T1]
-                product = bool(m.group(7)) # whether product of generic and non-generic arguments should be created
+                return_type_part2 = m.group(4)
+                return_type += return_type_part2 if return_type_part2 else "[{0}]"
+                start_index = int(m.group(5))
+                end_index = int(m.group(6))
+                generic_ = m.group(7) # _Tx is argument of generic_ like Type[_T1]
+                product = bool(m.group(8)) # whether product of generic and non-generic arguments should be created
 
                 sys.stderr.write(
                     f"Generating {start_index}-{end_index} overloads "
@@ -100,7 +102,7 @@ def process_module(modname: str, filename: str) -> str:
 def {current_fnname}(
     {'self,' if use_self else ''}
     {entities}
-) -> '{return_type}[{return_type_arg}]':
+) -> '{return_type.format(return_type_arg)}':
     ...
 
 """,
