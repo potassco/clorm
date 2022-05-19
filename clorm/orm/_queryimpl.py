@@ -3,8 +3,9 @@
 #------------------------------------------------------------------------------
 
 
-from typing import (Any, Dict, Generator, Generic, Iterator, Tuple, Type,
-                    TypeVar, cast, overload)
+import functools
+from typing import (Any, Callable, Dict, Generator, Generic, Iterator, Tuple,
+                    Type, TypeVar, overload)
 
 from clorm.orm.factcontainers import FactMap
 
@@ -18,6 +19,7 @@ from .query import (Query, QueryExecutor, QuerySpec, make_query_plan,
 #------------------------------------------------------------------------------
 SelfQuery = TypeVar("SelfQuery", bound="QueryImpl[Any]")
 _T = TypeVar("_T", bound=Any)
+_Fn = TypeVar("_Fn", bound=Callable[..., Any])
 
 #------------------------------------------------------------------------------
 # New Clorm Query API
@@ -26,6 +28,22 @@ _T = TypeVar("_T", bound=Any)
 # - factmaps             - dictionary mapping predicate types to FactMap objects
 # - qspec                - a dictionary with query parameters
 #------------------------------------------------------------------------------
+
+def _generate(fn: _Fn) -> _Fn:
+    """Copy decorator.
+
+    This decorator copies the object and runs the copied object.
+    """
+
+    @functools.wraps(fn)
+    def _generative(self: 'QueryImpl', *args: Any, **kw: Any) -> Any:
+        self = self.__class__(self._factmaps, self._qspec)
+        x = fn(self, *args, **kw)
+        assert x is self, "methods must return self"
+        return self
+
+    return _generative # type: ignore
+
 
 class QueryImpl(Query, Generic[_T]):
 
@@ -46,13 +64,16 @@ class QueryImpl(Query, Generic[_T]):
     #--------------------------------------------------------------------------
     # Add a join expression
     #--------------------------------------------------------------------------
+    @_generate
     def join(self: SelfQuery, *expressions: Any) -> SelfQuery:
         join=process_join(expressions, self._qspec.roots)
-        return cast(SelfQuery, QueryImpl(self._factmaps, self._qspec.newp(join=join)))
+        self._qspec = self._qspec.newp(join=join)
+        return self
 
     #--------------------------------------------------------------------------
     # Add an order_by expression
     #--------------------------------------------------------------------------
+    @_generate
     def where(self: SelfQuery, *expressions: Any) -> SelfQuery:
         self._check_join_called_first("where")
 
@@ -64,35 +85,37 @@ class QueryImpl(Query, Generic[_T]):
         else:
             where = process_where(and_(*expressions), self._qspec.roots)
 
-        nqspec = self._qspec.newp(where=where)
-        return cast(SelfQuery, QueryImpl(self._factmaps, nqspec))
+        self._qspec = self._qspec.newp(where=where)
+        return self
 
     #--------------------------------------------------------------------------
     # Add an orderered() flag
     #--------------------------------------------------------------------------
+    @_generate
     def ordered(self: SelfQuery, *expressions: Any) -> SelfQuery:
         self._check_join_called_first("ordered")
         if self._qspec.getp("order_by",None) is not None:
             raise ValueError(("Invalid query 'ordered' declaration conflicts "
                               "with previous 'order_by' declaration"))
-        nqspec = self._qspec.newp(ordered=True)
-        return cast(SelfQuery, QueryImpl(self._factmaps, nqspec))
+        self._qspec = self._qspec.newp(ordered=True)
+        return self
 
     #--------------------------------------------------------------------------
     # Add an order_by expression
     #--------------------------------------------------------------------------
+    @_generate
     def order_by(self: SelfQuery, *expressions: Any) -> SelfQuery:
         self._check_join_called_first("order_by")
         if not expressions:
-            nqspec = self._qspec.newp(order_by=None)   # raise exception
+            self._qspec = self._qspec.newp(order_by=None)   # raise exception
         elif self._qspec.getp("ordered",False):
             raise ValueError(("Invalid query 'order_by' declaration '{}' "
                               "conflicts with previous 'ordered' "
                               "declaration").format(expressions))
         else:
-            nqspec = self._qspec.newp(
+            self._qspec = self._qspec.newp(
                 order_by=process_orderby(expressions,self._qspec.roots))
-        return cast(SelfQuery, QueryImpl(self._factmaps, nqspec))
+        return self
 
     #--------------------------------------------------------------------------
     # Add a group_by expression
@@ -239,13 +262,13 @@ class QueryImpl(Query, Generic[_T]):
     @overload
     def group_by(self, *expressions: Any) -> 'QueryImpl[Tuple[Any, Iterator[_T]]]': ...
     
-    def group_by(self, *expressions):
+    def group_by(self, *expressions: Any) -> 'QueryImpl[Any]':
         if not expressions:
-            nqspec = self._qspec.newp(group_by=None)   # raise exception
+            self._qspec = self._qspec.newp(group_by=None)   # raise exception
         else:
-            nqspec = self._qspec.newp(
+            self._qspec = self._qspec.newp(
                 group_by=process_orderby(expressions,self._qspec.roots))
-        return QueryImpl(self._factmaps, nqspec)
+        return self
 
     #--------------------------------------------------------------------------
     # Explicitly select the elements to output or delete
@@ -952,43 +975,48 @@ class QueryImpl(Query, Generic[_T]):
     @overload
     def select(self, *outsig: Any) -> 'QueryImpl[Any]': ...
 
-    def select(self, *outsig):
+    @_generate
+    def select(self, *outsig: Any) -> Any:
         self._check_join_called_first("select")
         if not outsig:
             raise ValueError("An empty 'select' signature is invalid")
-        nqspec = self._qspec.newp(select=outsig)
-        return QueryImpl(self._factmaps, nqspec)
+        self._qspec = self._qspec.newp(select=outsig)
+        return self
 
     #--------------------------------------------------------------------------
     # The distinct flag
     #--------------------------------------------------------------------------
+    @_generate
     def distinct(self: SelfQuery) -> SelfQuery:
         self._check_join_called_first("distinct")
-        nqspec = self._qspec.newp(distinct=True)
-        return cast(SelfQuery, QueryImpl(self._factmaps, nqspec))
+        self._qspec = self._qspec.newp(distinct=True)
+        return self
 
     #--------------------------------------------------------------------------
     # Ground - bind
     #--------------------------------------------------------------------------
+    @_generate
     def bind(self: SelfQuery, *args: Any, **kwargs: Any) -> SelfQuery:
         self._check_join_called_first("bind")
-        nqspec = self._qspec.bindp(*args, **kwargs)
-        return cast(SelfQuery, QueryImpl(self._factmaps, nqspec))
+        self._qspec = self._qspec.bindp(*args, **kwargs)
+        return self
 
     #--------------------------------------------------------------------------
     # The tuple flag
     #--------------------------------------------------------------------------
+    @_generate
     def tuple(self) -> 'QueryImpl[Any]':
         self._check_join_called_first("tuple")
-        nqspec = self._qspec.newp(tuple=True)
-        return QueryImpl(self._factmaps, nqspec)
+        self._qspec = self._qspec.newp(tuple=True)
+        return self
 
     #--------------------------------------------------------------------------
     # Overide the default heuristic
     #--------------------------------------------------------------------------
+    @_generate
     def heuristic(self: SelfQuery, join_order: Any) -> SelfQuery:
-        nqspec = self._qspec.newp(heuristic=True, joh=join_order)
-        return cast(SelfQuery, QueryImpl(self._factmaps, nqspec))
+        self._qspec = self._qspec.newp(heuristic=True, joh=join_order)
+        return self
 
     #--------------------------------------------------------------------------
     # End points that do something useful
