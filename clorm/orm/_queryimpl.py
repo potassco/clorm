@@ -3,13 +3,15 @@
 #------------------------------------------------------------------------------
 
 
-from typing import (Any, Generator, Generic, Iterator, Tuple, Type, TypeVar,
-                    cast, overload)
+from typing import (Any, Dict, Generator, Generic, Iterator, Tuple, Type,
+                    TypeVar, cast, overload)
 
-from .._typing import _T0, _T1, _T2, _T3, _T4, _TP
-from .core import and_
-from .query import (Query, QueryExecutor, make_query_plan, process_join,
-                    process_orderby, process_where)
+from clorm.orm.factcontainers import FactMap
+
+from .._typing import _T0, _T1, _T2, _T3, _T4
+from .core import Predicate, and_
+from .query import (Query, QueryExecutor, QuerySpec, make_query_plan,
+                    process_join, process_orderby, process_where)
 
 #------------------------------------------------------------------------------
 # Global
@@ -27,7 +29,7 @@ _T = TypeVar("_T", bound=Any)
 
 class QueryImpl(Query, Generic[_T]):
 
-    def __init__(self, factmaps, qspec):
+    def __init__(self, factmaps: Dict[Type[Predicate], FactMap], qspec: QuerySpec) -> None:
         self._factmaps = factmaps
         self._qspec = qspec
 
@@ -968,7 +970,7 @@ class QueryImpl(Query, Generic[_T]):
     #--------------------------------------------------------------------------
     # Ground - bind
     #--------------------------------------------------------------------------
-    def bind(self: SelfQuery, *args: Any,**kwargs: Any) -> SelfQuery:
+    def bind(self: SelfQuery, *args: Any, **kwargs: Any) -> SelfQuery:
         self._check_join_called_first("bind")
         nqspec = self._qspec.bindp(*args, **kwargs)
         return cast(SelfQuery, QueryImpl(self._factmaps, nqspec))
@@ -976,7 +978,7 @@ class QueryImpl(Query, Generic[_T]):
     #--------------------------------------------------------------------------
     # The tuple flag
     #--------------------------------------------------------------------------
-    def tuple(self): # don't know how to add proper type annotations...
+    def tuple(self) -> 'QueryImpl[Any]':
         self._check_join_called_first("tuple")
         nqspec = self._qspec.newp(tuple=True)
         return QueryImpl(self._factmaps, nqspec)
