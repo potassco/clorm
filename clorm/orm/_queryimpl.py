@@ -36,13 +36,31 @@ def _generate(fn: _Fn) -> _Fn:
     """
 
     @functools.wraps(fn)
-    def _generative(self: 'QueryImpl', *args: Any, **kw: Any) -> Any:
+    def wrap(self: 'QueryImpl', *args: Any, **kw: Any) -> Any:
         self = self.__class__(self._factmaps, self._qspec)
         x = fn(self, *args, **kw)
         assert x is self, "methods must return self"
         return self
 
-    return _generative # type: ignore
+    return wrap # type: ignore
+
+
+def _check_join_called_first(_fn=None, *, endpoint=False):
+    """test whether a precondition to call the decorated function is met"""
+    def wrap(fn: _Fn) -> _Fn:
+        @functools.wraps(fn)
+        def check(self: 'QueryImpl', *args: Any, **kwargs: Any) -> Any:
+            if self._qspec.join is not None or len(self._qspec.roots) == 1:
+                return fn(self, *args, **kwargs)
+            if endpoint:
+                raise ValueError(("A query over multiple predicates is incomplete without "
+                                "'join' clauses connecting these predicates"))
+            raise ValueError("A 'join' clause must be specified before '{}'".format(fn.__name__))
+        return check # type: ignore
+    
+    if _fn is None:
+        return wrap
+    return wrap(_fn)
 
 
 class QueryImpl(Query, Generic[_T]):
@@ -50,16 +68,6 @@ class QueryImpl(Query, Generic[_T]):
     def __init__(self, factmaps: Dict[Type[Predicate], FactMap], qspec: QuerySpec) -> None:
         self._factmaps = factmaps
         self._qspec = qspec
-
-    #--------------------------------------------------------------------------
-    # Internal function to test whether a function has been called and add it
-    #--------------------------------------------------------------------------
-    def _check_join_called_first(self, name,endpoint=False):
-        if self._qspec.join is not None or len(self._qspec.roots) == 1: return
-        if endpoint:
-            raise ValueError(("A query over multiple predicates is incomplete without "
-                              "'join' clauses connecting these predicates"))
-        raise ValueError("A 'join' clause must be specified before '{}'".format(name))
 
     #--------------------------------------------------------------------------
     # Add a join expression
@@ -74,9 +82,8 @@ class QueryImpl(Query, Generic[_T]):
     # Add an order_by expression
     #--------------------------------------------------------------------------
     @_generate
+    @_check_join_called_first
     def where(self: SelfQuery, *expressions: Any) -> SelfQuery:
-        self._check_join_called_first("where")
-
         if not expressions:
             self._qspec.newp(where=None)    # Raise an error
 
@@ -92,8 +99,8 @@ class QueryImpl(Query, Generic[_T]):
     # Add an orderered() flag
     #--------------------------------------------------------------------------
     @_generate
+    @_check_join_called_first
     def ordered(self: SelfQuery, *expressions: Any) -> SelfQuery:
-        self._check_join_called_first("ordered")
         if self._qspec.getp("order_by",None) is not None:
             raise ValueError(("Invalid query 'ordered' declaration conflicts "
                               "with previous 'order_by' declaration"))
@@ -104,8 +111,8 @@ class QueryImpl(Query, Generic[_T]):
     # Add an order_by expression
     #--------------------------------------------------------------------------
     @_generate
+    @_check_join_called_first
     def order_by(self: SelfQuery, *expressions: Any) -> SelfQuery:
-        self._check_join_called_first("order_by")
         if not expressions:
             self._qspec = self._qspec.newp(order_by=None)   # raise exception
         elif self._qspec.getp("ordered",False):
@@ -976,8 +983,8 @@ class QueryImpl(Query, Generic[_T]):
     def select(self, *outsig: Any) -> 'QueryImpl[Any]': ...
 
     @_generate
+    @_check_join_called_first
     def select(self, *outsig: Any) -> Any:
-        self._check_join_called_first("select")
         if not outsig:
             raise ValueError("An empty 'select' signature is invalid")
         self._qspec = self._qspec.newp(select=outsig)
@@ -987,8 +994,8 @@ class QueryImpl(Query, Generic[_T]):
     # The distinct flag
     #--------------------------------------------------------------------------
     @_generate
+    @_check_join_called_first
     def distinct(self: SelfQuery) -> SelfQuery:
-        self._check_join_called_first("distinct")
         self._qspec = self._qspec.newp(distinct=True)
         return self
 
@@ -996,8 +1003,8 @@ class QueryImpl(Query, Generic[_T]):
     # Ground - bind
     #--------------------------------------------------------------------------
     @_generate
+    @_check_join_called_first
     def bind(self: SelfQuery, *args: Any, **kwargs: Any) -> SelfQuery:
-        self._check_join_called_first("bind")
         self._qspec = self._qspec.bindp(*args, **kwargs)
         return self
 
@@ -1005,8 +1012,8 @@ class QueryImpl(Query, Generic[_T]):
     # The tuple flag
     #--------------------------------------------------------------------------
     @_generate
+    @_check_join_called_first
     def tuple(self) -> 'QueryImpl[Any]':
-        self._check_join_called_first("tuple")
         self._qspec = self._qspec.newp(tuple=True)
         return self
 
@@ -1025,8 +1032,8 @@ class QueryImpl(Query, Generic[_T]):
     #--------------------------------------------------------------------------
     # For the user to see what the query plan looks like
     #--------------------------------------------------------------------------
+    @_check_join_called_first
     def query_plan(self,*args,**kwargs):
-        self._check_join_called_first("query_plan")
         qspec = self._qspec.fill_defaults()
 
         (factsets,factindexes) = \
@@ -1043,18 +1050,16 @@ class QueryImpl(Query, Generic[_T]):
     #--------------------------------------------------------------------------
     # Select to display all the output of the query
     # --------------------------------------------------------------------------
+    @_check_join_called_first(endpoint=True)
     def all(self) -> Generator[_T, None, None]:
-        self._check_join_called_first("all",endpoint=True)
-
         qe = QueryExecutor(self._factmaps, self._qspec)
         return qe.all()
 
     #--------------------------------------------------------------------------
     # Show the single element and throw an exception if there is more than one
     # --------------------------------------------------------------------------
+    @_check_join_called_first(endpoint=True)
     def singleton(self) -> _T:
-        self._check_join_called_first("singleton",endpoint=True)
-
         qe = QueryExecutor(self._factmaps, self._qspec)
         gen = qe.all()
         first = next(gen, None)
@@ -1075,9 +1080,8 @@ class QueryImpl(Query, Generic[_T]):
     @overload
     def count(self: 'QueryImpl[_T1]') -> int: ...
 
+    @_check_join_called_first(endpoint=True)
     def count(self):
-        self._check_join_called_first("count",endpoint=True)
-
         qe = QueryExecutor(self._factmaps, self._qspec)
 
         def group_by_generator():
@@ -1095,9 +1099,8 @@ class QueryImpl(Query, Generic[_T]):
     #--------------------------------------------------------------------------
     # Return the first element of the query
     # --------------------------------------------------------------------------
+    @_check_join_called_first(endpoint=True)
     def first(self) -> _T:
-        self._check_join_called_first("first",endpoint=True)
-
         qe = QueryExecutor(self._factmaps, self._qspec)
 
         for out in qe.all():
@@ -1107,9 +1110,8 @@ class QueryImpl(Query, Generic[_T]):
     #--------------------------------------------------------------------------
     # Delete a selection of fact
     #--------------------------------------------------------------------------
+    @_check_join_called_first(endpoint=True)
     def delete(self) -> int:
-        self._check_join_called_first("delete",endpoint=True)
-
         qe = QueryExecutor(self._factmaps, self._qspec)
         return qe.delete()
 
