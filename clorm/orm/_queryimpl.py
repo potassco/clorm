@@ -6,8 +6,6 @@
 from typing import (Any, Generator, Generic, Iterator, Tuple, Type, TypeVar,
                     cast, overload)
 
-from typing_extensions import TypeVarTuple, Unpack
-
 from .._typing import _T0, _T1, _T2, _T3, _T4, _TP
 from .core import and_
 from .query import (Query, QueryExecutor, make_query_plan, process_join,
@@ -17,8 +15,7 @@ from .query import (Query, QueryExecutor, make_query_plan, process_join,
 # Global
 #------------------------------------------------------------------------------
 SelfQuery = TypeVar("SelfQuery", bound="QueryImpl[Any]")
-_T = TypeVar("_T")
-_TVT = TypeVarTuple("_TVT")
+_T = TypeVar("_T", bound=Any)
 
 #------------------------------------------------------------------------------
 # New Clorm Query API
@@ -98,10 +95,149 @@ class QueryImpl(Query, Generic[_T]):
     #--------------------------------------------------------------------------
     # Add a group_by expression
     #--------------------------------------------------------------------------
+    # START OVERLOADED FUNCTIONS self.group_by QueryImpl[Tuple[{0}, Iterator[_T]]] 1-3 Type P
+
+    # code within this block is **programmatically, 
+    # statically generated** by generate_overloads.py
+
+
+    @overload
     def group_by(
         self,
-        *expressions: Unpack[_TVT] # type: ignore
-    ) -> 'QueryImpl[Tuple[Tuple[Unpack[_TVT]], Iterator[_T]]]': # type: ignore
+        __ent0: Type[_T0]
+    ) -> 'QueryImpl[Tuple[_T0, Iterator[_T]]]':
+        ...
+
+
+    @overload
+    def group_by(
+        self,
+        __ent0: _T0
+    ) -> 'QueryImpl[Tuple[_T0, Iterator[_T]]]':
+        ...
+
+
+    @overload
+    def group_by(
+        self,
+        __ent0: Type[_T0],
+    	__ent1: Type[_T1]
+    ) -> 'QueryImpl[Tuple[Tuple[_T0, _T1], Iterator[_T]]]':
+        ...
+
+
+    @overload
+    def group_by(
+        self,
+        __ent0: Type[_T0],
+    	__ent1: _T1
+    ) -> 'QueryImpl[Tuple[Tuple[_T0, _T1], Iterator[_T]]]':
+        ...
+
+
+    @overload
+    def group_by(
+        self,
+        __ent0: _T0,
+    	__ent1: Type[_T1]
+    ) -> 'QueryImpl[Tuple[Tuple[_T0, _T1], Iterator[_T]]]':
+        ...
+
+
+    @overload
+    def group_by(
+        self,
+        __ent0: _T0,
+    	__ent1: _T1
+    ) -> 'QueryImpl[Tuple[Tuple[_T0, _T1], Iterator[_T]]]':
+        ...
+
+
+    @overload
+    def group_by(
+        self,
+        __ent0: Type[_T0],
+    	__ent1: Type[_T1],
+    	__ent2: Type[_T2]
+    ) -> 'QueryImpl[Tuple[Tuple[_T0, _T1, _T2], Iterator[_T]]]':
+        ...
+
+
+    @overload
+    def group_by(
+        self,
+        __ent0: Type[_T0],
+    	__ent1: Type[_T1],
+    	__ent2: _T2
+    ) -> 'QueryImpl[Tuple[Tuple[_T0, _T1, _T2], Iterator[_T]]]':
+        ...
+
+
+    @overload
+    def group_by(
+        self,
+        __ent0: Type[_T0],
+    	__ent1: _T1,
+    	__ent2: Type[_T2]
+    ) -> 'QueryImpl[Tuple[Tuple[_T0, _T1, _T2], Iterator[_T]]]':
+        ...
+
+
+    @overload
+    def group_by(
+        self,
+        __ent0: Type[_T0],
+    	__ent1: _T1,
+    	__ent2: _T2
+    ) -> 'QueryImpl[Tuple[Tuple[_T0, _T1, _T2], Iterator[_T]]]':
+        ...
+
+
+    @overload
+    def group_by(
+        self,
+        __ent0: _T0,
+    	__ent1: Type[_T1],
+    	__ent2: Type[_T2]
+    ) -> 'QueryImpl[Tuple[Tuple[_T0, _T1, _T2], Iterator[_T]]]':
+        ...
+
+
+    @overload
+    def group_by(
+        self,
+        __ent0: _T0,
+    	__ent1: Type[_T1],
+    	__ent2: _T2
+    ) -> 'QueryImpl[Tuple[Tuple[_T0, _T1, _T2], Iterator[_T]]]':
+        ...
+
+
+    @overload
+    def group_by(
+        self,
+        __ent0: _T0,
+    	__ent1: _T1,
+    	__ent2: Type[_T2]
+    ) -> 'QueryImpl[Tuple[Tuple[_T0, _T1, _T2], Iterator[_T]]]':
+        ...
+
+
+    @overload
+    def group_by(
+        self,
+        __ent0: _T0,
+    	__ent1: _T1,
+    	__ent2: _T2
+    ) -> 'QueryImpl[Tuple[Tuple[_T0, _T1, _T2], Iterator[_T]]]':
+        ...
+
+    # END OVERLOADED FUNCTIONS self.group_by
+
+    @overload
+    def group_by(self, *expressions: Any) -> 'QueryImpl[Tuple[Any, Iterator[_T]]]': ...
+    
+    def group_by(self, *expressions):
         if not expressions:
             nqspec = self._qspec.newp(group_by=None)   # raise exception
         else:
