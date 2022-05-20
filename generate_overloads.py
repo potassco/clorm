@@ -47,25 +47,22 @@ def process_module(modname: str, filename: str) -> str:
         in_block = False
         current_fnname = given_fnname = None
         for line in orig_py:
-            m = re.match(
-                r"^( *)# START OVERLOADED FUNCTIONS ([\.\w_]+) ([\w_]+)(\[[\w{}\[\], ]+\])? (\d+)-(\d+) ?([\w_]+)? ?(P)?$",  # noqa: E501
-                line,
-            )
+            m = re.match(r"^( *)# START OVERLOADED FUNCTIONS (.*)$", line)
             if m:
+                config_ = m.group(2).split(";")
+                assert len(config_) == 6
                 indent = m.group(1)
-                given_fnname = current_fnname = m.group(2)
+                given_fnname = current_fnname = config_[0]
                 if current_fnname.startswith("self."):
                     use_self = True
                     current_fnname = current_fnname.split(".")[1]
                 else:
                     use_self = False
-                return_type = m.group(3)
-                return_type_part2 = m.group(4)
-                return_type += return_type_part2 if return_type_part2 else "[{0}]"
-                start_index = int(m.group(5))
-                end_index = int(m.group(6))
-                generic_ = m.group(7) # _Tx is argument of generic_ like Type[_T1]
-                product = bool(m.group(8)) # whether product of generic and non-generic arguments should be created
+                return_type = config_[1]
+                start_index = int(config_[2])
+                end_index = int(config_[3])
+                generic_ = config_[4] # _Tx is argument of generic_ like Type[_T1]
+                product = bool(config_[5]) # whether product of generic and non-generic arguments should be created
 
                 sys.stderr.write(
                     f"Generating {start_index}-{end_index} overloads "

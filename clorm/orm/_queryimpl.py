@@ -127,7 +127,7 @@ class QueryImpl(Query, Generic[_T]):
     #--------------------------------------------------------------------------
     # Add a group_by expression
     #--------------------------------------------------------------------------
-    # START OVERLOADED FUNCTIONS self.group_by QueryImpl[Tuple[{0}, Iterator[_T]]] 1-3 Type P
+    # START OVERLOADED FUNCTIONS self.group_by;QueryImpl[Tuple[{0}, Iterator[_T]]];1;3;Type;P
 
     # code within this block is **programmatically, 
     # statically generated** by generate_overloads.py
@@ -280,7 +280,7 @@ class QueryImpl(Query, Generic[_T]):
     #--------------------------------------------------------------------------
     # Explicitly select the elements to output or delete
     #--------------------------------------------------------------------------
-    # START OVERLOADED FUNCTIONS self.select QueryImpl 1-5 Type P
+    # START OVERLOADED FUNCTIONS self.select;QueryImpl[{0}];1;5;Type;P
 
     # code within this block is **programmatically, 
     # statically generated** by generate_overloads.py
