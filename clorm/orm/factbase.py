@@ -318,58 +318,38 @@ class FactBase(object):
 
         return _Delete(self, QuerySpec(roots=roots))
 
-    # START OVERLOADED FUNCTIONS self.query;;UnGroupedQuery[{0}];1;5;Type;;
+    # START OVERLOADED FUNCTIONS self.query;UnGroupedQuery[{0}];1;5;Type;
 
     # code within this block is **programmatically, 
     # statically generated** by generate_overloads.py
 
-
     @overload
     def query(
-        self,
-        __ent0: Type[_T0]
+        self, __ent0: Type[_T0]
     ) -> 'UnGroupedQuery[_T0]':
         ...
 
-
     @overload
     def query(
-        self,
-        __ent0: Type[_T0],
-    	__ent1: Type[_T1]
+        self, __ent0: Type[_T0], __ent1: Type[_T1]
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1]]':
         ...
 
-
     @overload
     def query(
-        self,
-        __ent0: Type[_T0],
-    	__ent1: Type[_T1],
-    	__ent2: Type[_T2]
+        self, __ent0: Type[_T0], __ent1: Type[_T1], __ent2: Type[_T2]
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2]]':
         ...
 
-
     @overload
     def query(
-        self,
-        __ent0: Type[_T0],
-    	__ent1: Type[_T1],
-    	__ent2: Type[_T2],
-    	__ent3: Type[_T3]
+        self, __ent0: Type[_T0], __ent1: Type[_T1], __ent2: Type[_T2], __ent3: Type[_T3]
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3]]':
         ...
 
-
     @overload
     def query(
-        self,
-        __ent0: Type[_T0],
-    	__ent1: Type[_T1],
-    	__ent2: Type[_T2],
-    	__ent3: Type[_T3],
-    	__ent4: Type[_T4]
+        self, __ent0: Type[_T0], __ent1: Type[_T1], __ent2: Type[_T2], __ent3: Type[_T3], __ent4: Type[_T4]
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 

@@ -50,7 +50,7 @@ def process_module(modname: str, filename: str) -> str:
             m = re.match(r"^( *)# START OVERLOADED FUNCTIONS (.*)$", line)
             if m:
                 config_ = m.group(2).split(";")
-                assert len(config_) == 8
+                assert len(config_) == 6
                 indent = m.group(1)
                 given_fnname = current_fnname = config_[0]
                 if current_fnname.startswith("self."):
@@ -58,13 +58,12 @@ def process_module(modname: str, filename: str) -> str:
                     current_fnname = current_fnname.split(".")[1]
                 else:
                     use_self = False
-                self_type = config_[1]
-                return_type = config_[2]
-                start_index = int(config_[3])
-                end_index = int(config_[4])
-                generic_ = config_[5] # _Tx is argument of generic_ like Type[_T1]
-                product = bool(config_[6]=="Y") # whether product of generic and non-generic arguments should be created
-                ignore_overlap = bool(config_[7]=="Y") # add # type: ignore[misc]
+                
+                return_type = config_[1]
+                start_index = int(config_[2])
+                end_index = int(config_[3])
+                generic_ = config_[4] # _Tx is argument of generic_ like Type[_T1]
+                product = bool(config_[5]=="Y") # whether product of generic and non-generic arguments should be created
 
                 sys.stderr.write(
                     f"Generating {start_index}-{end_index} overloads "
@@ -93,14 +92,12 @@ def process_module(modname: str, filename: str) -> str:
                     return_type_arg = typevars if num_args==1 else f"Tuple[{typevars}]"
 
                     for combination in itertools.product(arg_template,repeat=num_args):
-                        entities = ",\n\t".join(arg_t.format(i) for i, arg_t in enumerate(combination,0))
+                        entities = ", ".join(arg_t.format(i) for i, arg_t in enumerate(combination,0))
                         buf.write(
                             textwrap.indent(
-                                f"""
-@overload
-def {current_fnname}({" # type: ignore[misc]" if ignore_overlap else ""}
-    {'self' if use_self else ''}{f": '{self_type}'," if self_type else ','}
-    {entities}
+                                f"""@overload
+def {current_fnname}(
+    {'self, ' if use_self else ''}{entities}
 ) -> '{return_type.format(return_type_arg)}':
     ...
 

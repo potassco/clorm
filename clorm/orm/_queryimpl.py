@@ -263,141 +263,381 @@ class UnGroupedQuery(BaseQueryImpl[_T], Generic[_T]):
     #--------------------------------------------------------------------------
     # Add a group_by expression
     #--------------------------------------------------------------------------
-    # START OVERLOADED FUNCTIONS self.group_by;;GroupedQuery[{0}, _T];1;3;Type;Y;
+    # START OVERLOADED FUNCTIONS self.group_by;GroupedQuery[{0}, _T];1;5;Type;Y
 
     # code within this block is **programmatically, 
     # statically generated** by generate_overloads.py
 
-
     @overload
     def group_by(
-        self,
-        __ent0: Type[_T0]
+        self, __ent0: Type[_T0]
     ) -> 'GroupedQuery[_T0, _T]':
         ...
 
-
     @overload
     def group_by(
-        self,
-        __ent0: _T0
+        self, __ent0: _T0
     ) -> 'GroupedQuery[_T0, _T]':
         ...
 
-
     @overload
     def group_by(
-        self,
-        __ent0: Type[_T0],
-    	__ent1: Type[_T1]
+        self, __ent0: Type[_T0], __ent1: Type[_T1]
     ) -> 'GroupedQuery[Tuple[_T0, _T1], _T]':
         ...
 
-
     @overload
     def group_by(
-        self,
-        __ent0: Type[_T0],
-    	__ent1: _T1
+        self, __ent0: Type[_T0], __ent1: _T1
     ) -> 'GroupedQuery[Tuple[_T0, _T1], _T]':
         ...
 
-
     @overload
     def group_by(
-        self,
-        __ent0: _T0,
-    	__ent1: Type[_T1]
+        self, __ent0: _T0, __ent1: Type[_T1]
     ) -> 'GroupedQuery[Tuple[_T0, _T1], _T]':
         ...
 
-
     @overload
     def group_by(
-        self,
-        __ent0: _T0,
-    	__ent1: _T1
+        self, __ent0: _T0, __ent1: _T1
     ) -> 'GroupedQuery[Tuple[_T0, _T1], _T]':
         ...
 
-
     @overload
     def group_by(
-        self,
-        __ent0: Type[_T0],
-    	__ent1: Type[_T1],
-    	__ent2: Type[_T2]
+        self, __ent0: Type[_T0], __ent1: Type[_T1], __ent2: Type[_T2]
     ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2], _T]':
         ...
 
-
     @overload
     def group_by(
-        self,
-        __ent0: Type[_T0],
-    	__ent1: Type[_T1],
-    	__ent2: _T2
+        self, __ent0: Type[_T0], __ent1: Type[_T1], __ent2: _T2
     ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2], _T]':
         ...
 
-
     @overload
     def group_by(
-        self,
-        __ent0: Type[_T0],
-    	__ent1: _T1,
-    	__ent2: Type[_T2]
+        self, __ent0: Type[_T0], __ent1: _T1, __ent2: Type[_T2]
     ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2], _T]':
         ...
 
-
     @overload
     def group_by(
-        self,
-        __ent0: Type[_T0],
-    	__ent1: _T1,
-    	__ent2: _T2
+        self, __ent0: Type[_T0], __ent1: _T1, __ent2: _T2
     ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2], _T]':
         ...
 
-
     @overload
     def group_by(
-        self,
-        __ent0: _T0,
-    	__ent1: Type[_T1],
-    	__ent2: Type[_T2]
+        self, __ent0: _T0, __ent1: Type[_T1], __ent2: Type[_T2]
     ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2], _T]':
         ...
 
-
     @overload
     def group_by(
-        self,
-        __ent0: _T0,
-    	__ent1: Type[_T1],
-    	__ent2: _T2
+        self, __ent0: _T0, __ent1: Type[_T1], __ent2: _T2
     ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2], _T]':
         ...
 
-
     @overload
     def group_by(
-        self,
-        __ent0: _T0,
-    	__ent1: _T1,
-    	__ent2: Type[_T2]
+        self, __ent0: _T0, __ent1: _T1, __ent2: Type[_T2]
     ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2], _T]':
         ...
 
+    @overload
+    def group_by(
+        self, __ent0: _T0, __ent1: _T1, __ent2: _T2
+    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2], _T]':
+        ...
 
     @overload
     def group_by(
-        self,
-        __ent0: _T0,
-    	__ent1: _T1,
-    	__ent2: _T2
-    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2], _T]':
+        self, __ent0: Type[_T0], __ent1: Type[_T1], __ent2: Type[_T2], __ent3: Type[_T3]
+    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2, _T3], _T]':
+        ...
+
+    @overload
+    def group_by(
+        self, __ent0: Type[_T0], __ent1: Type[_T1], __ent2: Type[_T2], __ent3: _T3
+    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2, _T3], _T]':
+        ...
+
+    @overload
+    def group_by(
+        self, __ent0: Type[_T0], __ent1: Type[_T1], __ent2: _T2, __ent3: Type[_T3]
+    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2, _T3], _T]':
+        ...
+
+    @overload
+    def group_by(
+        self, __ent0: Type[_T0], __ent1: Type[_T1], __ent2: _T2, __ent3: _T3
+    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2, _T3], _T]':
+        ...
+
+    @overload
+    def group_by(
+        self, __ent0: Type[_T0], __ent1: _T1, __ent2: Type[_T2], __ent3: Type[_T3]
+    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2, _T3], _T]':
+        ...
+
+    @overload
+    def group_by(
+        self, __ent0: Type[_T0], __ent1: _T1, __ent2: Type[_T2], __ent3: _T3
+    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2, _T3], _T]':
+        ...
+
+    @overload
+    def group_by(
+        self, __ent0: Type[_T0], __ent1: _T1, __ent2: _T2, __ent3: Type[_T3]
+    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2, _T3], _T]':
+        ...
+
+    @overload
+    def group_by(
+        self, __ent0: Type[_T0], __ent1: _T1, __ent2: _T2, __ent3: _T3
+    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2, _T3], _T]':
+        ...
+
+    @overload
+    def group_by(
+        self, __ent0: _T0, __ent1: Type[_T1], __ent2: Type[_T2], __ent3: Type[_T3]
+    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2, _T3], _T]':
+        ...
+
+    @overload
+    def group_by(
+        self, __ent0: _T0, __ent1: Type[_T1], __ent2: Type[_T2], __ent3: _T3
+    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2, _T3], _T]':
+        ...
+
+    @overload
+    def group_by(
+        self, __ent0: _T0, __ent1: Type[_T1], __ent2: _T2, __ent3: Type[_T3]
+    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2, _T3], _T]':
+        ...
+
+    @overload
+    def group_by(
+        self, __ent0: _T0, __ent1: Type[_T1], __ent2: _T2, __ent3: _T3
+    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2, _T3], _T]':
+        ...
+
+    @overload
+    def group_by(
+        self, __ent0: _T0, __ent1: _T1, __ent2: Type[_T2], __ent3: Type[_T3]
+    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2, _T3], _T]':
+        ...
+
+    @overload
+    def group_by(
+        self, __ent0: _T0, __ent1: _T1, __ent2: Type[_T2], __ent3: _T3
+    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2, _T3], _T]':
+        ...
+
+    @overload
+    def group_by(
+        self, __ent0: _T0, __ent1: _T1, __ent2: _T2, __ent3: Type[_T3]
+    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2, _T3], _T]':
+        ...
+
+    @overload
+    def group_by(
+        self, __ent0: _T0, __ent1: _T1, __ent2: _T2, __ent3: _T3
+    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2, _T3], _T]':
+        ...
+
+    @overload
+    def group_by(
+        self, __ent0: Type[_T0], __ent1: Type[_T1], __ent2: Type[_T2], __ent3: Type[_T3], __ent4: Type[_T4]
+    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4], _T]':
+        ...
+
+    @overload
+    def group_by(
+        self, __ent0: Type[_T0], __ent1: Type[_T1], __ent2: Type[_T2], __ent3: Type[_T3], __ent4: _T4
+    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4], _T]':
+        ...
+
+    @overload
+    def group_by(
+        self, __ent0: Type[_T0], __ent1: Type[_T1], __ent2: Type[_T2], __ent3: _T3, __ent4: Type[_T4]
+    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4], _T]':
+        ...
+
+    @overload
+    def group_by(
+        self, __ent0: Type[_T0], __ent1: Type[_T1], __ent2: Type[_T2], __ent3: _T3, __ent4: _T4
+    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4], _T]':
+        ...
+
+    @overload
+    def group_by(
+        self, __ent0: Type[_T0], __ent1: Type[_T1], __ent2: _T2, __ent3: Type[_T3], __ent4: Type[_T4]
+    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4], _T]':
+        ...
+
+    @overload
+    def group_by(
+        self, __ent0: Type[_T0], __ent1: Type[_T1], __ent2: _T2, __ent3: Type[_T3], __ent4: _T4
+    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4], _T]':
+        ...
+
+    @overload
+    def group_by(
+        self, __ent0: Type[_T0], __ent1: Type[_T1], __ent2: _T2, __ent3: _T3, __ent4: Type[_T4]
+    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4], _T]':
+        ...
+
+    @overload
+    def group_by(
+        self, __ent0: Type[_T0], __ent1: Type[_T1], __ent2: _T2, __ent3: _T3, __ent4: _T4
+    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4], _T]':
+        ...
+
+    @overload
+    def group_by(
+        self, __ent0: Type[_T0], __ent1: _T1, __ent2: Type[_T2], __ent3: Type[_T3], __ent4: Type[_T4]
+    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4], _T]':
+        ...
+
+    @overload
+    def group_by(
+        self, __ent0: Type[_T0], __ent1: _T1, __ent2: Type[_T2], __ent3: Type[_T3], __ent4: _T4
+    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4], _T]':
+        ...
+
+    @overload
+    def group_by(
+        self, __ent0: Type[_T0], __ent1: _T1, __ent2: Type[_T2], __ent3: _T3, __ent4: Type[_T4]
+    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4], _T]':
+        ...
+
+    @overload
+    def group_by(
+        self, __ent0: Type[_T0], __ent1: _T1, __ent2: Type[_T2], __ent3: _T3, __ent4: _T4
+    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4], _T]':
+        ...
+
+    @overload
+    def group_by(
+        self, __ent0: Type[_T0], __ent1: _T1, __ent2: _T2, __ent3: Type[_T3], __ent4: Type[_T4]
+    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4], _T]':
+        ...
+
+    @overload
+    def group_by(
+        self, __ent0: Type[_T0], __ent1: _T1, __ent2: _T2, __ent3: Type[_T3], __ent4: _T4
+    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4], _T]':
+        ...
+
+    @overload
+    def group_by(
+        self, __ent0: Type[_T0], __ent1: _T1, __ent2: _T2, __ent3: _T3, __ent4: Type[_T4]
+    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4], _T]':
+        ...
+
+    @overload
+    def group_by(
+        self, __ent0: Type[_T0], __ent1: _T1, __ent2: _T2, __ent3: _T3, __ent4: _T4
+    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4], _T]':
+        ...
+
+    @overload
+    def group_by(
+        self, __ent0: _T0, __ent1: Type[_T1], __ent2: Type[_T2], __ent3: Type[_T3], __ent4: Type[_T4]
+    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4], _T]':
+        ...
+
+    @overload
+    def group_by(
+        self, __ent0: _T0, __ent1: Type[_T1], __ent2: Type[_T2], __ent3: Type[_T3], __ent4: _T4
+    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4], _T]':
+        ...
+
+    @overload
+    def group_by(
+        self, __ent0: _T0, __ent1: Type[_T1], __ent2: Type[_T2], __ent3: _T3, __ent4: Type[_T4]
+    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4], _T]':
+        ...
+
+    @overload
+    def group_by(
+        self, __ent0: _T0, __ent1: Type[_T1], __ent2: Type[_T2], __ent3: _T3, __ent4: _T4
+    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4], _T]':
+        ...
+
+    @overload
+    def group_by(
+        self, __ent0: _T0, __ent1: Type[_T1], __ent2: _T2, __ent3: Type[_T3], __ent4: Type[_T4]
+    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4], _T]':
+        ...
+
+    @overload
+    def group_by(
+        self, __ent0: _T0, __ent1: Type[_T1], __ent2: _T2, __ent3: Type[_T3], __ent4: _T4
+    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4], _T]':
+        ...
+
+    @overload
+    def group_by(
+        self, __ent0: _T0, __ent1: Type[_T1], __ent2: _T2, __ent3: _T3, __ent4: Type[_T4]
+    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4], _T]':
+        ...
+
+    @overload
+    def group_by(
+        self, __ent0: _T0, __ent1: Type[_T1], __ent2: _T2, __ent3: _T3, __ent4: _T4
+    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4], _T]':
+        ...
+
+    @overload
+    def group_by(
+        self, __ent0: _T0, __ent1: _T1, __ent2: Type[_T2], __ent3: Type[_T3], __ent4: Type[_T4]
+    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4], _T]':
+        ...
+
+    @overload
+    def group_by(
+        self, __ent0: _T0, __ent1: _T1, __ent2: Type[_T2], __ent3: Type[_T3], __ent4: _T4
+    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4], _T]':
+        ...
+
+    @overload
+    def group_by(
+        self, __ent0: _T0, __ent1: _T1, __ent2: Type[_T2], __ent3: _T3, __ent4: Type[_T4]
+    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4], _T]':
+        ...
+
+    @overload
+    def group_by(
+        self, __ent0: _T0, __ent1: _T1, __ent2: Type[_T2], __ent3: _T3, __ent4: _T4
+    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4], _T]':
+        ...
+
+    @overload
+    def group_by(
+        self, __ent0: _T0, __ent1: _T1, __ent2: _T2, __ent3: Type[_T3], __ent4: Type[_T4]
+    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4], _T]':
+        ...
+
+    @overload
+    def group_by(
+        self, __ent0: _T0, __ent1: _T1, __ent2: _T2, __ent3: Type[_T3], __ent4: _T4
+    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4], _T]':
+        ...
+
+    @overload
+    def group_by(
+        self, __ent0: _T0, __ent1: _T1, __ent2: _T2, __ent3: _T3, __ent4: Type[_T4]
+    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4], _T]':
+        ...
+
+    @overload
+    def group_by(
+        self, __ent0: _T0, __ent1: _T1, __ent2: _T2, __ent3: _T3, __ent4: _T4
+    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4], _T]':
         ...
 
     # END OVERLOADED FUNCTIONS self.group_by
@@ -416,700 +656,380 @@ class UnGroupedQuery(BaseQueryImpl[_T], Generic[_T]):
     #--------------------------------------------------------------------------
     # Explicitly select the elements to output or delete
     #--------------------------------------------------------------------------
-    # START OVERLOADED FUNCTIONS self.select;;UnGroupedQuery[{0}];1;5;Type;Y;
+    # START OVERLOADED FUNCTIONS self.select;UnGroupedQuery[{0}];1;5;Type;Y
 
     # code within this block is **programmatically, 
     # statically generated** by generate_overloads.py
 
-
     @overload
     def select(
-        self,
-        __ent0: Type[_T0]
+        self, __ent0: Type[_T0]
     ) -> 'UnGroupedQuery[_T0]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: _T0
+        self, __ent0: _T0
     ) -> 'UnGroupedQuery[_T0]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: Type[_T0],
-    	__ent1: Type[_T1]
+        self, __ent0: Type[_T0], __ent1: Type[_T1]
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: Type[_T0],
-    	__ent1: _T1
+        self, __ent0: Type[_T0], __ent1: _T1
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: _T0,
-    	__ent1: Type[_T1]
+        self, __ent0: _T0, __ent1: Type[_T1]
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: _T0,
-    	__ent1: _T1
+        self, __ent0: _T0, __ent1: _T1
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: Type[_T0],
-    	__ent1: Type[_T1],
-    	__ent2: Type[_T2]
+        self, __ent0: Type[_T0], __ent1: Type[_T1], __ent2: Type[_T2]
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: Type[_T0],
-    	__ent1: Type[_T1],
-    	__ent2: _T2
+        self, __ent0: Type[_T0], __ent1: Type[_T1], __ent2: _T2
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: Type[_T0],
-    	__ent1: _T1,
-    	__ent2: Type[_T2]
+        self, __ent0: Type[_T0], __ent1: _T1, __ent2: Type[_T2]
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: Type[_T0],
-    	__ent1: _T1,
-    	__ent2: _T2
+        self, __ent0: Type[_T0], __ent1: _T1, __ent2: _T2
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: _T0,
-    	__ent1: Type[_T1],
-    	__ent2: Type[_T2]
+        self, __ent0: _T0, __ent1: Type[_T1], __ent2: Type[_T2]
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: _T0,
-    	__ent1: Type[_T1],
-    	__ent2: _T2
+        self, __ent0: _T0, __ent1: Type[_T1], __ent2: _T2
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: _T0,
-    	__ent1: _T1,
-    	__ent2: Type[_T2]
+        self, __ent0: _T0, __ent1: _T1, __ent2: Type[_T2]
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: _T0,
-    	__ent1: _T1,
-    	__ent2: _T2
+        self, __ent0: _T0, __ent1: _T1, __ent2: _T2
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: Type[_T0],
-    	__ent1: Type[_T1],
-    	__ent2: Type[_T2],
-    	__ent3: Type[_T3]
+        self, __ent0: Type[_T0], __ent1: Type[_T1], __ent2: Type[_T2], __ent3: Type[_T3]
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: Type[_T0],
-    	__ent1: Type[_T1],
-    	__ent2: Type[_T2],
-    	__ent3: _T3
+        self, __ent0: Type[_T0], __ent1: Type[_T1], __ent2: Type[_T2], __ent3: _T3
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: Type[_T0],
-    	__ent1: Type[_T1],
-    	__ent2: _T2,
-    	__ent3: Type[_T3]
+        self, __ent0: Type[_T0], __ent1: Type[_T1], __ent2: _T2, __ent3: Type[_T3]
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: Type[_T0],
-    	__ent1: Type[_T1],
-    	__ent2: _T2,
-    	__ent3: _T3
+        self, __ent0: Type[_T0], __ent1: Type[_T1], __ent2: _T2, __ent3: _T3
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: Type[_T0],
-    	__ent1: _T1,
-    	__ent2: Type[_T2],
-    	__ent3: Type[_T3]
+        self, __ent0: Type[_T0], __ent1: _T1, __ent2: Type[_T2], __ent3: Type[_T3]
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: Type[_T0],
-    	__ent1: _T1,
-    	__ent2: Type[_T2],
-    	__ent3: _T3
+        self, __ent0: Type[_T0], __ent1: _T1, __ent2: Type[_T2], __ent3: _T3
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: Type[_T0],
-    	__ent1: _T1,
-    	__ent2: _T2,
-    	__ent3: Type[_T3]
+        self, __ent0: Type[_T0], __ent1: _T1, __ent2: _T2, __ent3: Type[_T3]
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: Type[_T0],
-    	__ent1: _T1,
-    	__ent2: _T2,
-    	__ent3: _T3
+        self, __ent0: Type[_T0], __ent1: _T1, __ent2: _T2, __ent3: _T3
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: _T0,
-    	__ent1: Type[_T1],
-    	__ent2: Type[_T2],
-    	__ent3: Type[_T3]
+        self, __ent0: _T0, __ent1: Type[_T1], __ent2: Type[_T2], __ent3: Type[_T3]
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: _T0,
-    	__ent1: Type[_T1],
-    	__ent2: Type[_T2],
-    	__ent3: _T3
+        self, __ent0: _T0, __ent1: Type[_T1], __ent2: Type[_T2], __ent3: _T3
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: _T0,
-    	__ent1: Type[_T1],
-    	__ent2: _T2,
-    	__ent3: Type[_T3]
+        self, __ent0: _T0, __ent1: Type[_T1], __ent2: _T2, __ent3: Type[_T3]
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: _T0,
-    	__ent1: Type[_T1],
-    	__ent2: _T2,
-    	__ent3: _T3
+        self, __ent0: _T0, __ent1: Type[_T1], __ent2: _T2, __ent3: _T3
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: _T0,
-    	__ent1: _T1,
-    	__ent2: Type[_T2],
-    	__ent3: Type[_T3]
+        self, __ent0: _T0, __ent1: _T1, __ent2: Type[_T2], __ent3: Type[_T3]
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: _T0,
-    	__ent1: _T1,
-    	__ent2: Type[_T2],
-    	__ent3: _T3
+        self, __ent0: _T0, __ent1: _T1, __ent2: Type[_T2], __ent3: _T3
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: _T0,
-    	__ent1: _T1,
-    	__ent2: _T2,
-    	__ent3: Type[_T3]
+        self, __ent0: _T0, __ent1: _T1, __ent2: _T2, __ent3: Type[_T3]
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: _T0,
-    	__ent1: _T1,
-    	__ent2: _T2,
-    	__ent3: _T3
+        self, __ent0: _T0, __ent1: _T1, __ent2: _T2, __ent3: _T3
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: Type[_T0],
-    	__ent1: Type[_T1],
-    	__ent2: Type[_T2],
-    	__ent3: Type[_T3],
-    	__ent4: Type[_T4]
+        self, __ent0: Type[_T0], __ent1: Type[_T1], __ent2: Type[_T2], __ent3: Type[_T3], __ent4: Type[_T4]
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: Type[_T0],
-    	__ent1: Type[_T1],
-    	__ent2: Type[_T2],
-    	__ent3: Type[_T3],
-    	__ent4: _T4
+        self, __ent0: Type[_T0], __ent1: Type[_T1], __ent2: Type[_T2], __ent3: Type[_T3], __ent4: _T4
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: Type[_T0],
-    	__ent1: Type[_T1],
-    	__ent2: Type[_T2],
-    	__ent3: _T3,
-    	__ent4: Type[_T4]
+        self, __ent0: Type[_T0], __ent1: Type[_T1], __ent2: Type[_T2], __ent3: _T3, __ent4: Type[_T4]
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: Type[_T0],
-    	__ent1: Type[_T1],
-    	__ent2: Type[_T2],
-    	__ent3: _T3,
-    	__ent4: _T4
+        self, __ent0: Type[_T0], __ent1: Type[_T1], __ent2: Type[_T2], __ent3: _T3, __ent4: _T4
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: Type[_T0],
-    	__ent1: Type[_T1],
-    	__ent2: _T2,
-    	__ent3: Type[_T3],
-    	__ent4: Type[_T4]
+        self, __ent0: Type[_T0], __ent1: Type[_T1], __ent2: _T2, __ent3: Type[_T3], __ent4: Type[_T4]
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: Type[_T0],
-    	__ent1: Type[_T1],
-    	__ent2: _T2,
-    	__ent3: Type[_T3],
-    	__ent4: _T4
+        self, __ent0: Type[_T0], __ent1: Type[_T1], __ent2: _T2, __ent3: Type[_T3], __ent4: _T4
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: Type[_T0],
-    	__ent1: Type[_T1],
-    	__ent2: _T2,
-    	__ent3: _T3,
-    	__ent4: Type[_T4]
+        self, __ent0: Type[_T0], __ent1: Type[_T1], __ent2: _T2, __ent3: _T3, __ent4: Type[_T4]
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: Type[_T0],
-    	__ent1: Type[_T1],
-    	__ent2: _T2,
-    	__ent3: _T3,
-    	__ent4: _T4
+        self, __ent0: Type[_T0], __ent1: Type[_T1], __ent2: _T2, __ent3: _T3, __ent4: _T4
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: Type[_T0],
-    	__ent1: _T1,
-    	__ent2: Type[_T2],
-    	__ent3: Type[_T3],
-    	__ent4: Type[_T4]
+        self, __ent0: Type[_T0], __ent1: _T1, __ent2: Type[_T2], __ent3: Type[_T3], __ent4: Type[_T4]
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: Type[_T0],
-    	__ent1: _T1,
-    	__ent2: Type[_T2],
-    	__ent3: Type[_T3],
-    	__ent4: _T4
+        self, __ent0: Type[_T0], __ent1: _T1, __ent2: Type[_T2], __ent3: Type[_T3], __ent4: _T4
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: Type[_T0],
-    	__ent1: _T1,
-    	__ent2: Type[_T2],
-    	__ent3: _T3,
-    	__ent4: Type[_T4]
+        self, __ent0: Type[_T0], __ent1: _T1, __ent2: Type[_T2], __ent3: _T3, __ent4: Type[_T4]
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: Type[_T0],
-    	__ent1: _T1,
-    	__ent2: Type[_T2],
-    	__ent3: _T3,
-    	__ent4: _T4
+        self, __ent0: Type[_T0], __ent1: _T1, __ent2: Type[_T2], __ent3: _T3, __ent4: _T4
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: Type[_T0],
-    	__ent1: _T1,
-    	__ent2: _T2,
-    	__ent3: Type[_T3],
-    	__ent4: Type[_T4]
+        self, __ent0: Type[_T0], __ent1: _T1, __ent2: _T2, __ent3: Type[_T3], __ent4: Type[_T4]
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: Type[_T0],
-    	__ent1: _T1,
-    	__ent2: _T2,
-    	__ent3: Type[_T3],
-    	__ent4: _T4
+        self, __ent0: Type[_T0], __ent1: _T1, __ent2: _T2, __ent3: Type[_T3], __ent4: _T4
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: Type[_T0],
-    	__ent1: _T1,
-    	__ent2: _T2,
-    	__ent3: _T3,
-    	__ent4: Type[_T4]
+        self, __ent0: Type[_T0], __ent1: _T1, __ent2: _T2, __ent3: _T3, __ent4: Type[_T4]
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: Type[_T0],
-    	__ent1: _T1,
-    	__ent2: _T2,
-    	__ent3: _T3,
-    	__ent4: _T4
+        self, __ent0: Type[_T0], __ent1: _T1, __ent2: _T2, __ent3: _T3, __ent4: _T4
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: _T0,
-    	__ent1: Type[_T1],
-    	__ent2: Type[_T2],
-    	__ent3: Type[_T3],
-    	__ent4: Type[_T4]
+        self, __ent0: _T0, __ent1: Type[_T1], __ent2: Type[_T2], __ent3: Type[_T3], __ent4: Type[_T4]
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: _T0,
-    	__ent1: Type[_T1],
-    	__ent2: Type[_T2],
-    	__ent3: Type[_T3],
-    	__ent4: _T4
+        self, __ent0: _T0, __ent1: Type[_T1], __ent2: Type[_T2], __ent3: Type[_T3], __ent4: _T4
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: _T0,
-    	__ent1: Type[_T1],
-    	__ent2: Type[_T2],
-    	__ent3: _T3,
-    	__ent4: Type[_T4]
+        self, __ent0: _T0, __ent1: Type[_T1], __ent2: Type[_T2], __ent3: _T3, __ent4: Type[_T4]
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: _T0,
-    	__ent1: Type[_T1],
-    	__ent2: Type[_T2],
-    	__ent3: _T3,
-    	__ent4: _T4
+        self, __ent0: _T0, __ent1: Type[_T1], __ent2: Type[_T2], __ent3: _T3, __ent4: _T4
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: _T0,
-    	__ent1: Type[_T1],
-    	__ent2: _T2,
-    	__ent3: Type[_T3],
-    	__ent4: Type[_T4]
+        self, __ent0: _T0, __ent1: Type[_T1], __ent2: _T2, __ent3: Type[_T3], __ent4: Type[_T4]
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: _T0,
-    	__ent1: Type[_T1],
-    	__ent2: _T2,
-    	__ent3: Type[_T3],
-    	__ent4: _T4
+        self, __ent0: _T0, __ent1: Type[_T1], __ent2: _T2, __ent3: Type[_T3], __ent4: _T4
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: _T0,
-    	__ent1: Type[_T1],
-    	__ent2: _T2,
-    	__ent3: _T3,
-    	__ent4: Type[_T4]
+        self, __ent0: _T0, __ent1: Type[_T1], __ent2: _T2, __ent3: _T3, __ent4: Type[_T4]
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: _T0,
-    	__ent1: Type[_T1],
-    	__ent2: _T2,
-    	__ent3: _T3,
-    	__ent4: _T4
+        self, __ent0: _T0, __ent1: Type[_T1], __ent2: _T2, __ent3: _T3, __ent4: _T4
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: _T0,
-    	__ent1: _T1,
-    	__ent2: Type[_T2],
-    	__ent3: Type[_T3],
-    	__ent4: Type[_T4]
+        self, __ent0: _T0, __ent1: _T1, __ent2: Type[_T2], __ent3: Type[_T3], __ent4: Type[_T4]
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: _T0,
-    	__ent1: _T1,
-    	__ent2: Type[_T2],
-    	__ent3: Type[_T3],
-    	__ent4: _T4
+        self, __ent0: _T0, __ent1: _T1, __ent2: Type[_T2], __ent3: Type[_T3], __ent4: _T4
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: _T0,
-    	__ent1: _T1,
-    	__ent2: Type[_T2],
-    	__ent3: _T3,
-    	__ent4: Type[_T4]
+        self, __ent0: _T0, __ent1: _T1, __ent2: Type[_T2], __ent3: _T3, __ent4: Type[_T4]
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: _T0,
-    	__ent1: _T1,
-    	__ent2: Type[_T2],
-    	__ent3: _T3,
-    	__ent4: _T4
+        self, __ent0: _T0, __ent1: _T1, __ent2: Type[_T2], __ent3: _T3, __ent4: _T4
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: _T0,
-    	__ent1: _T1,
-    	__ent2: _T2,
-    	__ent3: Type[_T3],
-    	__ent4: Type[_T4]
+        self, __ent0: _T0, __ent1: _T1, __ent2: _T2, __ent3: Type[_T3], __ent4: Type[_T4]
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: _T0,
-    	__ent1: _T1,
-    	__ent2: _T2,
-    	__ent3: Type[_T3],
-    	__ent4: _T4
+        self, __ent0: _T0, __ent1: _T1, __ent2: _T2, __ent3: Type[_T3], __ent4: _T4
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: _T0,
-    	__ent1: _T1,
-    	__ent2: _T2,
-    	__ent3: _T3,
-    	__ent4: Type[_T4]
+        self, __ent0: _T0, __ent1: _T1, __ent2: _T2, __ent3: _T3, __ent4: Type[_T4]
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: _T0,
-    	__ent1: _T1,
-    	__ent2: _T2,
-    	__ent3: _T3,
-    	__ent4: _T4
+        self, __ent0: _T0, __ent1: _T1, __ent2: _T2, __ent3: _T3, __ent4: _T4
     ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
@@ -1135,141 +1055,381 @@ class GroupedQuery(BaseQueryImpl[Tuple[_KT, Iterator[_GT]]], Generic[_KT, _GT]):
         # doesn't need to implement group_by
         raise ValueError("Cannot specify 'group_by' multiple times")
 
-    # START OVERLOADED FUNCTIONS self.select;;GroupedQuery[_KT, {0}];1;3;Type;Y;
+    # START OVERLOADED FUNCTIONS self.select;GroupedQuery[_KT, {0}];1;5;Type;Y
 
     # code within this block is **programmatically, 
     # statically generated** by generate_overloads.py
 
-
     @overload
     def select(
-        self,
-        __ent0: Type[_T0]
+        self, __ent0: Type[_T0]
     ) -> 'GroupedQuery[_KT, _T0]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: _T0
+        self, __ent0: _T0
     ) -> 'GroupedQuery[_KT, _T0]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: Type[_T0],
-    	__ent1: Type[_T1]
+        self, __ent0: Type[_T0], __ent1: Type[_T1]
     ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: Type[_T0],
-    	__ent1: _T1
+        self, __ent0: Type[_T0], __ent1: _T1
     ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: _T0,
-    	__ent1: Type[_T1]
+        self, __ent0: _T0, __ent1: Type[_T1]
     ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: _T0,
-    	__ent1: _T1
+        self, __ent0: _T0, __ent1: _T1
     ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: Type[_T0],
-    	__ent1: Type[_T1],
-    	__ent2: Type[_T2]
+        self, __ent0: Type[_T0], __ent1: Type[_T1], __ent2: Type[_T2]
     ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: Type[_T0],
-    	__ent1: Type[_T1],
-    	__ent2: _T2
+        self, __ent0: Type[_T0], __ent1: Type[_T1], __ent2: _T2
     ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: Type[_T0],
-    	__ent1: _T1,
-    	__ent2: Type[_T2]
+        self, __ent0: Type[_T0], __ent1: _T1, __ent2: Type[_T2]
     ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: Type[_T0],
-    	__ent1: _T1,
-    	__ent2: _T2
+        self, __ent0: Type[_T0], __ent1: _T1, __ent2: _T2
     ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: _T0,
-    	__ent1: Type[_T1],
-    	__ent2: Type[_T2]
+        self, __ent0: _T0, __ent1: Type[_T1], __ent2: Type[_T2]
     ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: _T0,
-    	__ent1: Type[_T1],
-    	__ent2: _T2
+        self, __ent0: _T0, __ent1: Type[_T1], __ent2: _T2
     ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2]]':
         ...
 
-
     @overload
     def select(
-        self,
-        __ent0: _T0,
-    	__ent1: _T1,
-    	__ent2: Type[_T2]
+        self, __ent0: _T0, __ent1: _T1, __ent2: Type[_T2]
     ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2]]':
         ...
 
+    @overload
+    def select(
+        self, __ent0: _T0, __ent1: _T1, __ent2: _T2
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2]]':
+        ...
 
     @overload
     def select(
-        self,
-        __ent0: _T0,
-    	__ent1: _T1,
-    	__ent2: _T2
-    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2]]':
+        self, __ent0: Type[_T0], __ent1: Type[_T1], __ent2: Type[_T2], __ent3: Type[_T3]
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2, _T3]]':
+        ...
+
+    @overload
+    def select(
+        self, __ent0: Type[_T0], __ent1: Type[_T1], __ent2: Type[_T2], __ent3: _T3
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2, _T3]]':
+        ...
+
+    @overload
+    def select(
+        self, __ent0: Type[_T0], __ent1: Type[_T1], __ent2: _T2, __ent3: Type[_T3]
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2, _T3]]':
+        ...
+
+    @overload
+    def select(
+        self, __ent0: Type[_T0], __ent1: Type[_T1], __ent2: _T2, __ent3: _T3
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2, _T3]]':
+        ...
+
+    @overload
+    def select(
+        self, __ent0: Type[_T0], __ent1: _T1, __ent2: Type[_T2], __ent3: Type[_T3]
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2, _T3]]':
+        ...
+
+    @overload
+    def select(
+        self, __ent0: Type[_T0], __ent1: _T1, __ent2: Type[_T2], __ent3: _T3
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2, _T3]]':
+        ...
+
+    @overload
+    def select(
+        self, __ent0: Type[_T0], __ent1: _T1, __ent2: _T2, __ent3: Type[_T3]
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2, _T3]]':
+        ...
+
+    @overload
+    def select(
+        self, __ent0: Type[_T0], __ent1: _T1, __ent2: _T2, __ent3: _T3
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2, _T3]]':
+        ...
+
+    @overload
+    def select(
+        self, __ent0: _T0, __ent1: Type[_T1], __ent2: Type[_T2], __ent3: Type[_T3]
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2, _T3]]':
+        ...
+
+    @overload
+    def select(
+        self, __ent0: _T0, __ent1: Type[_T1], __ent2: Type[_T2], __ent3: _T3
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2, _T3]]':
+        ...
+
+    @overload
+    def select(
+        self, __ent0: _T0, __ent1: Type[_T1], __ent2: _T2, __ent3: Type[_T3]
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2, _T3]]':
+        ...
+
+    @overload
+    def select(
+        self, __ent0: _T0, __ent1: Type[_T1], __ent2: _T2, __ent3: _T3
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2, _T3]]':
+        ...
+
+    @overload
+    def select(
+        self, __ent0: _T0, __ent1: _T1, __ent2: Type[_T2], __ent3: Type[_T3]
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2, _T3]]':
+        ...
+
+    @overload
+    def select(
+        self, __ent0: _T0, __ent1: _T1, __ent2: Type[_T2], __ent3: _T3
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2, _T3]]':
+        ...
+
+    @overload
+    def select(
+        self, __ent0: _T0, __ent1: _T1, __ent2: _T2, __ent3: Type[_T3]
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2, _T3]]':
+        ...
+
+    @overload
+    def select(
+        self, __ent0: _T0, __ent1: _T1, __ent2: _T2, __ent3: _T3
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2, _T3]]':
+        ...
+
+    @overload
+    def select(
+        self, __ent0: Type[_T0], __ent1: Type[_T1], __ent2: Type[_T2], __ent3: Type[_T3], __ent4: Type[_T4]
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2, _T3, _T4]]':
+        ...
+
+    @overload
+    def select(
+        self, __ent0: Type[_T0], __ent1: Type[_T1], __ent2: Type[_T2], __ent3: Type[_T3], __ent4: _T4
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2, _T3, _T4]]':
+        ...
+
+    @overload
+    def select(
+        self, __ent0: Type[_T0], __ent1: Type[_T1], __ent2: Type[_T2], __ent3: _T3, __ent4: Type[_T4]
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2, _T3, _T4]]':
+        ...
+
+    @overload
+    def select(
+        self, __ent0: Type[_T0], __ent1: Type[_T1], __ent2: Type[_T2], __ent3: _T3, __ent4: _T4
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2, _T3, _T4]]':
+        ...
+
+    @overload
+    def select(
+        self, __ent0: Type[_T0], __ent1: Type[_T1], __ent2: _T2, __ent3: Type[_T3], __ent4: Type[_T4]
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2, _T3, _T4]]':
+        ...
+
+    @overload
+    def select(
+        self, __ent0: Type[_T0], __ent1: Type[_T1], __ent2: _T2, __ent3: Type[_T3], __ent4: _T4
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2, _T3, _T4]]':
+        ...
+
+    @overload
+    def select(
+        self, __ent0: Type[_T0], __ent1: Type[_T1], __ent2: _T2, __ent3: _T3, __ent4: Type[_T4]
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2, _T3, _T4]]':
+        ...
+
+    @overload
+    def select(
+        self, __ent0: Type[_T0], __ent1: Type[_T1], __ent2: _T2, __ent3: _T3, __ent4: _T4
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2, _T3, _T4]]':
+        ...
+
+    @overload
+    def select(
+        self, __ent0: Type[_T0], __ent1: _T1, __ent2: Type[_T2], __ent3: Type[_T3], __ent4: Type[_T4]
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2, _T3, _T4]]':
+        ...
+
+    @overload
+    def select(
+        self, __ent0: Type[_T0], __ent1: _T1, __ent2: Type[_T2], __ent3: Type[_T3], __ent4: _T4
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2, _T3, _T4]]':
+        ...
+
+    @overload
+    def select(
+        self, __ent0: Type[_T0], __ent1: _T1, __ent2: Type[_T2], __ent3: _T3, __ent4: Type[_T4]
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2, _T3, _T4]]':
+        ...
+
+    @overload
+    def select(
+        self, __ent0: Type[_T0], __ent1: _T1, __ent2: Type[_T2], __ent3: _T3, __ent4: _T4
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2, _T3, _T4]]':
+        ...
+
+    @overload
+    def select(
+        self, __ent0: Type[_T0], __ent1: _T1, __ent2: _T2, __ent3: Type[_T3], __ent4: Type[_T4]
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2, _T3, _T4]]':
+        ...
+
+    @overload
+    def select(
+        self, __ent0: Type[_T0], __ent1: _T1, __ent2: _T2, __ent3: Type[_T3], __ent4: _T4
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2, _T3, _T4]]':
+        ...
+
+    @overload
+    def select(
+        self, __ent0: Type[_T0], __ent1: _T1, __ent2: _T2, __ent3: _T3, __ent4: Type[_T4]
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2, _T3, _T4]]':
+        ...
+
+    @overload
+    def select(
+        self, __ent0: Type[_T0], __ent1: _T1, __ent2: _T2, __ent3: _T3, __ent4: _T4
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2, _T3, _T4]]':
+        ...
+
+    @overload
+    def select(
+        self, __ent0: _T0, __ent1: Type[_T1], __ent2: Type[_T2], __ent3: Type[_T3], __ent4: Type[_T4]
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2, _T3, _T4]]':
+        ...
+
+    @overload
+    def select(
+        self, __ent0: _T0, __ent1: Type[_T1], __ent2: Type[_T2], __ent3: Type[_T3], __ent4: _T4
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2, _T3, _T4]]':
+        ...
+
+    @overload
+    def select(
+        self, __ent0: _T0, __ent1: Type[_T1], __ent2: Type[_T2], __ent3: _T3, __ent4: Type[_T4]
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2, _T3, _T4]]':
+        ...
+
+    @overload
+    def select(
+        self, __ent0: _T0, __ent1: Type[_T1], __ent2: Type[_T2], __ent3: _T3, __ent4: _T4
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2, _T3, _T4]]':
+        ...
+
+    @overload
+    def select(
+        self, __ent0: _T0, __ent1: Type[_T1], __ent2: _T2, __ent3: Type[_T3], __ent4: Type[_T4]
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2, _T3, _T4]]':
+        ...
+
+    @overload
+    def select(
+        self, __ent0: _T0, __ent1: Type[_T1], __ent2: _T2, __ent3: Type[_T3], __ent4: _T4
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2, _T3, _T4]]':
+        ...
+
+    @overload
+    def select(
+        self, __ent0: _T0, __ent1: Type[_T1], __ent2: _T2, __ent3: _T3, __ent4: Type[_T4]
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2, _T3, _T4]]':
+        ...
+
+    @overload
+    def select(
+        self, __ent0: _T0, __ent1: Type[_T1], __ent2: _T2, __ent3: _T3, __ent4: _T4
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2, _T3, _T4]]':
+        ...
+
+    @overload
+    def select(
+        self, __ent0: _T0, __ent1: _T1, __ent2: Type[_T2], __ent3: Type[_T3], __ent4: Type[_T4]
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2, _T3, _T4]]':
+        ...
+
+    @overload
+    def select(
+        self, __ent0: _T0, __ent1: _T1, __ent2: Type[_T2], __ent3: Type[_T3], __ent4: _T4
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2, _T3, _T4]]':
+        ...
+
+    @overload
+    def select(
+        self, __ent0: _T0, __ent1: _T1, __ent2: Type[_T2], __ent3: _T3, __ent4: Type[_T4]
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2, _T3, _T4]]':
+        ...
+
+    @overload
+    def select(
+        self, __ent0: _T0, __ent1: _T1, __ent2: Type[_T2], __ent3: _T3, __ent4: _T4
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2, _T3, _T4]]':
+        ...
+
+    @overload
+    def select(
+        self, __ent0: _T0, __ent1: _T1, __ent2: _T2, __ent3: Type[_T3], __ent4: Type[_T4]
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2, _T3, _T4]]':
+        ...
+
+    @overload
+    def select(
+        self, __ent0: _T0, __ent1: _T1, __ent2: _T2, __ent3: Type[_T3], __ent4: _T4
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2, _T3, _T4]]':
+        ...
+
+    @overload
+    def select(
+        self, __ent0: _T0, __ent1: _T1, __ent2: _T2, __ent3: _T3, __ent4: Type[_T4]
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2, _T3, _T4]]':
+        ...
+
+    @overload
+    def select(
+        self, __ent0: _T0, __ent1: _T1, __ent2: _T2, __ent3: _T3, __ent4: _T4
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
     # END OVERLOADED FUNCTIONS self.select
