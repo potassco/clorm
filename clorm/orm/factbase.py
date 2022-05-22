@@ -11,7 +11,7 @@ from typing import (Any, Callable, Iterable, Iterator, List, Optional, TextIO,
                     Tuple, Type, Union, cast, overload)
 
 from .._typing import _T0, _T1, _T2, _T3, _T4
-from ._queryimpl import QueryImpl
+from ._queryimpl import UnGroupedQuery
 from .core import (Predicate, PredicateDefn, PredicatePath, and_,
                    validate_root_paths)
 from .factcontainers import FactMap, factset_equality
@@ -318,7 +318,7 @@ class FactBase(object):
 
         return _Delete(self, QuerySpec(roots=roots))
 
-    # START OVERLOADED FUNCTIONS self.query;;QueryImpl[{0}];1;5;Type;;
+    # START OVERLOADED FUNCTIONS self.query;;UnGroupedQuery[{0}];1;5;Type;;
 
     # code within this block is **programmatically, 
     # statically generated** by generate_overloads.py
@@ -328,7 +328,7 @@ class FactBase(object):
     def query(
         self,
         __ent0: Type[_T0]
-    ) -> 'QueryImpl[_T0]':
+    ) -> 'UnGroupedQuery[_T0]':
         ...
 
 
@@ -337,7 +337,7 @@ class FactBase(object):
         self,
         __ent0: Type[_T0],
     	__ent1: Type[_T1]
-    ) -> 'QueryImpl[Tuple[_T0, _T1]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1]]':
         ...
 
 
@@ -347,7 +347,7 @@ class FactBase(object):
         __ent0: Type[_T0],
     	__ent1: Type[_T1],
     	__ent2: Type[_T2]
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2]]':
         ...
 
 
@@ -358,7 +358,7 @@ class FactBase(object):
     	__ent1: Type[_T1],
     	__ent2: Type[_T2],
     	__ent3: Type[_T3]
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2, _T3]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3]]':
         ...
 
 
@@ -370,13 +370,13 @@ class FactBase(object):
     	__ent2: Type[_T2],
     	__ent3: Type[_T3],
     	__ent4: Type[_T4]
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2, _T3, _T4]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
     # END OVERLOADED FUNCTIONS self.query
    
     @overload
-    def query(self, *roots: Any) -> 'QueryImpl[Any]': ...
+    def query(self, *roots: Any) -> 'UnGroupedQuery[Any]': ...
 
     def query(self, *roots):
         """Define a query using the new Query API :class:`Query`.
@@ -399,7 +399,7 @@ class FactBase(object):
         for ptype in ptypes: self._factmaps.setdefault(ptype, FactMap(ptype))
 
         qspec = QuerySpec(roots=roots)
-        return QueryImpl(self._factmaps, qspec)
+        return UnGroupedQuery(self._factmaps, qspec)
 
     @property
     def predicates(self) -> Tuple[Type[Predicate], ...]:

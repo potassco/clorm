@@ -5,7 +5,7 @@
 
 import functools
 from typing import (Any, Callable, Dict, Generator, Generic, Iterator, Tuple,
-                    Type, TypeVar, overload)
+                    Type, TypeVar, Union, overload)
 
 from clorm.orm.factcontainers import FactMap
 
@@ -17,11 +17,9 @@ from .query import (Query, QueryExecutor, QuerySpec, make_query_plan,
 #------------------------------------------------------------------------------
 # Global
 #------------------------------------------------------------------------------
-SelfQuery = TypeVar("SelfQuery", bound="QueryImpl[Any]")
+SelfQuery = TypeVar("SelfQuery", bound="BaseQueryImpl[Any]")
 _T = TypeVar("_T", bound=Any)
 _Fn = TypeVar("_Fn", bound=Callable[..., Any])
-_TK = TypeVar("_TK", bound=Any)
-_TG = TypeVar("_TG", bound=Any)
 
 #------------------------------------------------------------------------------
 # New Clorm Query API
@@ -38,7 +36,7 @@ def _generate(fn: _Fn) -> _Fn:
     """
 
     @functools.wraps(fn)
-    def wrap(self: 'QueryImpl', *args: Any, **kw: Any) -> Any:
+    def wrap(self: 'BaseQueryImpl', *args: Any, **kw: Any) -> Any:
         self = self.__class__(self._factmaps, self._qspec)
         x = fn(self, *args, **kw)
         assert x is self, "methods must return self"
@@ -51,7 +49,7 @@ def _check_join_called_first(_fn=None, *, endpoint=False):
     """test whether a precondition to call the decorated function is met"""
     def wrap(fn: _Fn) -> _Fn:
         @functools.wraps(fn)
-        def check(self: 'QueryImpl', *args: Any, **kwargs: Any) -> Any:
+        def check(self: 'BaseQueryImpl', *args: Any, **kwargs: Any) -> Any:
             if self._qspec.join is not None or len(self._qspec.roots) == 1:
                 return fn(self, *args, **kwargs)
             if endpoint:
@@ -65,7 +63,7 @@ def _check_join_called_first(_fn=None, *, endpoint=False):
     return wrap(_fn)
 
 
-class QueryImpl(Query, Generic[_T]):
+class BaseQueryImpl(Query, Generic[_T]):
 
     def __init__(self, factmaps: Dict[Type[Predicate], FactMap], qspec: QuerySpec) -> None:
         self._factmaps = factmaps
@@ -125,6 +123,142 @@ class QueryImpl(Query, Generic[_T]):
             self._qspec = self._qspec.newp(
                 order_by=process_orderby(expressions,self._qspec.roots))
         return self
+
+    @_generate
+    @_check_join_called_first
+    def select(self, *outsig: Any) -> Any:
+        if not outsig:
+            raise ValueError("An empty 'select' signature is invalid")
+        self._qspec = self._qspec.newp(select=outsig)
+        return self
+
+    #--------------------------------------------------------------------------
+    # The distinct flag
+    #--------------------------------------------------------------------------
+    @_generate
+    @_check_join_called_first
+    def distinct(self: SelfQuery) -> SelfQuery:
+        self._qspec = self._qspec.newp(distinct=True)
+        return self
+
+    #--------------------------------------------------------------------------
+    # Ground - bind
+    #--------------------------------------------------------------------------
+    @_generate
+    @_check_join_called_first
+    def bind(self: SelfQuery, *args: Any, **kwargs: Any) -> SelfQuery:
+        self._qspec = self._qspec.bindp(*args, **kwargs)
+        return self
+
+    #--------------------------------------------------------------------------
+    # The tuple flag
+    #--------------------------------------------------------------------------
+    @_generate
+    @_check_join_called_first
+    def tuple(self) -> 'BaseQueryImpl[Any]':
+        self._qspec = self._qspec.newp(tuple=True)
+        return self
+
+    #--------------------------------------------------------------------------
+    # Overide the default heuristic
+    #--------------------------------------------------------------------------
+    @_generate
+    def heuristic(self: SelfQuery, join_order: Any) -> SelfQuery:
+        self._qspec = self._qspec.newp(heuristic=True, joh=join_order)
+        return self
+
+    #--------------------------------------------------------------------------
+    # End points that do something useful
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    # For the user to see what the query plan looks like
+    #--------------------------------------------------------------------------
+    @_check_join_called_first
+    def query_plan(self,*args,**kwargs):
+        qspec = self._qspec.fill_defaults()
+
+        (factsets,factindexes) = \
+            QueryExecutor.get_factmap_data(self._factmaps, qspec)
+        return make_query_plan(factindexes.keys(), qspec)
+
+    #--------------------------------------------------------------------------
+    # Return the placeholders
+    #--------------------------------------------------------------------------
+    @property
+    def qspec(self):
+        return self._qspec
+
+    #--------------------------------------------------------------------------
+    # Select to display all the output of the query
+    # --------------------------------------------------------------------------
+    @_check_join_called_first(endpoint=True)
+    def all(self: 'BaseQueryImpl[_T1]') -> Generator[_T1, None, None]:
+        qe = QueryExecutor(self._factmaps, self._qspec)
+        return qe.all()
+
+    #--------------------------------------------------------------------------
+    # Show the single element and throw an exception if there is more than one
+    # --------------------------------------------------------------------------
+    @_check_join_called_first(endpoint=True)
+    def singleton(self) -> _T:
+        qe = QueryExecutor(self._factmaps, self._qspec)
+        gen = qe.all()
+        first = next(gen, None)
+        if first is None:
+            raise ValueError("Query has no matching elements")
+        second = next(gen, None)
+        if second is not None:
+            raise ValueError("Query returned more than a single element")
+        return first
+
+    #--------------------------------------------------------------------------
+    # Return the count of elements - Note: the behaviour of what is counted
+    # changes if group_by() has been specified.
+    # --------------------------------------------------------------------------
+    @overload
+    def count(self: 'GroupedQuery[_T0, _T1]') -> Iterator[Tuple[_T0, int]]: ... # type: ignore
+    
+    @overload
+    def count(self: 'BaseQueryImpl[_T1]') -> int: ...
+
+    @_check_join_called_first(endpoint=True)
+    def count(self) -> Union[Iterator[Tuple[Any, int]], int]:
+        qe = QueryExecutor(self._factmaps, self._qspec)
+
+        def group_by_generator():
+            for k, g in qe.all():
+                yield k, sum(1 for _ in g)
+
+        # If group_by is set then we want to count records associated with each
+        # key and not just total records.
+        if self._qspec.group_by:
+            return group_by_generator()
+        else:
+            return sum(1 for _ in qe.all())
+
+
+    #--------------------------------------------------------------------------
+    # Return the first element of the query
+    # --------------------------------------------------------------------------
+    @_check_join_called_first(endpoint=True)
+    def first(self) -> _T:
+        qe = QueryExecutor(self._factmaps, self._qspec)
+
+        for out in qe.all():
+            return out
+        raise ValueError("Query has no matching elements")
+
+    #--------------------------------------------------------------------------
+    # Delete a selection of fact
+    #--------------------------------------------------------------------------
+    @_check_join_called_first(endpoint=True)
+    def delete(self) -> int:
+        qe = QueryExecutor(self._factmaps, self._qspec)
+        return qe.delete()
+
+
+class UnGroupedQuery(BaseQueryImpl[_T], Generic[_T]):
 
     #--------------------------------------------------------------------------
     # Add a group_by expression
@@ -269,159 +403,20 @@ class QueryImpl(Query, Generic[_T]):
     # END OVERLOADED FUNCTIONS self.group_by
 
     @overload
-    def group_by(self, *expressions: Any) -> 'QueryImpl[Tuple[Any, Iterator[_T]]]': ...
+    def group_by(self, *expressions: Any) -> 'GroupedQuery[Any, _T]': ...
     
-    def group_by(self, *expressions: Any) -> 'QueryImpl[Any]':
+    def group_by(self, *expressions: Any) -> 'GroupedQuery[Any, _T]':
         if not expressions:
-            self._qspec = self._qspec.newp(group_by=None)   # raise exception
+            nqspec = self._qspec.newp(group_by=None)   # raise exception
         else:
-            self._qspec = self._qspec.newp(
+            nqspec = self._qspec.newp(
                 group_by=process_orderby(expressions,self._qspec.roots))
-        return self
+        return GroupedQuery(self._factmaps, nqspec)
 
     #--------------------------------------------------------------------------
     # Explicitly select the elements to output or delete
     #--------------------------------------------------------------------------
-    # START OVERLOADED FUNCTIONS self.select;GroupedQuery[_TK, _TG];GroupedQuery[_TK, {0}];1;3;Type;Y;Y
-
-    # code within this block is **programmatically, 
-    # statically generated** by generate_overloads.py
-
-
-    @overload
-    def select( # type: ignore[misc]
-        self: 'GroupedQuery[_TK, _TG]',
-        __ent0: Type[_T0]
-    ) -> 'GroupedQuery[_TK, _T0]':
-        ...
-
-
-    @overload
-    def select( # type: ignore[misc]
-        self: 'GroupedQuery[_TK, _TG]',
-        __ent0: _T0
-    ) -> 'GroupedQuery[_TK, _T0]':
-        ...
-
-
-    @overload
-    def select( # type: ignore[misc]
-        self: 'GroupedQuery[_TK, _TG]',
-        __ent0: Type[_T0],
-    	__ent1: Type[_T1]
-    ) -> 'GroupedQuery[_TK, Tuple[_T0, _T1]]':
-        ...
-
-
-    @overload
-    def select( # type: ignore[misc]
-        self: 'GroupedQuery[_TK, _TG]',
-        __ent0: Type[_T0],
-    	__ent1: _T1
-    ) -> 'GroupedQuery[_TK, Tuple[_T0, _T1]]':
-        ...
-
-
-    @overload
-    def select( # type: ignore[misc]
-        self: 'GroupedQuery[_TK, _TG]',
-        __ent0: _T0,
-    	__ent1: Type[_T1]
-    ) -> 'GroupedQuery[_TK, Tuple[_T0, _T1]]':
-        ...
-
-
-    @overload
-    def select( # type: ignore[misc]
-        self: 'GroupedQuery[_TK, _TG]',
-        __ent0: _T0,
-    	__ent1: _T1
-    ) -> 'GroupedQuery[_TK, Tuple[_T0, _T1]]':
-        ...
-
-
-    @overload
-    def select( # type: ignore[misc]
-        self: 'GroupedQuery[_TK, _TG]',
-        __ent0: Type[_T0],
-    	__ent1: Type[_T1],
-    	__ent2: Type[_T2]
-    ) -> 'GroupedQuery[_TK, Tuple[_T0, _T1, _T2]]':
-        ...
-
-
-    @overload
-    def select( # type: ignore[misc]
-        self: 'GroupedQuery[_TK, _TG]',
-        __ent0: Type[_T0],
-    	__ent1: Type[_T1],
-    	__ent2: _T2
-    ) -> 'GroupedQuery[_TK, Tuple[_T0, _T1, _T2]]':
-        ...
-
-
-    @overload
-    def select( # type: ignore[misc]
-        self: 'GroupedQuery[_TK, _TG]',
-        __ent0: Type[_T0],
-    	__ent1: _T1,
-    	__ent2: Type[_T2]
-    ) -> 'GroupedQuery[_TK, Tuple[_T0, _T1, _T2]]':
-        ...
-
-
-    @overload
-    def select( # type: ignore[misc]
-        self: 'GroupedQuery[_TK, _TG]',
-        __ent0: Type[_T0],
-    	__ent1: _T1,
-    	__ent2: _T2
-    ) -> 'GroupedQuery[_TK, Tuple[_T0, _T1, _T2]]':
-        ...
-
-
-    @overload
-    def select( # type: ignore[misc]
-        self: 'GroupedQuery[_TK, _TG]',
-        __ent0: _T0,
-    	__ent1: Type[_T1],
-    	__ent2: Type[_T2]
-    ) -> 'GroupedQuery[_TK, Tuple[_T0, _T1, _T2]]':
-        ...
-
-
-    @overload
-    def select( # type: ignore[misc]
-        self: 'GroupedQuery[_TK, _TG]',
-        __ent0: _T0,
-    	__ent1: Type[_T1],
-    	__ent2: _T2
-    ) -> 'GroupedQuery[_TK, Tuple[_T0, _T1, _T2]]':
-        ...
-
-
-    @overload
-    def select( # type: ignore[misc]
-        self: 'GroupedQuery[_TK, _TG]',
-        __ent0: _T0,
-    	__ent1: _T1,
-    	__ent2: Type[_T2]
-    ) -> 'GroupedQuery[_TK, Tuple[_T0, _T1, _T2]]':
-        ...
-
-
-    @overload
-    def select( # type: ignore[misc]
-        self: 'GroupedQuery[_TK, _TG]',
-        __ent0: _T0,
-    	__ent1: _T1,
-    	__ent2: _T2
-    ) -> 'GroupedQuery[_TK, Tuple[_T0, _T1, _T2]]':
-        ...
-
-    # END OVERLOADED FUNCTIONS self.select
-
-    # START OVERLOADED FUNCTIONS self.select;;QueryImpl[{0}];1;5;Type;Y;
+    # START OVERLOADED FUNCTIONS self.select;;UnGroupedQuery[{0}];1;5;Type;Y;
 
     # code within this block is **programmatically, 
     # statically generated** by generate_overloads.py
@@ -431,7 +426,7 @@ class QueryImpl(Query, Generic[_T]):
     def select(
         self,
         __ent0: Type[_T0]
-    ) -> 'QueryImpl[_T0]':
+    ) -> 'UnGroupedQuery[_T0]':
         ...
 
 
@@ -439,7 +434,7 @@ class QueryImpl(Query, Generic[_T]):
     def select(
         self,
         __ent0: _T0
-    ) -> 'QueryImpl[_T0]':
+    ) -> 'UnGroupedQuery[_T0]':
         ...
 
 
@@ -448,7 +443,7 @@ class QueryImpl(Query, Generic[_T]):
         self,
         __ent0: Type[_T0],
     	__ent1: Type[_T1]
-    ) -> 'QueryImpl[Tuple[_T0, _T1]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1]]':
         ...
 
 
@@ -457,7 +452,7 @@ class QueryImpl(Query, Generic[_T]):
         self,
         __ent0: Type[_T0],
     	__ent1: _T1
-    ) -> 'QueryImpl[Tuple[_T0, _T1]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1]]':
         ...
 
 
@@ -466,7 +461,7 @@ class QueryImpl(Query, Generic[_T]):
         self,
         __ent0: _T0,
     	__ent1: Type[_T1]
-    ) -> 'QueryImpl[Tuple[_T0, _T1]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1]]':
         ...
 
 
@@ -475,7 +470,7 @@ class QueryImpl(Query, Generic[_T]):
         self,
         __ent0: _T0,
     	__ent1: _T1
-    ) -> 'QueryImpl[Tuple[_T0, _T1]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1]]':
         ...
 
 
@@ -485,7 +480,7 @@ class QueryImpl(Query, Generic[_T]):
         __ent0: Type[_T0],
     	__ent1: Type[_T1],
     	__ent2: Type[_T2]
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2]]':
         ...
 
 
@@ -495,7 +490,7 @@ class QueryImpl(Query, Generic[_T]):
         __ent0: Type[_T0],
     	__ent1: Type[_T1],
     	__ent2: _T2
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2]]':
         ...
 
 
@@ -505,7 +500,7 @@ class QueryImpl(Query, Generic[_T]):
         __ent0: Type[_T0],
     	__ent1: _T1,
     	__ent2: Type[_T2]
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2]]':
         ...
 
 
@@ -515,7 +510,7 @@ class QueryImpl(Query, Generic[_T]):
         __ent0: Type[_T0],
     	__ent1: _T1,
     	__ent2: _T2
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2]]':
         ...
 
 
@@ -525,7 +520,7 @@ class QueryImpl(Query, Generic[_T]):
         __ent0: _T0,
     	__ent1: Type[_T1],
     	__ent2: Type[_T2]
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2]]':
         ...
 
 
@@ -535,7 +530,7 @@ class QueryImpl(Query, Generic[_T]):
         __ent0: _T0,
     	__ent1: Type[_T1],
     	__ent2: _T2
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2]]':
         ...
 
 
@@ -545,7 +540,7 @@ class QueryImpl(Query, Generic[_T]):
         __ent0: _T0,
     	__ent1: _T1,
     	__ent2: Type[_T2]
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2]]':
         ...
 
 
@@ -555,7 +550,7 @@ class QueryImpl(Query, Generic[_T]):
         __ent0: _T0,
     	__ent1: _T1,
     	__ent2: _T2
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2]]':
         ...
 
 
@@ -566,7 +561,7 @@ class QueryImpl(Query, Generic[_T]):
     	__ent1: Type[_T1],
     	__ent2: Type[_T2],
     	__ent3: Type[_T3]
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2, _T3]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3]]':
         ...
 
 
@@ -577,7 +572,7 @@ class QueryImpl(Query, Generic[_T]):
     	__ent1: Type[_T1],
     	__ent2: Type[_T2],
     	__ent3: _T3
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2, _T3]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3]]':
         ...
 
 
@@ -588,7 +583,7 @@ class QueryImpl(Query, Generic[_T]):
     	__ent1: Type[_T1],
     	__ent2: _T2,
     	__ent3: Type[_T3]
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2, _T3]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3]]':
         ...
 
 
@@ -599,7 +594,7 @@ class QueryImpl(Query, Generic[_T]):
     	__ent1: Type[_T1],
     	__ent2: _T2,
     	__ent3: _T3
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2, _T3]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3]]':
         ...
 
 
@@ -610,7 +605,7 @@ class QueryImpl(Query, Generic[_T]):
     	__ent1: _T1,
     	__ent2: Type[_T2],
     	__ent3: Type[_T3]
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2, _T3]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3]]':
         ...
 
 
@@ -621,7 +616,7 @@ class QueryImpl(Query, Generic[_T]):
     	__ent1: _T1,
     	__ent2: Type[_T2],
     	__ent3: _T3
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2, _T3]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3]]':
         ...
 
 
@@ -632,7 +627,7 @@ class QueryImpl(Query, Generic[_T]):
     	__ent1: _T1,
     	__ent2: _T2,
     	__ent3: Type[_T3]
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2, _T3]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3]]':
         ...
 
 
@@ -643,7 +638,7 @@ class QueryImpl(Query, Generic[_T]):
     	__ent1: _T1,
     	__ent2: _T2,
     	__ent3: _T3
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2, _T3]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3]]':
         ...
 
 
@@ -654,7 +649,7 @@ class QueryImpl(Query, Generic[_T]):
     	__ent1: Type[_T1],
     	__ent2: Type[_T2],
     	__ent3: Type[_T3]
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2, _T3]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3]]':
         ...
 
 
@@ -665,7 +660,7 @@ class QueryImpl(Query, Generic[_T]):
     	__ent1: Type[_T1],
     	__ent2: Type[_T2],
     	__ent3: _T3
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2, _T3]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3]]':
         ...
 
 
@@ -676,7 +671,7 @@ class QueryImpl(Query, Generic[_T]):
     	__ent1: Type[_T1],
     	__ent2: _T2,
     	__ent3: Type[_T3]
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2, _T3]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3]]':
         ...
 
 
@@ -687,7 +682,7 @@ class QueryImpl(Query, Generic[_T]):
     	__ent1: Type[_T1],
     	__ent2: _T2,
     	__ent3: _T3
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2, _T3]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3]]':
         ...
 
 
@@ -698,7 +693,7 @@ class QueryImpl(Query, Generic[_T]):
     	__ent1: _T1,
     	__ent2: Type[_T2],
     	__ent3: Type[_T3]
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2, _T3]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3]]':
         ...
 
 
@@ -709,7 +704,7 @@ class QueryImpl(Query, Generic[_T]):
     	__ent1: _T1,
     	__ent2: Type[_T2],
     	__ent3: _T3
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2, _T3]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3]]':
         ...
 
 
@@ -720,7 +715,7 @@ class QueryImpl(Query, Generic[_T]):
     	__ent1: _T1,
     	__ent2: _T2,
     	__ent3: Type[_T3]
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2, _T3]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3]]':
         ...
 
 
@@ -731,7 +726,7 @@ class QueryImpl(Query, Generic[_T]):
     	__ent1: _T1,
     	__ent2: _T2,
     	__ent3: _T3
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2, _T3]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3]]':
         ...
 
 
@@ -743,7 +738,7 @@ class QueryImpl(Query, Generic[_T]):
     	__ent2: Type[_T2],
     	__ent3: Type[_T3],
     	__ent4: Type[_T4]
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2, _T3, _T4]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
 
@@ -755,7 +750,7 @@ class QueryImpl(Query, Generic[_T]):
     	__ent2: Type[_T2],
     	__ent3: Type[_T3],
     	__ent4: _T4
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2, _T3, _T4]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
 
@@ -767,7 +762,7 @@ class QueryImpl(Query, Generic[_T]):
     	__ent2: Type[_T2],
     	__ent3: _T3,
     	__ent4: Type[_T4]
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2, _T3, _T4]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
 
@@ -779,7 +774,7 @@ class QueryImpl(Query, Generic[_T]):
     	__ent2: Type[_T2],
     	__ent3: _T3,
     	__ent4: _T4
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2, _T3, _T4]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
 
@@ -791,7 +786,7 @@ class QueryImpl(Query, Generic[_T]):
     	__ent2: _T2,
     	__ent3: Type[_T3],
     	__ent4: Type[_T4]
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2, _T3, _T4]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
 
@@ -803,7 +798,7 @@ class QueryImpl(Query, Generic[_T]):
     	__ent2: _T2,
     	__ent3: Type[_T3],
     	__ent4: _T4
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2, _T3, _T4]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
 
@@ -815,7 +810,7 @@ class QueryImpl(Query, Generic[_T]):
     	__ent2: _T2,
     	__ent3: _T3,
     	__ent4: Type[_T4]
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2, _T3, _T4]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
 
@@ -827,7 +822,7 @@ class QueryImpl(Query, Generic[_T]):
     	__ent2: _T2,
     	__ent3: _T3,
     	__ent4: _T4
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2, _T3, _T4]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
 
@@ -839,7 +834,7 @@ class QueryImpl(Query, Generic[_T]):
     	__ent2: Type[_T2],
     	__ent3: Type[_T3],
     	__ent4: Type[_T4]
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2, _T3, _T4]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
 
@@ -851,7 +846,7 @@ class QueryImpl(Query, Generic[_T]):
     	__ent2: Type[_T2],
     	__ent3: Type[_T3],
     	__ent4: _T4
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2, _T3, _T4]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
 
@@ -863,7 +858,7 @@ class QueryImpl(Query, Generic[_T]):
     	__ent2: Type[_T2],
     	__ent3: _T3,
     	__ent4: Type[_T4]
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2, _T3, _T4]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
 
@@ -875,7 +870,7 @@ class QueryImpl(Query, Generic[_T]):
     	__ent2: Type[_T2],
     	__ent3: _T3,
     	__ent4: _T4
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2, _T3, _T4]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
 
@@ -887,7 +882,7 @@ class QueryImpl(Query, Generic[_T]):
     	__ent2: _T2,
     	__ent3: Type[_T3],
     	__ent4: Type[_T4]
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2, _T3, _T4]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
 
@@ -899,7 +894,7 @@ class QueryImpl(Query, Generic[_T]):
     	__ent2: _T2,
     	__ent3: Type[_T3],
     	__ent4: _T4
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2, _T3, _T4]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
 
@@ -911,7 +906,7 @@ class QueryImpl(Query, Generic[_T]):
     	__ent2: _T2,
     	__ent3: _T3,
     	__ent4: Type[_T4]
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2, _T3, _T4]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
 
@@ -923,7 +918,7 @@ class QueryImpl(Query, Generic[_T]):
     	__ent2: _T2,
     	__ent3: _T3,
     	__ent4: _T4
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2, _T3, _T4]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
 
@@ -935,7 +930,7 @@ class QueryImpl(Query, Generic[_T]):
     	__ent2: Type[_T2],
     	__ent3: Type[_T3],
     	__ent4: Type[_T4]
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2, _T3, _T4]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
 
@@ -947,7 +942,7 @@ class QueryImpl(Query, Generic[_T]):
     	__ent2: Type[_T2],
     	__ent3: Type[_T3],
     	__ent4: _T4
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2, _T3, _T4]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
 
@@ -959,7 +954,7 @@ class QueryImpl(Query, Generic[_T]):
     	__ent2: Type[_T2],
     	__ent3: _T3,
     	__ent4: Type[_T4]
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2, _T3, _T4]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
 
@@ -971,7 +966,7 @@ class QueryImpl(Query, Generic[_T]):
     	__ent2: Type[_T2],
     	__ent3: _T3,
     	__ent4: _T4
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2, _T3, _T4]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
 
@@ -983,7 +978,7 @@ class QueryImpl(Query, Generic[_T]):
     	__ent2: _T2,
     	__ent3: Type[_T3],
     	__ent4: Type[_T4]
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2, _T3, _T4]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
 
@@ -995,7 +990,7 @@ class QueryImpl(Query, Generic[_T]):
     	__ent2: _T2,
     	__ent3: Type[_T3],
     	__ent4: _T4
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2, _T3, _T4]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
 
@@ -1007,7 +1002,7 @@ class QueryImpl(Query, Generic[_T]):
     	__ent2: _T2,
     	__ent3: _T3,
     	__ent4: Type[_T4]
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2, _T3, _T4]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
 
@@ -1019,7 +1014,7 @@ class QueryImpl(Query, Generic[_T]):
     	__ent2: _T2,
     	__ent3: _T3,
     	__ent4: _T4
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2, _T3, _T4]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
 
@@ -1031,7 +1026,7 @@ class QueryImpl(Query, Generic[_T]):
     	__ent2: Type[_T2],
     	__ent3: Type[_T3],
     	__ent4: Type[_T4]
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2, _T3, _T4]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
 
@@ -1043,7 +1038,7 @@ class QueryImpl(Query, Generic[_T]):
     	__ent2: Type[_T2],
     	__ent3: Type[_T3],
     	__ent4: _T4
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2, _T3, _T4]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
 
@@ -1055,7 +1050,7 @@ class QueryImpl(Query, Generic[_T]):
     	__ent2: Type[_T2],
     	__ent3: _T3,
     	__ent4: Type[_T4]
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2, _T3, _T4]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
 
@@ -1067,7 +1062,7 @@ class QueryImpl(Query, Generic[_T]):
     	__ent2: Type[_T2],
     	__ent3: _T3,
     	__ent4: _T4
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2, _T3, _T4]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
 
@@ -1079,7 +1074,7 @@ class QueryImpl(Query, Generic[_T]):
     	__ent2: _T2,
     	__ent3: Type[_T3],
     	__ent4: Type[_T4]
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2, _T3, _T4]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
 
@@ -1091,7 +1086,7 @@ class QueryImpl(Query, Generic[_T]):
     	__ent2: _T2,
     	__ent3: Type[_T3],
     	__ent4: _T4
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2, _T3, _T4]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
 
@@ -1103,7 +1098,7 @@ class QueryImpl(Query, Generic[_T]):
     	__ent2: _T2,
     	__ent3: _T3,
     	__ent4: Type[_T4]
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2, _T3, _T4]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
 
@@ -1115,148 +1110,175 @@ class QueryImpl(Query, Generic[_T]):
     	__ent2: _T2,
     	__ent3: _T3,
     	__ent4: _T4
-    ) -> 'QueryImpl[Tuple[_T0, _T1, _T2, _T3, _T4]]':
+    ) -> 'UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]':
         ...
 
     # END OVERLOADED FUNCTIONS self.select
 
     @overload
-    def select(self, *outsig: Any) -> 'QueryImpl[Any]': ...
+    def select(self, *outsig: Any) -> 'UnGroupedQuery[Any]': ...
 
-    @_generate
-    @_check_join_called_first
     def select(self, *outsig: Any) -> Any:
-        if not outsig:
-            raise ValueError("An empty 'select' signature is invalid")
-        self._qspec = self._qspec.newp(select=outsig)
-        return self
+        return super().select(*outsig)
 
-    #--------------------------------------------------------------------------
-    # The distinct flag
-    #--------------------------------------------------------------------------
-    @_generate
-    @_check_join_called_first
-    def distinct(self: SelfQuery) -> SelfQuery:
-        self._qspec = self._qspec.newp(distinct=True)
-        return self
 
-    #--------------------------------------------------------------------------
-    # Ground - bind
-    #--------------------------------------------------------------------------
-    @_generate
-    @_check_join_called_first
-    def bind(self: SelfQuery, *args: Any, **kwargs: Any) -> SelfQuery:
-        self._qspec = self._qspec.bindp(*args, **kwargs)
-        return self
+_KT = TypeVar("_KT", bound=Any) # Key type of GroupedQuery
+_GT = TypeVar("_GT", bound=Any) # Group type of GroupedQuery
 
-    #--------------------------------------------------------------------------
-    # The tuple flag
-    #--------------------------------------------------------------------------
-    @_generate
-    @_check_join_called_first
-    def tuple(self) -> 'QueryImpl[Any]':
-        self._qspec = self._qspec.newp(tuple=True)
-        return self
 
-    #--------------------------------------------------------------------------
-    # Overide the default heuristic
-    #--------------------------------------------------------------------------
-    @_generate
-    def heuristic(self: SelfQuery, join_order: Any) -> SelfQuery:
-        self._qspec = self._qspec.newp(heuristic=True, joh=join_order)
-        return self
+class GroupedQuery(BaseQueryImpl[Tuple[_KT, Iterator[_GT]]], Generic[_KT, _GT]):
 
-    #--------------------------------------------------------------------------
-    # End points that do something useful
-    #--------------------------------------------------------------------------
+    def group_by(self, *expressions):
+        # ABC 'Query' requires to implement group_by, but multiple group_by are not allowed
+        # so we raise an error here
+        # a better solution would be to somehow adjust 'Query' that GroupedQuery
+        # doesn't need to implement group_by
+        raise ValueError("Cannot specify 'group_by' multiple times")
 
-    #--------------------------------------------------------------------------
-    # For the user to see what the query plan looks like
-    #--------------------------------------------------------------------------
-    @_check_join_called_first
-    def query_plan(self,*args,**kwargs):
-        qspec = self._qspec.fill_defaults()
+    # START OVERLOADED FUNCTIONS self.select;;GroupedQuery[_KT, {0}];1;3;Type;Y;
 
-        (factsets,factindexes) = \
-            QueryExecutor.get_factmap_data(self._factmaps, qspec)
-        return make_query_plan(factindexes.keys(), qspec)
+    # code within this block is **programmatically, 
+    # statically generated** by generate_overloads.py
 
-    #--------------------------------------------------------------------------
-    # Return the placeholders
-    #--------------------------------------------------------------------------
-    @property
-    def qspec(self):
-        return self._qspec
 
-    #--------------------------------------------------------------------------
-    # Select to display all the output of the query
-    # --------------------------------------------------------------------------
-    @_check_join_called_first(endpoint=True)
-    def all(self) -> Generator[_T, None, None]:
-        qe = QueryExecutor(self._factmaps, self._qspec)
-        return qe.all()
-
-    #--------------------------------------------------------------------------
-    # Show the single element and throw an exception if there is more than one
-    # --------------------------------------------------------------------------
-    @_check_join_called_first(endpoint=True)
-    def singleton(self) -> _T:
-        qe = QueryExecutor(self._factmaps, self._qspec)
-        gen = qe.all()
-        first = next(gen, None)
-        if first is None:
-            raise ValueError("Query has no matching elements")
-        second = next(gen, None)
-        if second is not None:
-            raise ValueError("Query returned more than a single element")
-        return first
-
-    #--------------------------------------------------------------------------
-    # Return the count of elements - Note: the behaviour of what is counted
-    # changes if group_by() has been specified.
-    # --------------------------------------------------------------------------
     @overload
-    def count(self: 'QueryImpl[Tuple[_T0, Iterator[_T1]]]') -> Iterator[Tuple[_T0, int]]: ... # type: ignore
-    
+    def select(
+        self,
+        __ent0: Type[_T0]
+    ) -> 'GroupedQuery[_KT, _T0]':
+        ...
+
+
     @overload
-    def count(self: 'QueryImpl[_T1]') -> int: ...
-
-    @_check_join_called_first(endpoint=True)
-    def count(self):
-        qe = QueryExecutor(self._factmaps, self._qspec)
-
-        def group_by_generator():
-            for k, g in qe.all():
-                yield k, sum(1 for _ in g)
-
-        # If group_by is set then we want to count records associated with each
-        # key and not just total records.
-        if self._qspec.group_by:
-            return group_by_generator()
-        else:
-            return sum(1 for _ in qe.all())
+    def select(
+        self,
+        __ent0: _T0
+    ) -> 'GroupedQuery[_KT, _T0]':
+        ...
 
 
-    #--------------------------------------------------------------------------
-    # Return the first element of the query
-    # --------------------------------------------------------------------------
-    @_check_join_called_first(endpoint=True)
-    def first(self) -> _T:
-        qe = QueryExecutor(self._factmaps, self._qspec)
+    @overload
+    def select(
+        self,
+        __ent0: Type[_T0],
+    	__ent1: Type[_T1]
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1]]':
+        ...
 
-        for out in qe.all():
-            return out
-        raise ValueError("Query has no matching elements")
 
-    #--------------------------------------------------------------------------
-    # Delete a selection of fact
-    #--------------------------------------------------------------------------
-    @_check_join_called_first(endpoint=True)
-    def delete(self) -> int:
-        qe = QueryExecutor(self._factmaps, self._qspec)
-        return qe.delete()
+    @overload
+    def select(
+        self,
+        __ent0: Type[_T0],
+    	__ent1: _T1
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1]]':
+        ...
 
-GroupedQuery = QueryImpl[Tuple[_TK, Iterator[_TG]]]
+
+    @overload
+    def select(
+        self,
+        __ent0: _T0,
+    	__ent1: Type[_T1]
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1]]':
+        ...
+
+
+    @overload
+    def select(
+        self,
+        __ent0: _T0,
+    	__ent1: _T1
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1]]':
+        ...
+
+
+    @overload
+    def select(
+        self,
+        __ent0: Type[_T0],
+    	__ent1: Type[_T1],
+    	__ent2: Type[_T2]
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2]]':
+        ...
+
+
+    @overload
+    def select(
+        self,
+        __ent0: Type[_T0],
+    	__ent1: Type[_T1],
+    	__ent2: _T2
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2]]':
+        ...
+
+
+    @overload
+    def select(
+        self,
+        __ent0: Type[_T0],
+    	__ent1: _T1,
+    	__ent2: Type[_T2]
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2]]':
+        ...
+
+
+    @overload
+    def select(
+        self,
+        __ent0: Type[_T0],
+    	__ent1: _T1,
+    	__ent2: _T2
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2]]':
+        ...
+
+
+    @overload
+    def select(
+        self,
+        __ent0: _T0,
+    	__ent1: Type[_T1],
+    	__ent2: Type[_T2]
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2]]':
+        ...
+
+
+    @overload
+    def select(
+        self,
+        __ent0: _T0,
+    	__ent1: Type[_T1],
+    	__ent2: _T2
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2]]':
+        ...
+
+
+    @overload
+    def select(
+        self,
+        __ent0: _T0,
+    	__ent1: _T1,
+    	__ent2: Type[_T2]
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2]]':
+        ...
+
+
+    @overload
+    def select(
+        self,
+        __ent0: _T0,
+    	__ent1: _T1,
+    	__ent2: _T2
+    ) -> 'GroupedQuery[_KT, Tuple[_T0, _T1, _T2]]':
+        ...
+
+    # END OVERLOADED FUNCTIONS self.select
+
+    @overload
+    def select(self, *outsig: Any) -> 'GroupedQuery[Any, Any]': ...
+
+    def select(self, *outsig: Any) -> Any:
+        return super().select(*outsig)
 
 #------------------------------------------------------------------------------
 # main
