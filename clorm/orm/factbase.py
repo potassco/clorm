@@ -318,7 +318,7 @@ class FactBase(object):
 
         return _Delete(self, QuerySpec(roots=roots))
 
-    # START OVERLOADED FUNCTIONS self.query;QueryImpl[{0}];1;5;Type;
+    # START OVERLOADED FUNCTIONS self.query;;QueryImpl[{0}];1;5;Type;;
 
     # code within this block is **programmatically, 
     # statically generated** by generate_overloads.py

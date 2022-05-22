@@ -20,6 +20,8 @@ from .query import (Query, QueryExecutor, QuerySpec, make_query_plan,
 SelfQuery = TypeVar("SelfQuery", bound="QueryImpl[Any]")
 _T = TypeVar("_T", bound=Any)
 _Fn = TypeVar("_Fn", bound=Callable[..., Any])
+_TK = TypeVar("_TK", bound=Any)
+_TG = TypeVar("_TG", bound=Any)
 
 #------------------------------------------------------------------------------
 # New Clorm Query API
@@ -127,7 +129,7 @@ class QueryImpl(Query, Generic[_T]):
     #--------------------------------------------------------------------------
     # Add a group_by expression
     #--------------------------------------------------------------------------
-    # START OVERLOADED FUNCTIONS self.group_by;QueryImpl[Tuple[{0}, Iterator[_T]]];1;3;Type;P
+    # START OVERLOADED FUNCTIONS self.group_by;;GroupedQuery[{0}, _T];1;3;Type;Y;
 
     # code within this block is **programmatically, 
     # statically generated** by generate_overloads.py
@@ -137,7 +139,7 @@ class QueryImpl(Query, Generic[_T]):
     def group_by(
         self,
         __ent0: Type[_T0]
-    ) -> 'QueryImpl[Tuple[_T0, Iterator[_T]]]':
+    ) -> 'GroupedQuery[_T0, _T]':
         ...
 
 
@@ -145,7 +147,7 @@ class QueryImpl(Query, Generic[_T]):
     def group_by(
         self,
         __ent0: _T0
-    ) -> 'QueryImpl[Tuple[_T0, Iterator[_T]]]':
+    ) -> 'GroupedQuery[_T0, _T]':
         ...
 
 
@@ -154,7 +156,7 @@ class QueryImpl(Query, Generic[_T]):
         self,
         __ent0: Type[_T0],
     	__ent1: Type[_T1]
-    ) -> 'QueryImpl[Tuple[Tuple[_T0, _T1], Iterator[_T]]]':
+    ) -> 'GroupedQuery[Tuple[_T0, _T1], _T]':
         ...
 
 
@@ -163,7 +165,7 @@ class QueryImpl(Query, Generic[_T]):
         self,
         __ent0: Type[_T0],
     	__ent1: _T1
-    ) -> 'QueryImpl[Tuple[Tuple[_T0, _T1], Iterator[_T]]]':
+    ) -> 'GroupedQuery[Tuple[_T0, _T1], _T]':
         ...
 
 
@@ -172,7 +174,7 @@ class QueryImpl(Query, Generic[_T]):
         self,
         __ent0: _T0,
     	__ent1: Type[_T1]
-    ) -> 'QueryImpl[Tuple[Tuple[_T0, _T1], Iterator[_T]]]':
+    ) -> 'GroupedQuery[Tuple[_T0, _T1], _T]':
         ...
 
 
@@ -181,7 +183,7 @@ class QueryImpl(Query, Generic[_T]):
         self,
         __ent0: _T0,
     	__ent1: _T1
-    ) -> 'QueryImpl[Tuple[Tuple[_T0, _T1], Iterator[_T]]]':
+    ) -> 'GroupedQuery[Tuple[_T0, _T1], _T]':
         ...
 
 
@@ -191,7 +193,7 @@ class QueryImpl(Query, Generic[_T]):
         __ent0: Type[_T0],
     	__ent1: Type[_T1],
     	__ent2: Type[_T2]
-    ) -> 'QueryImpl[Tuple[Tuple[_T0, _T1, _T2], Iterator[_T]]]':
+    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2], _T]':
         ...
 
 
@@ -201,7 +203,7 @@ class QueryImpl(Query, Generic[_T]):
         __ent0: Type[_T0],
     	__ent1: Type[_T1],
     	__ent2: _T2
-    ) -> 'QueryImpl[Tuple[Tuple[_T0, _T1, _T2], Iterator[_T]]]':
+    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2], _T]':
         ...
 
 
@@ -211,7 +213,7 @@ class QueryImpl(Query, Generic[_T]):
         __ent0: Type[_T0],
     	__ent1: _T1,
     	__ent2: Type[_T2]
-    ) -> 'QueryImpl[Tuple[Tuple[_T0, _T1, _T2], Iterator[_T]]]':
+    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2], _T]':
         ...
 
 
@@ -221,7 +223,7 @@ class QueryImpl(Query, Generic[_T]):
         __ent0: Type[_T0],
     	__ent1: _T1,
     	__ent2: _T2
-    ) -> 'QueryImpl[Tuple[Tuple[_T0, _T1, _T2], Iterator[_T]]]':
+    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2], _T]':
         ...
 
 
@@ -231,7 +233,7 @@ class QueryImpl(Query, Generic[_T]):
         __ent0: _T0,
     	__ent1: Type[_T1],
     	__ent2: Type[_T2]
-    ) -> 'QueryImpl[Tuple[Tuple[_T0, _T1, _T2], Iterator[_T]]]':
+    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2], _T]':
         ...
 
 
@@ -241,7 +243,7 @@ class QueryImpl(Query, Generic[_T]):
         __ent0: _T0,
     	__ent1: Type[_T1],
     	__ent2: _T2
-    ) -> 'QueryImpl[Tuple[Tuple[_T0, _T1, _T2], Iterator[_T]]]':
+    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2], _T]':
         ...
 
 
@@ -251,7 +253,7 @@ class QueryImpl(Query, Generic[_T]):
         __ent0: _T0,
     	__ent1: _T1,
     	__ent2: Type[_T2]
-    ) -> 'QueryImpl[Tuple[Tuple[_T0, _T1, _T2], Iterator[_T]]]':
+    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2], _T]':
         ...
 
 
@@ -261,7 +263,7 @@ class QueryImpl(Query, Generic[_T]):
         __ent0: _T0,
     	__ent1: _T1,
     	__ent2: _T2
-    ) -> 'QueryImpl[Tuple[Tuple[_T0, _T1, _T2], Iterator[_T]]]':
+    ) -> 'GroupedQuery[Tuple[_T0, _T1, _T2], _T]':
         ...
 
     # END OVERLOADED FUNCTIONS self.group_by
@@ -280,7 +282,146 @@ class QueryImpl(Query, Generic[_T]):
     #--------------------------------------------------------------------------
     # Explicitly select the elements to output or delete
     #--------------------------------------------------------------------------
-    # START OVERLOADED FUNCTIONS self.select;QueryImpl[{0}];1;5;Type;P
+    # START OVERLOADED FUNCTIONS self.select;GroupedQuery[_TK, _TG];GroupedQuery[_TK, {0}];1;3;Type;Y;Y
+
+    # code within this block is **programmatically, 
+    # statically generated** by generate_overloads.py
+
+
+    @overload
+    def select( # type: ignore[misc]
+        self: 'GroupedQuery[_TK, _TG]',
+        __ent0: Type[_T0]
+    ) -> 'GroupedQuery[_TK, _T0]':
+        ...
+
+
+    @overload
+    def select( # type: ignore[misc]
+        self: 'GroupedQuery[_TK, _TG]',
+        __ent0: _T0
+    ) -> 'GroupedQuery[_TK, _T0]':
+        ...
+
+
+    @overload
+    def select( # type: ignore[misc]
+        self: 'GroupedQuery[_TK, _TG]',
+        __ent0: Type[_T0],
+    	__ent1: Type[_T1]
+    ) -> 'GroupedQuery[_TK, Tuple[_T0, _T1]]':
+        ...
+
+
+    @overload
+    def select( # type: ignore[misc]
+        self: 'GroupedQuery[_TK, _TG]',
+        __ent0: Type[_T0],
+    	__ent1: _T1
+    ) -> 'GroupedQuery[_TK, Tuple[_T0, _T1]]':
+        ...
+
+
+    @overload
+    def select( # type: ignore[misc]
+        self: 'GroupedQuery[_TK, _TG]',
+        __ent0: _T0,
+    	__ent1: Type[_T1]
+    ) -> 'GroupedQuery[_TK, Tuple[_T0, _T1]]':
+        ...
+
+
+    @overload
+    def select( # type: ignore[misc]
+        self: 'GroupedQuery[_TK, _TG]',
+        __ent0: _T0,
+    	__ent1: _T1
+    ) -> 'GroupedQuery[_TK, Tuple[_T0, _T1]]':
+        ...
+
+
+    @overload
+    def select( # type: ignore[misc]
+        self: 'GroupedQuery[_TK, _TG]',
+        __ent0: Type[_T0],
+    	__ent1: Type[_T1],
+    	__ent2: Type[_T2]
+    ) -> 'GroupedQuery[_TK, Tuple[_T0, _T1, _T2]]':
+        ...
+
+
+    @overload
+    def select( # type: ignore[misc]
+        self: 'GroupedQuery[_TK, _TG]',
+        __ent0: Type[_T0],
+    	__ent1: Type[_T1],
+    	__ent2: _T2
+    ) -> 'GroupedQuery[_TK, Tuple[_T0, _T1, _T2]]':
+        ...
+
+
+    @overload
+    def select( # type: ignore[misc]
+        self: 'GroupedQuery[_TK, _TG]',
+        __ent0: Type[_T0],
+    	__ent1: _T1,
+    	__ent2: Type[_T2]
+    ) -> 'GroupedQuery[_TK, Tuple[_T0, _T1, _T2]]':
+        ...
+
+
+    @overload
+    def select( # type: ignore[misc]
+        self: 'GroupedQuery[_TK, _TG]',
+        __ent0: Type[_T0],
+    	__ent1: _T1,
+    	__ent2: _T2
+    ) -> 'GroupedQuery[_TK, Tuple[_T0, _T1, _T2]]':
+        ...
+
+
+    @overload
+    def select( # type: ignore[misc]
+        self: 'GroupedQuery[_TK, _TG]',
+        __ent0: _T0,
+    	__ent1: Type[_T1],
+    	__ent2: Type[_T2]
+    ) -> 'GroupedQuery[_TK, Tuple[_T0, _T1, _T2]]':
+        ...
+
+
+    @overload
+    def select( # type: ignore[misc]
+        self: 'GroupedQuery[_TK, _TG]',
+        __ent0: _T0,
+    	__ent1: Type[_T1],
+    	__ent2: _T2
+    ) -> 'GroupedQuery[_TK, Tuple[_T0, _T1, _T2]]':
+        ...
+
+
+    @overload
+    def select( # type: ignore[misc]
+        self: 'GroupedQuery[_TK, _TG]',
+        __ent0: _T0,
+    	__ent1: _T1,
+    	__ent2: Type[_T2]
+    ) -> 'GroupedQuery[_TK, Tuple[_T0, _T1, _T2]]':
+        ...
+
+
+    @overload
+    def select( # type: ignore[misc]
+        self: 'GroupedQuery[_TK, _TG]',
+        __ent0: _T0,
+    	__ent1: _T1,
+    	__ent2: _T2
+    ) -> 'GroupedQuery[_TK, Tuple[_T0, _T1, _T2]]':
+        ...
+
+    # END OVERLOADED FUNCTIONS self.select
+
+    # START OVERLOADED FUNCTIONS self.select;;QueryImpl[{0}];1;5;Type;Y;
 
     # code within this block is **programmatically, 
     # statically generated** by generate_overloads.py
@@ -1114,6 +1255,8 @@ class QueryImpl(Query, Generic[_T]):
     def delete(self) -> int:
         qe = QueryExecutor(self._factmaps, self._qspec)
         return qe.delete()
+
+GroupedQuery = QueryImpl[Tuple[_TK, Iterator[_TG]]]
 
 #------------------------------------------------------------------------------
 # main
