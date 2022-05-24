@@ -9,7 +9,7 @@ from typing import (Any, Callable, Dict, Generator, Generic, Iterator, Tuple,
 
 from clorm.orm.factcontainers import FactMap
 
-from .._typing import _T0, _T1, _T2, _T3, _T4
+from ._typing import _T0, _T1, _T2, _T3, _T4
 from .core import Predicate, and_
 from .query import (Query, QueryExecutor, QuerySpec, make_query_plan,
                     process_join, process_orderby, process_where)

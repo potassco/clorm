@@ -10,7 +10,7 @@ import sys
 from typing import (Any, Callable, Iterable, Iterator, List, Optional, TextIO,
                     Tuple, Type, Union, cast, overload)
 
-from .._typing import _T0, _T1, _T2, _T3, _T4
+from ._typing import _T0, _T1, _T2, _T3, _T4
 from ._queryimpl import UnGroupedQuery
 from .core import (Predicate, PredicateDefn, PredicatePath, and_,
                    validate_root_paths)
