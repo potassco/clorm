@@ -24,9 +24,8 @@ https://code.activestate.com/recipes/496741-object-proxying/
 
 import functools
 import inspect
-from typing import Any, Optional, Type, TypeVar, Union, overload
+from typing import Any, Optional
 
-_T = TypeVar("_T", bound=type)
 
 # ------------------------------------------------------------------------------
 # Make proxy member functions and properties
@@ -109,15 +108,7 @@ class WrapperMetaClass(type):
 # ------------------------------------------------------------------------------
 
 
-@overload
-def make_class_wrapper(inputclass: Type[object]) -> Type[object]: ...
-
-
-@overload
-def make_class_wrapper(inputclass: Type[object], override: _T) -> _T: ...
-
-
-def make_class_wrapper(inputclass: Type[object], override: Optional[_T] = None) -> Union[Type[object], _T]:
+def make_class_wrapper(inputclass: type, override: Optional[type] = None) -> type:
     def getattrdoc(cls, key):
         if not cls: return None
         try:
