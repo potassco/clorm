@@ -44,6 +44,11 @@ def _generate(fn: _Fn) -> _Fn:
 
     return wrap # type: ignore
 
+@overload
+def _check_join_called_first(*, endpoint: bool=False) -> Callable[[_Fn], _Fn]: ...
+
+@overload
+def _check_join_called_first(_fn: _Fn, *, endpoint: bool=False) -> _Fn: ...
 
 def _check_join_called_first(_fn=None, *, endpoint=False):
     """test whether a precondition to call the decorated function is met"""
@@ -193,7 +198,7 @@ class BaseQueryImpl(Query, Generic[_T]):
     # Select to display all the output of the query
     # --------------------------------------------------------------------------
     @_check_join_called_first(endpoint=True)
-    def all(self: 'BaseQueryImpl[_T1]') -> Generator[_T1, None, None]:
+    def all(self) -> Generator[_T, None, None]:
         qe = QueryExecutor(self._factmaps, self._qspec)
         return qe.all()
 
@@ -217,10 +222,10 @@ class BaseQueryImpl(Query, Generic[_T]):
     # changes if group_by() has been specified.
     # --------------------------------------------------------------------------
     @overload
-    def count(self: 'GroupedQuery[_T0, _T1]') -> Iterator[Tuple[_T0, int]]: ... # type: ignore
+    def count(self: 'GroupedQuery[_T0, Any]') -> Iterator[Tuple[_T0, int]]: ... # type: ignore
     
     @overload
-    def count(self: 'BaseQueryImpl[_T1]') -> int: ...
+    def count(self: 'BaseQueryImpl[Any]') -> int: ...
 
     @_check_join_called_first(endpoint=True)
     def count(self) -> Union[Iterator[Tuple[Any, int]], int]:
@@ -1435,7 +1440,7 @@ class GroupedQuery(BaseQueryImpl[Tuple[_KT, Iterator[_GT]]], Generic[_KT, _GT]):
     # END OVERLOADED FUNCTIONS self.select
 
     @overload
-    def select(self, *outsig: Any) -> 'GroupedQuery[Any, Any]': ...
+    def select(self, *outsig: Any) -> 'GroupedQuery[_KT, Any]': ...
 
     def select(self, *outsig: Any) -> Any:
         return super().select(*outsig)
