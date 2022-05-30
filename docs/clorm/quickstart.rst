@@ -95,14 +95,12 @@ Defining the Data Model
 -----------------------
 
 The most important step is to define a *data model* that maps the Clingo
-predicates to Python classes. Clorm provides the :class:`~clorm.Predicate` and
-:class:`~clorm.ComplexTerm` classes for this purpose (although, for this example
-only the :class:`~clorm.Predicate` class is needed). These classes must be
-sub-classed; a :class:`~clorm.Predicate` sub-class defines a direct mapping to
-an underlying ASP logical predicate. The parameters of the predicate are
-specified using a number of *field* classes. Fields can be thought of as *term
-definitions*, as they define how a logical *term* is converted to, and from, a
-Python object. Clorm provides three standard field classes,
+predicates to Python classes. Clorm provides the :class:`~clorm.Predicate` base
+class for this purpose; a :class:`~clorm.Predicate` sub-class defines a direct
+mapping to an underlying ASP logical predicate. The parameters of the predicate
+are specified using a number of *field* classes. Fields can be thought of as
+*term definitions*, as they define how a logical *term* is converted to, and
+from, a Python object. Clorm provides three standard field classes,
 :class:`~clorm.ConstantField`, :class:`~clorm.StringField`, and
 :class:`~clorm.IntegerField`, that correspond to the standard *logic
 programming* data types of constant, string, and integer.

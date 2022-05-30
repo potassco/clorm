@@ -1082,25 +1082,29 @@ class _BaseFieldMeta(type):
 class _AbstractBaseFieldMeta(abc.ABCMeta, _BaseFieldMeta): pass
 
 class BaseField(object, metaclass=_AbstractBaseFieldMeta):
-    """A class that represents a field that correspond to logical terms.
+    """Define a mapping from ASP logical terms to Python objects.
 
-    A field is typically used as part of a ``ComplexTerm`` or ``Predicate``
-    definition. It defines the data type of an ASP term and provides functions
-    for translating the term to a more convenient Python type.
+    A field is used as part of a ``ComplexTerm`` or ``Predicate``
+    definition. It specifies the translation between ASP terms and Python
+    objects.
 
-    It contains two class functions ``cltopy`` and ``pytocl`` that implement the
-    translation from Clingo to Python and Python to Clingo respectively. For
-    ``BaseField`` these functions are abstract. However ``BaseField`` can be
-    sub-classed to build a chain of translations. ``RawField``, ``StringField``,
-    ``IntegerField``, and ``ConstantField`` are predefined sub-classes that
-    provide translations. ``BaseField`` provides direct pass-through for the raw
-    clingo symbol object. ``StringField``, ``IntegerField``, and
-    ``ConstantField`` provide translations for the ASP simple terms; *string*,
-    *integer* and *constant*.
+    It contains two class functions ``cltopy`` and ``pytocl`` that implement
+    the translation from Clingo to Python and Python to Clingo
+    respectively. For ``BaseField`` these functions are
+    abstract. ``StringField``, ``IntegerField``, and ``ConstantField`` are
+    standard sub-classes that provide translations for the ASP simple terms;
+    *string*, *integer* and *constant*.
+
+    These ``BaseField`` subclasses can be further sub-classes to build a chain
+    of translations.
 
     To sub-class BaseField (or one of its sub-classes) simply specify ``cltopy``
     and ``pytocl`` functions that take an input and perform some translation to
     an output format.
+
+    ``RawField`` is a special ``BaseField`` sub-class that provides direct
+    pass-through for raw clingo symbol objects. It cannot be sub-classed
+    further.
 
     Note: the ``cltopy`` and ``pytocl`` functions are legitmately allowed to
     throw either a ``TypeError`` or ``ValueError`` exception when provided with
@@ -1280,6 +1284,16 @@ def field(basefield: _FieldDefinition,*, default: Any=MISSING, default_factory: 
 # ------------------------------------------------------------------------------
 
 class Raw(object):
+    """A wrapper around a raw ``Symbol`` object.
+
+    The ``Raw`` object is for use with a ``RawField`` field definition. It
+    provides a thin wrapper around a ``clingo.Symbol`` (or ``noclingo.Symbol``)
+    objects. ``RawField`` unifies with all symbols as it doesn't try to access
+    any of the underlying structure of the symbol object. Instead the symbol
+    object is wrapped in a ``Raw`` object. To access the underlying
+    ``clingo.Symbol`` object simply access the read-only ``symbol`` property.
+
+    """
     __slots__ = ("_symbol", )
     def __init__(self, symbol: AnySymbol) -> None:
         self._symbol = symbol
@@ -1339,6 +1353,7 @@ class Raw(object):
 
     @property
     def symbol(self):
+        """Access the underlying clingo.Symbol object``."""
         return self._symbol
 
 
@@ -1348,7 +1363,15 @@ class Raw(object):
 # ------------------------------------------------------------------------------
 
 class RawField(BaseField):
-    """A field to pass through an arbitrary Clingo.Symbol."""
+    """A field that unifies with any raw symbol.
+
+    ``RawField`` unifies with all symbols as it doesn't try to access any of
+    the underlying structure of the symbol object. Instead the symbol object is
+    wrapped in a ``Raw`` object. To access the underlying ``clingo.Symbol``
+    object simply access the read-only ``symbol`` property of the ``Raw``
+    object.
+
+    """
 
     cltopy = Raw
 

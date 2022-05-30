@@ -37,7 +37,7 @@ To provide a mapping that satisfies the above predicate we need to sub-class the
 :class:`~clorm.Predicate` class and use the :class:`~clorm.ConstantField` and
 :class:`~clorm.StringField` classes. These field classes, including the
 :class:`~clorm.IntegerField`, are all sub-classes of the base
-:class:`~clorm.RawField` class.
+:class:`~clorm.BaseField` class.
 
 .. code-block:: python
 
@@ -215,7 +215,7 @@ class is introduced simply as an alias for the :class:`~clorm.Predicate` class.
 
 The definition for a complex term can be included within a new
 :class:`~clorm.Predicate` definition by using the
-:py:meth:`ComplexTerm.Field<clorm.Predicate.Field>` property of the
+:py:meth:`Field<clorm.Predicate.Field>` property of the
 :class:`~clorm.ComplexTerm` sub-class.
 
 .. code-block:: python
@@ -224,11 +224,11 @@ The definition for a complex term can be included within a new
        date=StringField
        location=Location.Field
 
-The :py:meth:`ComplexTerm.Field<clorm.Predicate.Field>` property returns a
-:class:`~clorm.RawField` sub-class that is generated automatically when the
-:class:`~clorm.Predicate` sub-class is defined. It provides the functions to
-automatically convert to, and from, the Predicate sub-class instances and the
-Clingo symbol objects.
+The :py:meth:`Location.Field<clorm.Predicate.Field>` property returns a
+:class:`~clorm.BaseField` sub-class that is generated automatically when
+:class:`~clorm.Predicate` (or :class:`~clorm.ComplexTerm`) is sub-classed. It
+provides the functions to automatically convert to, and from, the Predicate
+sub-class instances and the Clingo symbol objects.
 
 The predicate class containing complex terms can be instantiated in the obvious
 way:
@@ -406,15 +406,15 @@ support for improved query performance.
 Sub-classing Field Definitions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-All field classes inherit from a base class :class:`~clorm.RawField` and it's
+All field classes inherit from a base class :class:`~clorm.BaseField` and it's
 possible to define arbitrary data conversions by sub-classing
-:class:`~clorm.RawField`. Clorm provides the standard sub-classes
+:class:`~clorm.BaseField`. Clorm provides the standard sub-classes
 :class:`~clorm.StringField`, :class:`~clorm.ConstantField`, and
 :class:`~clorm.IntegerField`. Clorm also automatically generates an appropriate
 sub-class for every :class:`~clorm.ComplexTerm` definition.
 
 However, it is sometimes also useful to explicitly sub-class the
-:class:`~clorm.RawField` class, or sub-class one of its sub-classes. By
+:class:`~clorm.BaseField` class, or sub-class one of its sub-classes. By
 sub-classing a sub-class it is possible to form a *data conversion chain*. To
 understand why this is useful we consider an example of specifying a date field.
 
@@ -480,8 +480,8 @@ date. Furthermore the places in the code where these translations are made may
 be far apart, leading to potential problems when code needs to be refactored.
 
 The solution to this problem is to create a sub-class of
-:class:`~clorm.RawField` that performs the appropriate data conversion. However,
-sub-classing :class:`~clorm.Rawfield` directly requires dealing with raw Clingo
+:class:`~clorm.BaseField` that performs the appropriate data conversion. However,
+sub-classing :class:`~clorm.Basefield` directly requires dealing with raw Clingo
 ``Symbol`` objects. A better alternative is to sub-class the
 :class:`~clorm.StringField` class so you need to only deal with the string to
 date conversion.
@@ -873,43 +873,60 @@ Integrating Clingo Symbols into a Predicate Definition
 There are some cases when it might be convenient to combine the simplicity and
 the structure of the Clorm predicate interface with the flexibility of the
 underlying Clingo symbol API. For this case it is possible to use the
-:class:`~clorm.RawField` base class itself.
+:class:`~clorm.RawField` class.
 
 For example when modeling dynamic domains it is often useful to provide a
-predicate that defines what *fluents* are true at a given time point, but to
-allow the fluents themselves to have an arbitrary form.
+predicate that defines what *fluents* hold (i.e., are true) at a given time
+point, but to allow the fluents themselves to have an arbitrary form.
 
 .. code-block:: prolog
 
    time(1..5).
 
-   true(X,T+1) :- fluent(X), not true(X,T).
+   holds(X,T+1) :- fluent(X), not holds(X,T).
 
    fluent(light(on)).
    fluent(robotlocation(roby, kitchen)).
 
-   true(light(on), 0).
-   true(robotlocation(roby,kitchen), 0).
+   holds(light(on), 0).
+   holds(robotlocation(roby,kitchen), 0).
 
-In this example instances of the ``true/2`` predicate can have two distinctly
+In this example instances of the ``holds/2`` predicate can have two distinctly
 different signatures for the first term (i.e., ``light/1`` and
-``robotlocation/2``). While the definition of the fluent is important at the ASP
-level, however, at the Python level we may not be interested in the structure of
-the fluent, only whether it is true or not. In such a case we can simply treat
-the fluents themselves as raw Clingo symbol objects.
+``robotlocation/2``). While the definition of the fluent is important at the
+ASP level, however, at the Python level we may not be interested in the
+structure of the fluent, only whether it holds or not. In such a case we can
+use a :class:`~clorm.RawField` to define the raw mapping from the fluent term
+to a Python object.
 
 .. code-block:: python
 
    from clorm import *
 
-   class True(Predicate):
+   class Holds(Predicate):
       fluent = RawField
       time = IntegerField
 
-Accessing the value of the ``fluent`` simply returns the raw Clingo symbol. Also
-the :class:`~clorm.RawField` has the useful property that it will unify with any
-``Clingo.Symbol`` object and therefore can be used to capture both the
-``light/1`` and ``robotlocation/2`` complex terms.
+:class:`~clorm.RawField` provides no data translation between ASP and Python
+and therefore has the has the useful property that it will unify with any
+``clingo.Symbol`` object; in particular in this case it can be used to capture
+both the ``light/1`` and ``robotlocation/2`` complex terms.
+
+When translating from Python to clingo, :class:`~clorm.RawField` expects objects
+of the type :class:`~clorm.Raw`, and returns objects of this type when
+translating from clingo to Python. :class:`~clorm.Raw` is simply a thin wrapper
+around the underlying ``clingo.Symbol``.
+
+For example, to create a create a Python fact that specifies that the light is
+on at time 0:
+
+.. code-block:: python
+
+   from clingo import Function
+   from clorm import Raw
+
+   sym_lighton = Function("light", [Function("on",[])])
+   lighton1 = Holds(fluent=Raw(sym_lighton), time=0)
 
 
 Combining Field Definitions
@@ -917,12 +934,12 @@ Combining Field Definitions
 
 The above example is useful for cases where you don't care about accessing the
 details of individual fluents and therefore it makes sense to simply treat them
-as a :class:`~clorm.RawField` complex term. However, the question naturally arises what to
-do if you do want more fine-grained access to these fluents.
+as a :class:`~clorm.RawField` complex term. However, the question naturally
+arises what to do if you do want more fine-grained access to these fluents.
 
 There are a few possible solutions to this problem, but one obvious answer is to
 use a field that combines together multiple fields. Such a combined field could
-be specified manually by explicitly defining a :class:`~clorm.RawField`
+be specified manually by explicitly defining a :class:`~clorm.BaseField`
 sub-class. However, to simplify this process the
 :py:func:`~clorm.combine_fields` factory function has been provided that will
 return such a combined sub-class.
@@ -932,7 +949,7 @@ following Python integration:
 
 .. code-block:: python
 
-   from clorm import Predicate, ComplexTerm, IntegerField, ConstantField combine_fields
+   from clorm import Predicate, ComplexTerm, IntegerField, ConstantField, combine_fields
 
    class Light(ComplexTerm):
       status=ConstantField
@@ -942,8 +959,8 @@ following Python integration:
       location=ConstantField
       class Meta: name = "robotlocation"
 
-   class True(Predicate):
-      fluent = combine_fields([Light,RobotLocation])
+   class Holds(Predicate):
+      fluent = combine_fields([Light.Field, RobotLocation.Field])
       time = IntegerField
 
 
@@ -980,7 +997,7 @@ Unfortunately, getting facts containing these sorts of nested lists into and out
 of Clingo can be very cumbersome. To help support this type of encoding Clorm
 provides the :py:func:`~clorm.define_nested_list_field()` function. This factory
 function takes an element field class, as well as an optional new class name,
-and returns a newly created :class:`~clorm.RawField` sub-class that can be used
+and returns a newly created :class:`~clorm.BaseField` sub-class that can be used
 to convert to and from a list of elements of that field class.
 
  .. code-block:: python

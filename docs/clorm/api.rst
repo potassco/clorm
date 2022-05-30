@@ -15,8 +15,10 @@ Fields
 Fields provide a specification for how to convert ``clingo.Symbol`` objects into
 more intuitive Python objects.
 
+.. autoclass:: clorm.BaseField
+   :members: cltopy, pytocl, default, has_default, has_default_factory, index
+
 .. autoclass:: clorm.RawField
-   :members: cltopy, pytocl, unifies, default, index
 
 .. autoclass:: clorm.StringField
 
@@ -25,6 +27,9 @@ more intuitive Python objects.
 .. autoclass:: clorm.IntegerField
 
 .. autoclass:: clorm.SimpleField
+
+.. autoclass:: clorm.Raw
+   :members: symbol
 
 .. autofunction:: clorm.refine_field
 
