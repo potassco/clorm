@@ -22,4 +22,5 @@ from .test_monkey import *
 from .test_json import *
 from .test_libdate import LibDateTestCase
 from .test_libtimeslot import *
+from .test_mypy import *
 

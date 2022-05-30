@@ -12,6 +12,7 @@ import functools
 import itertools
 import inspect
 import enum
+from typing import Any, Generator
 
 from ..util import OrderedSet as FactSet
 from ..util.tools import all_equal
@@ -3513,7 +3514,7 @@ class QueryExecutor(object):
     # Function to return a generator of the query output
     # --------------------------------------------------------------------------
 
-    def all(self):
+    def all(self) -> Generator[Any, None, None]:
         if self._qspec.distinct and not self._qspec.select:
             raise ValueError("'distinct' flag requires a 'select' projection")
 

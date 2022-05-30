@@ -53,10 +53,12 @@ will raise an exception.
 import os
 import enum
 import clingo
-import typing
 
 from clingo import SymbolType, Symbol
-from typing import Optional, Sequence, Tuple, Union, Any, cast
+from typing import TYPE_CHECKING, Optional, Sequence, Tuple, Union, Any, cast
+
+if TYPE_CHECKING:
+    from ._typing import AnySymbol
 
 __all__ = [
     'SymbolType',
@@ -308,9 +310,6 @@ class NoSymbol(object):
 # --------------------------------------------------------------------------------
 
 
-AnySymbol = Union[Symbol, NoSymbol]
-
-
 def NoFunction(name: str, arguments: Sequence[NoSymbol] = [], positive: bool = True) -> NoSymbol:
     return NoSymbol(SymbolType.Function, name, arguments, positive)
 
@@ -336,7 +335,7 @@ NoSupremum = NoSymbol(SymbolType.Supremum)
 # Functions to convert between clingo.Symbol and noclingo.Symbol
 # --------------------------------------------------------------------------------
 
-def clingo_to_noclingo(clsym: AnySymbol) -> NoSymbol:
+def clingo_to_noclingo(clsym: "AnySymbol") -> NoSymbol:
     if isinstance(clsym, NoSymbol):
         return clsym
     if clsym.type == clingo.SymbolType.Infimum:
@@ -356,7 +355,7 @@ def clingo_to_noclingo(clsym: AnySymbol) -> NoSymbol:
                       clsym.positive)
 
 
-def noclingo_to_clingo(nclsym: AnySymbol) -> Symbol:
+def noclingo_to_clingo(nclsym: "AnySymbol") -> Symbol:
     if isinstance(nclsym, clingo.Symbol):
         return nclsym
     if nclsym.type == SymbolType.Infimum:
@@ -407,28 +406,28 @@ def get_symbol_mode() -> SymbolMode:
     return _mode
 
 
-def get_Infimum() -> AnySymbol:
+def get_Infimum() -> "AnySymbol":
     return _infimum
 
 
-def get_Supremum() -> AnySymbol:
+def get_Supremum() -> "AnySymbol":
     return _supremum
 
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
     def set_symbol_mode(sm: SymbolMode) -> None:
         ...
 
-    def Function(name: str, arguments: Sequence[Symbol] = [], positive: bool = True) -> AnySymbol:
+    def Function(name: str, arguments: Sequence[Symbol] = [], positive: bool = True) -> "AnySymbol":
         ...
 
-    def String(string: str) -> AnySymbol:
+    def String(string: str) -> "AnySymbol":
         ...
 
-    def Number(number: int) -> AnySymbol:
+    def Number(number: int) -> "AnySymbol":
         ...
 
-    def Tuple_(arguments: Sequence[Symbol]) -> AnySymbol:
+    def Tuple_(arguments: Sequence[Symbol]) -> "AnySymbol":
         ...
 
 else:

@@ -25,8 +25,10 @@ import uuid
 
 from clorm.orm.types import ConstantStr, HeadList, HeadListReversed, StrictBool, TailList, TailListReversed
 
-from .noclingo import (Symbol, NoSymbol, Function, String, Number, SymbolType, SymbolMode,
-                       NoSymbol, get_symbol_mode, clingo_to_noclingo, noclingo_to_clingo)
+from .noclingo import (Symbol, Function, String, Number, SymbolType, SymbolMode,
+                       get_symbol_mode, clingo_to_noclingo, noclingo_to_clingo)
+
+from ._typing import AnySymbol, get_args, get_origin
 
 from .templating import (expand_template, PREDICATE_TEMPLATE,
                          CHECK_SIGN_TEMPLATE, CHECK_SIGN_UNIFY_TEMPLATE,
@@ -35,49 +37,6 @@ from .templating import (expand_template, PREDICATE_TEMPLATE,
 
 from typing import ( TYPE_CHECKING, Any, Callable, Dict, Iterable, Iterator, List, Optional, Sequence, Tuple,
                      Type, TypeVar, Union, overload, cast )
-
-
-# copied from https://github.com/samuelcolvin/pydantic/blob/master/pydantic/typing.py
-if sys.version_info < (3, 8):
-    from typing_extensions import Annotated
-
-    def get_origin(t: Type[Any]) -> Optional[Type[Any]]:
-        if type(t).__name__ in {'AnnotatedMeta', '_AnnotatedAlias'}:
-            # weirdly this is a runtime requirement, as well as for mypy
-            return cast(Type[Any], Annotated)
-        return getattr(t, '__origin__', None)
-else:
-    from typing import get_origin, get_args
-
-
-if sys.version_info < (3, 7):
-    def get_args(t: Type[Any]) -> Tuple[Any, ...]:
-        """Simplest get_args compatibility layer possible.
-        The Python 3.6 typing module does not have `_GenericAlias` so
-        this won't work for everything. In particular this will not
-        support the `generics` module (we don't support generic models in
-        python 3.6).
-        """
-        if type(t).__name__ in {'AnnotatedMeta', '_AnnotatedAlias'}:
-            return t.__args__ + t.__metadata__
-        return getattr(t, '__args__', ())
-
-elif sys.version_info < (3, 8):
-    from typing import _GenericAlias
-
-    def get_args(t: Type[Any]) -> Tuple[Any, ...]:
-        """Compatibility version of get_args for python 3.7.
-        Mostly compatible with the python 3.8 `typing` module version
-        and able to handle almost all use cases.
-        """
-        if type(t).__name__ in {'AnnotatedMeta', '_AnnotatedAlias'}:
-            return t.__args__ + t.__metadata__
-        if isinstance(t, _GenericAlias):
-            res = t.__args__
-            if t.__origin__ is Callable and res and res[0] is not Ellipsis:
-                res = (list(res[:-1]), res[-1])
-            return res
-        return getattr(t, '__args__', ())
 
 
 __all__ = [
@@ -125,7 +84,6 @@ _T = TypeVar('_T')
 _P = TypeVar('_P', bound='Predicate')
 _BF = TypeVar('_BF', bound='BaseField')
 
-AnySymbol = Union[Symbol, NoSymbol]
 
 #------------------------------------------------------------------------------
 # A _classproperty decorator used in combination with @classmethod. (see
