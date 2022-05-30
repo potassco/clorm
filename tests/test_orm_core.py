@@ -219,8 +219,9 @@ class FieldTestCase(unittest.TestCase):
             self.assertEqual(PartialField.cltopy(symstr), dt)
 
 
+        # Cannot have a field with multiple inheritance
         with self.assertRaises(TypeError) as ctx:
-            class DateField(StringField, StringField):
+            class BadField(IntegerField, StringField):
                 pass
 
     #--------------------------------------------------------------------------
