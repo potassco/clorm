@@ -114,7 +114,7 @@ class Unifier(object):
 # ------------------------------------------------------------------------------
 
 def _unify(predicates: Iterable[Type[Predicate]], symbols: Iterable[AnySymbol]) -> Iterator[Predicate]:
-    return Unifier(predicates).iter_unify(symbols, raise_nomatch=False) 
+    return Unifier(predicates).iter_unify(symbols, raise_nomatch=False)
 
 
 #------------------------------------------------------------------------------
@@ -371,13 +371,10 @@ class NonFactVisitor:
         ASTType.BinaryOperation,
         ASTType.Interval,
         ASTType.Pool,
-        ASTType.CspProduct,
-        ASTType.CspSum,
-        ASTType.CspGuard,
         ASTType.BooleanConstant,
         ASTType.Comparison,
-        ASTType.CspLiteral,
-        ASTType.AggregateGuard,
+        getattr(ASTType, "Guard" if clingo.version() >= (5, 6, 0)
+                         else "AggregateGuard"),
         ASTType.ConditionalLiteral,
         ASTType.Aggregate,
         ASTType.BodyAggregateElement,
@@ -385,8 +382,6 @@ class NonFactVisitor:
         ASTType.HeadAggregateElement,
         ASTType.HeadAggregate,
         ASTType.Disjunction,
-        ASTType.DisjointElement,
-        ASTType.Disjoint,
         ASTType.TheorySequence,
         ASTType.TheoryFunction,
         ASTType.TheoryUnparsedTermElement,
@@ -476,7 +471,7 @@ def parse_fact_string(aspstr: str, unifier: Iterable[Type[Predicate]], *, factba
                 clast.parse_string(aspstr, on_rule)
         else:
             ctrl.add("base", [], aspstr)
-    
+
     except ClingoParserWrapperError as e:
         raise e.exc
 
