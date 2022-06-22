@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        distribution: [focal]
+        distribution: [jammy, focal]
 
     env:
       distribution: ${{ matrix.distribution }}
