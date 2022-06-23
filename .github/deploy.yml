@@ -79,9 +79,8 @@ ppa:
         - 'README.rst'
         - 'LICENSE'
     distributions:
+        jammy:
         focal:
-            source:
-                Build-Depends: 'debhelper-compat (= 11), dh-python, python3-all, python3-setuptools, python3-clingo'
     source:
         Source: 'python3-clorm'
         Section: 'devel'
