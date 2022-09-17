@@ -12,7 +12,9 @@ import functools
 import itertools
 import inspect
 import enum
-from typing import Any, Generator
+from typing import Any, Generator, List, Set
+
+from clorm.util.oset import OrderedSet
 
 from ..util import OrderedSet as FactSet
 from ..util.tools import all_equal
@@ -2348,8 +2350,8 @@ def make_query_plan_preordered_roots(indexed_paths, root_join_order,
     whereclauses = qspec.where
     orderbys = qspec.order_by
 
-    joinset=set(joins)
-    clauseset=set(whereclauses)
+    joinset=OrderedSet(joins)
+    clauseset=OrderedSet(whereclauses)
     visited=set({})
     orderbys=list(orderbys)
 
@@ -2362,12 +2364,11 @@ def make_query_plan_preordered_roots(indexed_paths, root_join_order,
     # For a set of visited root paths and a set of comparator
     # statements return the subset of join statements that only reference paths
     # that have been visited.  Removes these joins from the original set.
-    def visitedsubset(visited, inset):
-        outlist=[]
-        for comp in inset:
-            if visited.issuperset([hashable_path(r) for r in comp.roots]):
-                outlist.append(comp)
-        for comp in outlist: inset.remove(comp)
+    def visitedsubset(visited: Set, inset: OrderedSet) -> List:
+        outlist=[comp for comp in inset if visited.issuperset(map(hashable_path, comp.roots))]
+
+        for comp in outlist:
+            inset.remove(comp)
         return outlist
 
 
