@@ -14,14 +14,12 @@ import inspect
 import enum
 from typing import Any, Generator, List, Set
 
-from clorm.util.oset import OrderedSet
-
-from ..util import OrderedSet as FactSet
+from ..util import OrderedSet
 from ..util.tools import all_equal
 from .core import *
 from .core import get_field_definition, QCondition, PredicatePath, \
     validate_root_paths, kwargs_check_keys, trueall, falseall, notcontains
-from .factcontainers import FactSet, FactIndex, FactMap
+from .factcontainers import FactIndex, FactMap
 
 __all__ = [
     'Query',
@@ -2520,7 +2518,7 @@ class InQuerySorter(object):
 # ------------------------------------------------------------------------------
 
 def make_first_prejoin_query(jqp, factsets, factindexes):
-    factset = factsets.get(jqp.root.meta.predicate, FactSet())
+    factset = factsets.get(jqp.root.meta.predicate, OrderedSet())
 
     pjk = jqp.prejoin_key_clause
     prejcb = jqp.prejoin_clauses
@@ -2598,7 +2596,7 @@ def make_prejoin_query_source(jqp, factsets, factindexes):
     pjob = jqp.prejoin_orderbys
     jk   = jqp.join_key
     predicate = jqp.root.meta.predicate
-    factset = factsets.get(jqp.root.meta.predicate, FactSet())
+    factset = factsets.get(jqp.root.meta.predicate, OrderedSet())
 
     # If there is a prejoin key clause then every comparator within it must
     # refer to exactly one index
