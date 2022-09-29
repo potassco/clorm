@@ -2989,6 +2989,7 @@ class QueryExecutorTestCase(unittest.TestCase):
     # Test delete
     #--------------------------------------------------------------------------
     def test_api_QueryExecutor_delete(self):
+        FA = alias(self.F)
         F = self.F
         G = self.G
         bjoh = basic_join_order
@@ -3002,14 +3003,14 @@ class QueryExecutorTestCase(unittest.TestCase):
             pj = process_join
             pob = process_orderby
 
-            roots = [F,G]
-            join = pj([F.anum == G.anum],roots)
+            roots = [FA,G]
+            join = pj([FA.anum == G.anum],roots)
             where = pw(G.anum > 4,roots)
-            orderby = pob([F.anum,G.anum],roots)
+            orderby = pob([FA.anum,G.anum],roots)
             qspec = QuerySpec(roots=roots, join=join,where=where,
                               order_by=orderby,joh=bjoh,select=subroots)
             qe = QueryExecutor(factmaps, qspec)
-            return(factmaps,qe.delete())
+            return(factmaps, qe.delete())
 
         # Test deleting all selected elements
         factmaps,count = delete()
@@ -3021,7 +3022,7 @@ class QueryExecutorTestCase(unittest.TestCase):
         self.assertFalse(f_in_factmaps(G(5,"foo"), factmaps))
 
         # Test deleting all selected elements chosen explicitly
-        factmaps,count = delete(F,G)
+        factmaps,count = delete(FA,G)
         self.assertEqual(count,4)
         self.assertFalse(f_in_factmaps(F(5,"a"),factmaps))
         self.assertFalse(f_in_factmaps(F(5,"foo"),factmaps))
@@ -3029,7 +3030,7 @@ class QueryExecutorTestCase(unittest.TestCase):
         self.assertFalse(f_in_factmaps(G(5,"foo"),factmaps))
 
         # Test deleting only the F instances
-        factmaps,count = delete(F)
+        factmaps,count = delete(FA)
         self.assertEqual(count,2)
         self.assertFalse(f_in_factmaps(F(5,"a"),factmaps))
         self.assertFalse(f_in_factmaps(F(5,"foo"),factmaps))
@@ -3042,13 +3043,11 @@ class QueryExecutorTestCase(unittest.TestCase):
         self.assertFalse(f_in_factmaps(G(5,"foo"),factmaps))
 
         # Bad delete - deleting an alias path that is not in the original
-        FA = alias(self.F)
         with self.assertRaises(ValueError) as ctx:
-            factmaps,count = delete(FA)
+            factmaps,count = delete(F)
         check_errmsg("For a 'delete' query",ctx)
 
         # Bad delete - deleting a field path
-        FA = alias(self.F)
         with self.assertRaises(ValueError) as ctx:
             factmaps,count = delete(FA.anum)
         check_errmsg("For a 'delete' query",ctx)
@@ -3079,6 +3078,136 @@ class QueryExecutorTestCase(unittest.TestCase):
 
         qe = QueryExecutor(clean_factmaps(), QuerySpec(roots=[G]))
         self.assertEqual(len(original_fm[G]), qe.delete())
+
+
+    #--------------------------------------------------------------------------
+    # Test modify
+    #--------------------------------------------------------------------------
+    def test_api_QueryExecutor_modify(self):
+        FA = alias(self.F)
+        F = self.F
+        G = self.G
+        bjoh = basic_join_order
+        bjoh = oppref_join_order
+
+        def modify(subroots, fn):
+            tmp = factmaps_to_factsets(self.factmaps)
+            facts = [f for p, fs in tmp.items() for f in fs]
+            factmaps=factmaps_dict(facts)
+            pw = process_where
+            pj = process_join
+            pob = process_orderby
+
+            roots = [FA,G]
+            join = pj([FA.anum == G.anum],roots)
+            where = pw(G.anum > 4,roots)
+            orderby = pob([FA.anum,G.anum],roots)
+            qspec = QuerySpec(roots=roots, join=join,where=where,
+                              order_by=orderby,joh=bjoh,select=subroots)
+            qe = QueryExecutor(factmaps, qspec)
+            return(factmaps,qe.modify(fn))
+
+        # Test replacing all selected elemets chosen implicitly (using a return tuple)
+        factmaps,(dcount, acount) = modify([], lambda f,g: ((f,g),(f.clone(anum=f.anum+10), g.clone(anum=g.anum+10))))
+        self.assertEqual(dcount,4)
+        self.assertEqual(acount,4)
+        self.assertEqual(len(factmaps),2)
+        self.assertFalse(f_in_factmaps(F(5,"a"), factmaps))
+        self.assertFalse(f_in_factmaps(F(5,"foo"), factmaps))
+        self.assertFalse(f_in_factmaps(G(5,"a"), factmaps))
+        self.assertFalse(f_in_factmaps(G(5,"foo"), factmaps))
+        self.assertTrue(f_in_factmaps(F(15,"a"), factmaps))
+        self.assertTrue(f_in_factmaps(F(15,"foo"), factmaps))
+        self.assertTrue(f_in_factmaps(G(15,"a"), factmaps))
+        self.assertTrue(f_in_factmaps(G(15,"foo"), factmaps))
+
+        # Test replacing all selected elements chosen explicitly (using a return set)
+        factmaps,(dcount, acount) = modify([FA,G], lambda f,g: ({f,g},{f.clone(anum=f.anum+20), g.clone(anum=g.anum+20)}))
+        self.assertEqual(dcount,4)
+        self.assertEqual(acount,4)
+        self.assertFalse(f_in_factmaps(F(5,"a"),factmaps))
+        self.assertFalse(f_in_factmaps(F(5,"foo"),factmaps))
+        self.assertFalse(f_in_factmaps(G(5,"a"),factmaps))
+        self.assertFalse(f_in_factmaps(G(5,"foo"),factmaps))
+        self.assertTrue(f_in_factmaps(F(25,"a"), factmaps))
+        self.assertTrue(f_in_factmaps(F(25,"foo"), factmaps))
+        self.assertTrue(f_in_factmaps(G(25,"a"), factmaps))
+        self.assertTrue(f_in_factmaps(G(25,"foo"), factmaps))
+
+        # Test replacing only the F instances
+        factmaps,(dcount,acount) = modify([FA], lambda f: (f, f.clone(anum=f.anum+30)))
+        self.assertEqual(dcount,2)
+        self.assertEqual(acount,2)
+        self.assertFalse(f_in_factmaps(F(5,"a"),factmaps))
+        self.assertFalse(f_in_factmaps(F(5,"foo"),factmaps))
+        self.assertTrue(f_in_factmaps(F(35,"a"),factmaps))
+        self.assertTrue(f_in_factmaps(F(35,"foo"),factmaps))
+
+        # Bad modify - selecting based on a path that is not in the original
+        with self.assertRaises(ValueError) as ctx:
+            factmaps,(dcount,acount) = modify([F], lambda f: ({}, {f.clone(anum=f.anum+30)}))
+        check_errmsg("For a 'modify' query",ctx)
+
+        # Bad modify - selecting a path that is not a root path
+        with self.assertRaises(ValueError) as ctx:
+            factmaps,(dcount,acount) = modify([FA.anum], lambda f: ({}, {f.clone(anum=f.anum+30)}))
+        check_errmsg("For a 'modify' query",ctx)
+
+        # Bad modify -  selecting all plus an extra
+        with self.assertRaises(ValueError) as ctx:
+            factmaps,(dcount, acount) = modify([FA,G,F], lambda f,g,fa: ({},{f.clone(anum=f.anum+20), g.clone(anum=g.anum+20)}))
+        check_errmsg("For a 'modify' query",ctx)
+
+    #--------------------------------------------------------------------------
+    # Test replace - replace is just a special case of modify() with the parameter function fn is
+    # wrapped before being passed to modify(). So just need to test that the wrapping is working.
+    # --------------------------------------------------------------------------
+    def test_api_QueryExecutor_replace(self):
+        FA = alias(self.F)
+        F = self.F
+        G = self.G
+        bjoh = basic_join_order
+        bjoh = oppref_join_order
+
+        def replace(subroots, fn):
+            tmp = factmaps_to_factsets(self.factmaps)
+            facts = [f for p, fs in tmp.items() for f in fs]
+            factmaps=factmaps_dict(facts)
+            pw = process_where
+            pj = process_join
+            pob = process_orderby
+
+            roots = [FA,G]
+            join = pj([FA.anum == G.anum],roots)
+            where = pw(G.anum > 4,roots)
+            orderby = pob([FA.anum,G.anum],roots)
+            qspec = QuerySpec(roots=roots, join=join,where=where,
+                              order_by=orderby,joh=bjoh,select=subroots)
+            qe = QueryExecutor(factmaps, qspec)
+            return(factmaps,qe.replace(fn))
+
+        # Test replacing all selected elemets chosen implicitly (using a return tuple)
+        factmaps,(dcount, acount) = replace([], lambda f,g: (f.clone(anum=f.anum+10), g.clone(anum=g.anum+10)))
+        self.assertEqual(dcount,4)
+        self.assertEqual(acount,4)
+        self.assertEqual(len(factmaps),2)
+        self.assertFalse(f_in_factmaps(F(5,"a"), factmaps))
+        self.assertFalse(f_in_factmaps(F(5,"foo"), factmaps))
+        self.assertFalse(f_in_factmaps(G(5,"a"), factmaps))
+        self.assertFalse(f_in_factmaps(G(5,"foo"), factmaps))
+        self.assertTrue(f_in_factmaps(F(15,"a"), factmaps))
+        self.assertTrue(f_in_factmaps(F(15,"foo"), factmaps))
+        self.assertTrue(f_in_factmaps(G(15,"a"), factmaps))
+        self.assertTrue(f_in_factmaps(G(15,"foo"), factmaps))
+
+        # Test replacing only the F instances
+        factmaps,(dcount,acount) = replace([FA], lambda f: f.clone(anum=f.anum+30))
+        self.assertEqual(dcount,2)
+        self.assertEqual(acount,2)
+        self.assertFalse(f_in_factmaps(F(5,"a"),factmaps))
+        self.assertFalse(f_in_factmaps(F(5,"foo"),factmaps))
+        self.assertTrue(f_in_factmaps(F(35,"a"),factmaps))
+        self.assertTrue(f_in_factmaps(F(35,"foo"),factmaps))
 
 
 #------------------------------------------------------------------------------

@@ -162,6 +162,10 @@ specification of fact base queries.
 
    .. automethod:: delete
 
+   .. automethod:: modify
+
+   .. automethod:: replace
+
    .. automethod:: query_plan
 
 .. autoclass:: clorm.PredicatePath

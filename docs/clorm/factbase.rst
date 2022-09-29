@@ -504,6 +504,57 @@ operation:
 
    assert dave_dog in fb
 
+Queries that modify the FactBase
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Querying can be used to modify the underlying ``FactBase`` to acheive a similar effect to an SQL
+``DELETE`` or ``UPDATE`` query. The :py:meth:`Query.delete()<clorm.Query.delete>` end-point provides
+a mechanism to delete the matching facts of a query from the underlying ``FactBase``.
+
+For example, to delete the pets owned by people with the address "UNSW", we can identify the matching
+pets in the query.
+
+.. code-block:: python
+
+   fb.query(Person,Pet).join(Person.id == Pet.owner).where(Person.address == "UNSW")\
+     .select(Pet).delete()
+
+Clorm facts are immutable, so it is not possible to modify the facts themselves in the same way that
+one might want to perform an SQL ``UPDATE`` query. Nevertheless it is possible to provide query
+functions to make it easy to replace the selected facts within the ``FactBase``.  The
+:py:meth:`Query.replace()<clorm.Query.replace>` and :py:meth:`Query.modify()<clorm.Query.modify>`
+end-points provides the mechanism to modify the underlying ``FactBase`` based on the matches of a
+query.
+
+For example, rather than deleting all pets owned by people living in "UNSW" we can instead use the
+:py:meth:`Query.replace()<clorm.Query.replace>` end-point to assign these pets to a new owner,
+"Rob", replacing the existing Pet fact with a modified cloned fact.
+
+.. code-block:: python
+
+   def change_owner(pet):
+       return pet.clone(owner="Rob")
+
+   fb.query(Person,Pet).join(Person.id == Pet.owner).where(Person.address == "UNSW") \
+     .select(Pet).replace(change_owner)
+
+
+The :py:meth:`Query.replace()<clorm.Query.replace>` method takes a single function as an input. The
+input signature of the function must match the query selection criteria. The expected output of the
+function is a fact or set of facts that will be used to replace the matched facts. The matched facts
+are deleted and the replacements inserted in their place.
+
+The :py:meth:`Query.modify()<clorm.Query.modify>` method is a more general version of the
+:py:meth:`Query.replace()<clorm.Query.replace>` method. This allows for greater control over which
+facts are deleted. In this case the parameter function must return a pair of fact sets. The first
+set contains the facts to be deleted and the second set the facts to be inserted.
+
+Note, the behaviour of these modifying queries could also achieved by simply iterating over the
+results of a "normal" query and explictly buidling the delete and add lists. The advantage of using
+the special end-point methods is that it is more declarative and therefore more succint and less
+error prone. This can be especially convenient when chaining multiple modifications of a factbase.
+
+
 
 FactBases with Indexes
 ^^^^^^^^^^^^^^^^^^^^^^

@@ -223,7 +223,7 @@ class BaseQueryImpl(Query, Generic[_T]):
     # --------------------------------------------------------------------------
     @overload
     def count(self: 'GroupedQuery[_T0, Any]') -> Iterator[Tuple[_T0, int]]: ... # type: ignore
-    
+
     @overload
     def count(self: 'BaseQueryImpl[Any]') -> int: ...
 
@@ -261,6 +261,22 @@ class BaseQueryImpl(Query, Generic[_T]):
     def delete(self) -> int:
         qe = QueryExecutor(self._factmaps, self._qspec)
         return qe.delete()
+
+    #--------------------------------------------------------------------------
+    # Replace a selection of fact
+    #--------------------------------------------------------------------------
+    @_check_join_called_first(endpoint=True)
+    def replace(self, fn) -> Tuple[int, int]:
+        qe = QueryExecutor(self._factmaps, self._qspec)
+        return qe.replace(fn)
+
+    #--------------------------------------------------------------------------
+    # Modify a selection of fact
+    #--------------------------------------------------------------------------
+    @_check_join_called_first(endpoint=True)
+    def modify(self, fn) -> Tuple[int, int]:
+        qe = QueryExecutor(self._factmaps, self._qspec)
+        return qe.modify(fn)
 
 
 class UnGroupedQuery(BaseQueryImpl[_T], Generic[_T]):

@@ -1454,7 +1454,7 @@ class QueryAPI2TestCase(unittest.TestCase):
 
 
     #--------------------------------------------------------------------------
-    #   Test single table count/first/delete
+    #   Test single table count/first/delete/modify/replace
     #--------------------------------------------------------------------------
     def test_api_nonselect_single_table(self):
         F = self.F
@@ -1479,10 +1479,24 @@ class QueryAPI2TestCase(unittest.TestCase):
         q = factbase.query(F).order_by(F.anum,F.astr).tuple().select(F.anum)
         self.assertEqual(q.first(), (1,))
 
+        # Modify
+        dcount,acount = (factbase.query(F).
+                         where(F.anum > 1,F.astr == "b").
+                         modify(lambda f: (None,f.clone(astr="bb"))))
+        self.assertEqual(dcount,0)
+        self.assertEqual(acount,1)
+
+        # Replace
+        dcount,acount = (factbase.query(F).
+                         where(F.anum > 1,F.astr == "b").
+                         replace(lambda f: f.clone(astr="bbb")))
+        self.assertEqual(dcount,1)
+        self.assertEqual(acount,1)
+
         # Delete where clauses
-        q = factbase.query(F).where(F.anum > 1,F.astr == "b")
+        q = factbase.query(F).where(F.anum > 1,F.astr == "bb")
         r = q.delete(); self.assertEqual(r,1)
-        self.assertEqual(len(factbase), 5)
+        self.assertEqual(len(factbase), 6)
         self.assertTrue(F(3,"b") not in factbase)
 
     #--------------------------------------------------------------------------
@@ -1556,7 +1570,7 @@ class QueryAPI2TestCase(unittest.TestCase):
         check_errmsg("A query over multiple predicates is incomplete",ctx)
 
 #------------------------------------------------------------------------------
-# Tests for additional V2 select and delete statements
+# Tests for additional V2 select join  statements
 #------------------------------------------------------------------------------
 
 class SelectJoinTestCase(unittest.TestCase):

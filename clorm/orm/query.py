@@ -3367,6 +3367,75 @@ class Query(abc.ABC):
         pass
 
     #--------------------------------------------------------------------------
+    # Modify a selection of fact
+    #--------------------------------------------------------------------------
+    @abc.abstractmethod
+    def modify(self, fn):
+        """Modify matching facts in a ``FactBase()``.
+
+        Clorm facts are immutable, so in order to simulate something like an SQL ``UPDATE``
+        operation, the ``modify()`` query end-point provides a convenient way to replace or modify
+        matching facts in a query with some (related) facts.
+
+        This call operates in the same way as the ``delete()`` end-point but the matching facts are
+        first passed to the parameter function ``fn``. This function must return a pair consisting
+        of 1) the facts to delete from the factbase, 2) the facts to add to the fact base. These two
+        sets of facts are maintained until the end of the query and the delete set of facts are
+        removed followed by the add set being added.
+
+        Note, this behaviour could also achieved by iterating over the results of the query normally
+        and maintaining separate "delete" and "add" lists which are then acted upon at the end of
+        the query. The advantage of the ``modify()`` call is to provide a simple and declarative way
+        to do it which can be convenient especially when chaining multiple modifications of a
+        factbase.
+
+        The function ``fn`` must have the same input signature as the query output. If the output of
+        ``fn`` must be a pair consisting of the elements to delete and element to add. For
+        flexibility, each set can be ``None`` or a single clorm fact or an iterator over clorm
+        facts.
+
+           An exception is thrown if a ``group_by()`` or ``uclause has been specified.
+
+        Example assuming a FactBase ``fb`` consisting of ``F`` and ``G`` predicate facts:
+
+           def mod_fn(f: F, g: G):
+               return ({f, g}, {f.clone(a=10), g.clone(a=10)})
+
+           fb.query(F,G).join(F.a == G.a).where(F.a == 2).modify(mod_fn)
+
+           fb.query(F,G).join(F.a == G.a).where(F.a == 10).select(F).modify(lambda f: (None, {f.clone(a=20)}))
+
+
+        Returns:
+           Returns a (delete_count, add_count) pair indicating the total number of facts deleted and
+           added to the factbase.
+
+        """
+        pass
+
+    #--------------------------------------------------------------------------
+    # Replace a selection of fact
+    #--------------------------------------------------------------------------
+    @abc.abstractmethod
+    def replace(self, fn):
+        """Replace matching facts in a ``FactBase()``.
+
+        This function is a convenient special case of the more general ``modify()`` function.
+
+        While the ``modify()`` parameter function must return a del-add pair, the ``replace()``
+        parameter function returns only an add entry, since all matching facts will be deleted.
+
+        Returns:
+
+           Returns a (delete_count, add_count) pair indicating the total number of facts deleted and
+           added to the factbase.
+
+        """
+        pass
+
+
+    
+    #--------------------------------------------------------------------------
     # For the user to see what the query plan looks like
     #--------------------------------------------------------------------------
     @abc.abstractmethod
@@ -3535,10 +3604,9 @@ class QueryExecutor(object):
     # --------------------------------------------------------------------------
 
     def delete(self):
+
         if self._qspec.group_by:
             raise ValueError("'group_by' is incompatible with 'delete'")
-        if self._qspec.distinct:
-            raise ValueError("'distinct' is incompatible with 'delete'")
         if self._qspec.tuple:
             raise ValueError("'tuple' is incompatible with 'delete'")
 
@@ -3592,6 +3660,100 @@ class QueryExecutor(object):
             fm = self._factmaps[pt]
             for f in ds: fm.remove(f)
         return count
+
+    # --------------------------------------------------------------------------
+    # Modify the facts in a factbase
+    # --------------------------------------------------------------------------
+
+    def modify(self, fn):
+        return self._general_modify('modify', fn)
+
+    # --------------------------------------------------------------------------
+    # Replace a set of facts in a factbase
+    # --------------------------------------------------------------------------
+
+    def replace(self, fn):
+        def wrap_fn(*facts):
+            result = fn(*facts)
+            if isinstance(result, Predicate):
+                return (facts, {result})
+            return (facts, result)
+
+        return self._general_modify('replace', wrap_fn)
+
+    # --------------------------------------------------------------------------
+    # A general replacement endpoint to replace a selection of facts and optionally delete the
+    # original selection. This generalises both a delete() and extend() endpoint.
+    # --------------------------------------------------------------------------
+
+    def _general_modify(self, name, fn):
+        # Build an appropriate wrapper around the parameter function
+        add_count = 0
+        del_count = 0
+        addsets = collections.defaultdict(lambda: set())
+        delsets = collections.defaultdict(lambda: set())
+
+        def execute_fn(facts):
+            delres, addres = fn(*facts)
+            if addres is not None:
+                if isinstance(addres, Predicate):
+                    addsets[type(addres)].add(addres)
+                else:
+                    for f in addres:
+                        addsets[type(f)].add(f)
+            if delres is not None:
+                if isinstance(delres, Predicate):
+                    delsets[type(addres)].add(delres)
+                else:
+                    for f in delres:
+                        delsets[type(f)].add(f)
+
+        # Sanity checks
+        if self._qspec.group_by:
+            raise ValueError(f"'group_by' is incompatible with '{name}'")
+        if self._qspec.tuple:
+            raise ValueError(f"'tuple' is incompatible with '{name}'")
+
+        (self._qplan,self._query) = self._make_plan_and_query()
+
+        selection = self._qspec.select
+        roots = [hashable_path(p) for p in self._qspec.roots]
+        if selection:
+            subroots = set([hashable_path(p) for p in selection])
+        else:
+            subroots = set(roots)
+
+        if not subroots.issubset(set(roots)):
+            raise ValueError((f"For a '{name}' query the selected items '{selection}' "
+                              f"must be a subset of the query roots '{roots}'"))
+
+        outsig = self._qspec.select
+        if outsig is None or not outsig: outsig = self._qspec.roots
+        self._outputter = make_outputter(self._qplan.output_signature, outsig)
+        self._unwrap = False
+        self._distinct = self._qspec.distinct
+
+        # Running the query and execute the parameter function for each result
+        # and run the replacement parameter function
+        for facts in self._all():
+            execute_fn(facts)
+
+        # Delete any collected facts
+        for pt, delset in delsets.items():
+            fm = self._factmaps[pt]
+            tmplen = len(fm)
+            for f in delset:
+                fm.remove(f)
+            del_count += tmplen - len(fm)
+
+        # Add any new facts
+        for pt, addset in addsets.items():
+            fm = self._factmaps[pt]
+            tmplen = len(fm)
+            fm.update(addset)
+            add_count += len(fm) - tmplen
+
+        return (del_count, add_count)
 
 #------------------------------------------------------------------------------
 # main
