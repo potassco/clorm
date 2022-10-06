@@ -1,7 +1,7 @@
-'''A library of Python bool functions and terms for use within an ASP
+"""A library of Python bool functions and terms for use within an ASP
    program. 
 
-'''
+"""
 
 
 from typing import Any
@@ -9,8 +9,9 @@ from clorm.orm.core import AnySymbol, BaseField, IntegerField
 from clorm.orm.noclingo import Number
 
 
-BOOL_FALSE = {0, '0', 'off', 'f', 'false', 'n', 'no'}
-BOOL_TRUE = {1, '1', 'on', 't', 'true', 'y', 'yes'}
+BOOL_FALSE = {0, "0", "off", "f", "false", "n", "no"}
+BOOL_TRUE = {1, "1", "on", "t", "true", "y", "yes"}
+
 
 def bool_validator(v: Any) -> bool:
     if v is True or v is False:
@@ -23,9 +24,10 @@ def bool_validator(v: Any) -> bool:
         return False
     raise TypeError(f"value '{v}' could not be parsed to a boolean")
 
+
 class BooleanField(BaseField):
     """A field to convert between a Clingo.Number/String object and a Python bool.
-    
+
     Conversion failes if the value/clingo.Symbol is not one of the following:
     - a valid boolean ('True' or 'False')
     - the integers '0' or '1'
@@ -41,8 +43,9 @@ class BooleanField(BaseField):
             return bool_validator(symbol.string)
         except (AttributeError, RuntimeError):
             pass
-        raise TypeError(("Object '{}' ({}) is not a Number/String "
-                         "Symbol").format(symbol,type(symbol)))
+        raise TypeError(
+            ("Object '{}' ({}) is not a Number/String " "Symbol").format(symbol, type(symbol))
+        )
 
     def pytocl(v):
         val = int(bool_validator(v))
@@ -56,6 +59,7 @@ class StrictBooleanField(IntegerField):
 
     For everything else the conversion fails
     """
+
     def cltopy(symbol) -> bool:
         if symbol == 1:
             return True

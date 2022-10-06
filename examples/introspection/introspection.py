@@ -2,18 +2,22 @@
 
 from clorm import Predicate, ComplexTerm, ConstantField, IntegerField, path
 
+
 class Acomplex(ComplexTerm):
-    anum=IntegerField
-    aconst=ConstantField(index=True)
+    anum = IntegerField
+    aconst = ConstantField(index=True)
+
 
 class Apredicate(Predicate):
-    anum=IntegerField(index=True)
-    acmplx=Acomplex.Field
-    atuple=(IntegerField,ConstantField(index=True))
+    anum = IntegerField(index=True)
+    acmplx = Acomplex.Field
+    atuple = (IntegerField, ConstantField(index=True))
 
-#--------------------------------------------------------------------------
+
+# --------------------------------------------------------------------------
 #
-#--------------------------------------------------------------------------
+# --------------------------------------------------------------------------
+
 
 def main():
 
@@ -27,16 +31,16 @@ def main():
     assert Apredicate.meta.is_tuple == False
 
     # The names of the fields
-    assert set(Acomplex.meta.keys()) == set(["anum","aconst"])
-    assert set(Apredicate.meta.keys()) == set(["anum","acmplx","atuple"])
+    assert set(Acomplex.meta.keys()) == set(["anum", "aconst"])
+    assert set(Apredicate.meta.keys()) == set(["anum", "acmplx", "atuple"])
 
     # Map positional argument to field name
     assert Acomplex.meta.canonical(0) == "anum"
     assert Acomplex.meta.canonical(1) == "aconst"
 
-#------------------------------------------------------------------------------
+
+# ------------------------------------------------------------------------------
 # main
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 if __name__ == "__main__":
     main()
-

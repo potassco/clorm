@@ -7,14 +7,17 @@ from clorm.orm.query import QuerySpec, basic_join_order
 
 # this code is just to test type annotations with mypy and will not work when running with python
 
+
 class Customer(Predicate):
     cid: int
     name: str
+
 
 class Sale(Predicate):
     sid: int
     cid: int
     item: str
+
 
 class Address(Predicate):
     aid: int
@@ -34,7 +37,7 @@ def test_query_ungrouped_endpoints() -> None:
     # fallback to Any if query is called with more than 5 arguments
     # EXPECTED_TYPE: UnGroupedQuery[Any]
     reveal_type(fb.query(Address, Sale, Customer, Customer, Customer, Customer))
-    
+
     # EXPECTED_TYPE: Generator[Tuple[Sale, Customer], None, None]
     reveal_type(query1.all())
 
@@ -54,11 +57,10 @@ def test_query_ungrouped_endpoints() -> None:
     reveal_type(query1.delete())
 
 
-
 def test_query_ungrouped_select() -> None:
     fb = FactBase()
     query1 = fb.query()
-    
+
     # EXPECTED_TYPE: UnGroupedQuery[Any]
     reveal_type(query1)
 
@@ -151,7 +153,6 @@ def test_query_method_without_type_modification() -> None:
     # EXPECTED_TYPE: UnGroupedQuery[Tuple[int, int, str]]
     reveal_type(ungrouped.bind(ph_=42))
 
-
     grouped = GroupedQuery[Tuple[int, str], Sale]({}, QuerySpec())
 
     # EXPECTED_TYPE: GroupedQuery[Tuple[int, str], Sale]
@@ -171,7 +172,8 @@ def test_query_method_without_type_modification() -> None:
 
     # EXPECTED_TYPE: GroupedQuery[Tuple[int, str], Sale]
     reveal_type(grouped.bind(ph_=42))
-   
+
+
 def test_query_tuple() -> None:
     # can't find a proper type annotation to handle BaseQueryImpl.tuple
     # so for now we return BaseQueryImpl[Any] to get at least a type hint which is compatible to everything

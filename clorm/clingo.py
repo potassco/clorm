@@ -1,11 +1,9 @@
-'''A plugin replacement for the ``clingo`` modules that wraps the key clingo
+"""A plugin replacement for the ``clingo`` modules that wraps the key clingo
 objects to integrate Clorm ``Predicate`` and ``FactBase`` interfaces. See the
 `Clingo API <https://potassco.org/clingo/python-api/current/clingo.html#Model>`_
 for more details.
 
-'''
-
-
+"""
 
 
 # I want to replace the original clingo - re-exporting everything in clingo
@@ -27,14 +25,13 @@ else:
 
 from clingo import *
 
-# export clorm's redefinitions of Control, Model and SolveHandle twice, 
+# export clorm's redefinitions of Control, Model and SolveHandle twice,
 # once how they are defined and once with original name (clingo)
 # this give the possibility to either replace the original classes with clorm's ones
 # or use clorm's classes explicitly which also works better with static type checkers
 from ._clingo import ClormControl as Control, ClormModel as Model, ClormSolveHandle as SolveHandle
 from ._clingo import *
 
-__all__ = list([k for k in oclingo.__dict__.keys() if k[0] != '_'])
+__all__ = list([k for k in oclingo.__dict__.keys() if k[0] != "_"])
 
 __version__ = oclingo.__version__
-

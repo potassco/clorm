@@ -61,19 +61,19 @@ if TYPE_CHECKING:
     from ._typing import AnySymbol
 
 __all__ = [
-    'SymbolType',
-    'Symbol',
-    'Function',
-    'Tuple_',
-    'String',
-    'Number',
-    'SymbolMode',
-    'clingo_to_noclingo',
-    'noclingo_to_clingo',
-    'get_Infimum',
-    'get_Supremum',
-    'get_symbol_mode',
-    'set_symbol_mode'
+    "SymbolType",
+    "Symbol",
+    "Function",
+    "Tuple_",
+    "String",
+    "Number",
+    "SymbolMode",
+    "clingo_to_noclingo",
+    "noclingo_to_clingo",
+    "get_Infimum",
+    "get_Supremum",
+    "get_symbol_mode",
+    "set_symbol_mode",
 ]
 
 # --------------------------------------------------------------------------------
@@ -83,12 +83,12 @@ __all__ = [
 # input is treated as True.
 # --------------------------------------------------------------------------------
 
-CLORM_NOCLINGO_DEFAULT = 'False'
+CLORM_NOCLINGO_DEFAULT = "False"
 
 
 def _get_CLORM_NOCLINGO() -> bool:
-    tmp = os.environ.get('CLORM_NOCLINGO', CLORM_NOCLINGO_DEFAULT).lower()
-    return tmp not in ('0', 'false', 'no', 'disable')
+    tmp = os.environ.get("CLORM_NOCLINGO", CLORM_NOCLINGO_DEFAULT).lower()
+    return tmp not in ("0", "false", "no", "disable")
 
 
 ENABLE_NOCLINGO = _get_CLORM_NOCLINGO()
@@ -102,7 +102,7 @@ _SYMBOLTYPE_OID = {
     SymbolType.Number: 2,
     SymbolType.Function: 3,
     SymbolType.String: 4,
-    SymbolType.Supremum: 5
+    SymbolType.Supremum: 5,
 }
 
 
@@ -125,7 +125,13 @@ class NoSymbol(object):
 
     __slots__ = ("_stype", "_args", "_value", "_sign", "_hash")
 
-    def __init__(self, stype: SymbolType, value: Any = None, args: Sequence['NoSymbol'] = [], sign: bool = True):
+    def __init__(
+        self,
+        stype: SymbolType,
+        value: Any = None,
+        args: Sequence["NoSymbol"] = [],
+        sign: bool = True,
+    ):
         if not isinstance(stype, SymbolType):
             raise TypeError("{} is not a SymbolType".format(stype))
         self._stype = stype
@@ -166,7 +172,7 @@ class NoSymbol(object):
         return cast(str, self._value)
 
     @property
-    def arguments(self) -> Tuple['NoSymbol', ...]:
+    def arguments(self) -> Tuple["NoSymbol", ...]:
         if self._stype != SymbolType.Function:
             raise RuntimeError()
         return self._args
@@ -297,13 +303,15 @@ class NoSymbol(object):
 
         # A function or constant
         if self._value or len(self._args) > 1:
-            return "{}{}({})".format("" if self._sign else "-", self._value,
-                                     ",".join([str(a) for a in self._args]))
+            return "{}{}({})".format(
+                "" if self._sign else "-", self._value, ",".join([str(a) for a in self._args])
+            )
         # A singleton tuple
         return "({},)".format(str(self._args[0]))
 
     def __repr__(self) -> str:
         return self.__str__()
+
 
 # --------------------------------------------------------------------------------
 # helper functions to create objects
@@ -335,6 +343,7 @@ NoSupremum = NoSymbol(SymbolType.Supremum)
 # Functions to convert between clingo.Symbol and noclingo.Symbol
 # --------------------------------------------------------------------------------
 
+
 def clingo_to_noclingo(clsym: "AnySymbol") -> NoSymbol:
     if isinstance(clsym, NoSymbol):
         return clsym
@@ -347,12 +356,15 @@ def clingo_to_noclingo(clsym: "AnySymbol") -> NoSymbol:
     elif clsym.type == clingo.SymbolType.String:
         return NoString(clsym.string)
     elif clsym.type != clingo.SymbolType.Function:
-        raise TypeError(("Symbol '{}' ({}) is not of type clingo.SymbolType."
-                         "Function").format(clsym, type(clsym)))
+        raise TypeError(
+            ("Symbol '{}' ({}) is not of type clingo.SymbolType." "Function").format(
+                clsym, type(clsym)
+            )
+        )
 
-    return NoFunction(clsym.name,
-                      tuple(clingo_to_noclingo(t) for t in clsym.arguments),
-                      clsym.positive)
+    return NoFunction(
+        clsym.name, tuple(clingo_to_noclingo(t) for t in clsym.arguments), clsym.positive
+    )
 
 
 def noclingo_to_clingo(nclsym: "AnySymbol") -> Symbol:
@@ -367,18 +379,22 @@ def noclingo_to_clingo(nclsym: "AnySymbol") -> Symbol:
     elif nclsym.type == SymbolType.String:
         return clingo.String(nclsym.string)
     elif nclsym.type != SymbolType.Function:
-        raise TypeError(("Symbol '{}' ({}) is not of type noclingo.SymbolType."
-                         "Function").format(nclsym, type(nclsym)))
+        raise TypeError(
+            ("Symbol '{}' ({}) is not of type noclingo.SymbolType." "Function").format(
+                nclsym, type(nclsym)
+            )
+        )
 
-    return clingo.Function(nclsym.name,
-                           tuple(noclingo_to_clingo(t) for t in nclsym.arguments),
-                           nclsym.positive)
+    return clingo.Function(
+        nclsym.name, tuple(noclingo_to_clingo(t) for t in nclsym.arguments), nclsym.positive
+    )
 
 
 # ------------------------------------------------------------------------------
 # A mechanism to group together the symbol generator functions for clingo or
 # noclingo.
 # ------------------------------------------------------------------------------
+
 
 class SymbolMode(enum.IntEnum):
     CLINGO = 0
@@ -402,6 +418,7 @@ _mode = SymbolMode.CLINGO
 # Common functions that are valid even if NOCLINGO is disabled
 # ------------------------------------------------------------------------------
 
+
 def get_symbol_mode() -> SymbolMode:
     return _mode
 
@@ -415,10 +432,13 @@ def get_Supremum() -> "AnySymbol":
 
 
 if TYPE_CHECKING:
+
     def set_symbol_mode(sm: SymbolMode) -> None:
         ...
 
-    def Function(name: str, arguments: Sequence[Symbol] = [], positive: bool = True) -> "AnySymbol":
+    def Function(
+        name: str, arguments: Sequence[Symbol] = [], positive: bool = True
+    ) -> "AnySymbol":
         ...
 
     def String(string: str) -> "AnySymbol":
@@ -453,7 +473,9 @@ else:
                 _tuple_ = NoTuple_
                 _function = NoFunction
 
-        def Function(name: str, arguments: Sequence[Symbol] = [], positive: bool = True) -> Symbol:
+        def Function(
+            name: str, arguments: Sequence[Symbol] = [], positive: bool = True
+        ) -> Symbol:
             return _function(name, arguments, positive)
 
         def String(string: str) -> Symbol:
@@ -481,4 +503,4 @@ else:
 # main
 # ------------------------------------------------------------------------------
 if __name__ == "__main__":
-    raise RuntimeError('Cannot run modules')
+    raise RuntimeError("Cannot run modules")

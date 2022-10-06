@@ -58,12 +58,14 @@ def process_module(modname: str, filename: str) -> str:
                     current_fnname = current_fnname.split(".")[1]
                 else:
                     use_self = False
-                
+
                 return_type = config_[1]
                 start_index = int(config_[2])
                 end_index = int(config_[3])
-                generic_ = config_[4] # _Tx is argument of generic_ like Type[_T1]
-                product = bool(config_[5]=="Y") # whether product of generic and non-generic arguments should be created
+                generic_ = config_[4]  # _Tx is argument of generic_ like Type[_T1]
+                product = bool(
+                    config_[5] == "Y"
+                )  # whether product of generic and non-generic arguments should be created
 
                 sys.stderr.write(
                     f"Generating {start_index}-{end_index} overloads "
@@ -81,18 +83,20 @@ def process_module(modname: str, filename: str) -> str:
                 )
 
                 if generic_:
-                    arg_template = ["__ent{0}: "+generic_+"[_T{0}]"]
+                    arg_template = ["__ent{0}: " + generic_ + "[_T{0}]"]
                 else:
                     arg_template = ["__ent{0}: _T{0}"]
                 if product:
                     arg_template.append("__ent{0}: _T{0}")
                 for num_args in range(start_index, end_index + 1):
-                    typevars = ', '.join(f'_T{i}' for i in range(num_args))
+                    typevars = ", ".join(f"_T{i}" for i in range(num_args))
                     # for a single argument we return just a scalar instead of a tuple
-                    return_type_arg = typevars if num_args==1 else f"Tuple[{typevars}]"
+                    return_type_arg = typevars if num_args == 1 else f"Tuple[{typevars}]"
 
-                    for combination in itertools.product(arg_template,repeat=num_args):
-                        entities = ", ".join(arg_t.format(i) for i, arg_t in enumerate(combination,0))
+                    for combination in itertools.product(arg_template, repeat=num_args):
+                        entities = ", ".join(
+                            arg_t.format(i) for i, arg_t in enumerate(combination, 0)
+                        )
                         buf.write(
                             textwrap.indent(
                                 f"""@overload
@@ -106,9 +110,7 @@ def {current_fnname}(
                             )
                         )
 
-            if in_block and line.startswith(
-                f"{indent}# END OVERLOADED FUNCTIONS {given_fnname}"
-            ):
+            if in_block and line.startswith(f"{indent}# END OVERLOADED FUNCTIONS {given_fnname}"):
                 in_block = False
 
             if not in_block:
@@ -154,10 +156,7 @@ def main(args):
             run_module(modname, args.stdout)
 
 
-entries = [
-    "clorm.orm.factbase",
-    "clorm.orm._queryimpl"
-]
+entries = ["clorm.orm.factbase", "clorm.orm._queryimpl"]
 
 if __name__ == "__main__":
     parser = ArgumentParser()

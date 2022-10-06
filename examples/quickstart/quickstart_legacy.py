@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 
-from clorm import monkey; monkey.patch() # must call this before importing clingo
+from clorm import monkey
+
+monkey.patch()  # must call this before importing clingo
 
 from clorm import Predicate, ConstantField, IntegerField, FactBase
 from clorm import ph1_
@@ -8,46 +10,51 @@ from clorm import ph1_
 from clingo import Control
 
 
-ASP_PROGRAM="quickstart.lp"
+ASP_PROGRAM = "quickstart.lp"
 
-#--------------------------------------------------------------------------
+# --------------------------------------------------------------------------
 # Define a data model - we only care about defining the input and output
 # predicates.
-#--------------------------------------------------------------------------
+# --------------------------------------------------------------------------
+
 
 class Driver(Predicate):
-    name=ConstantField
+    name = ConstantField
+
 
 class Item(Predicate):
-    name=ConstantField
+    name = ConstantField
+
 
 class Assignment(Predicate):
-    item=ConstantField
-    driver=ConstantField
-    time=IntegerField
+    item = ConstantField
+    driver = ConstantField
+    time = IntegerField
 
 
-#--------------------------------------------------------------------------
+# --------------------------------------------------------------------------
 #
-#--------------------------------------------------------------------------
+# --------------------------------------------------------------------------
+
 
 def main():
     # Create a Control object that will unify models against the appropriate
     # predicates. Then load the asp file that encodes the problem domain.
-    ctrl = Control(unifier=[Driver,Item,Assignment])
+    ctrl = Control(unifier=[Driver, Item, Assignment])
     ctrl.load(ASP_PROGRAM)
 
     # Dynamically generate the instance data
-    drivers = [ Driver(name=n) for n in ["dave", "morri", "michael" ] ]
-    items = [ Item(name="item{}".format(i)) for i in range(1,6) ]
+    drivers = [Driver(name=n) for n in ["dave", "morri", "michael"]]
+    items = [Item(name="item{}".format(i)) for i in range(1, 6)]
     instance = FactBase(drivers + items)
 
     # Add the instance data and ground the ASP program
     ctrl.add_facts(instance)
-    ctrl.ground([("base",[])])
+    ctrl.ground([("base", [])])
 
     # Generate a solution - use a call back that saves the solution
-    solution=None
+    solution = None
+
     def on_model(model):
         nonlocal solution
         solution = model.facts(atoms=True)
@@ -60,7 +67,7 @@ def main():
     # assignments for each driver.
 
     #    query=solution.select(Assignment).where(lambda x,o: x.driver == o)
-    query=solution.select(Assignment).where(Assignment.driver == ph1_).order_by(Assignment.time)
+    query = solution.select(Assignment).where(Assignment.driver == ph1_).order_by(Assignment.time)
 
     for d in drivers:
         assignments = query.get(d.name)
@@ -71,9 +78,9 @@ def main():
             for a in assignments:
                 print("\t Item {} at time {}".format(a.item, a.time))
 
-#------------------------------------------------------------------------------
+
+# ------------------------------------------------------------------------------
 # main
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 if __name__ == "__main__":
     main()
-

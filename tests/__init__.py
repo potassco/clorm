@@ -4,6 +4,7 @@
 # -----------------------------------------------------------------------------
 
 import os
+
 os.environ["CLORM_NOCLINGO"] = "True"
 
 from .test_util_oset import OrderedSetTestCase
@@ -23,4 +24,3 @@ from .test_json import *
 from .test_libdate import LibDateTestCase
 from .test_libtimeslot import *
 from .test_mypy import *
-
