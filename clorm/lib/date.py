@@ -18,16 +18,18 @@
 #
 # ------------------------------------------------------------------------------
 
-import datetime
 import calendar
+import datetime
+
 from ..orm import (
     ComplexTerm,
+    ConstantField,
     IntegerField,
     StringField,
-    ConstantField,
     make_function_asp_callable,
     make_method_asp_callable,
 )
+
 
 # ------------------------------------------------------------------------------
 #

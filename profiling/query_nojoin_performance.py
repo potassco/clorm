@@ -4,14 +4,15 @@
 # Instantiating a FactBase with lots of elements
 # ------------------------------------------------------------------------------
 
-from clorm import Predicate, ComplexTerm, ConstantField, IntegerField, FactBase
-import clorm
-from clingo import Function, Number
-
-import time
 import cProfile
 import pstats
+import time
 from pstats import SortKey
+
+from clingo import Function, Number
+
+import clorm
+from clorm import ComplexTerm, ConstantField, FactBase, IntegerField, Predicate
 
 # ------------------------------------------------------------------------------
 #

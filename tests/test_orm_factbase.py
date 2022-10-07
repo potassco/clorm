@@ -8,51 +8,53 @@
 # to be completed.
 # ------------------------------------------------------------------------------
 
-from typing import Tuple
-import unittest
 import operator
 import pickle
+import unittest
+from typing import Tuple
 
-from clorm.orm.core import field
-from .support import check_errmsg
-
-from clingo import Control, Number, String, Function, SymbolType
-
-# Official Clorm API imports for the core complements
-from clorm.orm import (
-    IntegerField,
-    StringField,
-    ConstantField,
-    Predicate,
-    ComplexTerm,
-    path,
-    hashable_path,
-)
+from clingo import Control, Function, Number, String, SymbolType
 
 # Official Clorm API imports for the fact base components
+# Official Clorm API imports for the core complements
 from clorm.orm import (
+    ComplexTerm,
+    ConstantField,
     FactBase,
-    desc,
-    asc,
-    not_,
+    IntegerField,
+    Predicate,
+    StringField,
+    alias,
     and_,
+    asc,
+    desc,
+    func,
+    hashable_path,
+    in_,
+    not_,
+    notin_,
     or_,
-    ph_,
+    path,
     ph1_,
     ph2_,
-    func,
-    alias,
-    in_,
-    notin_,
+    ph_,
 )
+from clorm.orm.core import field
+from clorm.orm.factcontainers import FactIndex, FactMap, FactSet
+from clorm.orm.query import (
+    NamedPlaceholder,
+    PositionalPlaceholder,
+    QuerySpec,
+    fixed_join_order,
+    process_join,
+    process_orderby,
+    process_where,
+)
+
+from .support import check_errmsg
 
 # Implementation imports
 
-from clorm.orm.factcontainers import FactSet, FactIndex, FactMap
-
-from clorm.orm.query import PositionalPlaceholder, NamedPlaceholder, QuerySpec
-from clorm.orm.query import process_where, process_join, process_orderby
-from clorm.orm.query import fixed_join_order
 
 # ------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------

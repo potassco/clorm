@@ -3,14 +3,16 @@
 # FactMap.
 # ------------------------------------------------------------------------------
 
-import operator
-import collections
 import bisect
+import collections
 import itertools
+import operator
 from typing import Any, Iterable, List, Type
 
+from ..util import OrderedSet
+from ..util import OrderedSet as FactSet
 from .core import *
-from .core import notcontains, PredicatePath
+from .core import PredicatePath, notcontains
 
 # ------------------------------------------------------------------------------
 # In order to implement FactBase I originally used the built in 'set'
@@ -21,9 +23,6 @@ from .core import notcontains, PredicatePath
 # the same program the ordering of the set can change. This is bad for producing
 # deterministic ASP solving. So using an OrderedSet instead.
 
-from ..util import OrderedSet as FactSet
-
-from ..util import OrderedSet
 
 # FactSet=set                                # The Python standard set class. Note
 # fails some unit tests because I'm

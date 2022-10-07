@@ -3,7 +3,9 @@
 # ------------------------------------------------------------------------------
 
 import sys
+
 import clingo as original_clingo
+
 from . import clingo as clorm_clingo
 
 original_control = original_clingo.Control

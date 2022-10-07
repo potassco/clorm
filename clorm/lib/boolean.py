@@ -5,9 +5,9 @@
 
 
 from typing import Any
+
 from clorm.orm.core import AnySymbol, BaseField, IntegerField
 from clorm.orm.noclingo import Number
-
 
 BOOL_FALSE = {0, "0", "off", "f", "false", "n", "no"}
 BOOL_TRUE = {1, "1", "on", "t", "true", "y", "yes"}

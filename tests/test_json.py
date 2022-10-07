@@ -2,11 +2,13 @@
 # Unit tests for the clorm ORM interface
 # ------------------------------------------------------------------------------
 
-import unittest
-import clingo
-import clorm.json as cjson
 import json
-from clorm import Predicate, ComplexTerm, IntegerField, StringField, FactBase
+import unittest
+
+import clingo
+
+import clorm.json as cjson
+from clorm import ComplexTerm, FactBase, IntegerField, Predicate, StringField
 
 # ------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------

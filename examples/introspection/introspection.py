@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from clorm import Predicate, ComplexTerm, ConstantField, IntegerField, path
+from clorm import ComplexTerm, ConstantField, IntegerField, Predicate, path
 
 
 class Acomplex(ComplexTerm):

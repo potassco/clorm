@@ -2,8 +2,9 @@
 # Unit tests for the peewee based data model
 # ------------------------------------------------------------------------------
 
-import unittest
 import datetime
+import unittest
+
 import clorm.clingo as clingo
 from clorm.lib.date import *
 

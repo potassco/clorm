@@ -8,55 +8,21 @@
 # (see factbase.py).
 # ------------------------------------------------------------------------------
 
+import abc
+import collections
+import collections.abc as cabc
+
 # import logging
 # import os
 import datetime
-import abc
-import inspect
-import operator
-import collections
-import collections.abc as cabc
 import enum
 import functools
+import inspect
+import operator
+import re
 import sys
 import typing
-import re
 import uuid
-
-from clorm.orm.types import (
-    ConstantStr,
-    HeadList,
-    HeadListReversed,
-    StrictBool,
-    TailList,
-    TailListReversed,
-)
-
-from .noclingo import (
-    Symbol,
-    Function,
-    String,
-    Number,
-    SymbolType,
-    SymbolMode,
-    get_symbol_mode,
-    clingo_to_noclingo,
-    noclingo_to_clingo,
-)
-
-from ._typing import AnySymbol, get_args, get_origin
-
-from .templating import (
-    expand_template,
-    PREDICATE_TEMPLATE,
-    CHECK_SIGN_TEMPLATE,
-    CHECK_SIGN_UNIFY_TEMPLATE,
-    NO_DEFAULTS_TEMPLATE,
-    ASSIGN_DEFAULT_TEMPLATE,
-    ASSIGN_COMPLEX_TEMPLATE,
-    PREDICATE_UNIFY_DOCSTRING,
-)
-
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -71,10 +37,41 @@ from typing import (
     Type,
     TypeVar,
     Union,
-    overload,
     cast,
+    overload,
 )
 
+from clorm.orm.types import (
+    ConstantStr,
+    HeadList,
+    HeadListReversed,
+    StrictBool,
+    TailList,
+    TailListReversed,
+)
+
+from ._typing import AnySymbol, get_args, get_origin
+from .noclingo import (
+    Function,
+    Number,
+    String,
+    Symbol,
+    SymbolMode,
+    SymbolType,
+    clingo_to_noclingo,
+    get_symbol_mode,
+    noclingo_to_clingo,
+)
+from .templating import (
+    ASSIGN_COMPLEX_TEMPLATE,
+    ASSIGN_DEFAULT_TEMPLATE,
+    CHECK_SIGN_TEMPLATE,
+    CHECK_SIGN_UNIFY_TEMPLATE,
+    NO_DEFAULTS_TEMPLATE,
+    PREDICATE_TEMPLATE,
+    PREDICATE_UNIFY_DOCSTRING,
+    expand_template,
+)
 
 __all__ = [
     "ClormError",

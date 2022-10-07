@@ -3,18 +3,16 @@
 # ------------------------------------------------------------------------------
 import unittest
 
-from .support import check_errmsg, add_program_string
-
 import clingo as oclingo
-import clorm.clingo as cclingo
 
-# from clorm.clingo import Number, String, Function, parse_program, Control
-from clorm.clingo import Number, String, Function, Control
+import clorm.clingo as cclingo
+from clorm import FactBase, IntegerField, Predicate, StringField, SymbolPredicateUnifier, ph1_
 
 # from clingo.ast import parse_string
-from clorm.clingo import _expand_assumptions
+# from clorm.clingo import Number, String, Function, parse_program, Control
+from clorm.clingo import Control, Function, Number, String, _expand_assumptions
 
-from clorm import Predicate, IntegerField, StringField, FactBase, SymbolPredicateUnifier, ph1_
+from .support import add_program_string, check_errmsg
 
 # ------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------
@@ -262,8 +260,14 @@ class ClingoTestCase(unittest.TestCase):
         check_errmsg("'Bad' object has no attribute 'symbols'", ctx)
 
     def test_class_defs_are_equal(self):
-        from clorm.clingo import ClormSolveHandle, ClormControl, ClormModel
-        from clorm.clingo import SolveHandle, Control, Model
+        from clorm.clingo import (
+            ClormControl,
+            ClormModel,
+            ClormSolveHandle,
+            Control,
+            Model,
+            SolveHandle,
+        )
 
         self.assertEqual(Control, ClormControl)
         self.assertEqual(Model, ClormModel)

@@ -2,12 +2,12 @@
 # Combine all the main aspects of the Clorm ORM into one unified export.
 # -----------------------------------------------------------------------------
 
-from .noclingo import *
+from .atsyntax import *
 from .core import *
 from .factbase import *
+from .noclingo import *
 from .query import *
 from .symbols_facts import *
-from .atsyntax import *
 from .types import *
 
 __all__ = [

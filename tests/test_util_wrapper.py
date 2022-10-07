@@ -2,9 +2,10 @@
 # Unit tests for the clorm monkey patching
 # ------------------------------------------------------------------------------
 import unittest
-from .support import check_errmsg
 
 from clorm.util.wrapper import WrapperMetaClass, init_wrapper, make_class_wrapper
+
+from .support import check_errmsg
 
 # ------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------

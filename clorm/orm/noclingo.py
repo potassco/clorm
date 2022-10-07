@@ -50,12 +50,12 @@ will raise an exception.
 # --------------------------------------------------------------------------------
 # --------------------------------------------------------------------------------
 
-import os
 import enum
-import clingo
+import os
+from typing import TYPE_CHECKING, Any, Optional, Sequence, Tuple, Union, cast
 
-from clingo import SymbolType, Symbol
-from typing import TYPE_CHECKING, Optional, Sequence, Tuple, Union, Any, cast
+import clingo
+from clingo import Symbol, SymbolType
 
 if TYPE_CHECKING:
     from ._typing import AnySymbol

@@ -7,9 +7,6 @@ Extend clingo's Control, Model and SolveHandle classes to better use with clorm
 
 import functools
 import itertools
-
-import clingo as oclingo
-from .util.wrapper import init_wrapper, make_class_wrapper
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -23,7 +20,11 @@ from typing import (
     cast,
     overload,
 )
+
+import clingo as oclingo
+
 from .orm import *
+from .util.wrapper import init_wrapper, make_class_wrapper
 
 __all__ = ["ClormControl", "ClormModel", "ClormSolveHandle", "_expand_assumptions"]
 

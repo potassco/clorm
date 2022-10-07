@@ -3,11 +3,12 @@
 # calling Python from within ASP using the '@' syntax.
 # ------------------------------------------------------------------------------
 
+import collections.abc as cabc
+import functools
+
 # import logging
 # import os
 import inspect
-import collections.abc as cabc
-import functools
 from typing import Any, Callable, List, Sequence, Tuple, Type
 
 from .core import *

@@ -22,8 +22,8 @@ from typing import (
     overload,
 )
 
-from ._typing import _T0, _T1, _T2, _T3, _T4
 from ._queryimpl import UnGroupedQuery
+from ._typing import _T0, _T1, _T2, _T3, _T4
 from .core import Predicate, PredicateDefn, PredicatePath, and_, validate_root_paths
 from .factcontainers import FactMap, factset_equality
 from .query import QueryExecutor, QuerySpec, make_query_plan, process_orderby, process_where

@@ -4,11 +4,9 @@ from clorm import monkey
 
 monkey.patch()  # must call this before importing clingo
 
-from clorm import Predicate, ConstantField, IntegerField, FactBase
-from clorm import ph1_
-
 from clingo import Control
 
+from clorm import ConstantField, FactBase, IntegerField, Predicate, ph1_
 
 ASP_PROGRAM = "quickstart.lp"
 

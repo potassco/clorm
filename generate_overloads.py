@@ -18,16 +18,16 @@ copied from sqlalchemy
 """
 from __future__ import annotations
 
-from argparse import ArgumentParser
 import importlib
+import itertools
 import os
-from pathlib import Path
 import re
 import shutil
 import sys
-from tempfile import NamedTemporaryFile
 import textwrap
-import itertools
+from argparse import ArgumentParser
+from pathlib import Path
+from tempfile import NamedTemporaryFile
 
 is_posix = os.name == "posix"
 

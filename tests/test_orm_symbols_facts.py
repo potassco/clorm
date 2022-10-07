@@ -7,42 +7,44 @@
 # to be completed.
 # ------------------------------------------------------------------------------
 
-import unittest, os
+import os
 import tempfile
-from .support import check_errmsg, add_program_string
+import unittest
 
-from clingo import Control, Number, String, Function, SymbolType
+from clingo import Control, Function, Number, String, SymbolType
 
-from clorm import set_symbol_mode, SymbolMode
+# Official Clorm API imports
+from clorm import (
+    FactParserError,
+    SymbolMode,
+    SymbolPredicateUnifier,
+    UnifierNoMatchError,
+    control_add_facts,
+    define_nested_list_field,
+    parse_fact_files,
+    parse_fact_string,
+    set_symbol_mode,
+    symbolic_atoms_to_facts,
+    unify,
+)
 
 # Official Clorm API imports
 from clorm.orm import (
     BaseField,
+    ComplexTerm,
+    ConstantField,
+    FactBase,
+    IntegerField,
+    Predicate,
     Raw,
     RawField,
-    IntegerField,
-    StringField,
-    ConstantField,
     SimpleField,
-    Predicate,
-    ComplexTerm,
-    path,
+    StringField,
     hashable_path,
-    FactBase,
+    path,
 )
 
-# Official Clorm API imports
-from clorm import (
-    SymbolPredicateUnifier,
-    unify,
-    control_add_facts,
-    symbolic_atoms_to_facts,
-    parse_fact_string,
-    parse_fact_files,
-    UnifierNoMatchError,
-    FactParserError,
-    define_nested_list_field,
-)
+from .support import add_program_string, check_errmsg
 
 # ------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------

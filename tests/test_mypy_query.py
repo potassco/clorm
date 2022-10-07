@@ -1,9 +1,10 @@
 from typing import Tuple
-from typing_extensions import reveal_type
-from clorm import FactBase, Predicate
-from clorm.orm._queryimpl import UnGroupedQuery, GroupedQuery
-from clorm.orm.query import QuerySpec, basic_join_order
 
+from typing_extensions import reveal_type
+
+from clorm import FactBase, Predicate
+from clorm.orm._queryimpl import GroupedQuery, UnGroupedQuery
+from clorm.orm.query import QuerySpec, basic_join_order
 
 # this code is just to test type annotations with mypy and will not work when running with python
 

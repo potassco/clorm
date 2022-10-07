@@ -8,72 +8,73 @@
 # to be completed.
 # ------------------------------------------------------------------------------
 
-import inspect
-import sys
-from typing import Tuple, Union
-import unittest
-import datetime
-import operator
-import enum
 import collections.abc as cabc
-
-from .support import check_errmsg, check_errmsg_contains
+import datetime
+import enum
+import inspect
+import operator
 import pickle
+import sys
+import unittest
+from typing import Tuple, Union
+
+import clingo
+
+import clorm.orm.noclingo as noclingo
 
 # from clingo import Number, String, Function, SymbolType
 # Official Clorm API imports
 from clorm import (
     BaseField,
-    Raw,
-    RawField,
-    IntegerField,
-    StringField,
-    ConstantField,
-    SimpleField,
-    Predicate,
     ComplexTerm,
-    refine_field,
-    combine_fields,
-    define_flat_list_field,
-    define_nested_list_field,
-    define_enum_field,
-    simple_predicate,
-    path,
-    hashable_path,
-    alias,
-    not_,
-    and_,
-    or_,
-    cross,
-    in_,
-    notin_,
-    SymbolMode,
-    set_symbol_mode,
-    get_symbol_mode,
-    Function,
-    Number,
-    String,
-    StrictBool,
+    ConstantField,
     ConstantStr,
+    Function,
     HeadList,
     HeadListReversed,
+    IntegerField,
+    Number,
+    Predicate,
+    Raw,
+    RawField,
+    SimpleField,
+    StrictBool,
+    String,
+    StringField,
+    SymbolMode,
     TailList,
     TailListReversed,
+    alias,
+    and_,
+    combine_fields,
+    cross,
+    define_enum_field,
+    define_flat_list_field,
+    define_nested_list_field,
+    get_symbol_mode,
+    hashable_path,
+    in_,
+    not_,
+    notin_,
+    or_,
+    path,
+    refine_field,
+    set_symbol_mode,
+    simple_predicate,
 )
 
 # Implementation imports
 from clorm.orm.core import (
+    PredicatePath,
+    QCondition,
     dealiased_path,
     field,
     get_field_definition,
-    PredicatePath,
-    QCondition,
-    trueall,
     notcontains,
+    trueall,
 )
 
-import clingo
-import clorm.orm.noclingo as noclingo
+from .support import check_errmsg, check_errmsg_contains
 
 # ------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------

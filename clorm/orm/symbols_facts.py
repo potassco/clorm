@@ -11,6 +11,7 @@
 
 import itertools
 import sys
+from collections import defaultdict
 from typing import (
     Dict,
     Iterable,
@@ -26,14 +27,14 @@ from typing import (
     cast,
     overload,
 )
-from collections import defaultdict
 
 import clingo
 import clingo.ast as clast
+
 from .core import *
-from .noclingo import SymbolMode, Function, Number, String
-from .factbase import *
 from .core import AnySymbol, PredicatePath, get_symbol_mode
+from .factbase import *
+from .noclingo import Function, Number, String, SymbolMode
 
 if sys.version_info < (3, 8):
     from typing_extensions import Literal
@@ -451,7 +452,7 @@ class ClingoParserWrapperError(Exception):
 # Parse ASP facts from a string or files into a factbase
 # ------------------------------------------------------------------------------
 
-from clingo.ast import AST, ASTType, ASTSequence
+from clingo.ast import AST, ASTSequence, ASTType
 
 
 class NonFactVisitor:
@@ -654,7 +655,7 @@ def parse_fact_files(
 # A pure-python fact parser that uses Lark
 # ------------------------------------------------------------------------------
 
-from .lark_fact_parser import Lark_StandAlone, Transformer, LarkError, UnexpectedInput
+from .lark_fact_parser import Lark_StandAlone, LarkError, Transformer, UnexpectedInput
 
 
 class _END:

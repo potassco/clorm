@@ -3,11 +3,13 @@
 # ------------------------------------------------------------------------------
 
 import unittest
-from .support import check_errmsg
 
-from clingo import Number, String, Function, __version__ as clingo_version
-from clingo import Control
+from clingo import Control, Function, Number, String
+from clingo import __version__ as clingo_version
+
 from clorm.util.oset import OrderedSet
+
+from .support import check_errmsg
 
 # ------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------

@@ -2,32 +2,33 @@
 # Unit tests for the clorm ORM interface
 # ------------------------------------------------------------------------------
 
-import clingo
-import os
+import calendar
+import datetime
 import importlib
 import inspect
-import unittest
-import datetime
-import calendar
 import operator
+import os
+import unittest
 
-from .support import check_errmsg, check_errmsg_contains
+import clingo
 
 import clorm.orm.noclingo as noclingo
 from clorm.orm.noclingo import (
-    SymbolType,
-    Symbol,
     Function,
-    String,
     Number,
+    String,
+    Symbol,
+    SymbolMode,
+    SymbolType,
+    clingo_to_noclingo,
     get_Infimum,
     get_Supremum,
-    clingo_to_noclingo,
-    noclingo_to_clingo,
-    SymbolMode,
     get_symbol_mode,
+    noclingo_to_clingo,
     set_symbol_mode,
 )
+
+from .support import check_errmsg, check_errmsg_contains
 
 clingo_version = clingo.__version__
 

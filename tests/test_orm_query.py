@@ -8,80 +8,88 @@
 # to be completed.
 # ------------------------------------------------------------------------------
 
-import unittest
 import operator
-from .support import check_errmsg, check_errmsg_contains
+import unittest
 
-from clingo import Control, Number, String, Function, SymbolType
+from clingo import Control, Function, Number, String, SymbolType
 
 # Official Clorm API imports for the core complements
 from clorm.orm import (
-    IntegerField,
-    StringField,
-    ConstantField,
-    Predicate,
     ComplexTerm,
-    path,
-    hashable_path,
+    ConstantField,
+    IntegerField,
+    Predicate,
+    StringField,
     alias,
+    and_,
+    asc,
+    cross,
+    desc,
+    func,
+    hashable_path,
+    in_,
+    not_,
+    notin_,
+    or_,
+    path,
+    ph1_,
+    ph2_,
+    ph_,
 )
 
 # Implementation imports
-from clorm.orm.core import QCondition, trueall, notcontains
-
-# Official Clorm API imports for the fact base components
-from clorm.orm import desc, asc, ph_, ph1_, ph2_, func, not_, and_, or_, cross, in_, notin_
-
+from clorm.orm.core import QCondition, notcontains, trueall
+from clorm.orm.factcontainers import FactIndex, FactMap, FactSet
 from clorm.orm.query import (
-    PositionalPlaceholder,
-    NamedPlaceholder,
-    is_boolean_qcondition,
-    is_comparison_qcondition,
-    StandardComparator,
-    FunctionComparator,
-    make_input_alignment_functor,
-    validate_where_expression,
-    negate_where_expression,
-    where_expression_to_nnf,
-    where_expression_to_cnf,
     Clause,
     ClauseBlock,
-    normalise_where_expression,
-    process_where,
-    partition_clauses,
-    validate_join_expression,
-    process_join,
-    basic_join_order,
-    fixed_join_order,
-    oppref_join_order,
-    make_query_plan_preordered_roots,
-    validate_orderby_expression,
+    FunctionComparator,
+    InQuerySorter,
+    JoinQueryPlan,
+    MembershipSeq,
+    NamedPlaceholder,
     OrderBy,
     OrderByBlock,
-    process_orderby,
-    partition_orderbys,
-    make_prejoin_pair,
-    make_join_pair,
-    make_query_plan,
-    JoinQueryPlan,
+    PositionalPlaceholder,
+    QueryExecutor,
     QueryPlan,
     QuerySpec,
-    make_first_prejoin_query,
-    make_prejoin_query_source,
-    make_first_join_query,
+    StandardComparator,
+    basic_join_order,
+    fixed_join_order,
+    is_boolean_qcondition,
+    is_comparison_qcondition,
     make_chained_join_query,
+    make_first_join_query,
+    make_first_prejoin_query,
+    make_input_alignment_functor,
+    make_join_pair,
+    make_prejoin_pair,
+    make_prejoin_query_source,
     make_query,
-    InQuerySorter,
-    QueryExecutor,
-    MembershipSeq,
+    make_query_plan,
+    make_query_plan_preordered_roots,
+    negate_where_expression,
+    normalise_where_expression,
+    oppref_join_order,
+    partition_clauses,
+    partition_orderbys,
+    process_join,
+    process_orderby,
+    process_where,
+    validate_join_expression,
+    validate_orderby_expression,
+    validate_where_expression,
+    where_expression_to_cnf,
+    where_expression_to_nnf,
 )
+
+from .support import check_errmsg, check_errmsg_contains
 
 ###### NOTE: The QueryOutput tests need to be turned into QueryExecutor
 ###### tests. We can then delete QueryOutput which is not being used for
 ###### anything.
 
-
-from clorm.orm.factcontainers import FactSet, FactIndex, FactMap
 
 # ------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------

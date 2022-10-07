@@ -6,9 +6,11 @@
 # be easily machine processable whereas the clingo output would require parsing
 # to regenerate the original symbol objects.
 # --------------------------------------------------------------------------------
-from collections.abc import Mapping
-import clingo
 import json
+from collections.abc import Mapping
+
+import clingo
+
 from .orm import *
 
 __all__ = ["symbol_encoder", "symbol_decoder", "FactBaseCoder"]

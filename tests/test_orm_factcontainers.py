@@ -2,27 +2,27 @@
 # Unit tests for FactIndex and FactMap.
 # ------------------------------------------------------------------------------
 
-import unittest
 import operator
-from .support import check_errmsg
+import unittest
 
-from clingo import Control, Number, String, Function, SymbolType
+from clingo import Control, Function, Number, String, SymbolType
 
 # Official Clorm API imports for the core complements
 from clorm.orm import (
-    IntegerField,
-    StringField,
-    ConstantField,
-    Predicate,
     ComplexTerm,
-    path,
+    ConstantField,
+    IntegerField,
+    Predicate,
+    StringField,
     hashable_path,
+    path,
 )
+from clorm.orm.core import notcontains
 
 # Implementation imports
 from clorm.orm.factcontainers import FactIndex, FactMap, FactSet
 
-from clorm.orm.core import notcontains
+from .support import check_errmsg
 
 # ------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------

@@ -1,6 +1,8 @@
 import sys
-from typing import Any, TypeVar, Type, Optional, cast, Tuple, Union
+from typing import Any, Optional, Tuple, Type, TypeVar, Union, cast
+
 from clingo import Symbol
+
 from .noclingo import NoSymbol
 
 _T0 = TypeVar("_T0", bound=Any)
@@ -24,7 +26,7 @@ if sys.version_info < (3, 8):
         return getattr(t, "__origin__", None)
 
 else:
-    from typing import get_origin, get_args
+    from typing import get_args, get_origin
 
 
 if sys.version_info < (3, 7):
@@ -41,7 +43,7 @@ if sys.version_info < (3, 7):
         return getattr(t, "__args__", ())
 
 elif sys.version_info < (3, 8):
-    from typing import _GenericAlias, Callable
+    from typing import Callable, _GenericAlias
 
     def get_args(t: Type[Any]) -> Tuple[Any, ...]:
         """Compatibility version of get_args for python 3.7.

@@ -1,8 +1,9 @@
 # ------------------------------------------------------------------------------
 # Unit tests for the clorm monkey patching
 # ------------------------------------------------------------------------------
-import unittest
 import sys
+import unittest
+
 from clorm import monkey
 
 __all__ = [
@@ -30,7 +31,8 @@ class ClingoPatchTestCase(unittest.TestCase):
     # --------------------------------------------------------------------------
     def test_monkey(self):
         from clingo import Control
-        from clorm import Predicate, IntegerField, StringField, FactBase, SymbolPredicateUnifier
+
+        from clorm import FactBase, IntegerField, Predicate, StringField, SymbolPredicateUnifier
 
         spu = SymbolPredicateUnifier()
 

@@ -7,38 +7,36 @@
 # to be completed.
 # ------------------------------------------------------------------------------
 
-import inspect
-from typing import Tuple
-import unittest
-import datetime
 import calendar
-import operator
 import collections
-from .support import check_errmsg
+import datetime
+import inspect
+import operator
+import unittest
+from typing import Tuple
 
 import clingo
-from clingo import Control, Number, String, Function, SymbolType
+from clingo import Control, Function, Number, String, SymbolType
 
 # Official Clorm API imports
+# Official Clorm API imports
 from clorm.orm import (
-    IntegerField,
-    StringField,
-    ConstantField,
-    SimpleField,
-    Predicate,
     ComplexTerm,
-)
-
-# Official Clorm API imports
-from clorm.orm import (
-    TypeCastSignature,
+    ConstantField,
     ContextBuilder,
+    IntegerField,
+    Predicate,
+    SimpleField,
+    StringField,
+    TypeCastSignature,
     make_function_asp_callable,
     make_method_asp_callable,
 )
 
 # Implementation imports
 from clorm.orm.atsyntax import _get_annotations
+
+from .support import check_errmsg
 
 # ------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------

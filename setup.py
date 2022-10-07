@@ -1,9 +1,11 @@
 #!/usr/bin/env python
 
 import os
-import sys
 import re
+import sys
+
 from setuptools import setup
+
 
 # Utility functions so that we can populate the package description and the
 # version number automatically.

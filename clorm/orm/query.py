@@ -2,30 +2,30 @@
 # Clorm ORM FactBase query implementation. It provides the rich query API.
 # ------------------------------------------------------------------------------
 
-import io
-import sys
-import operator
-import collections
-import bisect
 import abc
-import functools
-import itertools
-import inspect
+import bisect
+import collections
 import enum
+import functools
+import inspect
+import io
+import itertools
+import operator
+import sys
 from typing import Any, Generator, List, Set
 
 from ..util import OrderedSet
 from ..util.tools import all_equal
 from .core import *
 from .core import (
-    get_field_definition,
-    QCondition,
     PredicatePath,
-    validate_root_paths,
-    kwargs_check_keys,
-    trueall,
+    QCondition,
     falseall,
+    get_field_definition,
+    kwargs_check_keys,
     notcontains,
+    trueall,
+    validate_root_paths,
 )
 from .factcontainers import FactIndex, FactMap
 

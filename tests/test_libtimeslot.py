@@ -2,8 +2,9 @@
 # Unit tests for the timeslot library
 # ------------------------------------------------------------------------------
 
-import unittest
 import datetime
+import unittest
+
 import clorm.clingo as clingo
 from clorm.lib.timeslot import *
 
