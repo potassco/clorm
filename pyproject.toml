@@ -7,3 +7,8 @@ extend-exclude = '''
   | clorm/orm/lark_fact_parser\.py
 )
 '''
+
+[tool.isort]
+profile="black"
+line_length=98
+extend_skip_glob = [".github/*", "clorm/orm/lark_fact_parser.py"]
