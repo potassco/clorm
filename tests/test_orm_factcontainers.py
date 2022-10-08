@@ -5,8 +5,6 @@
 import operator
 import unittest
 
-from clingo import Control, Function, Number, String, SymbolType
-
 # Official Clorm API imports for the core complements
 from clorm.orm import (
     ComplexTerm,
@@ -15,14 +13,11 @@ from clorm.orm import (
     Predicate,
     StringField,
     hashable_path,
-    path,
 )
 from clorm.orm.core import notcontains
 
 # Implementation imports
-from clorm.orm.factcontainers import FactIndex, FactMap, FactSet
-
-from .support import check_errmsg
+from clorm.orm.factcontainers import FactIndex, FactMap
 
 # ------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------

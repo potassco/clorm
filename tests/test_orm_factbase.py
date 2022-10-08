@@ -8,12 +8,9 @@
 # to be completed.
 # ------------------------------------------------------------------------------
 
-import operator
 import pickle
 import unittest
 from typing import Tuple
-
-from clingo import Control, Function, Number, String, SymbolType
 
 # Official Clorm API imports for the fact base components
 # Official Clorm API imports for the core complements
@@ -25,31 +22,18 @@ from clorm.orm import (
     Predicate,
     StringField,
     alias,
-    and_,
     asc,
     desc,
     func,
     hashable_path,
     in_,
-    not_,
-    notin_,
-    or_,
     path,
     ph1_,
     ph2_,
     ph_,
 )
 from clorm.orm.core import field
-from clorm.orm.factcontainers import FactIndex, FactMap, FactSet
-from clorm.orm.query import (
-    NamedPlaceholder,
-    PositionalPlaceholder,
-    QuerySpec,
-    fixed_join_order,
-    process_join,
-    process_orderby,
-    process_where,
-)
+from clorm.orm.query import fixed_join_order
 
 from .support import check_errmsg
 

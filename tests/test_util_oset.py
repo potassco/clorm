@@ -4,12 +4,7 @@
 
 import unittest
 
-from clingo import Control, Function, Number, String
-from clingo import __version__ as clingo_version
-
 from clorm.util.oset import OrderedSet
-
-from .support import check_errmsg
 
 # ------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------

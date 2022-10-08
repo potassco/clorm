@@ -9,10 +9,8 @@ import itertools
 import operator
 from typing import Any, Iterable, List, Type
 
-from ..util import OrderedSet
 from ..util import OrderedSet as FactSet
-from .core import *
-from .core import PredicatePath, notcontains
+from .core import Predicate, hashable_path, notcontains, path
 
 # ------------------------------------------------------------------------------
 # In order to implement FactBase I originally used the built in 'set'
@@ -81,7 +79,7 @@ class FactIndex(object):
         # Index the fact by the key - Note: using OrderedSet to preserve
         # insertion order for repeatability
         if key not in self._key2values:
-            self._key2values[key] = OrderedSet()
+            self._key2values[key] = FactSet()
         self._key2values[key].add(fact)
 
         # Maintain the sorted list of keys
@@ -430,8 +428,8 @@ class FactMap(object):
             self.discard(f)
 
     def symmetric_difference_update(self, other):
-        to_remove = OrderedSet()
-        to_add = OrderedSet()
+        to_remove = FactSet()
+        to_add = FactSet()
         for f in self._factset:
             if f in _fm_iterable(other):
                 to_remove.add(f)

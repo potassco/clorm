@@ -23,7 +23,7 @@ from typing import (
 
 import clingo as oclingo
 
-from .orm import *
+from .orm import FactBase, Predicate, Symbol, SymbolPredicateUnifier, control_add_facts
 from .util.wrapper import init_wrapper, make_class_wrapper
 
 __all__ = ["ClormControl", "ClormModel", "ClormSolveHandle", "_expand_assumptions"]

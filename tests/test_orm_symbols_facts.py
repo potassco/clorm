@@ -15,33 +15,27 @@ from clingo import Control, Function, Number, String, SymbolType
 
 # Official Clorm API imports
 from clorm import (
+    BaseField,
+    ComplexTerm,
+    ConstantField,
+    FactBase,
     FactParserError,
+    IntegerField,
+    Predicate,
+    Raw,
+    RawField,
+    StringField,
     SymbolMode,
     SymbolPredicateUnifier,
     UnifierNoMatchError,
     control_add_facts,
     define_nested_list_field,
+    hashable_path,
     parse_fact_files,
     parse_fact_string,
     set_symbol_mode,
     symbolic_atoms_to_facts,
     unify,
-)
-
-# Official Clorm API imports
-from clorm.orm import (
-    BaseField,
-    ComplexTerm,
-    ConstantField,
-    FactBase,
-    IntegerField,
-    Predicate,
-    Raw,
-    RawField,
-    SimpleField,
-    StringField,
-    hashable_path,
-    path,
 )
 
 from .support import add_program_string, check_errmsg

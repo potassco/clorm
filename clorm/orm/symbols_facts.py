@@ -31,9 +31,8 @@ from typing import (
 import clingo
 import clingo.ast as clast
 
-from .core import *
-from .core import AnySymbol, PredicatePath, get_symbol_mode
-from .factbase import *
+from .core import AnySymbol, ClormError, Predicate, PredicatePath, get_symbol_mode
+from .factbase import FactBase
 from .noclingo import Function, Number, String, SymbolMode
 
 if sys.version_info < (3, 8):

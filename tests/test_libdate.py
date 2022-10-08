@@ -5,8 +5,16 @@
 import datetime
 import unittest
 
-import clorm.clingo as clingo
-from clorm.lib.date import *
+from clorm import IntegerField, clingo
+from clorm.lib.date import (
+    DateField,
+    EnumDate,
+    EnumDateRange,
+    cl_date_range,
+    cl_dow,
+    date_range,
+    dow,
+)
 
 # ------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------

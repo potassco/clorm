@@ -5,14 +5,10 @@
 
 import collections.abc as cabc
 import functools
-
-# import logging
-# import os
 import inspect
 from typing import Any, Callable, List, Sequence, Tuple, Type
 
-from .core import *
-from .core import get_field_definition, infer_field_definition
+from .core import BaseField, get_field_definition, infer_field_definition
 
 __all__ = [
     "TypeCastSignature",

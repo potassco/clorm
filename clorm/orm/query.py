@@ -3,10 +3,8 @@
 # ------------------------------------------------------------------------------
 
 import abc
-import bisect
 import collections
 import enum
-import functools
 import inspect
 import io
 import itertools
@@ -15,19 +13,21 @@ import sys
 from typing import Any, Generator, List, Set
 
 from ..util import OrderedSet
-from ..util.tools import all_equal
-from .core import *
 from .core import (
+    Comparator,
+    Predicate,
     PredicatePath,
     QCondition,
+    and_,
     falseall,
-    get_field_definition,
+    hashable_path,
     kwargs_check_keys,
     notcontains,
+    or_,
+    path,
     trueall,
-    validate_root_paths,
 )
-from .factcontainers import FactIndex, FactMap
+from .factcontainers import FactIndex
 
 __all__ = [
     "Query",

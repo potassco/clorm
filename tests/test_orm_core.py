@@ -20,8 +20,6 @@ from typing import Tuple, Union
 
 import clingo
 
-import clorm.orm.noclingo as noclingo
-
 # from clingo import Number, String, Function, SymbolType
 # Official Clorm API imports
 from clorm import (
@@ -47,11 +45,9 @@ from clorm import (
     alias,
     and_,
     combine_fields,
-    cross,
     define_enum_field,
     define_flat_list_field,
     define_nested_list_field,
-    get_symbol_mode,
     hashable_path,
     in_,
     not_,
@@ -62,6 +58,7 @@ from clorm import (
     set_symbol_mode,
     simple_predicate,
 )
+from clorm.orm import noclingo
 
 # Implementation imports
 from clorm.orm.core import (

@@ -5,13 +5,9 @@
 # ------------------------------------------------------------------------------
 
 import cProfile
-import pstats
 import time
-from pstats import SortKey
 
-from clingo import Function, Number
-
-from clorm import ComplexTerm, ConstantField, FactBase, IntegerField, Predicate, ph1_
+from clorm import ConstantField, FactBase, IntegerField, Predicate, ph1_
 from clorm.orm.factbase import FactSet
 
 # ------------------------------------------------------------------------------

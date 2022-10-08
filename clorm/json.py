@@ -11,7 +11,7 @@ from collections.abc import Mapping
 
 import clingo
 
-from .orm import *
+from clorm import FactBase, Predicate, path
 
 __all__ = ["symbol_encoder", "symbol_decoder", "FactBaseCoder"]
 

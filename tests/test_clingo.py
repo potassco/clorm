@@ -7,10 +7,7 @@ import clingo as oclingo
 
 import clorm.clingo as cclingo
 from clorm import FactBase, IntegerField, Predicate, StringField, SymbolPredicateUnifier, ph1_
-
-# from clingo.ast import parse_string
-# from clorm.clingo import Number, String, Function, parse_program, Control
-from clorm.clingo import Control, Function, Number, String, _expand_assumptions
+from clorm.clingo import Control, _expand_assumptions
 
 from .support import add_program_string, check_errmsg
 

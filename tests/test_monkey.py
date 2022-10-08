@@ -1,7 +1,6 @@
 # ------------------------------------------------------------------------------
 # Unit tests for the clorm monkey patching
 # ------------------------------------------------------------------------------
-import sys
 import unittest
 
 from clorm import monkey

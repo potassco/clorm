@@ -8,15 +8,12 @@
 # ------------------------------------------------------------------------------
 
 import calendar
-import collections
 import datetime
-import inspect
-import operator
 import unittest
 from typing import Tuple
 
-import clingo
-from clingo import Control, Function, Number, String, SymbolType
+from clingo import Function, Number, String
+from clingo import __version__ as clingo_version
 
 # Official Clorm API imports
 # Official Clorm API imports
@@ -25,8 +22,6 @@ from clorm.orm import (
     ConstantField,
     ContextBuilder,
     IntegerField,
-    Predicate,
-    SimpleField,
     StringField,
     TypeCastSignature,
     make_function_asp_callable,
@@ -339,7 +334,7 @@ class TypeCastSignatureTestCase(unittest.TestCase):
             test_sig1(Number(1), Number(2))
         check_errmsg("test_sig1() takes 1 positional arguments but 2 ", ctx)
 
-        if clingo.__version__ >= "5.5.0":
+        if clingo_version >= "5.5.0":
             with self.assertRaises(TypeError) as ctx:
                 test_sig1(Number(1))
             check_errmsg("an integer is required for output of test_sig1()", ctx)
@@ -367,7 +362,7 @@ class TypeCastSignatureTestCase(unittest.TestCase):
             tmp.test_sig1(Number(1), Number(2))
         check_errmsg("test_sig1() takes 2 positional arguments but 3 ", ctx)
 
-        if clingo.__version__ >= "5.5.0":
+        if clingo_version >= "5.5.0":
             with self.assertRaises(TypeError) as ctx:
                 tmp.test_sig1(Number(1))
             check_errmsg("an integer is required for output of test_sig1()", ctx)

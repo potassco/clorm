@@ -15,8 +15,7 @@ import time
 
 from clingo import Function, Number
 
-from clorm import ComplexTerm, FactBase, IntegerField, Predicate, RawField, ph1_
-from clorm.clingo import Control
+from clorm import FactBase, IntegerField, Predicate, ph1_
 
 # --------------------------------------------------------------------------
 # Define a context timer (https://preshing.com/20110924/timing-your-code-using-pythons-with-statement/)

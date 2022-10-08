@@ -3,10 +3,11 @@
 # ------------------------------------------------------------------------------
 
 import datetime
+import math
 import unittest
 
-import clorm.clingo as clingo
-from clorm.lib.timeslot import *
+from clorm import IntegerField, clingo
+from clorm.lib.timeslot import Granularity, Range, TimeField, TimeSlot
 
 # ------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------

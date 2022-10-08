@@ -26,14 +26,7 @@
 import datetime
 import math
 
-from ..orm import (
-    ComplexTerm,
-    ConstantField,
-    IntegerField,
-    StringField,
-    make_function_asp_callable,
-    make_method_asp_callable,
-)
+from clorm import ComplexTerm, IntegerField, StringField, make_method_asp_callable
 
 
 # ------------------------------------------------------------------------------

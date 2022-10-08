@@ -11,7 +11,7 @@ monkey.patch()  # must call this before importing clingo
 
 from clingo import Control  # Import clingo.Control instead of clorm.clingo.Control
 
-from clorm import ConstantField, FactBase, IntegerField, Predicate, ph1_
+from clorm import ConstantField, FactBase, IntegerField, Predicate
 
 ASP_PROGRAM = "quickstart.lp"
 
