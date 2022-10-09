@@ -1,13 +1,16 @@
-from pathlib import Path
 import re
 import unittest
+from pathlib import Path
+
 import clorm
+
 
 def eq_(a, b, msg=None):
     """Assert a == b, with repr messaging on failure."""
     assert a == b, msg or "%r != %r" % (a, b)
 
-__all__=['MypyTestCase']
+
+__all__ = ["MypyTestCase"]
 
 
 def mypy_installed():
@@ -16,6 +19,7 @@ def mypy_installed():
     except ModuleNotFoundError:
         return False
     return True
+
 
 @unittest.skipIf(not mypy_installed(), reason="Test can just we executed if mypy is installed")
 class MypyTestCase(unittest.TestCase):
@@ -30,13 +34,13 @@ class MypyTestCase(unittest.TestCase):
             return api.run(args)
 
         return run
-    
+
     def test_files(self):
         """test wether revealed types by mypy are equal to expected type"""
         # based on sqlalchemy
-        path =  Path("tests", "test_mypy_query.py")
+        path = Path("tests", "test_mypy_query.py")
         expected_messages = []
-        
+
         mypy_runner = self.mypy_runner(str(Path(clorm.__file__).parent.parent / ".mypy_cache"))
         filename = path.name
         expected_re = re.compile(r"\s*# EXPECTED(_MYPY)?(_RE)?(_TYPE)?: (.+)")
@@ -71,9 +75,7 @@ class MypyTestCase(unittest.TestCase):
                                 expected_msg,
                             )
 
-                            expected_msg = re.sub(
-                                "List", "builtins.list", expected_msg
-                            )
+                            expected_msg = re.sub("List", "builtins.list", expected_msg)
 
                             expected_msg = re.sub(
                                 r"(int|str|float|bool)",
@@ -88,9 +90,7 @@ class MypyTestCase(unittest.TestCase):
 
                         is_mypy = is_re = True
                         expected_msg = f'Revealed type is "{expected_msg}"'
-                    current_assert_messages.append(
-                        (is_mypy, is_re, expected_msg.strip())
-                    )
+                    current_assert_messages.append((is_mypy, is_re, expected_msg.strip()))
                 elif current_assert_messages:
                     expected_messages.extend(
                         (num, is_mypy, is_re, expected_msg)
@@ -114,16 +114,12 @@ class MypyTestCase(unittest.TestCase):
                 e = raw_lines.pop(0)
                 if re.match(r".+\.py:\d+: error: .*", e):
                     output.append(("error", e))
-                elif re.match(
-                    r".+\.py:\d+: note: +(?:Possible overload|def ).*", e
-                ):
+                elif re.match(r".+\.py:\d+: note: +(?:Possible overload|def ).*", e):
                     while raw_lines:
                         ol = raw_lines.pop(0)
                         if not re.match(r".+\.py:\d+: note: +def \[.*", ol):
                             break
-                elif re.match(
-                    r".+\.py:\d+: note: .*(?:perhaps|suggestion)", e, re.I
-                ):
+                elif re.match(r".+\.py:\d+: note: .*(?:perhaps|suggestion)", e, re.I):
                     pass
                 elif re.match(r".+\.py:\d+: note: .*", e):
                     output.append(("note", e))
@@ -138,10 +134,7 @@ class MypyTestCase(unittest.TestCase):
                             errmsg,
                         ):
                             break
-                    elif (
-                        f"{filename}:{num}: {typ}: {prefix}{msg}"
-                        in errmsg.replace("'", '"')
-                    ):
+                    elif f"{filename}:{num}: {typ}: {prefix}{msg}" in errmsg.replace("'", '"'):
                         break
                 else:
                     continue

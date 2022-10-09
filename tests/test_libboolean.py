@@ -1,6 +1,6 @@
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Unit tests for the bool library
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
 
 import unittest
@@ -12,10 +12,9 @@ from tests.support import check_errmsg
 
 class LibBoolTestCase(unittest.TestCase):
 
-
-    #--------------------------------------------------------------------------
+    # --------------------------------------------------------------------------
     # Make sure BooleanField does what we expect
-    #--------------------------------------------------------------------------
+    # --------------------------------------------------------------------------
     def test_booleanfield(self):
         symstr = Number(0)
         self.assertEqual(type(BooleanField.cltopy(symstr)), bool)
@@ -33,11 +32,11 @@ class LibBoolTestCase(unittest.TestCase):
 
         with self.assertRaises(TypeError) as ctx:
             BooleanField.cltopy(String("2"))
-        check_errmsg("value '2'",ctx)
+        check_errmsg("value '2'", ctx)
 
-    #--------------------------------------------------------------------------
+    # --------------------------------------------------------------------------
     # Make sure StrictBooleanField does what we expect
-    #--------------------------------------------------------------------------
+    # --------------------------------------------------------------------------
     def test_strictbooleanfield(self):
         symstr = Number(1)
         self.assertEqual(type(StrictBooleanField.cltopy(symstr)), bool)
@@ -46,4 +45,4 @@ class LibBoolTestCase(unittest.TestCase):
 
         with self.assertRaises(TypeError) as ctx:
             StrictBooleanField.cltopy(Number(2))
-        check_errmsg("value must be either",ctx)
+        check_errmsg("value must be either", ctx)

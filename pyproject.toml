@@ -1,0 +1,14 @@
+[tool.black]
+line-length = 98
+target-version = ["py36", "py37", "py38", "py39", "py310"]
+extend-exclude = '''
+/(
+    \.github/
+  | clorm/orm/lark_fact_parser\.py
+)
+'''
+
+[tool.isort]
+profile="black"
+line_length=98
+extend_skip_glob = [".github/*", "clorm/orm/lark_fact_parser.py"]

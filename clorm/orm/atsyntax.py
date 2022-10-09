@@ -3,30 +3,27 @@
 # calling Python from within ASP using the '@' syntax.
 # ------------------------------------------------------------------------------
 
-#import logging
-#import os
-import inspect
 import collections.abc as cabc
 import functools
+import inspect
 from typing import Any, Callable, List, Sequence, Tuple, Type
 
-from .core import *
-from .core import get_field_definition, infer_field_definition
+from .core import BaseField, get_field_definition, infer_field_definition
 
 __all__ = [
-    'TypeCastSignature',
-    'ContextBuilder',
-    'make_function_asp_callable',
-    'make_method_asp_callable',
-    ]
+    "TypeCastSignature",
+    "ContextBuilder",
+    "make_function_asp_callable",
+    "make_method_asp_callable",
+]
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Global
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 _AnyCallable = Callable[..., Any]
 
-#------------------------------------------------------------------------------
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
 # ------------------------------------------------------------------------------
 # When calling Python functions from ASP you need to do some type
@@ -38,70 +35,75 @@ _AnyCallable = Callable[..., Any]
 class TypeCastSignature(object):
     r"""Defines a signature for converting to/from Clingo data types.
 
-    Args:
-      sigs(\*sigs): A list of signature elements.
+     Args:
+       sigs(\*sigs): A list of signature elements.
 
-      - Inputs. Match the sub-elements [:-1] define the input signature while
-        the last element defines the output signature. Each input must be a
-        BaseField (or sub-class).
+       - Inputs. Match the sub-elements [:-1] define the input signature while
+         the last element defines the output signature. Each input must be a
+         BaseField (or sub-class).
 
-      - Output: Must be BaseField (or sub-class) or a singleton list
-        containing a BaseField (or sub-class).
+       - Output: Must be BaseField (or sub-class) or a singleton list
+         containing a BaseField (or sub-class).
 
-   Example:
-       .. code-block:: python
+    Example:
+        .. code-block:: python
 
-           import datetime
+            import datetime
 
-           class DateField(StringField):
-                     pytocl = lambda dt: dt.strftime("%Y%m%d")
-                     cltopy = lambda s: datetime.datetime.strptime(s,"%Y%m%d").date()
+            class DateField(StringField):
+                      pytocl = lambda dt: dt.strftime("%Y%m%d")
+                      cltopy = lambda s: datetime.datetime.strptime(s,"%Y%m%d").date()
 
-           drsig = TypeCastSignature(DateField, DateField, [DateField])
+            drsig = TypeCastSignature(DateField, DateField, [DateField])
 
-           @drsig.make_clingo_wrapper
-           def date_range(start, end):
-               return [ start + timedelta(days=x) for x in range(0,end-start) ]
+            @drsig.make_clingo_wrapper
+            def date_range(start, end):
+                return [ start + timedelta(days=x) for x in range(0,end-start) ]
 
-       The function ``date_range`` that takes a start and end date and returns
-       the list of dates within that range.
+        The function ``date_range`` that takes a start and end date and returns
+        the list of dates within that range.
 
-       When *decorated* with the signature it provides the conversion code so
-       that the decorated function expects a start and end date encoded as
-       Clingo.String objects (matching YYYYMMDD format) and returns a list of
-       Clingo.String objects corresponding to the dates in that range.
+        When *decorated* with the signature it provides the conversion code so
+        that the decorated function expects a start and end date encoded as
+        Clingo.String objects (matching YYYYMMDD format) and returns a list of
+        Clingo.String objects corresponding to the dates in that range.
 
-        """
+    """
 
     @staticmethod
     def _is_input_element(se):
         """An input element must be a subclass of BaseField (or an instance of a
-           subclass) or a tuple corresponding to a subclass of BaseField"""
+        subclass) or a tuple corresponding to a subclass of BaseField"""
         return inspect.isclass(se) and issubclass(se, BaseField)
 
     @staticmethod
     def is_return_element(se: Any) -> bool:
         """An output element must be an output field or a singleton iterable containing
-           an output fields; where an output field is a BaseField sub-class or
-           tuple that recursively reduces to a BaseField sub-class.
+        an output fields; where an output field is a BaseField sub-class or
+        tuple that recursively reduces to a BaseField sub-class.
         """
+
         def _is_output_field(o):
-            if isinstance(o,tuple):
+            if isinstance(o, tuple):
                 for i in o:
-                    if not _is_output_field(i): return False
+                    if not _is_output_field(i):
+                        return False
                 return True
             return inspect.isclass(o) and issubclass(o, BaseField)
 
         if isinstance(se, Sequence):
-            if len(se) != 1: return False
+            if len(se) != 1:
+                return False
             return _is_output_field(se[0])
         return _is_output_field(se)
 
     def __init__(self, *sigs: Any) -> None:
         def _validate_basic_sig(sig):
-            if TypeCastSignature._is_input_element(sig): return True
-            raise TypeError(("TypeCastSignature element {} must be a BaseField "
-                             "subclass".format(sig)))
+            if TypeCastSignature._is_input_element(sig):
+                return True
+            raise TypeError(
+                ("TypeCastSignature element {} must be a BaseField " "subclass".format(sig))
+            )
 
         insigs: List[Type[BaseField]] = []
         for s in sigs[:-1]:
@@ -126,7 +128,8 @@ class TypeCastSignature(object):
                 self._outsig[0] = type(get_field_definition(self._outsig[0]))
 
         # Validate the signature
-        for s in insigs: _validate_basic_sig(s)
+        for s in insigs:
+            _validate_basic_sig(s)
         if isinstance(self._outsig, Sequence):
             _validate_basic_sig(self._outsig[0])
         else:
@@ -145,11 +148,12 @@ class TypeCastSignature(object):
 
         # Deal with a list
         if isinstance(sig, Sequence) and isinstance(arg, cabc.Iterable):
-            return [ self._output(sig[0], v) for v in arg ]
+            return [self._output(sig[0], v) for v in arg]
         raise ValueError("Value {} does not match signature {}".format(arg, sig))
 
     @property
-    def input_signature(self): return self._insigs
+    def input_signature(self):
+        return self._insigs
 
     def wrap_function(self, fn):
         """Function wrapper that adds data type conversions for wrapped function.
@@ -162,25 +166,27 @@ class TypeCastSignature(object):
         def wrapper(*args):
             fname = fn.__name__
             if len(args) > len(self._insigs):
-                raise TypeError(("{}() takes {} positional arguments but {} were "
-                                 "given").format(fname,len(self._insigs),len(args)))
+                raise TypeError(
+                    ("{}() takes {} positional arguments but {} were " "given").format(
+                        fname, len(self._insigs), len(args)
+                    )
+                )
             try:
-                newargs = [ self._input(self._insigs[i], arg) for i,arg in enumerate(args) ]
+                newargs = [self._input(self._insigs[i], arg) for i, arg in enumerate(args)]
             except Exception as e:
-                message = "{}: converting input arguments for function '{}".format(e,fname)
+                message = "{}: converting input arguments for function '{}".format(e, fname)
                 raise type(e)(message) from None
             try:
-                result=fn(*newargs)
+                result = fn(*newargs)
             except Exception as e:
-                message = "{}: raised by {}()".format(e,fname)
+                message = "{}: raised by {}()".format(e, fname)
                 raise type(e)(message) from e
             try:
-                return self._output(self._outsig,result)
+                return self._output(self._outsig, result)
             except Exception as e:
-                raise type(e)("{} for output of {}()".format(e,fname)) from None
+                raise type(e)("{} for output of {}()".format(e, fname)) from None
 
         return wrapper
-
 
     def wrap_method(self, fn):
         """Member function wrapper that adds data type conversions for wrapped member
@@ -195,28 +201,31 @@ class TypeCastSignature(object):
         def wrapper(self_, *args):
             fname = fn.__name__
             if len(args) > len(self._insigs):
-                raise TypeError(("{}() takes {} positional arguments but {} were "
-                                 "given").format(fname,len(self._insigs)+1,len(args)+1))
+                raise TypeError(
+                    ("{}() takes {} positional arguments but {} were " "given").format(
+                        fname, len(self._insigs) + 1, len(args) + 1
+                    )
+                )
             try:
-                newargs = [ self._input(self._insigs[i], arg) for i,arg in enumerate(args) ]
+                newargs = [self._input(self._insigs[i], arg) for i, arg in enumerate(args)]
             except Exception as e:
-                message = "{}: converting input arguments for function '{}".format(e,fname)
+                message = "{}: converting input arguments for function '{}".format(e, fname)
                 raise type(e)(message) from None
 
             try:
-                result=fn(self_,*newargs)
+                result = fn(self_, *newargs)
             except Exception as e:
-                message = "{}: raised by {}()".format(e,fname)
+                message = "{}: raised by {}()".format(e, fname)
                 raise type(e)(message) from e
             try:
-                return self._output(self._outsig,result)
+                return self._output(self._outsig, result)
             except Exception as e:
-                raise type(e)("{} for output of {}()".format(e,fname)) from None
+                raise type(e)("{} for output of {}()".format(e, fname)) from None
 
         return wrapper
 
     def __str__(self):
-        insigstr=", ".join([str(s) for s in self._insigs])
+        insigstr = ", ".join([str(s) for s in self._insigs])
         return "{} -> {}".format(insigstr, self._outsig)
 
     def __repr__(self):
@@ -228,19 +237,22 @@ class TypeCastSignature(object):
 # annotations. ignore_first is useful when dealing with member functions.
 # ------------------------------------------------------------------------------
 
+
 def _get_annotations(fn: Callable[..., Any], ignore_first: bool = False) -> Tuple[Any, ...]:
     fsig = inspect.signature(fn)
     qname = fn.__qualname__
     fsigparam = fsig.parameters
     annotations = [fsigparam[s].annotation for s in fsigparam]
     if not annotations and ignore_first:
-        raise TypeError(("Cannot ignore the first parameter for a function "
-                         "with no arguments: {}").format(qname))
+        raise TypeError(
+            ("Cannot ignore the first parameter for a function " "with no arguments: {}").format(
+                qname
+            )
+        )
 
     # Make sure the return value is annotated
     if inspect.Signature.empty == fsig.return_annotation:
-        raise TypeError(("Missing function return annotation: "
-                         "{}").format(qname))
+        raise TypeError(("Missing function return annotation: " "{}").format(qname))
 
     # Remove any ignore first and add the return value annotation
     if ignore_first:
@@ -248,13 +260,15 @@ def _get_annotations(fn: Callable[..., Any], ignore_first: bool = False) -> Tupl
     annotations.append(fsig.return_annotation)
 
     if inspect.Signature.empty in annotations:
-        raise TypeError(("Missing type cast annotations in function "
-                         "arguments: {} ").format(qname))
+        raise TypeError(
+            ("Missing type cast annotations in function " "arguments: {} ").format(qname)
+        )
     return tuple(annotations)
 
 
-#------------------------------------------------------------------------------
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
 
 def make_function_asp_callable(*args: Any) -> _AnyCallable:
     r"""A decorator for making a function callable from within an ASP program.
@@ -317,12 +331,15 @@ def make_function_asp_callable(*args: Any) -> _AnyCallable:
         return s.wrap_function(func)
 
     # If no function and sig then called as a decorator with arguments
-    if not fn and sigs: return _sig_decorate
+    if not fn and sigs:
+        return _sig_decorate
 
     return _sig_decorate(fn)
 
-#------------------------------------------------------------------------------
-#------------------------------------------------------------------------------
+
+# ------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
 
 def make_method_asp_callable(*args: Any) -> _AnyCallable:
     """A decorator for making a member function callable from within an ASP program.
@@ -332,8 +349,10 @@ def make_method_asp_callable(*args: Any) -> _AnyCallable:
     ``self`` or ``cls`` parameter.
 
     """
-    if len(args) == 0: raise ValueError("Invalid call to decorator")
-    fn = None ; sigs = None
+    if len(args) == 0:
+        raise ValueError("Invalid call to decorator")
+    fn = None
+    sigs = None
 
     # If the last element is not a function to be wrapped then a signature has
     # been specified.
@@ -342,11 +361,12 @@ def make_method_asp_callable(*args: Any) -> _AnyCallable:
     else:
         # Last element needs to be a function
         fn = args[-1]
-        if not callable(fn): raise ValueError("Invalid call to decorator")
+        if not callable(fn):
+            raise ValueError("Invalid call to decorator")
 
         # if exactly one element then use function annonations
         if len(args) == 1:
-            sigs = _get_annotations(fn,True)
+            sigs = _get_annotations(fn, True)
         else:
             sigs = args[:-1]
 
@@ -356,12 +376,13 @@ def make_method_asp_callable(*args: Any) -> _AnyCallable:
         return s.wrap_method(func)
 
     # If no function and sig then called as a decorator with arguments
-    if not fn and sigs: return _sig_decorate
+    if not fn and sigs:
+        return _sig_decorate
 
     return _sig_decorate(fn)
 
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Clingo 5.4 introduces the idea of a context to the grounding process. We want
 # to make it easier to use this idea. In particular providing a builder with a
 # decorator for capturing functions within a context.
@@ -370,7 +391,9 @@ def _context_wrapper(fn):
     @functools.wraps(fn)
     def wrapper(self, *args, **kwargs):
         return fn(*args, **kwargs)
+
     return wrapper
+
 
 class ContextBuilder(object):
     """Context builder simplifies the task of building grounding context for
@@ -443,36 +466,41 @@ class ContextBuilder(object):
 
     def _add_function(self, name, sig, fn):
         if name in self._funcs:
-            raise ValueError(("Function name '{}' has already been "
-                              "used").format(name))
-        self._funcs[name]=_context_wrapper(sig.wrap_function(fn))
+            raise ValueError(("Function name '{}' has already been " "used").format(name))
+        self._funcs[name] = _context_wrapper(sig.wrap_function(fn))
 
     def _make_decorator(self, func_name=None, *sigargs):
         def _decorator(fn):
-            if func_name: fname = func_name
-            else: fname = fn.__name__
-            if sigargs: args=sigargs
-            else: args= _get_annotations(fn)
+            if func_name:
+                fname = func_name
+            else:
+                fname = fn.__name__
+            if sigargs:
+                args = sigargs
+            else:
+                args = _get_annotations(fn)
             s = TypeCastSignature(*args)
             self._add_function(fname, s, fn)
             return fn
+
         return _decorator
 
     def register(self, *args):
         """Register a function with the context builder.
 
-    Args:
+        Args:
 
-      *args: the last argument must be the function to be registered. If there
-        is more than one argument then the earlier arguments define the data
-        conversion signature. If there are no earlier arguments then the
-        signature is extracted from the function annotations.
+          *args: the last argument must be the function to be registered. If there
+            is more than one argument then the earlier arguments define the data
+            conversion signature. If there are no earlier arguments then the
+            signature is extracted from the function annotations.
 
         """
 
         # Called as a decorator with no signature arguments so decorator needs
         # to use function annotations
-        if len(args) == 0: return self._make_decorator()
+        if len(args) == 0:
+            return self._make_decorator()
 
         # If the last element is a valid @-syntax return value then we have a
         # decorator with signature arguments.
@@ -482,58 +510,62 @@ class ContextBuilder(object):
         # If we get here the function must have been called as a normal function
         # (not a decorator) so the last element must be the function to wrap.
         if not callable(args[-1]):
-            raise ValueError(("Failed to register @-syntax function as {} is not "
-                              "callable").format(args[-1]))
+            raise ValueError(
+                ("Failed to register @-syntax function as {} is not " "callable").format(args[-1])
+            )
         if len(args) == 1:
             return self._make_decorator(None)(args[0])
         else:
-            sigargs=args[:-1]
-            return self._make_decorator(None,*sigargs)(args[-1])
+            sigargs = args[:-1]
+            return self._make_decorator(None, *sigargs)(args[-1])
 
     def register_name(self, func_name, *args):
         """Register a function with assigning it a new name witin the context.
 
-    Args:
+        Args:
 
-      func_name: the new name for the function within the context.
+          func_name: the new name for the function within the context.
 
-      *args: the last argument must be the function to be registered. If there
-        is more than one argument then the earlier arguments define the data
-        conversion signature. If there are no earlier arguments then the
-        signature is extracted from the function annotations.
+          *args: the last argument must be the function to be registered. If there
+            is more than one argument then the earlier arguments define the data
+            conversion signature. If there are no earlier arguments then the
+            signature is extracted from the function annotations.
         """
 
-        if not func_name: raise ValueError("Specified an empty function name")
+        if not func_name:
+            raise ValueError("Specified an empty function name")
 
         # Called as a decorator with no signature arguments so decorator needs
         # to use function annotations
-        if len(args) == 0: return self._make_decorator(func_name)
+        if len(args) == 0:
+            return self._make_decorator(func_name)
 
         # If the last element is a valid @-syntax return value then we have a
         # decorator with signature arguments.
         if TypeCastSignature.is_return_element(args[-1]):
             return self._make_decorator(func_name, *args)
 
-
         # If we get here the function must have been called as a normal function
         # (not a decorator) so the last element must be the function to wrap.
         if not callable(args[-1]):
-            raise ValueError(("Failed to register @-syntax function as {} is not "
-                              "callable").format(args[-1]))
+            raise ValueError(
+                ("Failed to register @-syntax function as {} is not " "callable").format(args[-1])
+            )
         if len(args) == 1:
             return self._make_decorator(func_name)(args[0])
         else:
-            sigargs=args[:-1]
-            return self._make_decorator(func_name,*sigargs)(args[-1])
+            sigargs = args[:-1]
+            return self._make_decorator(func_name, *sigargs)(args[-1])
 
     def make_context(self, cls_name="Context"):
         """Return a context object that encapsulates the registered functions"""
 
-        tmp = { n : fn for n,fn in self._funcs.items() }
+        tmp = {n: fn for n, fn in self._funcs.items()}
         return type(cls_name, (object,), tmp)()
 
-#------------------------------------------------------------------------------
+
+# ------------------------------------------------------------------------------
 # main
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 if __name__ == "__main__":
-    raise RuntimeError('Cannot run modules')
+    raise RuntimeError("Cannot run modules")

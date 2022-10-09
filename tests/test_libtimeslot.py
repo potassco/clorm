@@ -1,31 +1,34 @@
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Unit tests for the timeslot library
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
-import unittest
 import datetime
-import clorm.clingo as clingo
-from clorm.lib.timeslot import *
+import math
+import unittest
 
-#------------------------------------------------------------------------------
-#------------------------------------------------------------------------------
+from clorm import IntegerField, clingo
+from clorm.lib.timeslot import Granularity, Range, TimeField, TimeSlot
+
+# ------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
 __all__ = [
-    'LibTimeSlotTimeFieldTestCase',
-    'LibTimeSlotGranularityTestCase',
-    'LibTimeSlotTestCase'
-    ]
+    "LibTimeSlotTimeFieldTestCase",
+    "LibTimeSlotGranularityTestCase",
+    "LibTimeSlotTestCase",
+]
 
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 #
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
 
 class LibTimeSlotTimeFieldTestCase(unittest.TestCase):
 
-    #--------------------------------------------------------------------------
+    # --------------------------------------------------------------------------
     # Make sure TimeField does what we expect
-    #--------------------------------------------------------------------------
+    # --------------------------------------------------------------------------
     def test_timefield(self):
         tm1 = datetime.time(hour=12, minute=34)
         tm1_raw = clingo.String("12:34")
@@ -37,12 +40,13 @@ class LibTimeSlotTimeFieldTestCase(unittest.TestCase):
         self.assertEqual(TimeField.pytocl(tm2), tm2_raw)
         self.assertEqual(TimeField.cltopy(tm2_raw), tm2)
 
-#------------------------------------------------------------------------------
+
+# ------------------------------------------------------------------------------
 #
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
 
 class LibTimeSlotGranularityTestCase(unittest.TestCase):
-
     def test_granularity_bad(self):
         with self.assertRaises(ValueError) as ctx:
             gran = Granularity(minutes=75)
@@ -52,7 +56,7 @@ class LibTimeSlotGranularityTestCase(unittest.TestCase):
     def test_granularity_15min(self):
         gran = Granularity(minutes=15)
         self.assertEqual(gran.minutes(), 15)
-        self.assertEqual(gran.num_per_day(), 4*24)
+        self.assertEqual(gran.num_per_day(), 4 * 24)
         self.assertEqual(datetime.timedelta(minutes=15), gran.num_to_timedelta(1))
         self.assertEqual(datetime.timedelta(minutes=45), gran.num_to_timedelta(3))
         td1 = datetime.timedelta(minutes=15)
@@ -65,7 +69,7 @@ class LibTimeSlotGranularityTestCase(unittest.TestCase):
     def test_granularity_75min(self):
         gran = Granularity(minutes=45)
         self.assertEqual(gran.minutes(), 45)
-        self.assertEqual(gran.num_per_day(), int(60/45*24))
+        self.assertEqual(gran.num_per_day(), int(60 / 45 * 24))
         self.assertEqual(datetime.timedelta(minutes=45), gran.num_to_timedelta(1))
         self.assertEqual(datetime.timedelta(minutes=90), gran.num_to_timedelta(2))
         td1 = datetime.timedelta(minutes=0)
@@ -75,9 +79,11 @@ class LibTimeSlotGranularityTestCase(unittest.TestCase):
         self.assertEqual(math.ceil(gran.timedelta_to_num(td2)), 3)
         self.assertEqual(math.ceil(gran.timedelta_to_num(td3)), 4)
 
-#------------------------------------------------------------------------------
+
+# ------------------------------------------------------------------------------
 #
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
 
 class LibTimeSlotTestCase(unittest.TestCase):
     def setUp(self):
@@ -86,9 +92,9 @@ class LibTimeSlotTestCase(unittest.TestCase):
     def tearDown(self):
         pass
 
-   #--------------------------------------------------------------------------
+    # --------------------------------------------------------------------------
     # Make sure EnumDate does what we expect
-    #--------------------------------------------------------------------------
+    # --------------------------------------------------------------------------
     def test_timeslotrange_init(self):
 
         # Test 12 hour timeslots - 12*60 minutes
@@ -97,7 +103,7 @@ class LibTimeSlotTestCase(unittest.TestCase):
         self.assertEqual(tsr1.num_timeslots(), 2)
         ts1 = TimeSlot(idx=0, start=datetime.time(hour=0, minute=0))
         ts2 = TimeSlot(idx=1, start=datetime.time(hour=12, minute=0))
-        self.assertEqual([ts1,ts2], tsr1.range())
+        self.assertEqual([ts1, ts2], tsr1.range())
         self.assertEqual(2, len(tsr1.cl_range()))
 
         # Test 4 hour timeslots - 4*60 minutes
@@ -110,20 +116,20 @@ class LibTimeSlotTestCase(unittest.TestCase):
         ts4 = TimeSlot(idx=3, start=datetime.time(hour=12, minute=0))
         ts5 = TimeSlot(idx=4, start=datetime.time(hour=16, minute=0))
         ts6 = TimeSlot(idx=5, start=datetime.time(hour=20, minute=0))
-        self.assertEqual([ts1,ts2,ts3,ts4,ts5,ts6], tsr2.range())
+        self.assertEqual([ts1, ts2, ts3, ts4, ts5, ts6], tsr2.range())
         self.assertEqual(6, len(tsr2.cl_range()))
 
         # Test 15 min timeslots
         gran3 = Granularity(minutes=15)
         tsr2 = Range(granularity=gran3)
-        self.assertEqual(tsr2.num_timeslots(), 4*24)
-        self.assertEqual(tsr2.cl_num_timeslots(), IntegerField.pytocl(4*24))
+        self.assertEqual(tsr2.num_timeslots(), 4 * 24)
+        self.assertEqual(tsr2.cl_num_timeslots(), IntegerField.pytocl(4 * 24))
 
         # Test 1 min timeslots
         gran4 = Granularity(minutes=1)
         tsr3 = Range(granularity=gran4)
-        self.assertEqual(tsr3.num_timeslots(), 60*24)
-        self.assertEqual(tsr3.cl_num_timeslots(), IntegerField.pytocl(60*24))
+        self.assertEqual(tsr3.num_timeslots(), 60 * 24)
+        self.assertEqual(tsr3.cl_num_timeslots(), IntegerField.pytocl(60 * 24))
 
     def test_round_ceil_and_floor(self):
         gran = Granularity(minutes=30)
@@ -179,9 +185,9 @@ class LibTimeSlotTestCase(unittest.TestCase):
         self.assertEqual(cl_r_3, TimeSlot(idx=1, start=f).raw)
         self.assertEqual(cl_r_4, TimeSlot(idx=2, start=c).raw)
 
-    #--------------------------------------------------------------------------
+    # --------------------------------------------------------------------------
     # Check that the docstring are the same
-    #--------------------------------------------------------------------------
+    # --------------------------------------------------------------------------
     def _test_docstrings(self):
         self.assertEqual(dow.__doc__, cl_dow.__doc__)
         self.assertEqual(date_range.__doc__, cl_date_range.__doc__)
@@ -191,8 +197,8 @@ class LibTimeSlotTestCase(unittest.TestCase):
         self.assertEqual(Edr.enumdate_range.__doc__, Edr.cl_enumdate_range.__doc__)
 
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # main
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 if __name__ == "__main__":
-    raise RuntimeError('Cannot run modules')
+    raise RuntimeError("Cannot run modules")

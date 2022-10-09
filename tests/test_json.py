@@ -1,24 +1,24 @@
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 # Unit tests for the clorm ORM interface
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
-import unittest
-import clingo
-import clorm.json as cjson
 import json
-from clorm import Predicate, ComplexTerm, IntegerField, StringField, FactBase
+import unittest
 
-#------------------------------------------------------------------------------
-#------------------------------------------------------------------------------
+import clingo
 
-__all__ = [
-    'JSONSymbolTestCase',
-    'JSONPredicateTestCase'
-    ]
+import clorm.json as cjson
+from clorm import ComplexTerm, FactBase, IntegerField, Predicate, StringField
 
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
+__all__ = ["JSONSymbolTestCase", "JSONPredicateTestCase"]
+
+# ------------------------------------------------------------------------------
 #
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
 
 class JSONSymbolTestCase(unittest.TestCase):
     def setUp(self):
@@ -28,12 +28,22 @@ class JSONSymbolTestCase(unittest.TestCase):
         self.s2 = clingo.String("bbbb")
         self.n1 = clingo.Number(24)
         self.n2 = clingo.Number(60)
-        self.f1 = clingo.Function("",[self.s1, self.s2])
+        self.f1 = clingo.Function("", [self.s1, self.s2])
         self.f2 = clingo.Function("func1", [self.n1])
         self.f3 = clingo.Function("func2", [self.n2, self.f1])
         self.f4 = clingo.Function("func1", [], False)
-        self.alls = [self.inf, self.sup, self.s1, self.s2, self.n1, \
-                     self.n2, self.f1, self.f2, self.f3, self.f4 ]
+        self.alls = [
+            self.inf,
+            self.sup,
+            self.s1,
+            self.s2,
+            self.n1,
+            self.n2,
+            self.f1,
+            self.f2,
+            self.f3,
+            self.f4,
+        ]
 
         self.str_inf = '{"clingo.SymbolType": "Infimum"}'
         self.str_sup = '{"clingo.SymbolType": "Supremum"}'
@@ -41,22 +51,56 @@ class JSONSymbolTestCase(unittest.TestCase):
         self.str_s2 = '{"clingo.SymbolType": "String", "string": "bbbb"}'
         self.str_n1 = '{"clingo.SymbolType": "Number", "number": 24}'
         self.str_n2 = '{"clingo.SymbolType": "Number", "number": 60}'
-        self.str_f1 = '{"clingo.SymbolType": "Function", "name": "", "arguments": [' \
-            + self.str_s1 + ', ' + self.str_s2 + '], "positive": true}'
-        self.str_f2 = '{"clingo.SymbolType": "Function", "name": "func1", "arguments": [' \
-            + self.str_n1 + '], "positive": true}'
-        self.str_f3 = '{"clingo.SymbolType": "Function", "name": "func2", "arguments": [' \
-            + self.str_n2 + ', ' + self.str_f1 + '], "positive": true}'
-        self.str_f4 = '{"clingo.SymbolType": "Function", "name": "func1", "arguments": []' \
+        self.str_f1 = (
+            '{"clingo.SymbolType": "Function", "name": "", "arguments": ['
+            + self.str_s1
+            + ", "
+            + self.str_s2
+            + '], "positive": true}'
+        )
+        self.str_f2 = (
+            '{"clingo.SymbolType": "Function", "name": "func1", "arguments": ['
+            + self.str_n1
+            + '], "positive": true}'
+        )
+        self.str_f3 = (
+            '{"clingo.SymbolType": "Function", "name": "func2", "arguments": ['
+            + self.str_n2
+            + ", "
+            + self.str_f1
+            + '], "positive": true}'
+        )
+        self.str_f4 = (
+            '{"clingo.SymbolType": "Function", "name": "func1", "arguments": []'
             + ', "positive": false}'
-        self.str_alls = '[' + self.str_inf + ', ' + self.str_sup + ', ' + \
-             self.str_s1 + ', ' + self.str_s2 + ', ' + self.str_n1 + ', ' +\
-             self.str_n2 + ', ' + self.str_f1 + ', ' + self.str_f2 + ', ' +\
-             self.str_f3 + ', ' + self.str_f4 + ']'
+        )
+        self.str_alls = (
+            "["
+            + self.str_inf
+            + ", "
+            + self.str_sup
+            + ", "
+            + self.str_s1
+            + ", "
+            + self.str_s2
+            + ", "
+            + self.str_n1
+            + ", "
+            + self.str_n2
+            + ", "
+            + self.str_f1
+            + ", "
+            + self.str_f2
+            + ", "
+            + self.str_f3
+            + ", "
+            + self.str_f4
+            + "]"
+        )
 
-    #--------------------------------------------------------------------------
+    # --------------------------------------------------------------------------
     #
-    #--------------------------------------------------------------------------
+    # --------------------------------------------------------------------------
     def test_symbol_encoder(self):
         inf = self.inf
         sup = self.sup
@@ -139,13 +183,14 @@ class JSONSymbolTestCase(unittest.TestCase):
         self.assertEqual(json.loads(str_f3, object_hook=decoder), f3)
         self.assertEqual(json.loads(str_alls, object_hook=decoder), alls)
 
-#------------------------------------------------------------------------------
+
+# ------------------------------------------------------------------------------
 #
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
 
 class JSONPredicateTestCase(unittest.TestCase):
     def setUp(self):
-
         class Fun(ComplexTerm):
             aint = IntegerField()
             astr = StringField()
@@ -153,7 +198,9 @@ class JSONPredicateTestCase(unittest.TestCase):
         class Tup(ComplexTerm):
             aint = IntegerField()
             astr = StringField()
-            class Meta: is_tuple = True
+
+            class Meta:
+                is_tuple = True
 
         class Afact(Predicate):
             aint = IntegerField()
@@ -171,7 +218,7 @@ class JSONPredicateTestCase(unittest.TestCase):
         afact2 = Afact(aint=20, afun=Fun(aint=2, astr="b"))
         bfact1 = Bfact(astr="aa", atup=Tup(aint=1, astr="a"))
         bfact2 = Bfact(astr="bb", atup=Tup(aint=2, astr="b"))
-        self.allf = [ afact1, bfact1, afact2, bfact2 ]
+        self.allf = [afact1, bfact1, afact2, bfact2]
 
         self.Fun = Fun
         self.Tup = Tup
@@ -181,20 +228,27 @@ class JSONPredicateTestCase(unittest.TestCase):
 
         self.n1 = clingo.Number(60)
         self.s1 = clingo.String("aaaa")
-        self.f1 = clingo.Function("",[self.n1, self.s1])
+        self.f1 = clingo.Function("", [self.n1, self.s1])
         self.p1 = Cfact(aint=60, astr="aaaa")
         self.fb1 = FactBase(facts=[self.p1])
 
         self.str_n1 = '{"clingo.SymbolType": "Number", "number": 60}'
         self.str_s1 = '{"clingo.SymbolType": "String", "string": "aaaa"}'
-        self.str_f1 = '{"clingo.SymbolType": "Function", "name": "cfact", ' \
-            + '"arguments": [' + self.str_n1 + ', ' + self.str_s1 + ']' + ', "positive": true}'
-        self.str_p1 = '{"clorm.Predicate": "Cfact", "raw": ' + self.str_f1 + '}'
-        self.str_fb1 = '{"clorm.FactBase": [], "facts": ['+ self.str_p1 + ']}'
+        self.str_f1 = (
+            '{"clingo.SymbolType": "Function", "name": "cfact", '
+            + '"arguments": ['
+            + self.str_n1
+            + ", "
+            + self.str_s1
+            + "]"
+            + ', "positive": true}'
+        )
+        self.str_p1 = '{"clorm.Predicate": "Cfact", "raw": ' + self.str_f1 + "}"
+        self.str_fb1 = '{"clorm.FactBase": [], "facts": [' + self.str_p1 + "]}"
 
-    #--------------------------------------------------------------------------
+    # --------------------------------------------------------------------------
     #
-    #--------------------------------------------------------------------------
+    # --------------------------------------------------------------------------
     def test_predicate_coder(self):
         pc1 = cjson.FactBaseCoder()
         Afact = pc1.register(self.Afact)
@@ -204,21 +258,20 @@ class JSONPredicateTestCase(unittest.TestCase):
         p1 = self.p1
         str_p1 = self.str_p1
 
-        pc2 = cjson.FactBaseCoder([Afact,Bfact,Cfact])
+        pc2 = cjson.FactBaseCoder([Afact, Bfact, Cfact])
         json_str1 = pc1.dumps(allf)
         json_str2 = pc2.dumps(allf)
         result1 = pc1.loads(json_str2)
         result2 = pc2.loads(json_str1)
-        self.assertEqual(allf,result1)
-        self.assertEqual(allf,result2)
+        self.assertEqual(allf, result1)
+        self.assertEqual(allf, result2)
 
         json_p1 = pc2.dumps(p1)
         self.assertEqual(json_p1, str_p1)
 
-
-    #--------------------------------------------------------------------------
+    # --------------------------------------------------------------------------
     #
-    #--------------------------------------------------------------------------
+    # --------------------------------------------------------------------------
     def test_factbase_coder(self):
         pc = cjson.FactBaseCoder()
         allf = self.allf
@@ -238,8 +291,9 @@ class JSONPredicateTestCase(unittest.TestCase):
         self.assertEqual(set(fb_in), set(fb_out))
         self.assertEqual(fb_in, fb_out)
 
-#------------------------------------------------------------------------------
+
+# ------------------------------------------------------------------------------
 # main
-#------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 if __name__ == "__main__":
-    raise RuntimeError('Cannot run modules')
+    raise RuntimeError("Cannot run modules")
