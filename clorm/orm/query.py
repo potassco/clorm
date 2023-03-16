@@ -10,7 +10,7 @@ import io
 import itertools
 import operator
 import sys
-from typing import Any, Generator, List, Set
+from typing import Any, Callable, Generator, List, NamedTuple, Set, TypeVar, cast
 
 from ..util import OrderedSet
 from .core import (
@@ -18,6 +18,7 @@ from .core import (
     Predicate,
     PredicatePath,
     QCondition,
+    QElement,
     and_,
     falseall,
     hashable_path,
@@ -207,13 +208,31 @@ ph4_ = PositionalPlaceholder(posn=3)
 # clause or an output statement.
 # ------------------------------------------------------------------------------
 
-FuncInputSpec = collections.namedtuple("FuncInputSpec", "paths functor")
+
+class FuncInputSpec(QElement):
+    def __init__(self, paths: List[Any], functor: Callable):
+        self._paths = paths
+        self._functor = functor
+
+    @property
+    def paths(self):
+        return self._paths
+
+    @property
+    def functor(self):
+        return self._functor
 
 
-def func(paths, func):
-    """Wrap a boolean functor with predicate paths for use as a query condition"""
-    return FuncInputSpec(paths, func)
-    return FunctionComparator.from_specification(paths, func)
+_T = TypeVar("_T")
+
+
+def func(paths: List[Any], functor: Callable[..., _T]) -> _T:
+    """Return a wrapped functor for use in a 'query' where or 'select' clause"""
+    return FuncInputSpec(paths, functor)
+
+    # Note: used to just return a FunctionComparator but that is only suitable
+    # for a where clause
+    # return FunctionComparator.from_specification(paths, func)
 
 
 # ------------------------------------------------------------------------------
@@ -1747,9 +1766,7 @@ def normalise_where_expression(qcond):
 
 def process_where(where_expression, roots=[]):
     def _prevalidate(w):
-        if isinstance(w, QCondition):
-            return w
-        if isinstance(w, Comparator):
+        if isinstance(w, QElement):
             return w
         if callable(w) and not isinstance(w, PredicatePath):
             return w
