@@ -184,12 +184,22 @@ class ClormError(Exception):
 
 
 # ------------------------------------------------------------------------------
+# QElement is a base class for query elements (where, join, select, clause elements)
+# so that we can do some basic type checking.
+# ------------------------------------------------------------------------------
+
+
+class QElement(abc.ABC):
+    pass
+
+
+# ------------------------------------------------------------------------------
 # A comparator is used for defining queries. If is either a standard comparator
 # (with a known comparison operator) or made with an arbitrary function.
 # ------------------------------------------------------------------------------
 
 
-class Comparator(abc.ABC):
+class Comparator(QElement):
     @abc.abstractmethod
     def ground(self, *args, **kwargs):
         pass
@@ -313,7 +323,7 @@ def _wqc(a):
 # ------------------------------------------------------------------------------
 
 
-class QCondition(object):
+class QCondition(QElement):
     class Form(enum.Enum):
         UNIT = 0
         INFIX = 1
@@ -343,9 +353,7 @@ class QCondition(object):
 
     def __init__(self, op, *args):
         def _validate_qc(qc):
-            if isinstance(qc, QCondition):
-                return qc
-            if isinstance(qc, Comparator):
+            if isinstance(qc, QElement):
                 return qc
             if callable(qc) and not isinstance(qc, PredicatePath):
                 return qc

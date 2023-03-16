@@ -1583,6 +1583,66 @@ class QueryAPI2TestCase(unittest.TestCase):
         self.assertEqual(set(q.all()), set([(F(1, "a"), G(1, "c")), (F(2, "a"), G(2, "d"))]))
 
     # --------------------------------------------------------------------------
+    #   Test select on multiple tables with function in a where clause
+    # --------------------------------------------------------------------------
+    def test_api_select_multi_table_functor_where(self):
+        F = self.F
+        G = self.G
+        factbase = self.factbase
+
+        # Queries with a function where clause - changing the position of the function to make sure
+        # it covers different cases
+        q = factbase.query(F, G).join(F.anum == G.anum).where(func([F.anum], lambda x: x == 1))
+        self.assertEqual(set(q.all()), set([(F(1, "a"), G(1, "c"))]))
+
+        q = (
+            factbase.query(F, G)
+            .join(F.anum == G.anum)
+            .where(G.astr >= "c", func([F.anum], lambda x: x == 1))
+        )
+        self.assertEqual(set(q.all()), set([(F(1, "a"), G(1, "c"))]))
+
+        q = (
+            factbase.query(F, G)
+            .join(F.anum == G.anum)
+            .where((G.astr >= "c") & func([F.anum], lambda x: x == 1))
+        )
+        self.assertEqual(set(q.all()), set([(F(1, "a"), G(1, "c"))]))
+
+        q = (
+            factbase.query(F, G)
+            .join(F.anum == G.anum)
+            .where(func([F.anum], lambda x: x == 1) & (G.astr >= "c"))
+        )
+        self.assertEqual(set(q.all()), set([(F(1, "a"), G(1, "c"))]))
+
+    # --------------------------------------------------------------------------
+    #   Test select on multiple tables with function in a select clause
+    # --------------------------------------------------------------------------
+    def test_api_select_multi_table_functor_select(self):
+        F = self.F
+        G = self.G
+        factbase = self.factbase
+
+        # A function in the select statement
+        q = factbase.query(F, G).join(F.anum == G.anum).select(lambda f, g: (f, g.anum * 2))
+        self.assertEqual(set(q.all()), {(F(1, "a"), 2), (F(2, "a"), 4)})
+
+        q = (
+            factbase.query(F, G)
+            .join(F.anum == G.anum)
+            .select(F, func([G.anum], lambda gn: gn * 2))
+        )
+        self.assertEqual(set(q.all()), {(F(1, "a"), 2), (F(2, "a"), 4)})
+
+        q = (
+            factbase.query(F, G)
+            .join(F.anum == G.anum)
+            .select(func([F, G.anum], lambda f, gn: (f, gn * 2)))
+        )
+        self.assertEqual(set(q.all()), {(F(1, "a"), 2), (F(2, "a"), 4)})
+
+    # --------------------------------------------------------------------------
     #   Complex query query_plan
     # --------------------------------------------------------------------------
     def test_api_complex_query_join_order_output(self):
@@ -1643,7 +1703,7 @@ class SelectJoinTestCase(unittest.TestCase):
     # --------------------------------------------------------------------------
     #   Test that the select works
     # --------------------------------------------------------------------------
-    def _test_api_select_self_join(self):
+    def test_api_select_self_join(self):
         class P(Predicate):
             pid = ConstantField
             name = StringField
@@ -1677,9 +1737,6 @@ class SelectJoinTestCase(unittest.TestCase):
 
         PA = alias(P)
         all_friends = fb2.query(P, PA, F).join(P.pid == F.src, PA.pid == F.dst)
-        close_friends = all_friends.where(
-            P.name < PA.name, func([P.postcode, PA.postcode], lambda p, pa: abs(p - pa) < 3)
-        ).order_by(P.name)
         all_friends_sorted = all_friends.order_by(P.pid, PA.pid)
 
         results = list(all_friends_sorted.select(F).all())
@@ -1704,13 +1761,17 @@ class SelectJoinTestCase(unittest.TestCase):
         self.assertEqual(len(tmp["jill"]), 1)
         self.assertEqual(len(tmp["sal"]), 1)
 
-        all_friends_gb2 = all_friends.group_by(P.postcode).order_by(PA.pid)
-        tmp = {pc: list(fs) for pc, fs in all_friends.select(PA.pid).all()}
-        self.assertEqual(len(tmp), 4)
-        self.assertEqual(tmp[2001], ["jill"])
-        self.assertEqual(len(tmp[2002]), ["jane"])
-        self.assertEqual(len(tmp[2003]), ["bob"])
-        self.assertEqual(len(tmp[2004]), ["bill", "dave", "sal"])
+        close_friends = all_friends.where(
+            P.name < PA.name, func([P.postcode, PA.postcode], lambda p, pa: abs(p - pa) < 3)
+        )
+        results = set(close_friends.select(F).all())
+        self.assertEqual(
+            {
+                F(bill.pid, dave.pid),
+                F(jane.pid, sal.pid),
+            },
+            results,
+        )
 
 
 # ------------------------------------------------------------------------------
