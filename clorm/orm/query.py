@@ -1948,16 +1948,16 @@ def process_join(join_expression, roots=[]):
 # Specification of an ordering over a field of a predicate/complex-term
 # ------------------------------------------------------------------------------
 class OrderBy(object):
-    def __init__(self, path, asc):
+    def __init__(self, path: PredicatePath, asc: bool):
         self._path = path
         self._asc = asc
 
     @property
-    def path(self):
+    def path(self) -> PredicatePath:
         return self._path
 
     @property
-    def asc(self):
+    def asc(self) -> bool:
         return self._asc
 
     def dealias(self):
@@ -2094,7 +2094,7 @@ def validate_orderby_expression(orderby_expressions, roots=[]):
 # ------------------------------------------------------------------------------
 
 
-def process_orderby(orderby_expressions, roots=[]):
+def process_orderby(orderby_expressions: List[Any], roots=[]):
     return validate_orderby_expression(orderby_expressions, roots)
 
 
@@ -3747,7 +3747,7 @@ class Query(abc.ABC):
         matching elements.
 
         When both a ``group_by`` and ``order_by`` clause is provided the
-        ``order_by`` clause is used the sort the elements within each matching
+        ``order_by`` clause is used to sort the elements within each matching
         group.
 
         Args:
