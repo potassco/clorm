@@ -33,6 +33,7 @@ __all__ = [
     "Select",
     "Delete",
     "Placeholder",
+    "field",
     "refine_field",
     "combine_fields",
     "define_flat_list_field",

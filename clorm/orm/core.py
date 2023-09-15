@@ -91,6 +91,7 @@ __all__ = [
     "simple_predicate",
     "path",
     "hashable_path",
+    "field",
     "alias",
     "not_",
     "and_",
