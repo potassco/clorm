@@ -27,6 +27,7 @@ class Address(Predicate):
 
 def test_query_ungrouped_endpoints() -> None:
     fb = FactBase()
+
     query1 = fb.query(Sale, Customer)
 
     # EXPECTED_TYPE: UnGroupedQuery[Tuple[Sale, Customer]]
@@ -38,6 +39,9 @@ def test_query_ungrouped_endpoints() -> None:
     # fallback to Any if query is called with more than 5 arguments
     # EXPECTED_TYPE: UnGroupedQuery[Any]
     reveal_type(fb.query(Address, Sale, Customer, Customer, Customer, Customer))
+
+    # For correctness all predicates must be joined.
+    query1 = fb.query(Sale, Customer).join(Sale.cid == Customer.cid)
 
     # EXPECTED_TYPE: Generator[Tuple[Sale, Customer], None, None]
     reveal_type(query1.all())
@@ -60,6 +64,7 @@ def test_query_ungrouped_endpoints() -> None:
 
 def test_query_ungrouped_select() -> None:
     fb = FactBase()
+
     query1 = fb.query()
 
     # EXPECTED_TYPE: UnGroupedQuery[Any]
@@ -85,6 +90,8 @@ def test_query_ungrouped_select() -> None:
 
 def test_query_grouped_select() -> None:
     fb = FactBase()
+
+    #    query1 = fb.query(Sale, Customer).join(Sale.cid == Customer.cid)
     query1 = fb.query(Sale, Customer)
 
     # EXPECTED_TYPE: GroupedQuery[int, Tuple[Sale, Customer]]
@@ -111,7 +118,8 @@ def test_query_grouped_select() -> None:
 
 def test_query_grouped_endpoints() -> None:
     fb = FactBase()
-    query1 = fb.query(Sale, Customer).group_by(Customer, Sale.sid)
+    #    query1 = fb.query(Sale, Customer).join(Sale.cid == Customer.cid).group_by(Customer, Sale.sid)
+    query1 = fb.query(Sale, Customer)
 
     # EXPECTED_TYPE: Generator[Tuple[Tuple[Customer, int], Iterator[Tuple[Sale, Customer]]], None, None]
     reveal_type(query1.all())
