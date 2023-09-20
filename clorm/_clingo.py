@@ -115,6 +115,9 @@ class ModelOverride(object):
            atoms: select all atoms in the model (Default: False)
            terms: select all terms displayed with #show statements (Default: False)
            shown: select all atoms and terms (Default: False)
+           theory: select atoms added with Model.extend() (Default: False)
+           complement: return the complement of the answer set w.r.t. to the
+                       atoms known to the grounder. (Default: False)
            raise_on_empty: raise a ValueError if the resulting FactBase is empty
                            (Default: False)
 
@@ -123,12 +126,12 @@ class ModelOverride(object):
         nkwargs = dict(kwargs)
         if len(nargs) >= 1 and "unifier" in nkwargs:
             raise TypeError("facts() got multiple values for argument 'unifier'")
-        if len(nargs) >= 5 and "raise_on_empty" in nkwargs:
+        if len(nargs) >= 7 and "raise_on_empty" in nkwargs:
             raise TypeError("facts() got multiple values for argument 'raise_on_empty'")
 
         raise_on_empty = nkwargs.pop("raise_on_empty", False)
-        if len(nargs) >= 5:
-            raise_on_empty = nargs.pop(4)
+        if len(nargs) >= 7:
+            raise_on_empty = nargs.pop(6)
         unifier = nkwargs.pop("unifier", None)
         if len(nargs) >= 1:
             unifier = nargs.pop(0)
@@ -464,14 +467,14 @@ class ControlOverride(object):
         # keyword for Python 3.7+.
         async_keyword = "async_" if oclingo.__version__ > "5.3.1" else "async"
 
-        posnargs = [
-            "assumptions",
-            "on_model",
-            "on_statistics",
-            "on_finish",
-            "yield_",
-            async_keyword,
-        ]
+        posnargs = ["assumptions", "on_model"]
+
+        if oclingo.__version__ >= "5.5.0":
+            posnargs.append("on_unsat")
+        posnargs.extend(["on_statistics", "on_finish"])
+        if oclingo.__version__ >= "5.5.0":
+            posnargs.append("on_core")
+        posnargs.extend(["yield_", async_keyword])
         validargs = set(posnargs)
 
         # translate all positional arguments into keyword arguments.

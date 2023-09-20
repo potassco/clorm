@@ -701,7 +701,7 @@ class Clingo54TestCase(unittest.TestCase):
             check_errmsg("facts() got multiple values for argument 'unifier'", ctx)
 
             with self.assertRaises(TypeError) as ctx:
-                fb = m.facts([Af], True, True, True, True, raise_on_empty=True)
+                fb = m.facts([Af], True, True, True, True, True, True, raise_on_empty=True)
             check_errmsg("facts() got multiple values for argument 'raise_on_empty'", ctx)
 
     # --------------------------------------------------------------------------
@@ -984,7 +984,10 @@ class Clingo54TestCase(unittest.TestCase):
         # Calling using positional arguments
         om_called = False
         os_called = False
-        sr = ctrl.solve([], on_model, on_statistics)
+        if oclingo.__version__ < "5.5.0":
+            sr = ctrl.solve([], on_model, on_statistics)
+        else:
+            sr = ctrl.solve([], on_model, None, on_statistics)
         self.assertTrue(om_called)
         self.assertTrue(os_called)
 
@@ -994,6 +997,77 @@ class Clingo54TestCase(unittest.TestCase):
         sr = ctrl.solve(on_statistics=on_statistics)
         self.assertFalse(om_called)
         self.assertTrue(os_called)
+
+    # --------------------------------------------------------------------------
+    # Test the solve with on_unsat
+    # --------------------------------------------------------------------------
+    def test_solve_with_on_unsat(self):
+        # There is no on_unsat or on_core functions for older versions.
+        if oclingo.__version__ < "5.5.0":
+            return
+
+        # Program to test optimisation for on_unsat callback - note: setting the appropriate
+        # optimisation strategy is important to trigger the callback.
+        prgstr = """
+1 { p(X); q(X) } 1 :- X=1..3.
+#minimize { 1,p,X: p(X); 1,q,X: q(X) }.
+        """
+
+        ctrl = cclingo.Control()
+        conf = ctrl.configuration
+        conf.solver.opt_strategy = "usc,oll,0"
+        add_program_string(ctrl, prgstr)
+        ctrl.ground([("base", [])])
+
+        def on_unsat(ints):
+            nonlocal ou_called
+            ou_called = True
+
+        # Calling using positional arguments
+        ou_called = False
+        sr = ctrl.solve([], None, on_unsat)
+        self.assertTrue(ou_called)
+
+        # Caling using keyword arguments
+        ou_called = False
+        sr = ctrl.solve(on_unsat=on_unsat)
+        self.assertTrue(ou_called)
+
+    # --------------------------------------------------------------------------
+    # Test the solve with on_core
+    # --------------------------------------------------------------------------
+    def test_solve_with_on_core(self):
+        # There is no on_unsat or on_core functions for older versions.
+        if oclingo.__version__ < "5.5.0":
+            return
+
+        class F(Predicate):
+            num1 = IntegerField()
+
+        # Program to test unsatisfiable cores
+        prgstr = """
+2 {f(1..3)} 2.
+"""
+        all_facts = FactBase([F(1), F(2), F(3)])
+        ctrl = cclingo.Control(unifier=[F])
+        add_program_string(ctrl, prgstr)
+        ctrl.ground([("base", [])])
+        all_literals = [ctrl.symbolic_atoms[f.raw].literal for f in all_facts]
+
+        def on_core(ints):
+            nonlocal oc_called
+            assert set(all_literals) == set(ints)
+            oc_called = True
+
+        # Calling using positional arguments
+        oc_called = False  #
+        sr = ctrl.solve([(all_facts, True)], None, None, None, None, on_core)
+        self.assertTrue(oc_called)
+
+        # Calling using keyword arguments
+        oc_called = False
+        sr = ctrl.solve(assumptions=[(all_facts, True)], on_core=on_core)
+        self.assertTrue(oc_called)
 
     # --------------------------------------------------------------------------
     # Test accessing some other control variables that are not explcitly wrapped
