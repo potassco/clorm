@@ -782,9 +782,10 @@ class Clingo54TestCase(unittest.TestCase):
                 num_models += 1
             self.assertEqual(num_models, 3)
 
-    # --------------------------------------------------------------------------
-    # Test the solvehandle
-    # --------------------------------------------------------------------------
+    # ----------------------------------------------------------------------------------------
+    # Test expanding the assumptions - note: the order matters so for an input list of
+    # predicates or symbols the output list is the corresponding symbols in the same order.
+    # ----------------------------------------------------------------------------------------
     def test_expand_assumptions(self):
         class F(Predicate):
             num1 = IntegerField()
@@ -796,20 +797,20 @@ class Clingo54TestCase(unittest.TestCase):
         f2 = F(2)
         g1 = G(1)
 
-        r = set(_expand_assumptions([(f1, True), (g1, False)]))
-        self.assertEqual(r, set([(f1.raw, True), (g1.raw, False)]))
+        r = _expand_assumptions([(f1, True), (g1, False)])
+        self.assertEqual(r, [(f1.raw, True), (g1.raw, False)])
 
-        r = set(_expand_assumptions([(FactBase([f1, f2]), True), (set([g1]), False)]))
-        self.assertEqual(r, set([(f1.raw, True), (f2.raw, True), (g1.raw, False)]))
+        r = _expand_assumptions([(FactBase([f1, f2]), True), (set([g1]), False)])
+        self.assertEqual(r, [(f1.raw, True), (f2.raw, True), (g1.raw, False)])
 
         with self.assertRaises(TypeError) as ctx:
             _expand_assumptions([g1])
         with self.assertRaises(TypeError) as ctx:
             _expand_assumptions(g1)
 
-    # --------------------------------------------------------------------------
+    # ----------------------------------------------------------------------------------------
     # Test the solvehandle
-    # --------------------------------------------------------------------------
+    # ----------------------------------------------------------------------------------------
     def test_solve_with_assumptions_simple(self):
         spu = SymbolPredicateUnifier()
 
