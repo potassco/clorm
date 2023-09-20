@@ -24,6 +24,7 @@ from typing import (
 import clingo as oclingo
 
 from .orm import FactBase, Predicate, Symbol, SymbolPredicateUnifier, control_add_facts
+from .util.oset import OrderedSet
 from .util.wrapper import init_wrapper, make_class_wrapper
 
 __all__ = ["ClormControl", "ClormModel", "ClormSolveHandle", "_expand_assumptions"]
@@ -246,16 +247,11 @@ def _expand_assumptions(
         Tuple[Union[Iterable[Union[Predicate, Symbol]], Predicate, Symbol], bool]
     ]
 ) -> List[Tuple[Symbol, bool]]:
-    pos_assump = set()
-    neg_assump = set()
+    clingo_assump = []
 
     def _add_fact(fact: Union[Predicate, Symbol], bval: bool) -> None:
-        nonlocal pos_assump, neg_assump
         raw = fact.raw if isinstance(fact, Predicate) else fact
-        if bval:
-            pos_assump.add(raw)
-        else:
-            neg_assump.add(raw)
+        clingo_assump.append((raw, bool(bval)))
 
     try:
         for (arg, bval) in assumptions:
@@ -274,11 +270,7 @@ def _expand_assumptions(
                 "of raw-symbols/predicates). Got: {}"
             ).format(assumptions)
         )
-
-    # Now returned a list of raw assumptions combining pos and neg
-    pos = [(raw, True) for raw in pos_assump]
-    neg = [(raw, False) for raw in neg_assump]
-    return list(itertools.chain(pos, neg))
+    return clingo_assump
 
 
 # ------------------------------------------------------------------------------
