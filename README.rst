@@ -20,7 +20,7 @@ that makes it easier to refactor the python code as the ASP program evolves.
 
 The documentation is available online `here <https://clorm.readthedocs.io/>`_.
 
-Note: Clorm works with Python 3.5+ and Clingo 5.4+
+Note: Clorm works with Python 3.7+ and Clingo 5.4+
 
 Installation
 ------------
