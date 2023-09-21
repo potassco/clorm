@@ -3415,7 +3415,7 @@ def make_query(qp, factsets, factindexes):
 # ------------------------------------------------------------------------------
 
 
-def make_outputter(insig, outsig):
+def make_outputter(queryroots, insig, outsig):
     def make_simple_outputter():
         af = make_input_alignment_functor(insig, outsig)
         return lambda intuple, af=af: af(intuple)
@@ -3432,7 +3432,8 @@ def make_outputter(insig, outsig):
                 tmp = make_input_alignment_functor(insig, out.paths)
                 metasig.append(lambda x, af=tmp, f=out.functor: f(*af(x)))
             elif callable(out):
-                metasig.append(lambda x, f=out: f(*x))
+                tmp = make_input_alignment_functor(insig, queryroots)
+                metasig.append(lambda x, af=tmp, f=out: f(*af(x)))
             else:
                 metasign.append(lambda x, out=out: out)
 
@@ -4232,10 +4233,11 @@ class QueryExecutor(object):
         (self._qplan, self._query) = self._make_plan_and_query()
 
         outsig = self._qspec.select
+        roots = self._qspec.roots
         if outsig is None or not outsig:
             outsig = self._qspec.roots
 
-        self._outputter = make_outputter(self._qplan.output_signature, outsig)
+        self._outputter = make_outputter(roots, self._qplan.output_signature, outsig)
         self._unwrap = not self._qspec.tuple and len(outsig) == 1
         self._distinct = self._qspec.distinct
 
@@ -4387,9 +4389,10 @@ class QueryExecutor(object):
             )
 
         outsig = self._qspec.select
+        roots = self._qspec.roots
         if outsig is None or not outsig:
             outsig = self._qspec.roots
-        self._outputter = make_outputter(self._qplan.output_signature, outsig)
+        self._outputter = make_outputter(roots, self._qplan.output_signature, outsig)
         self._unwrap = False
         self._distinct = self._qspec.distinct
 
