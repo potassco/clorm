@@ -6,9 +6,9 @@
 import collections.abc as cabc
 import functools
 import inspect
-from typing import Any, Callable, List, Sequence, Tuple, Type
+from typing import Any, Callable, List, Sequence, Tuple, Type, Union
 
-from .core import BaseField, get_field_definition, infer_field_definition
+from .core import BaseField, get_field_definition, infer_field_definition, resolve_annotations
 
 __all__ = [
     "TypeCastSignature",
@@ -36,6 +36,7 @@ class TypeCastSignature(object):
     r"""Defines a signature for converting to/from Clingo data types.
 
      Args:
+       module: Name of the module where the signature is defined
        sigs(\*sigs): A list of signature elements.
 
        - Inputs. Match the sub-elements [:-1] define the input signature while
@@ -54,9 +55,9 @@ class TypeCastSignature(object):
                       pytocl = lambda dt: dt.strftime("%Y%m%d")
                       cltopy = lambda s: datetime.datetime.strptime(s,"%Y%m%d").date()
 
-            drsig = TypeCastSignature(DateField, DateField, [DateField])
+            drsig = TypeCastSignature(DateField, DateField, [DateField], module = "__main__")
 
-            @drsig.make_clingo_wrapper
+            @drsig.wrap_function
             def date_range(start, end):
                 return [ start + timedelta(days=x) for x in range(0,end-start) ]
 
@@ -97,24 +98,29 @@ class TypeCastSignature(object):
             return _is_output_field(se[0])
         return _is_output_field(se)
 
-    def __init__(self, *sigs: Any) -> None:
+    def __init__(self, *sigs: Any, module: Union[str, None] = None) -> None:
+        module = self.__module__ if module is None else module
+
         def _validate_basic_sig(sig):
             if TypeCastSignature._is_input_element(sig):
                 return True
             raise TypeError(
-                ("TypeCastSignature element {} must be a BaseField " "subclass".format(sig))
+                "TypeCastSignature element {} must be a BaseField subclass".format(sig)
             )
 
         insigs: List[Type[BaseField]] = []
         for s in sigs[:-1]:
             field = None
             try:
-                field = infer_field_definition(s, "")
+                resolved = resolve_annotations({"__tmp__": s}, module)["__tmp__"]
+                field = infer_field_definition(resolved, "")
             except Exception:
                 pass
             insigs.append(field if field else type(get_field_definition(s)))
         try:
-            self._outsig = infer_field_definition(sigs[-1], "") or sigs[-1]
+            outsig = sigs[-1]
+            outsig = resolve_annotations({"__tmp__": outsig}, module)["__tmp__"]
+            self._outsig = infer_field_definition(outsig, "") or outsig
         except Exception:
             self._outsig = sigs[-1]
 
@@ -327,7 +333,7 @@ def make_function_asp_callable(*args: Any) -> _AnyCallable:
 
     # A decorator function that adjusts for the given signature
     def _sig_decorate(func):
-        s = TypeCastSignature(*sigs)
+        s = TypeCastSignature(*sigs, module=func.__module__)
         return s.wrap_function(func)
 
     # If no function and sig then called as a decorator with arguments
@@ -372,7 +378,7 @@ def make_method_asp_callable(*args: Any) -> _AnyCallable:
 
     # A decorator function that adjusts for the given signature
     def _sig_decorate(func):
-        s = TypeCastSignature(*sigs)
+        s = TypeCastSignature(*sigs, module=func.__module__)
         return s.wrap_method(func)
 
     # If no function and sig then called as a decorator with arguments
@@ -479,7 +485,7 @@ class ContextBuilder(object):
                 args = sigargs
             else:
                 args = _get_annotations(fn)
-            s = TypeCastSignature(*args)
+            s = TypeCastSignature(*args, module=fn.__module__)
             self._add_function(fname, s, fn)
             return fn
 

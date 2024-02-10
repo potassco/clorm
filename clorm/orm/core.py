@@ -47,7 +47,7 @@ from clorm.orm.types import (
     TailListReversed,
 )
 
-from ._typing import AnySymbol, get_args, get_origin
+from ._typing import AnySymbol, get_args, get_origin, resolve_annotations
 from .noclingo import (
     Function,
     Number,
@@ -2866,6 +2866,9 @@ def infer_field_definition(type_: Type[Any], module: str) -> Optional[Type[BaseF
                 tuple(infer_field_definition(arg, module) for arg in args), module
             )
         )
+    if not isinstance(type_, type):
+        return None
+    # from here on only check for subclass
     if issubclass(type_, enum.Enum):
         # if type_ just inherits from Enum is IntegerField, otherwise find appropriate Field
         field = (
@@ -3000,13 +3003,11 @@ def _make_predicatedefn(
 
     fields_from_annotations = {}
     module = namespace.get("__module__", None)
-    for name, type_ in namespace.get("__annotations__", {}).items():
+    for name, type_ in resolve_annotations(namespace.get("__annotations__", {}), module).items():
         if name in fields_from_dct:  # first check if FieldDefinition was assigned
             fields_from_annotations[name] = fields_from_dct[name]
-        else:
-            fdefn = infer_field_definition(
-                type_, module
-            )  # if not try to infer the definition based on the type
+        else:  # if not try to infer the definition based on the type
+            fdefn = infer_field_definition(type_, module)
             if fdefn:
                 fields_from_annotations[name] = fdefn
             elif inspect.isclass(type_):

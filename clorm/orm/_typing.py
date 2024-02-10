@@ -1,5 +1,5 @@
 import sys
-from typing import Any, Optional, Tuple, Type, TypeVar, Union, cast
+from typing import Any, Dict, ForwardRef, Optional, Tuple, Type, TypeVar, Union, _eval_type, cast
 
 from clingo import Symbol
 
@@ -58,3 +58,37 @@ elif sys.version_info < (3, 8):
                 res = (list(res[:-1]), res[-1])
             return res
         return getattr(t, "__args__", ())
+
+
+def resolve_annotations(
+    raw_annotations: Dict[str, Type[Any]], module_name: Optional[str] = None
+) -> Dict[str, Type[Any]]:
+    """
+    Taken from https://github.com/pydantic/pydantic/blob/1.10.X-fixes/pydantic/typing.py#L376
+
+    Resolve string or ForwardRef annotations into type objects if possible.
+    """
+    base_globals: Optional[Dict[str, Any]] = None
+    if module_name:
+        try:
+            module = sys.modules[module_name]
+        except KeyError:
+            # happens occasionally, see https://github.com/pydantic/pydantic/issues/2363
+            pass
+        else:
+            base_globals = module.__dict__
+
+    annotations = {}
+    for name, value in raw_annotations.items():
+        if isinstance(value, str):
+            if (3, 10) > sys.version_info >= (3, 9, 8) or sys.version_info >= (3, 10, 1):
+                value = ForwardRef(value, is_argument=False, is_class=True)
+            else:
+                value = ForwardRef(value, is_argument=False)
+        try:
+            value = _eval_type(value, base_globals, None)
+        except NameError:
+            # this is ok, it can be fixed with update_forward_refs
+            pass
+        annotations[name] = value
+    return annotations
