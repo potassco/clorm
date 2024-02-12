@@ -8,6 +8,7 @@ import os
 os.environ["CLORM_NOCLINGO"] = "True"
 
 from .test_clingo import *
+from .test_forward_ref import *
 from .test_json import *
 from .test_libdate import LibDateTestCase
 from .test_libtimeslot import *
