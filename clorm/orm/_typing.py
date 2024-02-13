@@ -1,5 +1,6 @@
 import sys
 import inspect
+from inspect import FrameInfo
 from typing import Any, Dict, ForwardRef, Optional, Tuple, Type, TypeVar, Union, _eval_type, cast
 
 from clingo import Symbol
@@ -81,6 +82,8 @@ def resolve_annotations(
             base_globals = module.__dict__
 
     annotations = {}
+    frameinfos: Union[list[FrameInfo], None] = None
+    locals_ = {}
     for name, value in raw_annotations.items():
         if isinstance(value, str):
             if (3, 10) > sys.version_info >= (3, 9, 8) or sys.version_info >= (3, 10, 1):
@@ -91,20 +94,23 @@ def resolve_annotations(
             type_ = _eval_type(value, base_globals, None)
         except NameError:
             # The type annotation could refer to a definition at a non-global scope so build
-            # the locals from the calling context.
-            currframe = inspect.currentframe()
-            finfos = inspect.getouterframes(currframe)
-            if len(finfos) < 4:
-                raise RuntimeError('Cannot resolve field "{name}" with type annotation "{value}"')
-            locals_ = {}
+            # the locals from the calling context. We reuse the same set of locals for
+            # multiple annotations.
+            if frameinfos is None:
+                frameinfos = inspect.stack()
+                if len(frameinfos) < 4:
+                    raise RuntimeError(
+                        'Cannot resolve field "{name}" with type annotation "{value}"'
+                    )
+                frameinfos = frameinfos[3:]
             type_ = None
-            for finfo in finfos[3:]:
-                locals_.update(finfo.frame.f_locals)
+            while frameinfos:
                 try:
                     type_ = _eval_type(value, base_globals, locals_)
                     break
                 except NameError:
-                    pass
+                    finfo = frameinfos.pop(0)
+                    locals_.update(finfo.frame.f_locals)
             if type_ is None:
                 raise RuntimeError(
                     f'Cannot resolve field "{name}" with type annotation "{value}"'

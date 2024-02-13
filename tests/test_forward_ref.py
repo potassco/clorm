@@ -164,7 +164,6 @@ XP1, XP2 = define_predicates()
             p2 = module.XP2(a=p1)
             self.assertEqual(str(p2), 'p2(p1(c,3,"42"))')
 
-
     def test_forward_ref(self):
         def module_():
             from typing import ForwardRef
