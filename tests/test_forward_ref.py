@@ -1,4 +1,4 @@
-import importlib
+import importlib.util
 import inspect
 import secrets
 import sys
@@ -86,6 +86,7 @@ class P1(Predicate):
 
     def test_postponed_annotations_complex(self):
         code = """
+from __future__ import annotations
 from clorm import Predicate
 from typing import Union
 
@@ -104,6 +105,65 @@ class P3(Predicate):
             self.assertEqual(str(p), 'p3(p1(3,"42"))')
             p = module.P3(a=module.P2(a=42))
             self.assertEqual(str(p), "p3(p2(42))")
+
+    def test_postponed_annotations_nonglobal1(self):
+        code = """
+from __future__ import annotations
+from clorm import Predicate, ConstantField, field
+from typing import Union
+
+def define_predicates():
+
+
+    class P1(Predicate):
+        a1: str = field(ConstantField)
+        a: int
+        b: str
+
+    class P2(Predicate):
+        a: Union[int, P1]
+
+    return P1, P2
+
+XP1, XP2 = define_predicates()
+
+"""
+        with self._create_module(code) as module:
+            p1 = module.XP1(a1="c", a=3, b="42")
+            self.assertEqual(str(p1), 'p1(c,3,"42")')
+            p2 = module.XP2(a=p1)
+            self.assertEqual(str(p2), 'p2(p1(c,3,"42"))')
+
+    def test_postponed_annotations_nonglobal2(self):
+        code = """
+from __future__ import annotations
+from clorm import Predicate, ConstantField, field
+from typing import Union
+
+def define_predicates():
+
+
+    class P1(Predicate):
+        a1: str = field(ConstantField)
+        a: int
+        b: str
+
+    def define_complex():
+        class P2(Predicate):
+            a: Union[int, P1]
+        return P2
+
+    return P1, define_complex()
+
+XP1, XP2 = define_predicates()
+
+"""
+        with self._create_module(code) as module:
+            p1 = module.XP1(a1="c", a=3, b="42")
+            self.assertEqual(str(p1), 'p1(c,3,"42")')
+            p2 = module.XP2(a=p1)
+            self.assertEqual(str(p2), 'p2(p1(c,3,"42"))')
+
 
     def test_forward_ref(self):
         def module_():

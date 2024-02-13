@@ -1,4 +1,5 @@
 import sys
+import inspect
 from typing import Any, Dict, ForwardRef, Optional, Tuple, Type, TypeVar, Union, _eval_type, cast
 
 from clingo import Symbol
@@ -65,6 +66,7 @@ def resolve_annotations(
 ) -> Dict[str, Type[Any]]:
     """
     Taken from https://github.com/pydantic/pydantic/blob/1.10.X-fixes/pydantic/typing.py#L376
+    with some modifications for handling when the first _eval_type() call fails.
 
     Resolve string or ForwardRef annotations into type objects if possible.
     """
@@ -86,9 +88,26 @@ def resolve_annotations(
             else:
                 value = ForwardRef(value, is_argument=False)
         try:
-            value = _eval_type(value, base_globals, None)
+            type_ = _eval_type(value, base_globals, None)
         except NameError:
-            # this is ok, it can be fixed with update_forward_refs
-            pass
-        annotations[name] = value
+            # The type annotation could refer to a definition at a non-global scope so build
+            # the locals from the calling context.
+            currframe = inspect.currentframe()
+            finfos = inspect.getouterframes(currframe)
+            if len(finfos) < 4:
+                raise RuntimeError('Cannot resolve field "{name}" with type annotation "{value}"')
+            locals_ = {}
+            type_ = None
+            for finfo in finfos[3:]:
+                locals_.update(finfo.frame.f_locals)
+                try:
+                    type_ = _eval_type(value, base_globals, locals_)
+                    break
+                except NameError:
+                    pass
+            if type_ is None:
+                raise RuntimeError(
+                    f'Cannot resolve field "{name}" with type annotation "{value}"'
+                )
+        annotations[name] = type_
     return annotations

@@ -2918,7 +2918,6 @@ def infer_field_definition(type_: Type[Any], module: str) -> Optional[Type[BaseF
 def _make_predicatedefn(
     class_name: str, namespace: Dict[str, Any], meta_dct: Dict[str, Any]
 ) -> PredicateDefn:
-
     # Set the default predicate name
     pname = _predicatedefn_default_predicate_name(class_name)
     anon = False
@@ -3001,15 +3000,37 @@ def _make_predicatedefn(
             )
         fields_from_dct[fname] = fdefn
 
-    fields_from_annotations = {}
     module = namespace.get("__module__", None)
-    for name, type_ in resolve_annotations(namespace.get("__annotations__", {}), module).items():
-        if name in fields_from_dct:  # first check if FieldDefinition was assigned
-            fields_from_annotations[name] = fields_from_dct[name]
-        else:  # if not try to infer the definition based on the type
+
+    # Get the list of fields with annotations
+    annotations = namespace.get("__annotations__", {})
+
+    # If using type annotations then all fields must be annotated - however some fields can
+    # have field definition overrides.
+    if not annotations:
+        field_specification = fields_from_dct
+    else:
+        set_anno = set(annotations)
+        set_dct = set(fields_from_dct)
+        if not (set_dct <= set_anno):
+            raise TypeError(
+                (
+                    f"Predicate '{pname}' contains a mixture of type annotated and un-annotated "
+                    f"fields ({set_anno} and {set_dct}). If one field is annotated then all fields "
+                    "must be annotated"
+                )
+            )
+
+        raw_annotations = {
+            name_: type_ for name_, type_ in annotations.items() if name_ not in fields_from_dct
+        }
+        field_specification = {
+            name: fields_from_dct.get(name, None) for name, _ in annotations.items()
+        }
+        for name, type_ in resolve_annotations(raw_annotations, module).items():
             fdefn = infer_field_definition(type_, module)
             if fdefn:
-                fields_from_annotations[name] = fdefn
+                field_specification[name] = fdefn
             elif inspect.isclass(type_):
                 raise TypeError(
                     (
@@ -3018,22 +3039,9 @@ def _make_predicatedefn(
                     )
                 )
 
-    # TODO can this be done more elegantly
-    set_anno = set(fields_from_annotations)
-    set_dct = set(fields_from_dct)
-    set_union = set_dct.union(set_anno)
-    if set_dct < set_union > set_anno:
-        raise TypeError(
-            (
-                f"Predicate '{pname}': Mixed fields are not allowed. "
-                "(one field has just an annotation, the other one was only assigned a FieldDefinition)"
-            )
-        )
-
     fas = []
     idx = 0
-    fields_from_annotations.update(**fields_from_dct)
-    for fname, fdefn in fields_from_annotations.items():
+    for fname, fdefn in field_specification.items():
         try:
             fd = get_field_definition(fdefn, module)
             fa = FieldAccessor(fname, idx, fd)
