@@ -1,6 +1,10 @@
+import sys
 from typing import Tuple
 
-from typing_extensions import reveal_type
+if sys.version_info < (3, 11):
+    from typing_extensions import reveal_type
+else:
+    from typing import reveal_type
 
 from clorm import FactBase, Predicate
 from clorm.orm._queryimpl import GroupedQuery, UnGroupedQuery

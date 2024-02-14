@@ -1489,7 +1489,7 @@ class PredicateTestCase(unittest.TestCase):
     def test_predicates_with_annotated_fields(self):
         class P(Predicate):
             a: int = IntegerField
-            b = StringField
+            b: str = StringField
 
         class P1(Predicate):
             a: int
