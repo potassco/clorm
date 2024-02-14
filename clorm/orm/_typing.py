@@ -62,6 +62,23 @@ elif sys.version_info < (3, 8):
         return getattr(t, "__args__", ())
 
 
+if sys.version_info < (3, 9):
+    from ast import literal_eval
+
+    def _strip_quoted_annotations(annotation: str) -> str:
+        """Strip quotes around any annotations.
+
+        This is needed because the _eval_type() function for Python 3.8 and 3.7 doesn't
+        handle a ForwardRef that contains a quoted string.
+
+        """
+        try:
+            output = literal_eval(annotation)
+            return output if isinstance(output, str) else annotation
+        except (ValueError, TypeError, SyntaxError, MemoryError, RecursionError):
+            return annotation
+
+
 def resolve_annotations(
     raw_annotations: Dict[str, Type[Any]], module_name: Optional[str] = None
 ) -> Dict[str, Type[Any]]:
@@ -86,12 +103,19 @@ def resolve_annotations(
     locals_ = {}
     for name, value in raw_annotations.items():
         if isinstance(value, str):
+
+            # Strip quoted string annotions for Python 3.7 and 3.8
+            if sys.version_info < (3, 9):
+                value = _strip_quoted_annotations(value)
+
+            # Turn the string type annotation into a ForwardRef for processing
             if (3, 10) > sys.version_info >= (3, 9, 8) or sys.version_info >= (3, 10, 1):
                 value = ForwardRef(value, is_argument=False, is_class=True)
             else:
                 value = ForwardRef(value, is_argument=False)
         try:
             type_ = _eval_type(value, base_globals, None)
+
         except NameError:
             # The type annotation could refer to a definition at a non-global scope so build
             # the locals from the calling context. We reuse the same set of locals for
