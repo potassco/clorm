@@ -38,6 +38,9 @@ from typing import (
     overload,
 )
 
+if sys.version_info >= (3, 10):
+    from types import UnionType
+
 from clorm.orm.types import (
     ConstantStr,
     HeadList,
@@ -2829,8 +2832,15 @@ def _is_bad_predicate_inner_class_declaration(name, obj):
     return obj.__name__ == name
 
 
+def _is_union_type(type_: Type[Any]) -> bool:
+    if sys.version_info >= (3, 10):
+        return type_ is Union or type_ is UnionType
+    return type_ is Union
+
+
 # infer fielddefinition based on a given type
 def infer_field_definition(type_: Type[Any], module: str) -> Optional[Type[BaseField]]:
+    """Given an type annotation specification return the matching clorm field."""
     origin = get_origin(type_)
     args = get_args(type_)
 
@@ -2846,7 +2856,7 @@ def infer_field_definition(type_: Type[Any], module: str) -> Optional[Type[BaseF
     if origin is TailListReversed:
         field = infer_field_definition(args[0], module)
         return define_nested_list_field(field, headlist=False, reverse=True) if field else None
-    if origin is Union:
+    if _is_union_type(origin):
         fields: List[Type[BaseField]] = []
         for arg in args:
             field = infer_field_definition(arg, module)

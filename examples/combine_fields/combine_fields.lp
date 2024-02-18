@@ -17,9 +17,9 @@ holds(F,0) :- init(F).
 #script(python)
 
 from clorm.clingo import Control
-from clorm import Predicate, ComplexTerm, ConstantField, IntegerField, combine_fields
+from clorm import Predicate, ComplexTerm, ConstantStr, combine_fields
 from clorm import ph1_
-
+from typing import Union
 
 #--------------------------------------------------------------------------
 # Define a data model - we only care about defining the input and output
@@ -27,24 +27,23 @@ from clorm import ph1_
 #--------------------------------------------------------------------------
 
 class Time(Predicate):
-    time=IntegerField
+    time: int
 
 class Light(ComplexTerm):
-    status=ConstantField
+    status: ConstantStr
 
-class RobotLocation(ComplexTerm):
-    robot=ConstantField
-    location=ConstantField
-    class Meta: name = "robotlocation"
+class RobotLocation(ComplexTerm, name="robotlocation"):
+    robot: ConstantStr
+    location: ConstantStr
 
-FluentField=combine_fields([Light.Field,RobotLocation.Field])
+#FluentField=combine_fields([Light.Field,RobotLocation.Field])
 
 class Init(Predicate):
-    fluent=FluentField
+    fluent: Union[Light, RobotLocation]
 
 class Holds(Predicate):
-    fluent=FluentField
-    time=IntegerField
+    fluent: Union[Light, RobotLocation]
+    time: int
 
 #--------------------------------------------------------------------------
 # main

@@ -6,7 +6,7 @@ monkey.patch()  # must call this before importing clingo
 
 from clingo import Control
 
-from clorm import ConstantField, FactBase, IntegerField, Predicate, ph1_
+from clorm import ConstantStr, FactBase, Predicate, ph1_
 
 ASP_PROGRAM = "quickstart.lp"
 
@@ -17,17 +17,17 @@ ASP_PROGRAM = "quickstart.lp"
 
 
 class Driver(Predicate):
-    name = ConstantField
+    name: ConstantStr
 
 
 class Item(Predicate):
-    name = ConstantField
+    name: ConstantStr
 
 
 class Assignment(Predicate):
-    item = ConstantField
-    driver = ConstantField
-    time = IntegerField
+    item: ConstantStr
+    driver: ConstantStr
+    time: int
 
 
 # --------------------------------------------------------------------------
