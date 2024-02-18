@@ -331,7 +331,7 @@ class TypeCastSignatureTestCase(unittest.TestCase):
             return x + y
 
         @make_function_asp_callable
-        def _sig2(pair: tuple[int, int]) -> tuple[int, int]:
+        def _sig2(pair: Tuple[int, int]) -> Tuple[int, int]:
             return (pair[1], pair[0])
 
         self.assertEqual(_sig1(Number(1), Number(2)), Number(3))
