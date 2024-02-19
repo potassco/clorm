@@ -43,6 +43,7 @@ primitive logical terms: :class:`~clorm.StringField`, :class:`~clorm.ConstantFie
 
 .. autoclass:: clorm.IntegerField
 
+.. autofunction:: clorm.field
 
 Special Fields
 ^^^^^^^^^^^^^^
@@ -86,28 +87,26 @@ use of these functions and instead to rely on some predefined type annotation ma
 
 .. _api_predicates:
 
-Predicates and Complex Terms
+Predicates and complex terms
 ----------------------------
 
-In logical terminology predicates and terms are both considered *non logical
-symbols*; where the logical symbols are the operator symbols for *conjunction*,
-*negation*, *implication*, etc. While simple terms (constants, strings, and
-integers) are handled by Clorm as special cases, complex terms and predicates
-are both encapsulated in the ``Predicate`` class, with ``ComplexTerm`` simply
-being an alias to this class.
+In logical terminology predicates and terms are both considered *non logical symbols*; where
+the logical symbols are the operator symbols for *conjunction*, *negation*, *implication*,
+etc. While simple terms (constants, strings, and integers) are handled by Clorm as special
+cases, complex terms and predicates are both encapsulated in the ``Predicate`` class, with
+``ComplexTerm`` simply being an alias to this class.
 
 .. autoclass:: clorm.Predicate
-   :members:
+   :no-members:
 
    .. attribute:: Field
 
-      A RawField sub-class corresponding to a Field for this class
+      A BaseField sub-class corresponding to a field definition for this class.
 
 
    .. attribute:: meta
 
-      Meta data (definitional information) for the predicate/complex-term. This
-      includes:
+      The meta data (definitional information) for the Predicate. It contains:
 
       .. attribute:: name
 

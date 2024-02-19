@@ -105,8 +105,8 @@ between string objects and dates.
 
 .. code-block:: python
 
-   @make_function_asp_callable
-   def date_range(start : DateField, end : DateField) -> [(IntegerField, DateField)]:
+   @make_function_asp_callable(DateField, DateField, [(IntegerField, DateField)])
+   def date_range(start, end):
        inc = timedelta(days=1)
        tmp = []
        while start < end:
@@ -114,36 +114,24 @@ between string objects and dates.
 	   start += inc
        return list(enumerate(tmp))
 
-This decorator supports the specification of the type cast signature as part of
-the function's **annotations** (a Python 3 feature) to provide a neater
-specification. Note, the signature could equally be passed as decorator function
-arguments:
+The important point is that the type cast signature provides a mechanism to specify arbitrary
+data conversions both for the input and output data; including conversions generated from very
+complex terms specified as Clorm ``Predicate`` sub-classes. Consequently, the programmer does
+not have to explicitly write the type conversion code and even existing functions can be
+decorated to be used as callable ASP functions.
+
+Another point to note is that the Clorm specification is also able to use the simplified tuple
+syntax from the Clingo API to specify the enumerated pairs.  In fact this code can be viewed as
+a short-hand for an explicit declaration of a ``ComplexTerm`` tuple and internally Clorm
+generates a signature equivalent to the following:
 
 .. code-block:: python
 
-   @make_function_asp_callable(DateField, DateField, [(IntegerField, DateField)])
-   def date_range:
-       ...
+   from clorm import Predicate, field
 
-The important point is that the type cast signature provides a mechanism to
-specify arbitrary data conversions both for the input and output data; including
-conversions generated from very complex terms specified as Clorm ``ComplexTerm``
-sub-classes. Consequently, the programmer does not have to explicitly write the
-type conversion code and even existing functions can be decorated to be used as
-callable ASP functions.
-
-Another point to note is that the Clorm specification is also able to use the
-simplified tuple syntax from the Clingo API to specify the enumerated pairs.  In
-fact this code can be viewed as a short-hand for an explicit declaration of a
-``ComplexTerm`` tuple and internally Clorm does generate a signature equivalent
-to the following:
-
-.. code-block:: python
-
-   class EnumDate(ComplexTerm):
-       idx = IntegerField()
-       dt = DateField()
-       class Meta: is_tuple=True
+   class EnumDate(Predicate, name=""):
+       idx: int
+       dt: datetime.date = field(DateField)
 
    @make_function_asp_callable
    def date_range(start : DateField, end : DateField) -> [EnumDate.Field]:
@@ -151,18 +139,16 @@ to the following:
 
 There are two decorator functions that Clorm provides:
 
-* ``make_function_asp_callable``: Wraps a normal function. Every function
-  parameter is converted to and from the clingo equivalent.
-* ``make_method_asp_callable``: Wraps a member function. The first paramater is
-  the object's ``self`` parameter so is passed through and only the remaining
-  parameters are converted to their clingo equivalents.
+* ``make_function_asp_callable``: Wraps a normal function. Every function parameter is
+  converted to and from the clingo equivalent.
+* ``make_method_asp_callable``: Wraps a member function. The first paramater is the object's
+  ``self`` parameter so is passed through and only the remaining parameters are converted to
+  their clingo equivalents.
 
-In summary, the Clorm type cast signature has two distinct advantages over the
-built in Clingo API for handling external functions. Firstly, it provides a
-principled approach for specifying arbitrarily complex type conversions, unlike
-the limited ad-hoc approach of the built-in Clingo API. Secondly, by making this
-type conversion specification explicit it is clear what conversions will be
-performed and therefore makes for clearer and more re-usable code.
+In summary, the Clorm type cast signature provides a principled approach for specifying
+arbitrarily complex type conversions. Furthermore, by making this type conversion specification
+explicit it is clear what conversions will be performed and therefore makes for clearer and
+more re-usable code.
 
 Specifying a Grounding Context
 ------------------------------

@@ -19,15 +19,15 @@ a database-like query mechanism.
 
 .. code-block:: python
 
-   from clorm import Predicate, ConstantField, StringField, FactBase
+   from clorm import Predicate, ConstantStr, FactBase
 
    class Person(Predicate):
-      id = ConstantField
-      address = StringField
+      id: ConstantStr
+      address: str
 
    class Pet(Predicate):
-      owner = ConstantField
-      petname = StringField
+      owner: ConstantStr
+      petname: str
 
    dave = Person(id="dave", address="UNSW")
    morri = Person(id="morri", address="UNSW")
@@ -332,11 +332,11 @@ definition earlier to something containing a tuple:
 
 .. code-block:: python
 
-   from clorm import Predicate, ConstantField, StringField, FactBase
+   from clorm import Predicate, ConstantStr, FactBase
 
    class PersonAlt(Predicate):
-      id = ConstantField
-      address = (StringField,StringField)
+      id: ConstantStr
+      address: tuple[str, str]
 
    dave = PersonAlt(id="dave", address=("Newcastle","UNSW"))
    morri = PersonAlt(id="morri", address=("Sydney","UNSW"))
@@ -462,10 +462,10 @@ support querying based on the sign of a fact or complex term.
 
 .. code-block:: python
 
-   from clorm import IntegerField
+   from clorm import Predicate
 
    class P(Predicate):
-       a = IntegerField
+       a: int
 
    p1 = P(1)
    neg_p2 = P(2,sign=False)
@@ -579,9 +579,11 @@ indexed and the other is not.
 
 .. code-block:: python
 
+   from clorm import Predicate
+
    class Num(Predicate):
-       to_idx=IntegerField
-       not_to_idx=IntegerField
+       to_idx: int
+       not_to_idx: int
 
    fb4 = FactBase([Num(to_idx=n,not_to_idx=n) for n in range(0,100000)], indexes=[Num.to_idx])
 

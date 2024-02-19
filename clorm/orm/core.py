@@ -1470,6 +1470,15 @@ def field(
     default_factory: Any = MISSING,
     kw_only: bool = False,
 ) -> Any:
+    """Return a field definition.
+
+    This function is used to override the type annotation field specification. A different
+    field can be specificied as well as default values.
+
+    This function operates in a similar way to ``dataclass.field()`` in that it allows for more
+    field specification options.
+
+    """
     if default is not MISSING and default_factory is not MISSING:
         raise ValueError("can not specify both default and default_factory")
     if isinstance(basefield, tuple):
@@ -3349,7 +3358,7 @@ class Predicate(object, metaclass=_PredicateMeta):
     @_classproperty
     @classmethod
     def meta(cls) -> PredicateDefn:
-        """The meta data (definitional information) for the Predicate/Complex-term"""
+        """The meta data (definitional information) for the Predicate."""
         return cls._meta
 
     # --------------------------------------------------------------------------

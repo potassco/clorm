@@ -10,21 +10,20 @@ understanding of the internal operations of Clorm.
 Introspection of Predicate Definitions
 --------------------------------------
 
-A number of properties of a ``Predicate`` or ``ComplexTerm`` definition can be
-accessed through the ``meta`` property of the class. To highlight these features
-we assume the following definitions:
+A number of properties of a ``Predicate`` definition can be accessed through the ``meta``
+property of the class. To highlight these features we assume the following definitions:
 
 .. code-block:: python
 
-   from clorm import Predicate, ComplexTerm, ConstantField, StringField
+   from clorm import Predicate
 
-   class Address(ComplexTerm):
-	street = StringField
-	city = StringField(index=true)
+   class Address(Predicate):
+       street: str
+       city: str
 
    class Person(Predicate):
-      name = StringField(index=true)
-      address = Address.Field
+       name: str
+       address: Address
 
 Firstly the name and arities of the complex term and predicate can be examined:
 
@@ -68,27 +67,25 @@ use the ``clorm.clingo`` integration module but instead to use the main
 Unification
 ^^^^^^^^^^^
 
-In logical terms, unification involves transforming one expression into another
-through term substitution. We co-op this terminology for the process of
-transforming ``Clingo.Symbol`` objects into Clorm facts. This unification
-process is integral to using Clorm since it is the main process by which the
-symbols within a Clingo model are transformed into Clorm facts.
+In logical terms, unification involves transforming one expression into another through term
+substitution. We co-op this terminology for the process of transforming ``Clingo.Symbol``
+objects into Clorm facts. This unification process is integral to using Clorm since it is the
+main process by which the symbols within a Clingo model are transformed into Clorm facts.
 
-A ``unify`` function is provided that takes at least two parameters; a *unifier*
-and a list of raw clingo symbols. It then tries to unify the list of raw symbols
-with the predicates in the unifier. It returns a ``FactBase`` containing the
-facts, or a list of facts if the parameter ``ordered=True``, that resulted from
-the unification of the symbols with the first matching predicate. If a symbol
-was not able to unify with any predicate it is ignored.
+A ``unify`` function is provided that takes at least two parameters; a *unifier* and a list of
+raw clingo symbols. It then tries to unify the list of raw symbols with the predicates in the
+unifier. It returns a ``FactBase`` containing the facts, or a list of facts if the parameter
+``ordered=True``, that resulted from the unification of the symbols with the first matching
+predicate. If a symbol was not able to unify with any predicate it is ignored.
 
 .. code-block:: python
 
    from clingo import Function, String
-   from clorm import Predicate, StringField, unify
+   from clorm import Predicate, unify
 
    class Person(Predicate):
-      name = StringField(index=True)
-      address = StringField
+      name: str
+      address: str
 
    good_raw = Function("person", [String("Dave"),String("UNSW")])
    bad_raw = Function("nonperson", [])
@@ -97,59 +94,49 @@ was not able to unify with any predicate it is ignored.
    assert len(fb.indexes) == 1
 
 
-.. note:: In general it is a good idea to avoid defining multiple predicate
-   definitions that can unify to the same symbol. However, if a symbol can unify
-   with multiple predicate definitions then the ``unify`` function will match
-   only the first predicate definition in the list of predicates.
+.. note:: In general it is a good idea to avoid defining multiple predicate definitions that
+   can unify to the same symbol. However, if a symbol can unify with multiple predicate
+   definitions then the ``unify`` function will match only the first predicate definition in
+   the list of predicates.
 
-By default, the fact base object returned by the ``unify`` function will be
-initialised with any indexed fields as specified by the matching predicate
-declaration.
-
-To get more fined grained behaviour, such as controlling which fields are
-indexed, the user can also use a ``SymbolPredicateUnfier`` helper function.
-This class also provides a decorator function that can be used to register the
-class and any indexes at the point where the predicate is defined. The symbol
-predicate unifer can then be passed to the unify function instead of a list of
-predicates.
+To get more fined grained behaviour, such as controlling which fields are indexed, the user can
+also use a ``SymbolPredicateUnfier`` helper function. The symbol predicate unifer can then be
+passed to the unify function instead of a list of predicates.
 
 .. code-block:: python
 
    from clingo import Function, String
-   from clorm import Predicate, StringField, unify
+   from clorm import Predicate, ConstantStr, unify
 
-   spu = SymbolPredicateUnifier(supress_auto_index=True)
-
-   @spu.register
-   class Person(Predicate):
-      name = StringField(index=True)
-      address = StringField
+   spu = SymbolPredicateUnifier()
 
    class Person(Predicate):
-      id = ConstantField()
-      address = StringField()
+       name: str
+       address: str
+
+   class Person(Predicate):
+       id: ConstantStr
+       address: str
 
    good_raw = Function("person", [String("Dave"),String("UNSW")])
    bad_raw = Function("nonperson", [])
-   fb = spu.unify([bad_raw, good_raw])
+   fb = unify(spu, [bad_raw, good_raw])
    assert list(fb) == [Person(name="Dave", address="UNSW")]
    assert len(fb.indexes) == 0
 
-This function has two other useful features. Firtly, the option
-``raise_on_empty=True`` will throw an error if no clingo symbols unify with the
-registered predicates, which can be useful for debugging purposes.
+This function has two other useful features. Firtly, the option ``raise_on_empty=True`` will
+throw an error if no clingo symbols unify with the registered predicates, which can be useful
+for debugging purposes.
 
-The final option is the ``delayed_init=True`` option that allow for a delayed
-initialisation of the ``FactBase``. What this means is that the symbols are only
-processed (i.e., they are not unified agaist the predicates to generate facts)
-when the ``FactBase`` object is actually used.
+The final option is the ``delayed_init=True`` option that allow for a delayed initialisation of
+the ``FactBase``. What this means is that the symbols are only processed (i.e., they are not
+unified agaist the predicates to generate facts) when the ``FactBase`` object is actually used.
 
-This is also useful because there are cases where a fact base object is never
-actually used and is simply discarded. In particular this can happen when the
-ASP solver generates models as part of the ``on_model()`` callback function. If
-applications only cares about an optimal model or there is a timeout being
-applied then only the last model generated will actually be processed and all
-the earlier models may be discarded (see :ref:`api_clingo_integration`).
+This is also useful because there are cases where a fact base object is never actually used and
+is simply discarded. In particular this can happen when the ASP solver generates models as part
+of the ``on_model()`` callback function. If applications only cares about an optimal model or
+there is a timeout being applied then only the last model generated will actually be processed
+and all the earlier models may be discarded (see :ref:`api_clingo_integration`).
 
 
 

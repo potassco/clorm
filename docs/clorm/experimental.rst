@@ -5,9 +5,8 @@ Experimental Features
 
 .. warning::
 
-   The following are experimental features that may change between minor library
-   version increments. They shouldn't be considered part of the official Clorm
-   API.
+   The following are experimental features that shouldn't be considered part of the official
+   Clorm API. It is not meant to be used and mostly for exploring and developing ideas.
 
 Reusable Components
 -------------------
@@ -49,12 +48,12 @@ construction.
 
 .. code-block:: python
 
-   from clorm import Predicate, IntegerField, StringField
+   from clorm import Predicate
    from clorm.json import FactBaseCoder
 
    class Afact(Predicate):
-        aint = IntegerField()
-	astr = StringField()
+       aint: int
+       astr: str
 
    fb_coder = FactBaseCoder([Afact])
 
@@ -63,29 +62,28 @@ predicates.
 
 .. code-block:: python
 
-   from clorm import Predicate, IntegerField, StringField
+   from clorm import Predicate
    from clorm.json import FactBaseCoder
 
    fb_coder = FactBaseCoder()
 
-   class Fun(ComplexTerm):
-	aint = IntegerField()
-        astr = StringField()
+   class Fun(Predicate):
+       aint: int
+       astr: str
 
-   class Tup(ComplexTerm):
-	aint = IntegerField()
-        astr = StringField()
-        class Meta: is_tuple = True
+   class Tup(Predicate, name=""):
+       aint: int
+       astr: str
 
    @fb_coder.register
    class Afact(Predicate):
-	aint = IntegerField()
-        afun = Fun.Field()
+       aint: int
+       afun: Fun
 
    @fb_coder.register
    class Bfact(Predicate):
-	astr = StringField()
-        atup = Tup.Field()
+       astr: str
+       atup: Tup
 
 Once the fact coder has been created and the appropriate predicates registered,
 it then provides ``encoder`` and ``decoder`` member functions that can be used
