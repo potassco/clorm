@@ -2211,12 +2211,19 @@ def define_enum_field(
     Example:
        .. code-block:: python
 
-          class IO(str,Enum):
+          class IO(ConstantStr,Enum):
               IN="in"
               OUT="out"
 
           # A field that unifies against ASP constants "in" and "out"
           IOField = define_enum_field(ConstantField,IO)
+
+          # Note, when specified within a Predicate it is possible to avoid calling this
+          # function directly and the predicate class should simply reference the ``IO`` type
+          # annotation.
+
+          class X(Predicate):
+             x: IO
 
     Positional argument:
 
@@ -3216,9 +3223,9 @@ class Predicate(object, metaclass=_PredicateMeta):
        .. code-block:: python
 
            class Booking(Predicate):
-               date = StringField(index = True)
-               time = StringField(index = True)
-               name = StringField(default = "relax")
+               date: str
+               time: str
+               name: str = field(StringField, default="relax")
 
            b1 = Booking("20190101", "10:00")
            b2 = Booking("20190101", "11:00", "Dinner")
@@ -3300,7 +3307,7 @@ class Predicate(object, metaclass=_PredicateMeta):
     @_classproperty
     @classmethod
     def Field(cls) -> Type[BaseField]:
-        """A BaseField sub-class corresponding to a Field for this class."""
+        """A BaseField sub-class corresponding to a field definition for this class."""
         return cls._field
 
     # Clone the object with some differences

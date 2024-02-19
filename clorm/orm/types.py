@@ -16,6 +16,8 @@ if TYPE_CHECKING:
 else:
 
     class ConstantStr(str):
+        """A special ``str`` sub-class for specifying constant logical terms."""
+
         pass
 
 

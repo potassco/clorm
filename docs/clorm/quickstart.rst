@@ -78,7 +78,7 @@ First the relevant libraries need to be imported.
 
 .. code-block:: python
 
-   from clorm import Predicate, ConstantField, IntegerField
+   from clorm import Predicate, ConstantStr
    from clorm.clingo import Control
 
 .. note:: Importing from ``clorm.clingo`` instead of ``clingo``.
@@ -94,29 +94,31 @@ First the relevant libraries need to be imported.
 Defining the Data Model
 -----------------------
 
-The most important step is to define a *data model* that maps the Clingo
-predicates to Python classes. Clorm provides the :class:`~clorm.Predicate` base
-class for this purpose; a :class:`~clorm.Predicate` sub-class defines a direct
-mapping to an underlying ASP logical predicate. The parameters of the predicate
-are specified using a number of *field* classes. Fields can be thought of as
-*term definitions*, as they define how a logical *term* is converted to, and
-from, a Python object. Clorm provides three standard field classes,
-:class:`~clorm.ConstantField`, :class:`~clorm.StringField`, and
-:class:`~clorm.IntegerField`, that correspond to the standard *logic
-programming* data types of constant, string, and integer.
+The most important step is to define a *data model* that maps the Clingo predicates to Python
+classes. Clorm provides the :class:`~clorm.Predicate` base class for this purpose; a
+:class:`~clorm.Predicate` sub-class defines a direct mapping to an underlying ASP logical
+predicate. The parameters of the predicate are specified using a number of *fields*, similar to
+a standard Python ``dataclass``. In the Clorm context the fields can be thought of as *term
+definitions*, as they define how a logical *term* is converted to, and from, a Python object.
+
+ASP's *logic programming* syntax allows for three primitive types: integer, string, and
+constant. From the Python side this corresponds to the standard types ``int`` and ``str``, as
+well as a special Clorm defined type ``ConstantStr``. Note: ``ConstantStr`` is sub-classed from
+``str`` in order to disambiguate between ASP constants and strings, while still offering the
+same Python type checking behaviour of the ``str`` parent class.
 
 .. code-block:: python
 
    class Driver(Predicate):
-       name=ConstantField
+       name: ConstantStr
 
    class Item(Predicate):
-       name=ConstantField
+       name: ConstantStr
 
    class Assignment(Predicate):
-       item=ConstantField
-       driver=ConstantField
-       time=IntegerField
+       item: ConstantStr
+       driver: ConstantStr
+       time: int
 
 The above code defines three classes to match the ASP program's input and output
 predicates, where the name of the predicate to map to is derived from the
@@ -335,123 +337,3 @@ It is also worth noting that the :py:meth:`Query.select()<clorm.Query.select>`
 projection operator performs a similar function to an SQL ``SELECT`` clause to
 modify the output. Here, instead of returning the assignment item itself, it
 returns the two relevant parameter values.
-
-Old Query API
-^^^^^^^^^^^^^
-
-For comparison the following shows the same example but using the old query API.
-
-.. code-block:: python
-
-    from clorm import ph1_
-
-    query=solution.select(Assignment)\
-                  .where(Assignment.driver == ph1_).order_by(Assignment.time)
-
-    for d in drivers:
-        assignments = query.get(d.name)
-        if not assignments:
-            print("Driver {} is not working today".format(d.name))
-        else:
-            print("Driver {} must deliver: ".format(d.name))
-            for a in assignments:
-                print("\t Item {} at time {}".format(a.item, a.time))
-
-
-The old interface starts with a
-:py:meth:`FactBase.select()<clorm.FactBase.select>` call to return a
-:class:`~clorm.Select` object. This specifies both the predicate to be queried
-and the output format of the query. Comparing this to the new query API the old
-interface only allows a single predicate to be queried and the output format is
-fixed and cannot be modified.
-
-Calling ``query.get(d.name)`` executes the query for the given driver as well as
-binding the placeholders. An important difference between the old and new
-interfaces is that the call to :py:meth:`Select.get()<clorm.Select.get>`
-executes the query and returns a list of the results. In contrast the call to
-:py:meth:`Query.all()<clorm.Query.all>` returns a generator and the query is
-executed by the generator during its iteration.
-
-Other Clorm Features
---------------------
-
-The above example shows some of the basic features of Clorm and how to match the
-Python data model to the defined ASP predicates. However, beyond the basics
-outlined above there are other important features that will be useful for more
-complex interactions. These include:
-
-* Defining complex-terms. Many ASP programs include complex terms (i.e., either
-  tuples or functional objects). Clorm supports predicate definitions that
-  include complex-terms using a ``ComplexTerm`` class. Every defined complex
-  term has an associated ``Field`` property that can be used within a Predicate
-  definition.
-
-.. code-block:: python
-
-    from clorm import ComplexTerm
-
-    class Event(ComplexTerm):
-        date=StringField
-	name=StringField
-
-    class Log(Predicate):
-        event=Event.Field
-	level=IntegerField
-
-The above definition can be used to match against an ASP fact containing a
-complex term.
-
-.. code-block:: prolog
-
-    log(event("2019-04-05", "goto shops"), 0).
-
-* Custom fields. The ``IntegerField``, ``StringField``, and ``ConstantField``
-  classes are in fact sub-classes of a ``RawField`` class. Custom data
-  conversions can be performed by sub-classing ``RawField`` directly, or by
-  sub-classing one of its existing sub-classes. For example, a ``DateField`` can
-  be defined that converts Python date objects into Clingo strings with
-  YYYY-MM-DD formatting.
-
-.. code-block:: python
-
-    from clorm import StringField          # StringField is a sub-class of RawField
-    from datetime import datetime
-
-    class DateField(StringField):
-        pytocl = lambda dt: dt.strftime("%Y-%m-%d")
-        cltopy = lambda s: datetime.datetime.strptime(s,"%Y-%m-%d").date()
-
-    class DeliveryDate(Predicate):
-        item=ConstantField()
-        date=DateField()
-
-* Clingo allows Python functions to be called from within an ASP program using
-  the @-syntax. Values are passed to these Python functions as ``clingo.Symbol``
-  objects and it is up to the Python code to perform all appropriate data
-  conversions.
-
-  Clorm provides a number of mechanisms to automate this data conversion process
-  through the specification of a *data conversion signature*.
-
-  In the following example the function ``add`` is decorated with an automatic
-  data conversion signature that accepts two input integers and returns an
-  output integer.
-
-.. code-block:: python
-
-    @make_function_asp_callable(IntegerField, IntegerField, IntegerField)
-    def add(a,b): a+b
-
-.. code-block:: prolog
-
-    f(@add(5,6)).    % grounds to f(11).
-
-The default behaviour of the Clingo API does infact provide some minimal
-automatic data conversion for the @-functions. In particular, it will
-automatically convert numbers and strings, however it cannot deal with other
-types such as constants or more complex terms.
-
-The Clorm mechanism of a data conversion signatures provide a more principled
-and transparent approach; it can deal with arbitrary conversions and all data
-conversions are clear since they are specified as part of the signature.
-

@@ -1,7 +1,7 @@
 Installation
 ============
 
-Clorm requires Python 3.7+ and Clingo 5.4+ (as of writing Clingo 5.5.0 is the
+Clorm requires Python 3.7+ and Clingo 5.4+ (as of writing Clingo 5.7.1 is the
 latest version). There are many ways to install Clorm. In order of simplicity,
 it can be installed using `pip`, `conda`, from the `Potassco PPA
 <https://launchpad.net/~potassco>`_ (for Ubuntu users), and finally from source.

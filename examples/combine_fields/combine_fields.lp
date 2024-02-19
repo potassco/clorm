@@ -17,7 +17,8 @@ holds(F,0) :- init(F).
 #script(python)
 
 from clorm.clingo import Control
-from clorm import Predicate, ComplexTerm, ConstantStr, combine_fields
+from enum import Enum
+from clorm import Predicate, ConstantStr, combine_fields
 from clorm import ph1_
 from typing import Union
 
@@ -26,13 +27,17 @@ from typing import Union
 # predicates.
 #--------------------------------------------------------------------------
 
+class Status(ConstantStr, Enum):
+    ON="on"
+    OFF="off"
+
 class Time(Predicate):
     time: int
 
-class Light(ComplexTerm):
-    status: ConstantStr
+class Light(Predicate):
+    status: Status
 
-class RobotLocation(ComplexTerm, name="robotlocation"):
+class RobotLocation(Predicate, name="robotlocation"):
     robot: ConstantStr
     location: ConstantStr
 
@@ -53,7 +58,7 @@ def main(ctrl_):
     ctrl = Control(control_=ctrl_, unifier=[Time,Holds])
 
     # Some initial state
-    initstate=[Init(Light("on")),Init(RobotLocation("roby","kitchen"))]
+    initstate=[Init(Light(Status.ON)),Init(RobotLocation("roby","kitchen"))]
 
     # Add the initial state and ground the ASP program and solve
     solution=None
