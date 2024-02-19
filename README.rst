@@ -295,11 +295,11 @@ Clorm library. These include:
 
     class Event(Predicate):
         date: str
-	    name: str
+        name: str
 
     class Log(Predicate):
         event: Event
-	    level: int
+        level: int
 
     l1=Log(event=Event(date="2019-4-5",name="goto shops"),level=0)
 
@@ -328,7 +328,7 @@ Clorm library. These include:
 
     class Event(Predicate):
         date: datetime.date = field
-	    name: str
+        name: str
 
     l2=Log(event=Event(date=datetime.date(2019,3,15),name="travel"),level=0)
 
