@@ -73,6 +73,10 @@ from clorm.orm.core import (
 
 from .support import check_errmsg, check_errmsg_contains
 
+# Error messages for CPython and PyPy vary
+PYPY = sys.implementation.name == "pypy"
+
+
 # ------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------
 
@@ -488,9 +492,12 @@ class FieldTestCase(unittest.TestCase):
 
         with self.assertRaises(TypeError) as ctx:
             fld5 = IntegerField(unknown1=5, unknown2="f")
-        check_errmsg_contains(
-            ("__init__() got an unexpected keyword argument " "'unknown1'"), ctx
-        )
+        if PYPY:
+            check_errmsg_contains(("__init__() got 2 unexpected keyword arguments"), ctx)
+        else:
+            check_errmsg_contains(
+                ("__init__() got an unexpected keyword argument " "'unknown1'"), ctx
+            )
 
     # --------------------------------------------------------------------------
     # Test setting the index flag for a field
@@ -751,7 +758,10 @@ class FieldTestCase(unittest.TestCase):
 
         with self.assertRaises(TypeError) as ctx:
             tmp = INLField.pytocl([1, "b", 3])
-        check_errmsg("an integer is required", ctx)
+        if PYPY:
+            check_errmsg("expected integer", ctx)
+        else:
+            check_errmsg("an integer is required", ctx)
 
         with self.assertRaises(TypeError) as ctx:
             tmp = INLField.pytocl(1)
@@ -787,7 +797,10 @@ class FieldTestCase(unittest.TestCase):
         # Test some failures
         with self.assertRaises(TypeError) as ctx:
             tmp = ILField.pytocl(("a", "b", "c"))
-        check_errmsg("an integer is required", ctx)
+        if PYPY:
+            check_errmsg("expected integer", ctx)
+        else:
+            check_errmsg("an integer is required", ctx)
 
         with self.assertRaises(TypeError) as ctx:
             tmp = CLField.pytocl((1, 2, 3))

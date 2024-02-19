@@ -19,7 +19,7 @@ working_driver(D) :- assignment(_,D,_).
 #script(python)
 
 from clorm.clingo import Control
-from clorm import Predicate, ConstantField, IntegerField, FactBase
+from clorm import Predicate, ConstantStr, FactBase
 from clorm import ph1_
 
 
@@ -29,15 +29,15 @@ from clorm import ph1_
 #--------------------------------------------------------------------------
 
 class Driver(Predicate):
-    name=ConstantField
+    name: ConstantStr
 
 class Item(Predicate):
-    name=ConstantField
+    name: ConstantStr
 
 class Assignment(Predicate):
-    item=ConstantField
-    driver=ConstantField
-    time=IntegerField
+    item: ConstantStr
+    driver: ConstantStr
+    time: int
 
 #--------------------------------------------------------------------------
 # main

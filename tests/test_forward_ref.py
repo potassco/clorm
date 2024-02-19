@@ -106,6 +106,78 @@ class P3(Predicate):
             p = module.P3(a=module.P2(a=42))
             self.assertEqual(str(p), "p3(p2(42))")
 
+    def test_postponed_annotations_complex2(self):
+        code = """
+from __future__ import annotations
+from clorm import Predicate
+from typing import Union
+
+class P1(Predicate):
+    a: int
+    b: str
+
+class P2(Predicate):
+    a: int
+
+class P3(Predicate):
+    a: P1 | P2
+"""
+        if sys.version_info >= (3, 10):
+            with self._create_module(code) as module:
+                p = module.P3(a=module.P1(a=3, b="42"))
+                self.assertEqual(str(p), 'p3(p1(3,"42"))')
+                p = module.P3(a=module.P2(a=42))
+                self.assertEqual(str(p), "p3(p2(42))")
+
+    def test_postponed_annotations_complex3(self):
+        code = """
+from __future__ import annotations
+from clorm import Predicate
+from typing import Union
+
+class P1(Predicate):
+    a: int
+    b: str
+
+class P2(Predicate):
+    a: int
+
+class P3(Predicate):
+    a: 'P1 | P2'
+"""
+        if sys.version_info >= (3, 10):
+            with self._create_module(code) as module:
+                p = module.P3(a=module.P1(a=3, b="42"))
+                self.assertEqual(str(p), 'p3(p1(3,"42"))')
+                p = module.P3(a=module.P2(a=42))
+                self.assertEqual(str(p), "p3(p2(42))")
+
+    def test_postponed_annotations_tuple1(self):
+        code = """
+from __future__ import annotations
+from clorm import Predicate
+
+class P(Predicate):
+    a: tuple[int, str]
+"""
+        if sys.version_info >= (3, 10):
+            with self._create_module(code) as module:
+                p = module.P(a=(123, "Hello"))
+                self.assertEqual(str(p), 'p((123,"Hello"))')
+
+    def test_postponed_annotations_tuple1(self):
+        code = """
+from __future__ import annotations
+from clorm import Predicate
+from typing import Tuple
+
+class P(Predicate):
+    a: Tuple[int, str]
+"""
+        with self._create_module(code) as module:
+            p = module.P(a=(123, "Hello"))
+            self.assertEqual(str(p), 'p((123,"Hello"))')
+
     def test_postponed_annotations_nonglobal1(self):
         code = """
 from __future__ import annotations

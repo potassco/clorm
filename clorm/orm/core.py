@@ -38,6 +38,9 @@ from typing import (
     overload,
 )
 
+if sys.version_info >= (3, 10):
+    from types import UnionType
+
 from clorm.orm.types import (
     ConstantStr,
     HeadList,
@@ -1467,6 +1470,15 @@ def field(
     default_factory: Any = MISSING,
     kw_only: bool = False,
 ) -> Any:
+    """Return a field definition.
+
+    This function is used to override the type annotation field specification. A different
+    field can be specificied as well as default values.
+
+    This function operates in a similar way to ``dataclass.field()`` in that it allows for more
+    field specification options.
+
+    """
     if default is not MISSING and default_factory is not MISSING:
         raise ValueError("can not specify both default and default_factory")
     if isinstance(basefield, tuple):
@@ -2208,12 +2220,19 @@ def define_enum_field(
     Example:
        .. code-block:: python
 
-          class IO(str,Enum):
+          class IO(ConstantStr,Enum):
               IN="in"
               OUT="out"
 
           # A field that unifies against ASP constants "in" and "out"
           IOField = define_enum_field(ConstantField,IO)
+
+          # Note, when specified within a Predicate it is possible to avoid calling this
+          # function directly and the predicate class should simply reference the ``IO`` type
+          # annotation.
+
+          class X(Predicate):
+             x: IO
 
     Positional argument:
 
@@ -2829,8 +2848,15 @@ def _is_bad_predicate_inner_class_declaration(name, obj):
     return obj.__name__ == name
 
 
+def _is_union_type(type_: Type[Any]) -> bool:
+    if sys.version_info >= (3, 10):
+        return type_ is Union or type_ is UnionType
+    return type_ is Union
+
+
 # infer fielddefinition based on a given type
 def infer_field_definition(type_: Type[Any], module: str) -> Optional[Type[BaseField]]:
+    """Given an type annotation specification return the matching clorm field."""
     origin = get_origin(type_)
     args = get_args(type_)
 
@@ -2846,7 +2872,7 @@ def infer_field_definition(type_: Type[Any], module: str) -> Optional[Type[BaseF
     if origin is TailListReversed:
         field = infer_field_definition(args[0], module)
         return define_nested_list_field(field, headlist=False, reverse=True) if field else None
-    if origin is Union:
+    if _is_union_type(origin):
         fields: List[Type[BaseField]] = []
         for arg in args:
             field = infer_field_definition(arg, module)
@@ -3206,9 +3232,9 @@ class Predicate(object, metaclass=_PredicateMeta):
        .. code-block:: python
 
            class Booking(Predicate):
-               date = StringField(index = True)
-               time = StringField(index = True)
-               name = StringField(default = "relax")
+               date: str
+               time: str
+               name: str = field(StringField, default="relax")
 
            b1 = Booking("20190101", "10:00")
            b2 = Booking("20190101", "11:00", "Dinner")
@@ -3290,7 +3316,7 @@ class Predicate(object, metaclass=_PredicateMeta):
     @_classproperty
     @classmethod
     def Field(cls) -> Type[BaseField]:
-        """A BaseField sub-class corresponding to a Field for this class."""
+        """A BaseField sub-class corresponding to a field definition for this class."""
         return cls._field
 
     # Clone the object with some differences
@@ -3332,7 +3358,7 @@ class Predicate(object, metaclass=_PredicateMeta):
     @_classproperty
     @classmethod
     def meta(cls) -> PredicateDefn:
-        """The meta data (definitional information) for the Predicate/Complex-term"""
+        """The meta data (definitional information) for the Predicate."""
         return cls._meta
 
     # --------------------------------------------------------------------------
