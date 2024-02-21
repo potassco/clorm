@@ -2997,20 +2997,24 @@ def _make_predicatedefn(
     # which is true from Python 3.5+ (see PEP520
     # https://www.python.org/dev/peps/pep-0520/)
 
+    # Predicates (or complexterms) that are defined within the current Predicate context may be
+    # necessary to help resolve the postponed annotations.
+    inner_predicates: Dict[str, Type[Predicate]] = {}
+
     fields_from_dct = {}
     for fname, fdefn in namespace.items():
-
         # Ignore entries that are not field declarations
         if fname == "Meta":
             continue
         if _magic_name(fname):
             continue
         if _is_complexterm_declaration(fname, fdefn):
+            inner_predicates[fname] = fdefn
             continue
         if _is_bad_predicate_inner_class_declaration(fname, fdefn):
             raise TypeError(
                 (
-                    "Error defining class '{}': only ComplexTerm "
+                    "Error defining class '{}': only Predicate/ComplexTerm "
                     "sub-classes are allowed as inner classes of "
                     "a Predicate definition"
                 ).format(fname)
@@ -3053,7 +3057,7 @@ def _make_predicatedefn(
         field_specification = {
             name: fields_from_dct.get(name, None) for name, _ in annotations.items()
         }
-        for name, type_ in resolve_annotations(raw_annotations, module).items():
+        for name, type_ in resolve_annotations(raw_annotations, module, inner_predicates).items():
             fdefn = infer_field_definition(type_, module)
             if fdefn:
                 field_specification[name] = fdefn

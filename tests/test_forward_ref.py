@@ -84,6 +84,23 @@ class P1(Predicate):
             p = module.P1(a=3, b="42")
             self.assertEqual(str(p), 'p1(3,"42")')
 
+
+    def test_postponed_annotations_inner_class(self):
+        code = """
+from __future__ import annotations
+from clorm import Predicate
+
+class Outer(Predicate):
+    class Inner(Predicate):
+        a: int
+    b: Inner
+"""
+        with self._create_module(code) as module:
+            inner = module.Outer.Inner(a=3)
+            outer = module.Outer(b=inner)
+            self.assertEqual(str(outer), 'outer(inner(3))')
+
+
     def test_postponed_annotations_complex(self):
         code = """
 from __future__ import annotations
