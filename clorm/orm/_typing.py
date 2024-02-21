@@ -79,8 +79,15 @@ if sys.version_info < (3, 9):
             return annotation
 
 
+def print_dict(adict):
+    for k, v in adict.items():
+        print(f"{k} => {v}")
+
+
 def resolve_annotations(
-    raw_annotations: Dict[str, Type[Any]], module_name: Optional[str] = None
+    raw_annotations: Dict[str, Type[Any]],
+    module_name: Optional[str] = None,
+    locals_: Dict[str, Any] = None,
 ) -> Dict[str, Type[Any]]:
     """
     Taken from https://github.com/pydantic/pydantic/blob/1.10.X-fixes/pydantic/typing.py#L376
@@ -88,6 +95,7 @@ def resolve_annotations(
 
     Resolve string or ForwardRef annotations into type objects if possible.
     """
+    base_locals: Dict[str, Type[Any]] = dict(locals_) if locals_ else {}
     base_globals: Optional[Dict[str, Any]] = None
     if module_name:
         try:
@@ -100,7 +108,6 @@ def resolve_annotations(
 
     annotations = {}
     frameinfos: Union[list[FrameInfo], None] = None
-    locals_ = {}
     for name, value in raw_annotations.items():
         if isinstance(value, str):
 
@@ -114,7 +121,7 @@ def resolve_annotations(
             else:
                 value = ForwardRef(value, is_argument=False)
         try:
-            type_ = _eval_type(value, base_globals, None)
+            type_ = _eval_type(value, base_globals, base_locals)
 
         except NameError:
             # The type annotation could refer to a definition at a non-global scope so build
@@ -128,13 +135,14 @@ def resolve_annotations(
                     )
                 frameinfos = frameinfos[3:]
             type_ = None
+            count = 0
             while frameinfos:
                 try:
-                    type_ = _eval_type(value, base_globals, locals_)
+                    type_ = _eval_type(value, base_globals, base_locals)
                     break
                 except NameError:
                     finfo = frameinfos.pop(0)
-                    locals_.update(finfo.frame.f_locals)
+                    base_locals.update(finfo.frame.f_locals)
             if type_ is None:
                 raise RuntimeError(
                     f'Cannot resolve field "{name}" with type annotation "{value}"'
