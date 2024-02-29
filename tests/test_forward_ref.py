@@ -84,7 +84,7 @@ class P1(Predicate):
             p = module.P1(a=3, b="42")
             self.assertEqual(str(p), 'p1(3,"42")')
 
-    def test_postponed_annotations_inner_class(self):
+    def test_postponed_annotations_inner_class_basic(self):
         code = """
 from __future__ import annotations
 from clorm import Predicate
@@ -98,6 +98,33 @@ class Outer(Predicate):
             inner = module.Outer.Inner(a=3)
             outer = module.Outer(b=inner)
             self.assertEqual(str(outer), "outer(inner(3))")
+
+    def test_postponed_annotations_inner_class_complex(self):
+        """Test a complex case with inner classes across different bases classes.
+
+        Note: I think the internal implementation functionality of this test is already covered
+        by other tests, but adding this for peace of mind.
+
+        """
+        code = """
+from __future__ import annotations
+from clorm import Predicate
+
+class Outer(Predicate):
+    class Inner(Predicate):
+        a: int
+    b: Inner
+
+class NonPredicate:
+    class Inner(Predicate):
+        a: Outer
+        b: Outer.Inner
+"""
+        with self._create_module(code) as module:
+            inner = module.Outer.Inner(a=3)
+            outer = module.Outer(b=inner)
+            npinner = module.NonPredicate.Inner(a=outer, b=inner)
+            self.assertEqual(str(npinner), "inner(outer(inner(3)),inner(3))")
 
     def test_postponed_annotations_complex(self):
         code = """
