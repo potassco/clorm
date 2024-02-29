@@ -201,9 +201,9 @@ previously loaded ASP program to produce a *grounded* ASP program.
 At this point the control object is ready to be run and generate
 solutions. There are a number of ways in which the ASP solver can be run (see
 the `Clingo API documentation
-<https://potassco.org/clingo/python-api/5.4/#clingo.Control.solve>`_). For this
-example we run it using a callback function, which is called each time a model
-is found.
+<https://potassco.org/clingo/python-api/5.5/clingo/control.html#clingo.control.Control.solve>`_).
+For this example we run it using a callback function, which is called each time a
+model is found.
 
 .. code-block:: python
 
