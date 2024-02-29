@@ -4032,7 +4032,7 @@ class Query(abc.ABC):
         flexibility, each set can be ``None`` or a single clorm fact or an iterator over clorm
         facts.
 
-           An exception is thrown if a ``group_by()`` or ``uclause has been specified.
+           An exception is thrown if a ``group_by()`` or ``tuple()`` clause has been specified.
 
         Example assuming a FactBase ``fb`` consisting of ``F`` and ``G`` predicate facts:
 
