@@ -367,7 +367,7 @@ Clorm library. These include:
 
 Development
 -----------
-* Python version: Clorm works with Python versions (3.8+)
+* Python version: Clorm is tested with Python versions 3.7 - 3.12
 * Clingo version: Clorm is typically tested with Clingo versions 5.5 - 5.7
 
 Alternatives
