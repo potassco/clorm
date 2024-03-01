@@ -24,13 +24,6 @@ easier to refactor the python code as the ASP program evolves.
 
 - Works with Python 3.7+ and Clingo 5.5+
 
-.. note::
-
-   Clorm is now being hosted under the Potassco umbrella (which is the home of
-   Clingo and the other ASP tools). The GitHub and Anaconda namespaces have been
-   changed accordingly.
-
-
 
 .. toctree::
    :maxdepth: 2
