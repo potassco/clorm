@@ -331,6 +331,13 @@ class FactBase(object):
            Returns a Select query object for specifying a query.
 
         """
+        import warnings
+
+        warnings.warn(
+            "This API is deprecated. To use the new Query API call FactBase.query()",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self._check_init()  # Check for delayed init
 
         roots = validate_root_paths([root])
