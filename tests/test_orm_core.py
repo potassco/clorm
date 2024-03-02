@@ -775,12 +775,12 @@ class FieldTestCase(unittest.TestCase):
     def test_api_nested_list_field_complex_element_field(self):
         XField = define_nested_list_field((IntegerField, (ConstantField, StringField)))
 
-        symvalue1 = Function("", [Number(1), Function("", [Function("a",[]), String("A")])])
-        symvalue2 = Function("", [Number(2), Function("", [Function("b",[]), String("B")])])
-        symnlist = Function("", [symvalue1, Function("", [symvalue2, Function("",[])])])
+        symvalue1 = Function("", [Number(1), Function("", [Function("a", []), String("A")])])
+        symvalue2 = Function("", [Number(2), Function("", [Function("b", []), String("B")])])
+        symnlist = Function("", [symvalue1, Function("", [symvalue2, Function("", [])])])
 
-        value1 = (1,("a", "A"))
-        value2 = (2,("b", "B"))
+        value1 = (1, ("a", "A"))
+        value2 = (2, ("b", "B"))
         nlist = (value1, value2)
 
         self.assertEqual(XField.cltopy(symnlist), nlist)
@@ -827,12 +827,12 @@ class FieldTestCase(unittest.TestCase):
     def test_api_flat_list_field_complex_element_field(self):
         XField = define_flat_list_field((IntegerField, (ConstantField, StringField)))
 
-        symvalue1 = Function("", [Number(1), Function("", [Function("a",[]), String("A")])])
-        symvalue2 = Function("", [Number(2), Function("", [Function("b",[]), String("B")])])
+        symvalue1 = Function("", [Number(1), Function("", [Function("a", []), String("A")])])
+        symvalue2 = Function("", [Number(2), Function("", [Function("b", []), String("B")])])
         symnlist = Function("", [symvalue1, symvalue2])
 
-        value1 = (1,("a", "A"))
-        value2 = (2,("b", "B"))
+        value1 = (1, ("a", "A"))
+        value2 = (2, ("b", "B"))
         nlist = (value1, value2)
 
         self.assertEqual(XField.cltopy(symnlist), nlist)

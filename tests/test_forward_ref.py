@@ -302,7 +302,6 @@ class P(Predicate):
             p = module.P(x=((1, "a"), (2, "b")))
             self.assertEqual(str(p), 'p(((1,"a"),(2,"b")))')
 
-
     def test_forward_ref(self):
         def module_():
             from typing import ForwardRef
