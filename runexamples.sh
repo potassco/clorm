@@ -86,3 +86,6 @@ run_clingo examples/quickstart/embedded_quickstart.lp
 run_python examples/quickstart/quickstart.py
 
 run_clingo examples/combine_fields/combine_fields.lp
+
+run_clingo examples/nested_list/nested_list.lp
+
