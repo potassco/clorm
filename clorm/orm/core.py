@@ -1762,6 +1762,31 @@ class SimpleField(BaseField):
             return String(value)
 
 
+# ------------------------------------------------------------------------------------------
+# Internal function to process field definitions. If the input is a BaseField subclass then
+# return it directly. Otherwise tries to generate a new BaseField subclass from a tuple field
+# specification. This can be used by the field builder functions when passed a union based
+# field.
+# ------------------------------------------------------------------------------------------
+
+
+def _process_field_definition(field_defn: _FieldDefinition) -> Type[BaseField]:
+    if isinstance(field_defn, tuple):
+        try:
+            module = sys._getframe(1).f_globals.get("__name__", "__main__")
+        except (AttributeError, ValueError):
+            module = None
+        return _create_complex_term(field_defn, module=module)
+    if not inspect.isclass(field_defn) or not issubclass(field_defn, BaseField):
+        raise TypeError(
+            (
+                f"'{field_defn}' must be a '{BaseField}' sub-class or a nested "
+                f"tuple of {BaseField} sub-class leaves"
+            )
+        )
+    return field_defn
+
+
 # ------------------------------------------------------------------------------
 # refine_field is a function that creates a sub-class of a BaseField (or BaseField
 # sub-class). It restricts the set of allowable values based on a functor or an
@@ -1980,11 +2005,7 @@ def define_flat_list_field(element_field: Type[BaseField], *, name: str = "") ->
 
     """
     subclass_name = name if name else "AnonymousFlatSeqField"
-    efield = element_field
-
-    # The element_field must be a BaseField sub-class
-    if not inspect.isclass(efield) or not issubclass(efield, BaseField):
-        raise TypeError("'{}' is not a BaseField or a sub-class".format(efield))
+    efield = _process_field_definition(element_field)
 
     def _checkpy(v):
         if isinstance(v, str) or not isinstance(v, cabc.Iterable):
@@ -2093,11 +2114,7 @@ def define_nested_list_field(
 
     """
     subclass_name = name if name else "AnonymousNestedSeqField"
-    efield = element_field
-
-    # The element_field must be a BaseField sub-class
-    if not inspect.isclass(efield) or not issubclass(efield, BaseField):
-        raise TypeError("'{}' is not a BaseField or a sub-class".format(efield))
+    efield = _process_field_definition(element_field)
 
     # Support function - to check input values
     def _checkpy(v):

@@ -278,6 +278,31 @@ XP1, XP2 = define_predicates()
             p2 = module.XP2(a=p1)
             self.assertEqual(str(p2), 'p2(p1(c,3,"42"))')
 
+    def test_postponed_annotations_headlist(self):
+        code = """
+from __future__ import annotations
+from clorm import Predicate, HeadList
+
+class P(Predicate):
+    x: HeadList[tuple[int,str]]
+"""
+        with self._create_module(code) as module:
+            p = module.P(x=((1, "a"), (2, "b")))
+            self.assertEqual(str(p), 'p(((1,"a"),((2,"b"),())))')
+
+    def test_postponed_annotations_flatlist(self):
+        code = """
+from __future__ import annotations
+from clorm import Predicate
+
+class P(Predicate):
+    x: tuple[tuple[int,str], ...]
+"""
+        with self._create_module(code) as module:
+            p = module.P(x=((1, "a"), (2, "b")))
+            self.assertEqual(str(p), 'p(((1,"a"),(2,"b")))')
+
+
     def test_forward_ref(self):
         def module_():
             from typing import ForwardRef
