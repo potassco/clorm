@@ -1100,12 +1100,12 @@ def alias(predicate: Any, name: str = "") -> Type["Predicate"]:
     Example:
        .. code-block:: python
 
-           from clorm import FactBase, Predicate, IntegerField, StringField, alias
+           from clorm import FactBase, Predicate, alias
 
            class F(Predicate):
-               pid = IntegerField
-               name = StringField
-               fid = IntegerField
+               pid: int
+               name: str
+               fid: int
 
           fb=FactBase([F(1,"Adam",3),F(2,"Betty",4),F(3,"Carol",1),F(4,"Dan",2)])
 
@@ -1279,9 +1279,8 @@ class _AbstractBaseFieldMeta(abc.ABCMeta, _BaseFieldMeta):
 class BaseField(object, metaclass=_AbstractBaseFieldMeta):
     """Define a mapping from ASP logical terms to Python objects.
 
-    A field is used as part of a ``ComplexTerm`` or ``Predicate``
-    definition. It specifies the translation between ASP terms and Python
-    objects.
+    A field is used as part of a ``Predicate`` definition. It specifies the
+    translation between ASP terms and Python objects.
 
     It contains two class functions ``cltopy`` and ``pytocl`` that implement
     the translation from Clingo to Python and Python to Clingo
@@ -1332,7 +1331,7 @@ class BaseField(object, metaclass=_AbstractBaseFieldMeta):
     Args:
 
       default: A default value (or function) to be used when instantiating a
-       ``Predicate`` or ``ComplexTerm`` object. If a Python ``callable`` object is
+       ``Predicate`` object. If a Python ``callable`` object is
        specified (i.e., a function or functor) then it will be called (with no
        arguments) when the predicate/complex-term object is instantiated.
 
@@ -1621,7 +1620,7 @@ class RawField(BaseField):
 
 
 class StringField(BaseField):
-    """A field to convert between a Clingo.String object and a Python string."""
+    """A field to convert between a ``Clingo.String`` object and a Python string."""
 
     def cltopy(symbol):
         try:
@@ -1639,7 +1638,7 @@ class StringField(BaseField):
 
 
 class IntegerField(BaseField):
-    """A field to convert between a Clingo.Number object and a Python integer."""
+    """A field to convert between a ``Clingo.Number`` object and a Python integer."""
 
     def cltopy(symbol):
         try:
@@ -1828,12 +1827,14 @@ def refine_field(
     Example:
        .. code-block:: python
 
+           from clorm import Predicate, ConstantField, ConstantStr, refine_field, field
+
            WorkDayField = refine_field(ConstantField,
               ["monday", "tuesday", "wednesday", "thursday", "friday"])
 
           class WorksOn(Predicate):
-              employee = ConstantField()
-              workday = WorkdDayField()
+              employee: ConstantStr
+              workday: str = field(WorkdDayField)
 
     Instead of a passing a list of values the second parameter can also be a
     function/functor. If is parameter is callable then it is treated as a
@@ -2538,7 +2539,7 @@ class PredicateDefn(object):
     """Encapsulates some meta-data for a Predicate definition.
 
     Each Predicate class will have a corresponding PredicateDefn object that specifies some
-    introspective properties of the predicate/complex-term.
+    introspective properties of the predicate.
 
     """
 
@@ -2562,7 +2563,7 @@ class PredicateDefn(object):
 
     @property
     def name(self):
-        """Returns the string name of the predicate or complex term"""
+        """Returns the string name of the predicate"""
         return self._name
 
     @property
@@ -2617,7 +2618,7 @@ class PredicateDefn(object):
     # Internal property
     @property
     def parent(self):
-        """Return the Predicate/Complex-term associated with this definition"""
+        """Return the Predicate associated with this definition"""
         return self._parent_cls
 
     # Internal property
@@ -2856,7 +2857,7 @@ def _is_union_type(type_: Type[Any]) -> bool:
 
 # infer fielddefinition based on a given type
 def infer_field_definition(type_: Type[Any], module: str) -> Optional[Type[BaseField]]:
-    """Given an type annotation specification return the matching clorm field."""
+    """Given a type annotation specification return the matching clorm field."""
     origin = get_origin(type_)
     args = get_args(type_)
 
@@ -3226,11 +3227,10 @@ class _PredicateMeta(type):
 
 
 class Predicate(object, metaclass=_PredicateMeta):
-    """Encapsulates an ASP predicate or complex term in an easy to access object.
+    """Abstract base class to encapsulate an ASP predicate or complex term.
 
-    This is the heart of the ORM model for defining the mapping of a complex
-    term or predicate to a Python object. ``ComplexTerm`` is simply an alias for
-    ``Predicate``.
+    This is the heart of the ORM model for defining the mapping of a predicate
+    or complex term to a Python object.
 
     Example:
        .. code-block:: python
@@ -3238,7 +3238,7 @@ class Predicate(object, metaclass=_PredicateMeta):
            class Booking(Predicate):
                date: str
                time: str
-               name: str = field(StringField, default="relax")
+               name: str = field(StringField, default="Free time")
 
            b1 = Booking("20190101", "10:00")
            b2 = Booking("20190101", "11:00", "Dinner")
@@ -3247,26 +3247,24 @@ class Predicate(object, metaclass=_PredicateMeta):
     restrictions:
 
     - it cannot start with a "_", or
-    - it cannot be be one of the following reserved words: "meta", "raw",
+
+    - it cannot be be one of the following reserved words: "sign", "meta", "raw",
       "clone", or "Field".
 
-    The constructor creates a predicate instance (i.e., a *fact*) or complex
-    term.
+    The constructor creates a predicate instance (i.e., a *fact*).
 
     Note: Using the ``raw`` parameter is no longer supported. You should use
     the `unify()` function or `Unifier` class instead.
 
     Args:
       **kwargs:
-
-         - if a single named parameter ``raw`` is specified then it will try to
-           unify the parameter with the specification, or
          - named parameters corresponding to the field names.
+         - sign: a special named parameter to indicate the sign (pos/neg) of the fact.
 
     """
 
-    # sign is specified here to be recognized from __dataclass_transform__
-    # will be overriden by metaclass
+    # Note: sign is specified here to be recognized from __dataclass_transform__
+    # and will be overriden by the metaclass
     sign: bool = field(IntegerField, default=True, kw_only=True)
 
     if typing.TYPE_CHECKING:
@@ -3307,14 +3305,14 @@ class Predicate(object, metaclass=_PredicateMeta):
     def symbol(self):
         """Returns the Symbol object corresponding to the fact.
 
-        The type of the object maybe either a clingo.Symbol or noclingo.NoSymbol.
+        The type of the object maybe either a ``clingo.Symbol`` or ``noclingo.NoSymbol``.
         """
         return self._raw
 
     # Get the underlying clingo.Symbol object
     @property
     def raw(self) -> Symbol:
-        """Returns the underlying clingo.Symbol object"""
+        """Returns the underlying ``clingo.Symbol`` object"""
         return self._raw if isinstance(self._raw, Symbol) else noclingo_to_clingo(self._raw)
 
     @_classproperty
@@ -3379,7 +3377,7 @@ class Predicate(object, metaclass=_PredicateMeta):
         return self.meta[idx].__get__(self)
 
     def __bool__(self):
-        """Behaves like a tuple: returns False if the predicate/complex-term has no elements"""
+        """Behaves like a tuple: returns False if the predicate has no elements"""
         return len(self.meta) > 0
 
     def __len__(self):

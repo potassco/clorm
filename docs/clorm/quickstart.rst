@@ -28,7 +28,7 @@ reader is necessarily familiar with the official Clingo Python API. Since Clorm
 is designed to be used with the Clingo API we therefore provide some basic
 explanations of the relevant steps necessary to run the Clingo solver. However,
 for more detailed documentation see the `Clingo API
-<https://potassco.org/clingo/python-api/current/clingo.html>`_.
+<https://potassco.org/clingo/python-api/5.7/clingo/>`_.
 
 An Example Scenario
 -------------------
@@ -98,8 +98,9 @@ The most important step is to define a *data model* that maps the Clingo predica
 classes. Clorm provides the :class:`~clorm.Predicate` base class for this purpose; a
 :class:`~clorm.Predicate` sub-class defines a direct mapping to an underlying ASP logical
 predicate. The parameters of the predicate are specified using a number of *fields*, similar to
-a standard Python ``dataclass``. In the Clorm context the fields can be thought of as *term
-definitions*, as they define how a logical *term* is converted to, and from, a Python object.
+the definition of a standard Python ``dataclass``. In the Clorm context the fields can be
+thought of as *term definitions*, as they define how a logical *term* is converted to, and
+from, a Python object.
 
 ASP's *logic programming* syntax allows for three primitive types: integer, string, and
 constant. From the Python side this corresponds to the standard types ``int`` and ``str``, as
@@ -144,10 +145,10 @@ Python interface.
 Using the Data Model to Generate Solutions
 ------------------------------------------
 
-Once the data model has been defined it can be used to instantiate facts that
-are asserted to, or extract from, the ASP solver. In particular, it will be used
-to dynamically add the facts that make up a problem instance, and then to
-extract and print the *models* that correspond to solutions to the problem.
+Once the data model has been defined it can be used to instantiate facts that are asserted to,
+or extracted from, the ASP solver. In particular, it will be used to dynamically add the facts
+that make up a problem instance, and then to extract and print the *models* that correspond to
+problem solutions.
 
 First, the :class:`~clorm.clingo.Control` object needs to be created and
 initialised, and the static problem domain encoding must be loaded.
@@ -201,7 +202,7 @@ previously loaded ASP program to produce a *grounded* ASP program.
 At this point the control object is ready to be run and generate
 solutions. There are a number of ways in which the ASP solver can be run (see
 the `Clingo API documentation
-<https://potassco.org/clingo/python-api/5.5/clingo/control.html#clingo.control.Control.solve>`_).
+<https://potassco.org/clingo/python-api/5.7/clingo/control.html#clingo.control.Control.solve>`_).
 For this example we run it using a callback function, which is called each time a
 model is found.
 
@@ -232,13 +233,6 @@ earlier, any facts that fail to unify are ignored. In this case it ignores the
 Querying
 --------
 
-.. note::
-
-   As of Clorm 1.2.1 the new Query API should be the preferred query
-   mechanism. It provides all the functionality of the old query interface and
-   much more; including SQL-like ``JOIN`` clauses between predicates, and better
-   control of how the query results are presented.
-
 The final part of our Python program involves querying the solution to print out
 the relevant facts. In particular it would be useful to display all drivers and
 any jobs they have.  To do this we call the factbase's
@@ -247,7 +241,7 @@ returns a suitable :class:`~clorm.Query` object.
 
 The query is defined in terms of a chaining over the member functions of a
 :class:`~clorm.Query` object. Each function call returns a modified copy of the
-:class:`~clorm.Query` object. This technique will be be familiar to users of
+:class:`~clorm.Query` object. This technique will be familiar to users of
 Python ORM's such as SQLAlchemy or Peewee.
 
 .. code-block:: python

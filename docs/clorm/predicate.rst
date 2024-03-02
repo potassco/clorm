@@ -9,7 +9,7 @@ The Basics
 ----------
 
 It is easiest to explain this mapping by way of a simple example. Consider the following ground
-atoms for the predicates ``address/2`` and ``pets/2``. This specifies that the address of the
+atoms for the predicates ``address/2`` and ``pets/2``. It specifies that the address of the
 entity ``dave`` is ``"UNSW Sydney"`` and ``dave`` has 1 pet.
 
 .. code-block:: prolog
@@ -28,12 +28,13 @@ entity ``dave`` is ``"UNSW Sydney"`` and ``dave`` has 1 pet.
    contain arbitrary characters including spaces.
 
    ASP syntax also supports *complex terms* (also called *functions* but we will avoid this
-   usage to prevent confusion with Python functions) which we will discuss later. Note, however
-   that ASP does not support real number values.
+   usage to prevent confusion with Python functions) which we will discuss later.
+
+   It is significant to note that ASP does not support real number values.
 
 To provide a mapping that satisfies the above predicate we need to sub-class the
 :class:`~clorm.Predicate` class and use the :class:`~clorm.ConstantStr` type specifier as well
-as the standard ``int`` and ``str`` to define the individual terms.
+as the standard ``int`` and ``str`` types to define the individual terms.
 
 .. code-block:: python
 
@@ -71,8 +72,8 @@ These object correspond to the following ASP *ground atoms* (i.e., facts):
 There are some things to note here:
 
 * *Predicate names*: ASP uses standard logic-programming syntax, which requires that the names
-  of all predicate/complex-terms must begin with a lower-case letter and can contain only
-  alphanumeric characters or underscore. Unless overriden, Clorm will automatically generate a
+  of all predicate/complex-terms begin with a lower-case letter and contain only
+  alphanumeric characters or underscores. Unless overriden, Clorm will automatically generate a
   predicate name for a :class:`~clorm.Predicate` sub-class by transforming the class name based
   on some simple rules:
 
@@ -100,16 +101,18 @@ There are some things to note here:
   of a :class:`~clorm.Predicate` object.
 
 * *Constant vs string*: In the above example ``"bob"`` and ``"Sydney uni"`` are both Python
-  strings but because of the ``entity`` field is declared as a :class:`~clorm.ConstantStr` (or
-  the explicit :class:`~clorm.ConstantField` specifier) this ensures that the Python string
-  ``"bob"`` is treated as an ASP constant. Note, currently it is the users' responsibility to
-  ensure that the Python string passed to a constant term satisfies the syntactic restriction.
+  strings but because the ``entity`` field is declared as :class:`~clorm.ConstantStr` (or the
+  explicit :class:`~clorm.ConstantField` specifier) this ensures that the Python string
+  ``"bob"`` is treated as an ASP constant. Note, it is the users' responsibility to ensure that
+  the Python string passed to a constant field satisfies the syntactic restrictions for a
+  constant term.
 
 * The use of a *default value*: all term types support the specification of a default value.
 
-* If the specified default is a function then this function will be called (with no arguments)
-  when the predicate/complex-term object is instantiated. This can be used to generated unique
-  ids or a date/time stamp.
+* It is also possible to specify a *default factory* that is used to generate values. This must
+  be a unary function (i.e., called with no arguments) that is called when the
+  predicate/complex-term object is instantiated. This can be used to generated unique ids or a
+  date/time stamp.
 
 Overriding the Predicate Name
 -----------------------------
@@ -282,9 +285,9 @@ Note: Clingo supports negated literals as well as terms. However, tuples cannot 
    f(-(a,b)).  % Error!!!
 
 Clorm supports negation for any fact or term that can be negated by Clingo. Specifying a
-negative literal simply involves setting ``sign=False`` when instantiating the Predicate (or
-ComplexTerm). Note: unlike the field parameters, the ``sign`` parameter must be specified as a
-named parameter and cannot be specified using positional arguments.
+negative literal simply involves setting ``sign=False`` when instantiating the Predicate. Note:
+unlike the field parameters, the ``sign`` parameter must be specified as a named parameter and
+cannot be specified using positional arguments.
 
 .. code-block:: python
 
@@ -302,8 +305,8 @@ using the ``sign`` attribute of Predicate instance.
 
    assert neg_p1.sign == False
 
-Finally, for finer control of the unification process, a Predicate/ComplexTerm can be specified
-to only unify with either positive or negative facts/terms by setting a ``sign`` meta attribute
+Finally, for finer control of the unification process, a Predicate can be specified to only
+unify with either positive or negative facts/terms by setting a ``sign`` meta attribute
 declaration.
 
 .. code-block:: python
@@ -330,11 +333,11 @@ declaration.
 Field Definitions
 -----------------
 
-Clorm provides a number of standard definitions that specify the mapping between Clingo's
-internal representation (some form of ``Clingo.Symbol``) to more natural Python
-representations.  ASP has three *simple terms*: *integer*, *string*, and *constant*, and Clorm
-provides three standard definition classes to provide a mapping to these fields:
-:class:`~clorm.IntegerField`, :class:`~clorm.StringField`, and :class:`~clorm.ConstantField`.
+Clorm provides a number of standard classes to specify the mapping between Clingo's internal
+representation (some form of ``Clingo.Symbol``) to more natural Python representations.  ASP
+has three *simple terms*: *integer*, *string*, and *constant*, and Clorm provides three
+standard definition classes to provide a mapping to these fields: :class:`~clorm.IntegerField`,
+:class:`~clorm.StringField`, and :class:`~clorm.ConstantField`.
 
 Clorm also provides a :class:`~clorm.SimpleField` class that can match to any simple term. This
 is useful when the parameter of a defined predicate can contain arbitrary simple term
@@ -352,9 +355,9 @@ types is often preferable.
 Sub-classing Field Definitions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-All field classes inherit from a base class :class:`~clorm.BaseField` and it's possible to
-define arbitrary data conversions by sub-classing :class:`~clorm.BaseField`. Clorm provides the
-standard sub-classes :class:`~clorm.StringField`, :class:`~clorm.ConstantField`, and
+All field classes inherit from an abstract base class :class:`~clorm.BaseField`. It is possible
+to define arbitrary data conversions by sub-classing :class:`~clorm.BaseField`. Clorm provides
+the standard sub-classes :class:`~clorm.StringField`, :class:`~clorm.ConstantField`, and
 :class:`~clorm.IntegerField`. Clorm also automatically generates an appropriate sub-class for
 every :class:`~clorm.Predicate` definition for use in a complex term.
 
@@ -490,10 +493,9 @@ When defining a predicate corresponding to cooking/2 it is possible to simply us
 
 .. code-block:: python
 
-   class Cooking1(Predicate):
-      dow = ConstantField
-      person = StringField
-      class Meta: name = "cooking"
+   class Cooking1(Predicate, name="cooking"):
+      dow: ConstantStr
+      person: str
 
 However, this would potentiallly allow for creating erroneous instances that don't correspond
 to actual days of the week (for example, with a spelling mistake):
@@ -632,7 +634,7 @@ Tuples are a special case of complex terms that often appear in ASP programs. Fo
 
 .. code-block:: none
 
-   booking("2018-12-31", ("Sydney", "Australia)).
+   booking("2018-12-31", ("Sydney", "Australia")).
 
 For Clorm tuples are simply a :class:`~clorm.Predicate` sub-class where the name of the
 corresponding predicate is empty. While this can be set using an ``is_tuple`` property of the
@@ -661,7 +663,7 @@ above fact can be defined simply (using the ``DateField`` defined earlier):
 
 
 Here the ``location`` field is defined as a pair of strings, without having to explictly define
-a separate :class:`~clorm.ComplexTerm` sub-class that corresponds to this pair. To instantiate
+a separate :class:`~clorm.Predicate` sub-class that corresponds to this pair. To instantiate
 the ``Booking`` class a Python tuple can also be used for the values of ``location`` field. For
 example, the following creates a ``Boooking`` instance corresponding to the ``booking/2`` fact
 above:
@@ -673,20 +675,20 @@ above:
 
 While it is unnecessary to define a seperate :class:`~clorm.Predicate` sub-class corresponding
 to the tuple, internally this is in fact exactly what Clorm does. Clorm will transform the
-above definition into something similar to the following:
+above definition into something similar to the following (ignoring the class and field names):
 
 .. code-block:: python
 
    class SomeAnonymousName(Predicate, name=""):
-      city: str
-      country: str
+      field1: str
+      field2: str
 
    class Booking(Predicate):
        date: datetime.date = field(DateField)
        location: tuple[str, str] = field(SomeAnonymousName.Field)
 
-Here the :class:`~clorm.Predicate` has an empty name, so it will be treated as a tuple rather
-than a complex term with a function name.
+Here ``SomeAnonymousName`` has an empty name, so it will be treated as a tuple rather than a
+complex term with a function name.
 
 One important difference between the implicitly defined and explicitly defined versions of a
 tuple is that the explicit version allows for field names to be given, while the implicit
@@ -739,7 +741,7 @@ instead of the explicit ``Booking`` definition above we could use the
 .. code-block:: python
 
    from clorm.clingo import Symbol, Function, String
-   from clorm import _simple_predicate
+   from clorm import simple_predicate
 
    Booking_alt = simple_predicate("booking",2)
    bk_alt = Booking_alt(String("2018-12-31"), Function("",[String("Sydney"),String("Australia")]))
@@ -786,10 +788,10 @@ instance.
 .. note::
 
    To construct clorm objects from raw clingo symbols involves *unifying* the clingo symbol
-   with the :class:`~clorm.Predicate` or :class:`~clorm.ComplexTerm` sub-class. This typically
-   happens when you have a list of symbols corresponding to a clingo model and you want to turn
-   them into a set of clorm facts.  See :ref:`advanced_unification`,
-   :ref:`api_clingo_integration`, and :py:func:`~clorm.unify` for details about unification.
+   with the :class:`~clorm.Predicate` sub-class. This typically happens when you have a list of
+   symbols corresponding to a clingo model and you want to turn them into a set of clorm facts.
+   See :ref:`advanced_unification`, :ref:`api_clingo_integration`, and :py:func:`~clorm.unify`
+   for details about unification.
 
 
 Integrating Clingo Symbols into a Predicate Definition
@@ -869,7 +871,7 @@ integration:
 
 .. code-block:: python
 
-   from clorm import Predicate, ComplexTerm, IntegerField, ConstantField, combine_fields
+   from clorm import Predicate, IntegerField, ConstantField, combine_fields
 
    class Light(Predicate):
       status: ConstantStr
@@ -926,10 +928,12 @@ when used with care can be very useful.
 Unfortunately, getting facts containing these sorts of nested lists into and out of Clingo can
 be very cumbersome. To help support this type of encoding Clorm provides the
 :py:func:`~clorm.define_nested_list_field()` function. This factory function takes an element
-field class, as well as an optional new class name, and returns a newly created
-:class:`~clorm.BaseField` sub-class that can be used to convert to and from a list of elements
-of that field class. Clorm provides implicit support for this helper function with some extra
-type identifiers.
+field class, as well as a optional parameters to control the nesting process, and returns a
+newly created :class:`~clorm.BaseField` sub-class that can be used to convert to and from a
+list of elements of that field class. Note, to Clorm provides implicit support for this helper
+function with the extra type identifiers: ``HeadList``, ``HeadListReversed``, ``TailList``, and
+``TailListReversed``. These identifiers cover the different combination of parameters for the
+nesting.
 
  .. code-block:: python
 
@@ -939,8 +943,18 @@ type identifiers.
       param: ConstantStr
       alist: HeadList[int]
 
-   p = P("nodes",[1,2,3])
+   p = P("nodes",(1,2,3))
    assert str(p) == "p(nodes,(1,(2,(3,()))))"
+
+
+.. note::
+
+   Converting a Clorm ``Predicate`` instance into a Clingo ``Symbol`` object happens at
+   instance creation time. Any change to the object after object initialisation will not change
+   the underlying Clingo ``Symbol`` object. Consequently, in order to avoid unexpected
+   behaviour, ``Predicate`` instances should always be treated as immutable. Because of this
+   when dealing with terms that are nested lists it is preferable to use Python tuples rather
+   than lists; so in the above example we use ``(1,2,3)`` rather than ``[1,2,3]``.
 
 
 Old Syntax
@@ -951,9 +965,10 @@ very similar to standard Python dataclasses or a modern Python library such as
 `Pydantic <https://docs.pydantic.dev/latest/>`_. This new syntax integrates better with modern
 Python programming practices, for example using linters and type checkers.
 
-The old syntax does not use Python type annotations and instead required the user to explicitly
-a :class:`~clorm.BaseField` sub-class for each term. It also required the use of a ``Meta``
-sub-class to provide predicate meta-data, for example, to override the name of the predicate.
+The old syntax does not use Python type annotations and instead requires the user to explicitly
+define a :class:`~clorm.BaseField` sub-class for each term. It also required the use of a
+``Meta`` sub-class to provide predicate meta-data, for example, to override the name of the
+predicate.
 
  .. code-block:: python
 

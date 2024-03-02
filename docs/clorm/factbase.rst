@@ -76,18 +76,17 @@ will typically contain a number of conditional statements to determine what
 action to take for the given fact; and to store it if some sort of matching
 needs to take place.
 
-However, this loop-and-test approach leads to unnecessary boilerplate code as
-well as making the purpose of the code more obscure. :class:`~clorm.FactBase` is
-intended to alleviate this problem by offering a database-like query mechanism
-for extracting information from a model.
+However, this loop-and-test approach leads to unnecessary boilerplate code as well as making
+the purpose of the code more obscure. :class:`~clorm.FactBase` is intended to alleviate this
+problem by offering a database-like query mechanism for extracting information from a
+model. Accessing the Query API is handled throught the
+:py:meth:`FactBase.query(...)<clorm.FactBase.query>` entry point.
 
 .. note::
 
-   The following highlights the operations of the new Query API. As of Clorm
-   1.2.1 this new API should be the preferred search mechanism. It provides all
-   the functionality of the old query interface and much more; including
-   SQL-like joins between predicates and controlling how the query results are
-   presented.
+   The old Query API using the :py:meth:`FactBase.select(...)<clorm.FactBase.select>` entry
+   point has been deprecated. The new Query API has all the functionality of the old, and much
+   more.
 
 
 Simple Queries
