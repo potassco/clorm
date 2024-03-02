@@ -1,5 +1,7 @@
 """contains clorm specific types"""
 
+from __future__ import annotations
+
 from typing import TYPE_CHECKING, Generic, Tuple, TypeVar
 
 __all__ = [

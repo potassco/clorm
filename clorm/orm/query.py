@@ -2,6 +2,8 @@
 # Clorm ORM FactBase query implementation. It provides the rich query API.
 # ------------------------------------------------------------------------------
 
+from __future__ import annotations
+
 import abc
 import collections
 import enum

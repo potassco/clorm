@@ -9,6 +9,8 @@
 # less heavy handed.
 # ------------------------------------------------------------------------------
 
+from __future__ import annotations
+
 import itertools
 import sys
 from collections import defaultdict

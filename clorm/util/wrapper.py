@@ -22,6 +22,8 @@ https://code.activestate.com/recipes/496741-object-proxying/
 
 """
 
+from __future__ import annotations
+
 import functools
 import inspect
 from typing import Any, Optional

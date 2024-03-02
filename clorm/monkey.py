@@ -2,7 +2,7 @@
 # Monkey patching of clingo for the clorm library
 # ------------------------------------------------------------------------------
 
-import sys
+from __future__ import annotations
 
 import clingo as original_clingo
 

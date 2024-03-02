@@ -5,11 +5,7 @@ for more details.
 
 """
 
-
-# I want to replace the original clingo - re-exporting everything in clingo
-# except replacing the class overides with my version: _class_overides = [
-# 'Control', 'Model', 'SolveHandle' ]. The following seems to work but I'm not
-# sure if this is bad.
+from __future__ import annotations
 
 import clingo as oclingo
 
@@ -18,6 +14,12 @@ import clingo as oclingo
 # references point to the originals.
 # ------------------------------------------------------------------------------
 from .orm import *
+
+# I want to replace the original clingo - re-exporting everything in clingo
+# except replacing the class overides with my version: _class_overides = [
+# 'Control', 'Model', 'SolveHandle' ]. The following seems to work but I'm not
+# sure if this is bad.
+
 
 if oclingo.__version__ >= "5.5.0":
     from clingo.ast import parse_string

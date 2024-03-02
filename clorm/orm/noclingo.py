@@ -50,6 +50,8 @@ will raise an exception.
 # --------------------------------------------------------------------------------
 # --------------------------------------------------------------------------------
 
+from __future__ import annotations
+
 import enum
 import os
 from typing import TYPE_CHECKING, Any, Optional, Sequence, Tuple, Union, cast

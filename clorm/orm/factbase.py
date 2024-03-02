@@ -3,6 +3,8 @@
 # specifically for storing facts (Predicate instances).
 # ------------------------------------------------------------------------------
 
+from __future__ import annotations
+
 import abc
 import io
 import itertools

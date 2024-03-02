@@ -2,6 +2,8 @@
 # Some generic iterator and functional functions
 # ------------------------------------------------------------------------------
 
+from __future__ import annotations
+
 import itertools
 
 __all__ = ["all_equal"]

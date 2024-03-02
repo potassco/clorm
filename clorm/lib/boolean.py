@@ -1,8 +1,9 @@
 """A library of Python bool functions and terms for use within an ASP
-   program. 
+   program.
 
 """
 
+from __future__ import annotations
 
 from typing import Any
 

@@ -5,6 +5,8 @@ Extend clingo's Control, Model and SolveHandle classes to better use with clorm
 # TODO: For clorm v2.0 the raise_on_empty parameter in Model.facts() should be
 #       moved to the second parameter position.
 
+from __future__ import annotations
+
 import functools
 import itertools
 from typing import (
@@ -24,7 +26,6 @@ from typing import (
 import clingo as oclingo
 
 from .orm import FactBase, Predicate, Symbol, SymbolPredicateUnifier, control_add_facts
-from .util.oset import OrderedSet
 from .util.wrapper import init_wrapper, make_class_wrapper
 
 __all__ = ["ClormControl", "ClormModel", "ClormSolveHandle", "_expand_assumptions"]

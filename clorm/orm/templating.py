@@ -6,6 +6,8 @@ to help apply these templates.
 
 """
 
+from __future__ import annotations
+
 # ------------------------------------------------------------------------------
 # Helper functions for PredicateMeta class to create a Predicate
 # class constructor.
