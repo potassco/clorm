@@ -281,10 +281,11 @@ XP1, XP2 = define_predicates()
     def test_postponed_annotations_headlist(self):
         code = """
 from __future__ import annotations
+from typing import Tuple
 from clorm import Predicate, HeadList
 
 class P(Predicate):
-    x: HeadList[tuple[int,str]]
+    x: HeadList[Tuple[int,str]]
 """
         with self._create_module(code) as module:
             p = module.P(x=((1, "a"), (2, "b")))
@@ -293,10 +294,11 @@ class P(Predicate):
     def test_postponed_annotations_flatlist(self):
         code = """
 from __future__ import annotations
+from typing import Tuple
 from clorm import Predicate
 
 class P(Predicate):
-    x: tuple[tuple[int,str], ...]
+    x: Tuple[Tuple[int,str], ...]
 """
         with self._create_module(code) as module:
             p = module.P(x=((1, "a"), (2, "b")))
