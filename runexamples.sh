@@ -89,3 +89,4 @@ run_clingo examples/combine_fields/combine_fields.lp
 
 run_clingo examples/nested_list/nested_list.lp
 
+run_clingo examples/join_with_ampersand/join_with_ampersand.lp

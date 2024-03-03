@@ -1829,6 +1829,16 @@ def is_join_qcondition(cond):
 # ------------------------------------------------------------------------------
 
 
+def _process_join_with_andop(join_expressions):
+    tmp = []
+    for jexp in join_expressions:
+        if isinstance(jexp, QCondition) and jexp.operator == operator.and_:
+            tmp.extend(_process_join_with_andop(jexp.args))
+        else:
+            tmp.append(jexp)
+    return tmp
+
+
 def validate_join_expression(qconds, roots):
     jroots = set()  # The set of all roots in the join clauses
     joins = []  # The list of joins
@@ -1893,7 +1903,7 @@ def validate_join_expression(qconds, roots):
                 ).format(p)
             )
 
-    for qcond in qconds:
+    for qcond in _process_join_with_andop(qconds):
         if not is_join_qcondition(qcond):
             if not isinstance(qcond, QCondition):
                 raise ValueError(

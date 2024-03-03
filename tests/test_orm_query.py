@@ -1304,6 +1304,38 @@ class JoinExpressionTestCase(unittest.TestCase):
             vje([F.anum == G.anum, X.anum == Y.anum], [F, G, X, Y, Z])
         check_errmsg("Invalid join specification: missing joins", ctx)
 
+    # ------------------------------------------------------------------------------
+    # Test validating a join expression connected by &
+    # ------------------------------------------------------------------------------
+    def test_nonapi_validate_join_expression_with_ampersand(self):
+        F = path(self.F)
+        G = path(self.G)
+        FA = alias(F)
+        GA = alias(G)
+        SC = StandardComparator
+        vje = validate_join_expression
+        tmp1 = SC(operator.eq, [F.anum, G.anum])
+        tmp2 = SC(operator.eq, [F.anum, GA.anum])
+        tmp3 = SC(operator.eq, [G.anum, FA.anum])
+
+        joins = vje([(F.anum == G.anum) & (F.anum == GA.anum)], [F, G, GA])
+        self.assertEqual([tmp1, tmp2], joins)
+
+        joins = vje(
+            [(F.anum == G.anum) & (F.anum == GA.anum) & (G.anum == FA.anum)], [F, G, GA, FA]
+        )
+        self.assertEqual([tmp1, tmp2, tmp3], joins)
+
+        joins = vje(
+            [(F.anum == G.anum) & ((F.anum == GA.anum) & (G.anum == FA.anum))], [F, G, GA, FA]
+        )
+        self.assertEqual([tmp1, tmp2, tmp3], joins)
+
+        # Joining with a non-ampersand operator
+        with self.assertRaises(ValueError) as ctx:
+            vje([(F.anum == F.anum) | (F.anum == GA.anum)], [F, G, GA])
+        check_errmsg("Invalid join ", ctx)
+
 
 # ------------------------------------------------------------------------------
 # Tests OrderBy, OrderByBlock, and related functions
