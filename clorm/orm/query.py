@@ -230,7 +230,7 @@ _T = TypeVar("_T")
 
 def func(paths: List[Any], functor: Callable[..., _T]) -> _T:
     """Return a wrapped functor for use in a 'query' where or 'select' clause"""
-    return FuncInputSpec(paths, functor)
+    return cast(_T, FuncInputSpec(paths, functor))
 
     # Note: used to just return a FunctionComparator but that is only suitable
     # for a where clause

@@ -736,6 +736,11 @@ class UnGroupedQuery(BaseQueryImpl[_T], Generic[_T]):
     # --------------------------------------------------------------------------
     # Explicitly select the elements to output or delete
     # --------------------------------------------------------------------------
+
+    @overload
+    def select(self, __ent0: Callable[..., _T0]) -> "UnGroupedQuery[_T0]":
+        ...
+
     # START OVERLOADED FUNCTIONS self.select;UnGroupedQuery[{0}];1;5;Type;Y
 
     # code within this block is **programmatically,
@@ -1152,6 +1157,10 @@ class GroupedQuery(BaseQueryImpl[Tuple[_KT, Iterator[_GT]]], Generic[_KT, _GT]):
         # a better solution would be to somehow adjust 'Query' that GroupedQuery
         # doesn't need to implement group_by
         raise ValueError("Cannot specify 'group_by' multiple times")
+
+    @overload
+    def select(self, __ent0: Callable[..., _T0]) -> "GroupedQuery[_KT, _T0]":
+        ...
 
     # START OVERLOADED FUNCTIONS self.select;GroupedQuery[_KT, {0}];1;5;Type;Y
 
