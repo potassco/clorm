@@ -1118,6 +1118,9 @@ class QueryAPI1TestCase(unittest.TestCase):
     #   Test that select works with order_by for complex term
     # --------------------------------------------------------------------------
     def test_api_factbase_select_order_by_complex_term(self):
+        # NOTE: behavior change 20240428 - ordering is based on the underlying clingo.Symbol
+        # object and not the python translation. So using SwapField won't change the ordering
+        # for AComplex objects.
         class SwapField(IntegerField):
             pytocl = lambda x: 100 - x
             cltopy = lambda x: 100 - x
@@ -1145,10 +1148,13 @@ class QueryAPI1TestCase(unittest.TestCase):
         self.assertEqual([f1, f2, f3, f4], list(q.get()))
 
         q = fb.select(AFact).order_by(AFact.cmplx, AFact.astr)
-        self.assertEqual([f3, f4, f2, f1], list(q.get()))
+        self.assertEqual([f1, f2, f3, f4], list(q.get()))
 
         q = fb.select(AFact).where(AFact.cmplx <= ph1_).order_by(AFact.cmplx, AFact.astr)
-        self.assertEqual([f3, f4, f2], list(q.get(cmplx2)))
+        self.assertEqual([f1, f2], list(q.get(cmplx2)))
+
+        q = fb.select(AFact).where(AFact.cmplx >= ph1_).order_by(AFact.cmplx, AFact.astr)
+        self.assertEqual([f2, f3, f4], list(q.get(cmplx2)))
 
     # --------------------------------------------------------------------------
     #   Test that select works with order_by for complex term
