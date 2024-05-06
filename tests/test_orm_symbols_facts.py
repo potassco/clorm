@@ -126,6 +126,7 @@ class UnifyTestCase(unittest.TestCase):
 
             anum = IntegerField()
             afun = Fun.Field()
+
             #            afun=ComplexField(Fun)
             class Meta:
                 name = "afact"

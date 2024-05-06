@@ -293,6 +293,7 @@ class Comparator(QElement):
 # conditions and other boolean conditions.
 # ------------------------------------------------------------------------------
 
+
 # comparator functions that always return true (or false). This is useful for
 # the cross product join operator that always returns true
 def trueall(x, y):
@@ -1205,6 +1206,7 @@ def kwargs_check_keys(validkeys, inputkeys):
 # a field") between python and clingo.
 # ------------------------------------------------------------------------------
 
+
 # Create the pytocl and cltopy class member functions. If their inherit directly
 # from BaseField then just return the result of the function. If they inherit
 # from a sub-class of BaseField then call the parents conversion function first.
@@ -1289,6 +1291,7 @@ class _BaseFieldMeta(type):
 # Field definitions. All fields have the functions: pytocl, cltopy,
 # and unifies, and the properties: default and has_default
 # ------------------------------------------------------------------------------
+
 
 # Mixin class to be able to use both MetaClasses
 class _AbstractBaseFieldMeta(abc.ABCMeta, _BaseFieldMeta):
@@ -1816,6 +1819,7 @@ def _process_field_definition(field_defn: _FieldDefinition) -> Type[BaseField]:
 # Helper function to define a sub-class of a BaseField (or sub-class) that
 # restricts the allowable values.
 # ------------------------------------------------------------------------------
+
 
 # Support for refine_field
 def _refine_field_functor(subclass_name, field_class, valfunc):
@@ -2563,11 +2567,11 @@ def _magic_name(name):
 
 PathIdentity = collections.namedtuple("PathIdentity", "predicate name")
 
+
 # --------------------------------------------------------------------------
 # One PredicateDefn object for each Predicate sub-class
 # --------------------------------------------------------------------------
 class PredicateDefn(object):
-
     """Encapsulates some meta-data for a Predicate definition.
 
     Each Predicate class will have a corresponding PredicateDefn object that specifies some
@@ -2827,6 +2831,7 @@ def _generate_dynamic_predicate_functions(class_name: str, namespace: Dict) -> N
 # ------------------------------------------------------------------------------
 # Metaclass constructor support functions to create the fields
 # ------------------------------------------------------------------------------
+
 
 # Generate a default predicate name from the Predicate class name.
 def _predicatedefn_default_predicate_name(class_name):
@@ -3266,6 +3271,7 @@ class _PredicateMeta(type):
 # underlying Symbol object.
 # ------------------------------------------------------------------------------
 
+
 # Mixin class to be able to use both MetaClasses
 class _AbstractPredicateMeta(abc.ABCMeta, _PredicateMeta):
     pass
@@ -3545,6 +3551,7 @@ def simple_predicate(
 # ------------------------------------------------------------------------------
 # Internal supporting functions
 # ------------------------------------------------------------------------------
+
 
 # ------------------------------------------------------------------------------
 # Helper function to check if all the paths in a collection are root paths and

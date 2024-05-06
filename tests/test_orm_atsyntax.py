@@ -426,6 +426,7 @@ class ContextBuilderTestCase(unittest.TestCase):
         SF = StringField
         IF = IntegerField
         CF = ConstantField
+
         # Functions to add to the context
         def add(a: IF, b: IF) -> IF:
             return a + b

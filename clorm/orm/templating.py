@@ -21,6 +21,7 @@ def expand_template(template: str, **kwargs: str) -> str:
     line to preserve the correct indentation.
 
     """
+
     # Add spaces to each line of some multi-text input
     def add_spaces(num, text):
         space = " " * num

@@ -69,6 +69,7 @@ def _check_is_func(obj: Any, name: str) -> None:
 # Wrap clingo.Model and override some functions
 # ------------------------------------------------------------------------------
 
+
 # class Model(OModel, metaclass=WrapperMetaClass):
 class ModelOverride(object):
     """Provides access to a model during a solve call.
@@ -236,6 +237,7 @@ else:
 # Wrap clingo.Control and override some functions
 # ------------------------------------------------------------------------------
 
+
 # ------------------------------------------------------------------------------
 # Helper functions to expand the assumptions list as part of a solve() call. The
 # assumptions list is a list of argument-boolean pairs where the argument can be
@@ -255,7 +257,7 @@ def _expand_assumptions(
         clingo_assump.append((raw, bool(bval)))
 
     try:
-        for (arg, bval) in assumptions:
+        for arg, bval in assumptions:
             if isinstance(arg, Predicate):
                 _add_fact(arg, bval)
             elif isinstance(arg, Iterable):

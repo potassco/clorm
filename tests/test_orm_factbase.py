@@ -589,15 +589,24 @@ class FactBaseTestCase(unittest.TestCase):
     # Test the asp output string with the sorted flag
     # --------------------------------------------------------------------------
     def test_factbase_aspstr_sorted(self):
-        class A(Predicate, name="bb"):
+        class A(Predicate):
             a = IntegerField
 
-        class B(Predicate, name="aa"):
+            class Meta:
+                name = "bb"
+
+        class B(Predicate):
             a = IntegerField
 
-        class C(Predicate, name="aa"):
+            class Meta:
+                name = "aa"
+
+        class C(Predicate):
             a = IntegerField
             b = IntegerField
+
+            class Meta:
+                name = "aa"
 
         def tostr(facts):
             return ".\n".join([str(f) for f in facts])

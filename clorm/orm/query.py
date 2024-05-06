@@ -57,12 +57,12 @@ __all__ = [
 # Defining and manipulating conditional elements
 # ------------------------------------------------------------------------------
 
+
 # ------------------------------------------------------------------------------
 # Placeholder allows for variable substituion of a query. Placeholder is
 # an abstract class that exposes no API other than its existence.
 # ------------------------------------------------------------------------------
 class Placeholder(abc.ABC):
-
     r"""An abstract class for defining parameterised queries.
 
     Currently, Clorm supports 4 placeholders: ph1\_, ph2\_, ph3\_, ph4\_. These
@@ -513,6 +513,7 @@ def membership_op_keyable(sc, indexes):
 # provided StandardComparator is used only in this specific way within clorm and
 # is not exposed outside clorm.
 # ------------------------------------------------------------------------------
+
 
 # Helper function to try to convert Python tuples into a matching clorm anon tuple.  With this
 # we can pass a Python tuple to a query and not have to overload the Predicate comparison
@@ -2233,6 +2234,7 @@ def make_join_pair(joins, clauseblock, orderbys=[]):
 # describes the plan to execute a single link in a join.
 # ------------------------------------------------------------------------------
 
+
 # Check that the formula only refers to paths with the allowable roots
 def _check_roots(allowable_roots, formula):
     if not formula:
@@ -3066,6 +3068,7 @@ def make_query_plan(indexed_paths, qspec):
 # Implementing Queries - taking a QuerySpec, QueryPlan, and a FactMap and
 # generating an actual query.
 # ------------------------------------------------------------------------------
+
 
 # ------------------------------------------------------------------------------
 # Creates a mechanism for sorting using the order_by statements within queries.
