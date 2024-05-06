@@ -589,24 +589,15 @@ class FactBaseTestCase(unittest.TestCase):
     # Test the asp output string with the sorted flag
     # --------------------------------------------------------------------------
     def test_factbase_aspstr_sorted(self):
-        class A(Predicate):
+        class A(Predicate, name="bb"):
             a = IntegerField
 
-            class Meta:
-                name = "bb"
-
-        class B(Predicate):
+        class B(Predicate, name="aa"):
             a = IntegerField
 
-            class Meta:
-                name = "aa"
-
-        class C(Predicate):
+        class C(Predicate, name="aa"):
             a = IntegerField
             b = IntegerField
-
-            class Meta:
-                name = "aa"
 
         def tostr(facts):
             return ".\n".join([str(f) for f in facts])
@@ -712,6 +703,20 @@ class FactBaseTestCase(unittest.TestCase):
         result = fb.asp_str(commented=True)
         self.assertIn(expected_sig_predC, result)
         self.assertIn(expected_sig_predA, result)
+
+    # --------------------------------------------------------------------------
+    # Test the asp output string with sorting and incomparable terms
+    # --------------------------------------------------------------------------
+    def test_factbase_aspstr_sorted_incomparable(self):
+        class A(Predicate):
+            x = field(SimpleField)
+
+        fb = FactBase([A(1), A(2), A("b")])
+        q = fb.query(A).ordered()
+        self.assertTrue(list(q.all()) == [A(1), A(2), A("b")])
+        tmpstr1 = ".\n".join(f"{x}" for x in q.all()) + ".\n"
+        tmpstr2 = fb.asp_str(sorted=True)
+        self.assertTrue(tmpstr1 == tmpstr2)
 
 
 # ------------------------------------------------------------------------------
