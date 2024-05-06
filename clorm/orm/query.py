@@ -514,6 +514,27 @@ def membership_op_keyable(sc, indexes):
 # is not exposed outside clorm.
 # ------------------------------------------------------------------------------
 
+# Helper function to try to convert Python tuples into a matching clorm anon tuple.  With this
+# we can pass a Python tuple to a query and not have to overload the Predicate comparison
+# operator and hash function to match the tuple.
+def _try_to_convert_tuple_argument_to_clorm_tuple(op, args):
+    def _try_to_convert(tup, possiblepath):
+        if not isinstance(possiblepath, PredicatePath):
+            return tup
+        complex = possiblepath.meta.complex
+        if complex is None or not complex.meta.is_tuple:
+            return tup
+        return complex(*tup)
+
+    if op not in {operator.eq, operator.ne, operator.lt, operator.le, operator.gt, operator.ge}:
+        return args
+    if len(args) != 2:
+        return args
+    if isinstance(args[0], tuple):
+        return (_try_to_convert(args[0], args[1]), args[1])
+    if isinstance(args[1], tuple):
+        return (args[0], _try_to_convert(args[1], args[0]))
+    return args
 
 class StandardComparator(Comparator):
     class Preference(enum.IntEnum):
@@ -625,7 +646,7 @@ class StandardComparator(Comparator):
                 ).format(operator)
             )
         self._operator = operator
-        self._args = tuple(args)
+        self._args = tuple(_try_to_convert_tuple_argument_to_clorm_tuple(operator, args))
         self._hashableargs = tuple(
             [hashable_path(a) if isinstance(a, PredicatePath) else a for a in self._args]
         )
@@ -789,7 +810,7 @@ class StandardComparator(Comparator):
                     self._operator
                 )
             )
-        return StandardComparator(spec.swapop, reversed(self._args))
+        return StandardComparator(spec.swapop, tuple(reversed(self._args)))
 
     def keyable(self, indexes):
         spec = StandardComparator.operators[self._operator]

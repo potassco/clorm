@@ -730,6 +730,14 @@ class PredicatePath(object, metaclass=_PredicatePathMeta):
             return not hasattr(self, "_predicate_class")
 
         # --------------------------------------------------------------------------
+        # If the leaf of the path is a Predicate class then return it else None
+        # --------------------------------------------------------------------------
+        @property
+        def complex(self):
+            fld = self._parent._get_field()
+            return None if fld is None else fld.complex
+
+        # --------------------------------------------------------------------------
         # attrgetter
         # --------------------------------------------------------------------------
         @property
@@ -2453,10 +2461,7 @@ def get_field_definition(defn: Any, module: str = "") -> BaseField:
 def _create_complex_term(defn: Any, default_value: Any = MISSING, module: str = "") -> BaseField:
     # NOTE: relies on a dict preserving insertion order - this is true from Python 3.7+. Python
     # 3.7 is already end-of-life so there is no longer a reason to use OrderedDict.
-    #proto = {f"arg{idx+1}": get_field_definition(dn) for idx, dn in enumerate(defn)}
-    proto: Dict[str, Any] = collections.OrderedDict(
-        [(f"arg{i+1}", get_field_definition(d, module)) for i, d in enumerate(defn)]
-    )
+    proto = {f"arg{idx+1}": get_field_definition(dn) for idx, dn in enumerate(defn)}
     class_name = (
         f'ClormAnonTuple({",".join(f"{arg[0]}={repr(arg[1])}" for arg in proto.items())})'
     )
@@ -3027,9 +3032,8 @@ def _make_predicatedefn(
 
     reserved = set(["meta", "raw", "clone", "sign", "Field"])
 
-    # Generate the fields - NOTE: this relies on dct being an OrderedDict()
-    # which is true from Python 3.5+ (see PEP520
-    # https://www.python.org/dev/peps/pep-0520/)
+    # Generate the fields - NOTE: this relies on dict being an ordered which is true from
+    # Python 3.5+ (see PEP520 https://www.python.org/dev/peps/pep-0520/)
 
     # Predicates (or complexterms) that are defined within the current Predicate context may be
     # necessary to help resolve the postponed annotations.
@@ -3527,10 +3531,8 @@ def simple_predicate(
     """
     subclass_name = name if name else "AnonSimplePredicate"
 
-    # Use an OrderedDict to ensure the correct order of the field arguments
-    proto: Dict[str, Any] = collections.OrderedDict(
-        [("arg{}".format(i + 1), RawField()) for i in range(0, arity)]
-    )
+    # Note: dict is preserves the ordering
+    proto: Dict[str, Any] = {f"arg{i+1}": RawField() for i in range(0, arity)}
     proto["Meta"] = type(
         "Meta", (object,), {"name": predicate_name, "is_tuple": False, "_anon": True}
     )

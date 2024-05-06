@@ -1224,6 +1224,34 @@ class PredicateTestCase(unittest.TestCase):
         self.assertTrue(p1.tuple_ != tuple1)
         self.assertFalse(tuple(p1.tuple_) != tuple1)
 
+
+    # --------------------------------------------------------------------------
+    # Testing comparison between tuple fields where the corresponding python tuples
+    # can contain incomparible objects.
+    # --------------------------------------------------------------------------
+    def test_predicate_with_incomparable_python_tuples(self):
+        class P(Predicate):
+            tuple_ = field((SimpleField, SimpleField))
+
+        class Q(Predicate):
+            tuple_ = field((IntegerField, IntegerField))
+
+        ptuple = P.tuple_.meta.complex
+        qtuple = Q.tuple_.meta.complex
+
+        self.assertTrue(ptuple(1, 2) == qtuple(1, 2))
+        self.assertTrue(ptuple("a", "b") != qtuple(1, 2))
+
+        # NOTE: the following throws a TypeError when comparing two Python tuples but works
+        # with clorm tuples.
+        # error: self.assertTrue(("a", "b") > (1,2))
+        self.assertTrue(ptuple("a", "b") > qtuple(1, 2))
+        self.assertTrue(ptuple("a", "b") >= qtuple(1, 2))
+        self.assertFalse(ptuple("a", "b") < qtuple(1, 2))
+        self.assertFalse(ptuple("a", "b") <= qtuple(1, 2))
+
+
+
     # --------------------------------------------------------------------------
     # Test predicates with default fields
     # --------------------------------------------------------------------------
