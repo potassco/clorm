@@ -109,10 +109,11 @@ There are some things to note here:
 
 * The use of a *default value*: all term types support the specification of a default value.
 
-* It is also possible to specify a *default factory* that is used to generate values. This must
-  be a unary function (i.e., called with no arguments) that is called when the
-  predicate/complex-term object is instantiated. This can be used to generated unique ids or a
-  date/time stamp.
+* It is also possible to specify a *default factory* function, using the `default_factory`
+  parameter for the :py:func:`~clorm.field` function. This must be a unary function (i.e.,
+  called with no arguments) that is called when the predicate/complex-term object is
+  instantiated. This can be used to generated unique ids or a date/time stamp.
+
 
 Overriding the Predicate Name
 -----------------------------
@@ -646,7 +647,7 @@ above fact can be defined simply (using the ``DateField`` defined earlier):
 
    class Booking(Predicate):
        date: datetime.date = field(DateField)
-       location: tuple[str, str]
+       location: Tuple[str, str]
 
 .. note::
 
@@ -685,7 +686,7 @@ above definition into something similar to the following (ignoring the class and
 
    class Booking(Predicate):
        date: datetime.date = field(DateField)
-       location: tuple[str, str] = field(SomeAnonymousName.Field)
+       location: Tuple[str, str] = field(SomeAnonymousName.Field)
 
 Here ``SomeAnonymousName`` has an empty name, so it will be treated as a tuple rather than a
 complex term with a function name.
@@ -955,6 +956,68 @@ nesting.
    behaviour, ``Predicate`` instances should always be treated as immutable. Because of this
    when dealing with terms that are nested lists it is preferable to use Python tuples rather
    than lists; so in the above example we use ``(1,2,3)`` rather than ``[1,2,3]``.
+
+
+Comparison Operators
+--------------------
+
+.. note: The following description of the comparison operator semantics applies to Clorm
+   version 1.6.0 and above. Earlier versions had a more ad-hoc approach to the comparison
+   operators.
+
+
+The :class:`~clorm.Predicate` class overrides the standard Python comparison operators, such as
+equality and the less than operators. To use the Clorm API effectively it is important to
+understand how these operators are overriden.
+
+Predicate sub-classes should be understood as implementing a *view* over Clingo ``Symbol``
+objects. The view gives the user an easy and intuitive way to access the internal parameters of
+the ``Symbol`` object. In the same way that the view does not alter the underlying ``Symbol``
+object, the view also does not alter the behavior of the comparison operators. Therefore the
+comparison operators are based purely on the the comparison of the underlying ``Symbol``
+object.
+
+One important reason to use the underlying ``Symbol`` object for the comparison operators is
+that clingo guarantees an ordering over all ``Symbol`` objects. This is in contrast to Python
+types where not all operators are defined for objects of different types. For example, in
+Python the non-equality operators are not defined for the ``int`` and ``str`` primitive types;
+for example, ``"a" < 1`` will raise a ``TypeError``. However, in ASP programming it can be
+natural to compare a constant (or string) and an integer term.
+
+This is particularly important for factbase querying, where sorting a set of facts will inherit
+the ordering of the underlying ``Symbol`` object.
+
+A second consequence of this approach is that great care should be taken when using different
+:class:`~clorm.Predicate` instances that map to the same underlying ``Symbol`` object. For example,
+
+.. code-block:: python
+
+   from clingo import String, Function, Number
+   from clorm import Raw, Predicate, ConstantStr
+
+   class Holds1(Predicate, name="holds"):
+      fluent: Raw
+      time: int
+
+   class Holds2(Predicate, name="holds"):
+      fluent: int | ConstantStr
+      time: int
+
+   h1 = Holds1(fluent=Raw(Number(100)), time=1)
+   h2 = Holds2(fluent=100, time=1)
+
+   assert h1 == h2
+   assert type(h1) != type(h2)
+   assert str(h1) == str(h2)
+
+   assert len({h1, h2}) == 1
+
+In this example the comparison ``h1 == h2`` holds even though they are of different types. A
+consequence of this is ``h1`` and ``h2`` cannot be stored separate within the same set object,
+so a set containing this two facts has the length of 1 rather than 2. This behaviour may seem
+unintuitive at first glance. However consider that the main use of :class:`~clorm.Predicate`
+instances is to read/write to/from the clingo solver, and within the solver these two instances
+are indistinguishable.
 
 
 Old Syntax
