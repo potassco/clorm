@@ -44,9 +44,9 @@ def expand_template(template: str, **kwargs: str) -> str:
         end = line.find(r"%}", start)
         if end == -1:
             raise ValueError("Bad template expansion in {line}")
-        keyword = line[start + 2:end]
+        keyword = line[start + 2 : end]
         text = add_spaces(start, kwargs[keyword])
-        line = line[0:start] + text + line[end + 2:]
+        line = line[0:start] + text + line[end + 2 :]
         outlines.append(line)
     return "\n".join(outlines)
 

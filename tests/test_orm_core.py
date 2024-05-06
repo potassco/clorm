@@ -1022,12 +1022,10 @@ class PredicateTestCase(unittest.TestCase):
         clresult = td.pytocl((1, "blah"))
         self.assertEqual(clresult, clob)
 
-
     # --------------------------------------------------------------------------
     # Test that we define the new comparison operators in the template
     # --------------------------------------------------------------------------
     def test_predicate_comparison_operator_creation(self):
-
         class P(Predicate, name="p"):
             a = IntegerField
             b = ConstantField
@@ -1224,7 +1222,6 @@ class PredicateTestCase(unittest.TestCase):
         self.assertTrue(p1.tuple_ != tuple1)
         self.assertFalse(tuple(p1.tuple_) != tuple1)
 
-
     # --------------------------------------------------------------------------
     # Testing comparison between tuple fields where the corresponding python tuples
     # can contain incomparible objects.
@@ -1249,8 +1246,6 @@ class PredicateTestCase(unittest.TestCase):
         self.assertTrue(ptuple("a", "b") >= qtuple(1, 2))
         self.assertFalse(ptuple("a", "b") < qtuple(1, 2))
         self.assertFalse(ptuple("a", "b") <= qtuple(1, 2))
-
-
 
     # --------------------------------------------------------------------------
     # Test predicates with default fields
@@ -2184,7 +2179,6 @@ class PredicateInternalUnifyTestCase(unittest.TestCase):
         self.assertTrue((neg_p2.raw < p2.raw) == (neg_p2 < p2))
         self.assertTrue((p1.raw < p2.raw) == (p1 < p2))
 
-
     # --------------------------------------------------------------------------
     # Test a simple predicate with a field that has a function default
     # --------------------------------------------------------------------------
@@ -2551,7 +2545,6 @@ class PredicateInternalUnifyTestCase(unittest.TestCase):
         self.assertTrue(f2 > f1)
         self.assertTrue(f3 > f2)
         self.assertEqual(f3, f4)
-
 
     # --------------------------------------------------------------------------
     # Test unifying a symbol with a predicate

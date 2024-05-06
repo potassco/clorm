@@ -536,6 +536,7 @@ def _try_to_convert_tuple_argument_to_clorm_tuple(op, args):
         return (args[0], _try_to_convert(args[1], args[0]))
     return args
 
+
 class StandardComparator(Comparator):
     class Preference(enum.IntEnum):
         LOW = 0

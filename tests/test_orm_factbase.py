@@ -19,8 +19,8 @@ from clorm.orm import (
     ConstantField,
     FactBase,
     IntegerField,
-    SimpleField,
     Predicate,
+    SimpleField,
     StringField,
     alias,
     asc,
@@ -1708,6 +1708,7 @@ class QueryAPI2TestCase(unittest.TestCase):
 # Test some special cases involving passing a Python tuple instead of using the clorm tuple.
 # ------------------------------------------------------------------------------------------
 
+
 class QueryWithTupleTestCase(unittest.TestCase):
     def setUp(self):
         class F(Predicate):
@@ -1723,11 +1724,14 @@ class QueryWithTupleTestCase(unittest.TestCase):
 
         self.factbase = FactBase(
             [
-                F((1, "a"), "i"), F((2, "b"), "j"), F((3, "a"), "k"),
-                G(("a", "a"), "x"), G((2, "b"), "y"), G(("e", "e"), "z")
+                F((1, "a"), "i"),
+                F((2, "b"), "j"),
+                F((3, "a"), "k"),
+                G(("a", "a"), "x"),
+                G((2, "b"), "y"),
+                G(("e", "e"), "z"),
             ]
         )
-
 
     # --------------------------------------------------------------------------
     #   Some tuple predicate instance comparisons
@@ -1736,7 +1740,10 @@ class QueryWithTupleTestCase(unittest.TestCase):
         G = self.G
         fb = self.factbase
         cltuple = G.atuple.meta.complex
-        expected = [G((2, "b"), "y"), G(("a", "a"), "x"), ]
+        expected = [
+            G((2, "b"), "y"),
+            G(("a", "a"), "x"),
+        ]
 
         # NOTE: the version with python tuples fails to find the matching tuples because we can
         # no longer directly compare python tuples with clorm tuples.
@@ -1750,7 +1757,6 @@ class QueryWithTupleTestCase(unittest.TestCase):
         q2 = fb.query(G).where(in_(G.atuple, cltuples)).ordered()
         self.assertEqual(list(q2.all()), expected)
 
-
     # --------------------------------------------------------------------------
     #   Complex query where the join is on a tuple object
     # --------------------------------------------------------------------------
@@ -1763,7 +1769,6 @@ class QueryWithTupleTestCase(unittest.TestCase):
         q = fb.query(G, F).join(F.atuple == G.atuple).where(F.other == "j")
         expected = [(G((2, "b"), "y"), F((2, "b"), "j"))]
         self.assertEqual(list(q.all()), expected)
-
 
     # --------------------------------------------------------------------------
     #   Complex query with a where containing a tuple
@@ -1791,10 +1796,9 @@ class QueryWithTupleTestCase(unittest.TestCase):
         fb = self.factbase
 
         q = fb.query(G).order_by(G.atuple)
-        expected = [
-            G((2, "b"), "y"), G(("a", "a"), "x"), G(("e", "e"), "z")
-        ]
+        expected = [G((2, "b"), "y"), G(("a", "a"), "x"), G(("e", "e"), "z")]
         self.assertEqual(list(q.all()), expected)
+
 
 # ------------------------------------------------------------------------------
 # Tests for additional V2 select join  statements

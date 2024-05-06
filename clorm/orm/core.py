@@ -1358,6 +1358,7 @@ class BaseField(object, metaclass=_AbstractBaseFieldMeta):
         ``FactBase```. Defaults to ``False``.
 
     """
+
     def __init__(self, default: Any = MISSING, index: Any = MISSING) -> None:
         self._index = index if index is not MISSING else False
 
@@ -1390,10 +1391,11 @@ class BaseField(object, metaclass=_AbstractBaseFieldMeta):
                     'Invalid default value "{}" for {}'.format(default, type(self).__name__)
                 )
         else:
+
             def _process_default():
                 return _process_value(default())
-            self._default = (True, _process_default)
 
+            self._default = (True, _process_default)
 
     @staticmethod
     @abc.abstractmethod
@@ -2800,7 +2802,7 @@ def _generate_dynamic_predicate_functions(class_name: str, namespace: Dict) -> N
 
     template = PREDICATE_TEMPLATE.format(pdefn=pdefn)
     predicate_functions = expand_template(template, **expansions)
-#    print(f"INIT {class_name}:\n\n{predicate_functions}\n\n")
+    #    print(f"INIT {class_name}:\n\n{predicate_functions}\n\n")
 
     ldict: Dict[str, Any] = {}
     exec(predicate_functions, gdict, ldict)
@@ -3179,6 +3181,7 @@ def _define_field_for_predicate(cls_meta: "_PredicateMeta") -> Type[BaseField]:
 # A Metaclass for the Predicate base class
 # ------------------------------------------------------------------------------
 
+
 @__dataclass_transform__(field_descriptors=(field,))
 class _PredicateMeta(type):
     if TYPE_CHECKING:
@@ -3459,7 +3462,6 @@ class Predicate(object, metaclass=_AbstractPredicateMeta):
     def __gt__(self, other):
         """Overloaded boolean operator."""
         raise NotImplementedError("Predicate.__gt__() must be overriden")
-
 
     @abc.abstractmethod
     def __hash__(self):
