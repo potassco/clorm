@@ -3272,12 +3272,7 @@ class _PredicateMeta(type):
 # ------------------------------------------------------------------------------
 
 
-# Mixin class to be able to use both MetaClasses
-class _AbstractPredicateMeta(abc.ABCMeta, _PredicateMeta):
-    pass
-
-
-class Predicate(object, metaclass=_AbstractPredicateMeta):
+class Predicate(object, metaclass=_PredicateMeta):
     """Abstract base class to encapsulate an ASP predicate or complex term.
 
     This is the heart of the ORM model for defining the mapping of a predicate
@@ -3445,12 +3440,10 @@ class Predicate(object, metaclass=_AbstractPredicateMeta):
     # --------------------------------------------------------------------------
     # Overloaded operators
     # --------------------------------------------------------------------------
-    @abc.abstractmethod
     def __eq__(self, other):
         """Overloaded boolean operator."""
         raise NotImplementedError("Predicate.__eq__() must be overriden")
 
-    @abc.abstractmethod
     def __lt__(self, other):
         """Overloaded boolean operator."""
         raise NotImplementedError("Predicate.__lt__() must be overriden")
@@ -3459,17 +3452,14 @@ class Predicate(object, metaclass=_AbstractPredicateMeta):
         """Overloaded boolean operator."""
         raise NotImplementedError("Predicate.__le__() must be overriden")
 
-    @abc.abstractmethod
     def __ge__(self, other):
         """Overloaded boolean operator."""
         raise NotImplementedError("Predicate.__ge__() must be overriden")
 
-    @abc.abstractmethod
     def __gt__(self, other):
         """Overloaded boolean operator."""
         raise NotImplementedError("Predicate.__gt__() must be overriden")
 
-    @abc.abstractmethod
     def __hash__(self):
         """Overload the hash function."""
         raise NotImplementedError("Predicate.__hash__() must be overriden")
