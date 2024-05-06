@@ -20,6 +20,7 @@ from clorm.orm import (
     FactBase,
     IntegerField,
     Predicate,
+    SimpleField,
     StringField,
     alias,
     asc,
@@ -27,6 +28,7 @@ from clorm.orm import (
     func,
     hashable_path,
     in_,
+    notin_,
     path,
     ph1_,
     ph2_,
@@ -47,6 +49,7 @@ __all__ = [
     "FactBaseTestCase",
     "QueryAPI1TestCase",
     "QueryAPI2TestCase",
+    "QueryWithTupleTestCase",
     "SelectJoinTestCase",
     "MembershipQueriesTestCase",
     "FactBasePicklingTestCase",
@@ -710,6 +713,20 @@ class FactBaseTestCase(unittest.TestCase):
         self.assertIn(expected_sig_predC, result)
         self.assertIn(expected_sig_predA, result)
 
+    # --------------------------------------------------------------------------
+    # Test the asp output string with sorting and incomparable terms
+    # --------------------------------------------------------------------------
+    def test_factbase_aspstr_sorted_incomparable(self):
+        class A(Predicate):
+            x = field(SimpleField)
+
+        fb = FactBase([A(1), A(2), A("b")])
+        q = fb.query(A).ordered()
+        self.assertTrue(list(q.all()) == [A(1), A(2), A("b")])
+        tmpstr1 = ".\n".join(f"{x}" for x in q.all()) + ".\n"
+        tmpstr2 = fb.asp_str(sorted=True)
+        self.assertTrue(tmpstr1 == tmpstr2)
+
 
 # ------------------------------------------------------------------------------
 # Test QueryAPI version 1 (called via FactBase.select() and FactBase.delete())
@@ -1118,6 +1135,9 @@ class QueryAPI1TestCase(unittest.TestCase):
     #   Test that select works with order_by for complex term
     # --------------------------------------------------------------------------
     def test_api_factbase_select_order_by_complex_term(self):
+        # NOTE: behavior change 20240428 - ordering is based on the underlying clingo.Symbol
+        # object and not the python translation. So using SwapField won't change the ordering
+        # for AComplex objects.
         class SwapField(IntegerField):
             pytocl = lambda x: 100 - x
             cltopy = lambda x: 100 - x
@@ -1145,10 +1165,13 @@ class QueryAPI1TestCase(unittest.TestCase):
         self.assertEqual([f1, f2, f3, f4], list(q.get()))
 
         q = fb.select(AFact).order_by(AFact.cmplx, AFact.astr)
-        self.assertEqual([f3, f4, f2, f1], list(q.get()))
+        self.assertEqual([f1, f2, f3, f4], list(q.get()))
 
         q = fb.select(AFact).where(AFact.cmplx <= ph1_).order_by(AFact.cmplx, AFact.astr)
-        self.assertEqual([f3, f4, f2], list(q.get(cmplx2)))
+        self.assertEqual([f1, f2], list(q.get(cmplx2)))
+
+        q = fb.select(AFact).where(AFact.cmplx >= ph1_).order_by(AFact.cmplx, AFact.astr)
+        self.assertEqual([f2, f3, f4], list(q.get(cmplx2)))
 
     # --------------------------------------------------------------------------
     #   Test that select works with order_by for complex term
@@ -1278,8 +1301,7 @@ class QueryAPI1TestCase(unittest.TestCase):
         self.assertEqual(list(s1.get(20)), [f2, f1])
         self.assertEqual(list(s2.get(CT(20, "b"))), [f2])
 
-        # NOTE: Important test as it requires tuple complex terms to have the
-        # same hash as the corresponding python tuple.
+        # NOTE: This requires Python tuple to be converted to a clorm tuple.
         self.assertEqual(list(s3.get((1, 2))), [f2])
         self.assertEqual(list(s4.get((2, 1))), [f2])
 
@@ -1689,6 +1711,102 @@ class QueryAPI2TestCase(unittest.TestCase):
         with self.assertRaises(ValueError) as ctx:
             tmp = list(fb.query(F, G).all())
         check_errmsg("A query over multiple predicates is incomplete", ctx)
+
+
+# ------------------------------------------------------------------------------------------
+# Test some special cases involving passing a Python tuple instead of using the clorm tuple.
+# ------------------------------------------------------------------------------------------
+
+
+class QueryWithTupleTestCase(unittest.TestCase):
+    def setUp(self):
+        class F(Predicate):
+            atuple = field((IntegerField, StringField))
+            other = StringField
+
+        class G(Predicate):
+            atuple = field((SimpleField, StringField))
+            other = StringField
+
+        self.F = F
+        self.G = G
+
+        self.factbase = FactBase(
+            [
+                F((1, "a"), "i"),
+                F((2, "b"), "j"),
+                F((3, "a"), "k"),
+                G(("a", "a"), "x"),
+                G((2, "b"), "y"),
+                G(("e", "e"), "z"),
+            ]
+        )
+
+    # --------------------------------------------------------------------------
+    #   Some tuple predicate instance comparisons
+    # --------------------------------------------------------------------------
+    def test_basic_clorm_tuple_in_comparison(self):
+        G = self.G
+        fb = self.factbase
+        cltuple = G.atuple.meta.complex
+        expected = [
+            G((2, "b"), "y"),
+            G(("a", "a"), "x"),
+        ]
+
+        # NOTE: the version with python tuples fails to find the matching tuples because we can
+        # no longer directly compare python tuples with clorm tuples.
+
+        pytuples = {("a", "a"), (2, "b")}
+        q1 = fb.query(G).where(in_(G.atuple, pytuples)).ordered()
+        self.assertEqual(list(q1.all()), [])
+        # this fails: self.assertEqual(list(q1.all()), expected)
+
+        cltuples = {cltuple("a", "a"), cltuple(2, "b")}
+        q2 = fb.query(G).where(in_(G.atuple, cltuples)).ordered()
+        self.assertEqual(list(q2.all()), expected)
+
+    # --------------------------------------------------------------------------
+    #   Complex query where the join is on a tuple object
+    # --------------------------------------------------------------------------
+    def test_api_join_on_clorm_tuple(self):
+        F = self.F
+        G = self.G
+        fb = self.factbase
+
+        # Select everything with an equality join
+        q = fb.query(G, F).join(F.atuple == G.atuple).where(F.other == "j")
+        expected = [(G((2, "b"), "y"), F((2, "b"), "j"))]
+        self.assertEqual(list(q.all()), expected)
+
+    # --------------------------------------------------------------------------
+    #   Complex query with a where containing a tuple
+    # --------------------------------------------------------------------------
+    def test_api_where_with_python_tuple(self):
+        F = self.F
+        fb = self.factbase
+
+        # The Python tuple passed in the where clause
+        q = fb.query(F).where(F.atuple == (2, "b"))
+        expected = [F((2, "b"), "j")]
+        self.assertEqual(list(q.all()), expected)
+
+        # The Python tuple passed in the bind
+        q = fb.query(F).where(F.atuple == ph1_).bind((2, "b"))
+        expected = [F((2, "b"), "j")]
+        self.assertEqual(list(q.all()), expected)
+
+    # --------------------------------------------------------------------------
+    #   Complex query sorting on Clorm tuple where the corresponding Python tuple
+    #   is incomparable.
+    #   --------------------------------------------------------------------------
+    def test_api_sorting_with_incomparable_elements(self):
+        G = self.G
+        fb = self.factbase
+
+        q = fb.query(G).order_by(G.atuple)
+        expected = [G((2, "b"), "y"), G(("a", "a"), "x"), G(("e", "e"), "z")]
+        self.assertEqual(list(q.all()), expected)
 
 
 # ------------------------------------------------------------------------------

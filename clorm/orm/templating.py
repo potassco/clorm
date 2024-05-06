@@ -21,6 +21,7 @@ def expand_template(template: str, **kwargs: str) -> str:
     line to preserve the correct indentation.
 
     """
+
     # Add spaces to each line of some multi-text input
     def add_spaces(num, text):
         space = " " * num
@@ -37,11 +38,11 @@ def expand_template(template: str, **kwargs: str) -> str:
     lines = template.expandtabs(4).splitlines()
     outlines = []
     for line in lines:
-        start = line.find("{%")
+        start = line.find(r"{%")
         if start == -1:
             outlines.append(line)
             continue
-        end = line.find("%}", start)
+        end = line.find(r"%}", start)
         if end == -1:
             raise ValueError("Bad template expansion in {line}")
         keyword = line[start + 2 : end]
@@ -73,6 +74,7 @@ def __init__(self,
                          ({{%args_raw%}}),
                          self._sign)
 
+
 @classmethod
 def _unify(cls: Type[_P], raw: AnySymbol, raw_args: Optional[Sequence[AnySymbol]]=None, raw_name: Optional[str]=None) -> Optional[_P]:
     try:
@@ -97,6 +99,92 @@ def _unify(cls: Type[_P], raw: AnySymbol, raw_args: Optional[Sequence[AnySymbol]
     except AttributeError as e:
         raise ValueError((f"Cannot unify with object {{raw}} ({{type(raw)}}) as "
                           "it is not a clingo Symbol Function object"))
+
+
+def nontuple__eq__(self, other: Any) -> bool:
+    # Deal with a non-tuple predicate
+    if isinstance(other, Predicate):
+        return self._raw == other._raw
+    if isinstance(other, Symbol):
+        return self._raw == other
+    return NotImplemented
+
+
+def tuple__eq__(self, other: Any) -> bool:
+    # Deal with a predicate that is a tuple
+    if isinstance(other, Predicate):
+        return self._raw == other._raw
+    if isinstance(other, Symbol):
+        return self._raw == other
+#    if isinstance(other, tuple):
+#        return self._field_values == other
+    return NotImplemented
+
+
+def nontuple__lt__(self, other):
+    # If it is the same predicate class then compare the underlying clingo symbol
+    if isinstance(other, Predicate):
+        return self._raw < other._raw
+    if isinstance(other, Symbol):
+        return self._raw < other
+    return NotImplemented
+
+
+def tuple__lt__(self, other):
+    # self is always less than a non-tuple predicate
+    if isinstance(other, Predicate):
+        return self._raw < other._raw
+    if isinstance(other, Symbol):
+        return self._raw < other
+#    if isinstance(other, tuple):
+#        return self._field_values < other
+    return NotImplemented
+
+
+def nontuple__gt__(self, other):
+    if isinstance(other, Predicate):
+        return self._raw > other._raw
+    if isinstance(other, Symbol):
+        return self._raw > other
+    return NotImplemented
+
+
+def tuple__gt__(self, other):
+    # If it is the same predicate class then compare the sign and fields
+    if isinstance(other, Predicate):
+        return self._raw > other._raw
+    if isinstance(other, Symbol):
+        return self._raw > other
+#    if isinstance(other, tuple):
+#        return self._field_values > other
+    return NotImplemented
+
+
+def __ge__(self, other):
+    result = self.__lt__(other)
+    if result is NotImplemented:
+        return NotImplemented
+    return not result
+
+
+def __le__(self, other):
+    result = self.__gt__(other)
+    if result is NotImplemented:
+        return NotImplemented
+    return not result
+
+
+def __hash__(self):
+    if self._hash is None:
+        self._hash = hash(self._raw)
+    return self._hash
+
+
+__eq__ = tuple__eq__ if PREDICATE_IS_TUPLE else nontuple__eq__
+__lt__ = tuple__lt__ if PREDICATE_IS_TUPLE else nontuple__lt__
+__gt__ = tuple__gt__ if PREDICATE_IS_TUPLE else nontuple__gt__
+
+
 
 """
 

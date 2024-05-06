@@ -8,6 +8,12 @@
 # to be completed.
 # ------------------------------------------------------------------------------
 
+# -------------------------------------------------------------------------------------------
+# NOTE: 20242028 See orm/core.py for changes to the semantics of comparison operators for
+# Predicate objects.
+# -------------------------------------------------------------------------------------------
+
+
 import collections.abc as cabc
 import datetime
 import enum
@@ -71,7 +77,7 @@ from clorm.orm.core import (
     trueall,
 )
 
-from .support import check_errmsg, check_errmsg_contains
+from .support import check_errmsg, check_errmsg_contains, to_tuple
 
 # Error messages for CPython and PyPy vary
 PYPY = sys.implementation.name == "pypy"
@@ -280,10 +286,12 @@ class FieldTestCase(unittest.TestCase):
             self.assertEqual(t, (StringField, IntegerField))
 
             t = field((StringField, IntegerField), default=("3", 4))
+
             self.assertIsInstance(t, BaseField)
             self.assertIsInstance(t.complex[0].meta.field, StringField)
             self.assertIsInstance(t.complex[1].meta.field, IntegerField)
-            self.assertEqual(t.default, ("3", 4))
+            self.assertEqual(t.default, t.complex("3", 4))
+            self.assertEqual(to_tuple(t.default), ("3", 4))
 
         with self.subTest("with custom field"):
             INLField = define_flat_list_field(IntegerField, name="INLField")
@@ -302,8 +310,8 @@ class FieldTestCase(unittest.TestCase):
                 return ("3", x)
 
             t = field((StringField, IntegerField), default_factory=factory)
-            self.assertEqual(t.default, ("3", 1))
-            self.assertEqual(t.default, ("3", 2))
+            self.assertEqual(to_tuple(t.default), ("3", 1))
+            self.assertEqual(to_tuple(t.default), ("3", 2))
 
         with self.subTest("with nested tuple and default"):
             t = field((StringField, (StringField, IntegerField)))
@@ -313,7 +321,7 @@ class FieldTestCase(unittest.TestCase):
             self.assertIsInstance(t, BaseField)
             self.assertIsInstance(t.complex[0].meta.field, StringField)
             self.assertIsInstance(t.complex[1].meta.field, BaseField)
-            self.assertEqual(t.default, ("3", ("1", 4)))
+            self.assertEqual(to_tuple(t.default), ("3", ("1", 4)))
 
     def test_api_field_function_illegal_arguments(self):
         with self.subTest("illegal basefield type"):
@@ -783,7 +791,7 @@ class FieldTestCase(unittest.TestCase):
         value2 = (2, ("b", "B"))
         nlist = (value1, value2)
 
-        self.assertEqual(XField.cltopy(symnlist), nlist)
+        self.assertEqual(to_tuple(XField.cltopy(symnlist)), nlist)
         self.assertEqual(XField.pytocl(nlist), symnlist)
 
     # --------------------------------------------------------------------------
@@ -835,7 +843,7 @@ class FieldTestCase(unittest.TestCase):
         value2 = (2, ("b", "B"))
         nlist = (value1, value2)
 
-        self.assertEqual(XField.cltopy(symnlist), nlist)
+        self.assertEqual(to_tuple(XField.cltopy(symnlist)), nlist)
         self.assertEqual(XField.pytocl(nlist), symnlist)
 
     # --------------------------------------------------------------------------
@@ -1015,6 +1023,23 @@ class PredicateTestCase(unittest.TestCase):
         self.assertEqual(clresult, clob)
 
     # --------------------------------------------------------------------------
+    # Test that we define the new comparison operators in the template
+    # --------------------------------------------------------------------------
+    def test_predicate_comparison_operator_creation(self):
+        class P(Predicate, name="p"):
+            a = IntegerField
+            b = ConstantField
+
+        p1 = P(a=1, b="x")
+        p2 = P(a=1, b="x")
+        p3 = P(a=2, b="x")
+
+        tmp = {}
+        tmp[p1] = "P"
+        self.assertEqual(p1, p2)
+        self.assertNotEqual(p1, p3)
+
+    # --------------------------------------------------------------------------
     # Test that we can define predicates using the class syntax and test that
     # the getters and setters are connected properly to the predicate classes.
     # --------------------------------------------------------------------------
@@ -1177,21 +1202,50 @@ class PredicateTestCase(unittest.TestCase):
         tuple1 = tuple([1, "a"])
         tuple2 = tuple([2, "b"])
 
-        # Equality works even when the types are different
+        # Equality works even when the predicate types are different
         self.assertTrue(p1.tuple_ == p1_alt.tuple_)
         self.assertTrue(p1.tuple_ == q1.tuple_)
         self.assertTrue(p1.tuple_ == t1.tuple_)
-        self.assertTrue(p1.tuple_ == tuple1)
+
+        # New behaviour. Doesn't compare directly to tuple
+        self.assertFalse(p1.tuple_ == tuple1)
+        self.assertTrue(tuple(p1.tuple_) == tuple1)
 
         self.assertNotEqual(type(p1.tuple_), type(t1.tuple_))
-        #        self.assertNotEqual(type(p1.tuple_), type(t1))
 
         self.assertTrue(p1.tuple_ != p2.tuple_)
         self.assertTrue(p1.tuple_ != q2.tuple_)
         self.assertTrue(p1.tuple_ != r2.tuple_)
         self.assertTrue(p1.tuple_ != s2.tuple_)
         self.assertTrue(p1.tuple_ != t2.tuple_)
-        self.assertTrue(p1.tuple_ != tuple2)
+
+        self.assertTrue(p1.tuple_ != tuple1)
+        self.assertFalse(tuple(p1.tuple_) != tuple1)
+
+    # --------------------------------------------------------------------------
+    # Testing comparison between tuple fields where the corresponding python tuples
+    # can contain incomparible objects.
+    # --------------------------------------------------------------------------
+    def test_predicate_with_incomparable_python_tuples(self):
+        class P(Predicate):
+            tuple_ = field((SimpleField, SimpleField))
+
+        class Q(Predicate):
+            tuple_ = field((IntegerField, IntegerField))
+
+        ptuple = P.tuple_.meta.complex
+        qtuple = Q.tuple_.meta.complex
+
+        self.assertTrue(ptuple(1, 2) == qtuple(1, 2))
+        self.assertTrue(ptuple("a", "b") != qtuple(1, 2))
+
+        # NOTE: the following throws a TypeError when comparing two Python tuples but works
+        # with clorm tuples.
+        # error: self.assertTrue(("a", "b") > (1,2))
+        self.assertTrue(ptuple("a", "b") > qtuple(1, 2))
+        self.assertTrue(ptuple("a", "b") >= qtuple(1, 2))
+        self.assertFalse(ptuple("a", "b") < qtuple(1, 2))
+        self.assertFalse(ptuple("a", "b") <= qtuple(1, 2))
 
     # --------------------------------------------------------------------------
     # Test predicates with default fields
@@ -2113,33 +2167,17 @@ class PredicateInternalUnifyTestCase(unittest.TestCase):
         class P(Predicate):
             a = IntegerField
 
-        class Q(Predicate):
-            a = IntegerField
-
         p1 = P(1)
         neg_p1 = P(1, sign=False)
         p2 = P(2)
         neg_p2 = P(2, sign=False)
-        q1 = Q(1)
 
-        self.assertTrue(neg_p1 < neg_p2)
-        self.assertTrue(neg_p1 < p1)
-        self.assertTrue(neg_p1 < p2)
-        self.assertTrue(neg_p2 < p1)
-        self.assertTrue(neg_p2 < p2)
-        self.assertTrue(p1 < p2)
-
-        self.assertTrue(p2 > p1)
-        self.assertTrue(p2 > neg_p2)
-        self.assertTrue(p2 > neg_p1)
-        self.assertTrue(p1 > neg_p2)
-        self.assertTrue(p1 > neg_p1)
-        self.assertTrue(neg_p2 > neg_p1)
-
-        # Different predicate sub-classes are incomparable
-
-    #        with self.assertRaises(TypeError) as ctx:
-    #            self.assertTrue(p1 < q1)
+        # NOTE: 20240428 see note at top about change of semantics
+        self.assertTrue((neg_p1.raw < p1.raw) == (neg_p1 < p1))
+        self.assertTrue((neg_p1.raw < p2.raw) == (neg_p1 < p2))
+        self.assertTrue((neg_p2.raw < p1.raw) == (neg_p2 < p1))
+        self.assertTrue((neg_p2.raw < p2.raw) == (neg_p2 < p2))
+        self.assertTrue((p1.raw < p2.raw) == (p1 < p2))
 
     # --------------------------------------------------------------------------
     # Test a simple predicate with a field that has a function default
@@ -2320,9 +2358,9 @@ class PredicateInternalUnifyTestCase(unittest.TestCase):
         with self.assertRaises(TypeError) as ctx:
 
             class Fact2(Predicate):
-                afun = Fun.Field(default=(1, "str"))
+                afun = Fun.Field(default=6)
 
-        check_errmsg("""Invalid default value "(1, 'str')" for FunField""", ctx)
+        check_errmsg("""Invalid default value "6" for FunField""", ctx)
 
     # --------------------------------------------------------------------------
     # Test the simple_predicate function as a mechanism for defining
@@ -2423,6 +2461,7 @@ class PredicateInternalUnifyTestCase(unittest.TestCase):
     # Test predicate equality
     # --------------------------------------------------------------------------
     def test_predicate_comparison_operator_overloads(self):
+        # NOTE: 20240428 see note at top about change of semantics
 
         f1 = Function("fact", [Number(1)])
         f2 = Function("fact", [Number(2)])
@@ -2452,9 +2491,9 @@ class PredicateInternalUnifyTestCase(unittest.TestCase):
         self.assertEqual(f1, af1.raw)
         self.assertEqual(af1.raw, f1)
         self.assertEqual(af1.raw, ag1.raw)
-        self.assertNotEqual(af1, ag1)
-        self.assertNotEqual(af1, f1)
-        self.assertNotEqual(f1, af1)
+        self.assertEqual(af1, ag1)
+        self.assertEqual(af1, f1)
+        self.assertEqual(f1, af1)
 
         self.assertTrue(af1 < af2)
         self.assertTrue(af1 <= af2)
@@ -2478,6 +2517,8 @@ class PredicateInternalUnifyTestCase(unittest.TestCase):
     # Test predicate equality
     # --------------------------------------------------------------------------
     def test_comparison_operator_overloads_complex(self):
+        # NOTE: 20240428 see note at top about change of semantics
+
         class SwapField(IntegerField):
             pytocl = lambda x: 100 - x
             cltopy = lambda x: 100 - x
@@ -2497,15 +2538,12 @@ class PredicateInternalUnifyTestCase(unittest.TestCase):
         for rf in [rf1, rf2, rf3]:
             self.assertEqual(rf.arguments[0], rf.arguments[1])
 
-        # Test the the comparison operator for the complex term is using the
-        # swapped values so that the comparison is opposite to what the raw
-        # field says.
         self.assertTrue(rf1 < rf2)
         self.assertTrue(rf2 < rf3)
-        self.assertTrue(f1 > f2)
-        self.assertTrue(f2 > f3)
-        self.assertTrue(f2 < f1)
-        self.assertTrue(f3 < f2)
+        self.assertTrue(f1 < f2)
+        self.assertTrue(f2 < f3)
+        self.assertTrue(f2 > f1)
+        self.assertTrue(f3 > f2)
         self.assertEqual(f3, f4)
 
     # --------------------------------------------------------------------------

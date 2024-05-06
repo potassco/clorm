@@ -57,12 +57,12 @@ __all__ = [
 # Defining and manipulating conditional elements
 # ------------------------------------------------------------------------------
 
+
 # ------------------------------------------------------------------------------
 # Placeholder allows for variable substituion of a query. Placeholder is
 # an abstract class that exposes no API other than its existence.
 # ------------------------------------------------------------------------------
 class Placeholder(abc.ABC):
-
     r"""An abstract class for defining parameterised queries.
 
     Currently, Clorm supports 4 placeholders: ph1\_, ph2\_, ph3\_, ph4\_. These
@@ -515,6 +515,29 @@ def membership_op_keyable(sc, indexes):
 # ------------------------------------------------------------------------------
 
 
+# Helper function to try to convert Python tuples into a matching clorm anon tuple.  With this
+# we can pass a Python tuple to a query and not have to overload the Predicate comparison
+# operator and hash function to match the tuple.
+def _try_to_convert_tuple_argument_to_clorm_tuple(op, args):
+    def _try_to_convert(tup, possiblepath):
+        if not isinstance(possiblepath, PredicatePath):
+            return tup
+        complex = possiblepath.meta.complex
+        if complex is None or not complex.meta.is_tuple:
+            return tup
+        return complex(*tup)
+
+    if op not in {operator.eq, operator.ne, operator.lt, operator.le, operator.gt, operator.ge}:
+        return args
+    if len(args) != 2:
+        return args
+    if isinstance(args[0], tuple):
+        return (_try_to_convert(args[0], args[1]), args[1])
+    if isinstance(args[1], tuple):
+        return (args[0], _try_to_convert(args[1], args[0]))
+    return args
+
+
 class StandardComparator(Comparator):
     class Preference(enum.IntEnum):
         LOW = 0
@@ -625,7 +648,7 @@ class StandardComparator(Comparator):
                 ).format(operator)
             )
         self._operator = operator
-        self._args = tuple(args)
+        self._args = tuple(_try_to_convert_tuple_argument_to_clorm_tuple(operator, args))
         self._hashableargs = tuple(
             [hashable_path(a) if isinstance(a, PredicatePath) else a for a in self._args]
         )
@@ -789,7 +812,7 @@ class StandardComparator(Comparator):
                     self._operator
                 )
             )
-        return StandardComparator(spec.swapop, reversed(self._args))
+        return StandardComparator(spec.swapop, tuple(reversed(self._args)))
 
     def keyable(self, indexes):
         spec = StandardComparator.operators[self._operator]
@@ -2211,6 +2234,7 @@ def make_join_pair(joins, clauseblock, orderbys=[]):
 # describes the plan to execute a single link in a join.
 # ------------------------------------------------------------------------------
 
+
 # Check that the formula only refers to paths with the allowable roots
 def _check_roots(allowable_roots, formula):
     if not formula:
@@ -3044,6 +3068,7 @@ def make_query_plan(indexed_paths, qspec):
 # Implementing Queries - taking a QuerySpec, QueryPlan, and a FactMap and
 # generating an actual query.
 # ------------------------------------------------------------------------------
+
 
 # ------------------------------------------------------------------------------
 # Creates a mechanism for sorting using the order_by statements within queries.

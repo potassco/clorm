@@ -22,7 +22,7 @@ generate problem instances and process the results dynamically. Clorm makes this
 integration cleaner, both in terms of code readability but also by making it
 easier to refactor the python code as the ASP program evolves.
 
-- Works with Python 3.7+ and Clingo 5.5+
+- Works with Python 3.8+ and Clingo 5.6+
 
 
 .. toctree::

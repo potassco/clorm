@@ -84,7 +84,7 @@ from clorm.orm.query import (
     where_expression_to_nnf,
 )
 
-from .support import check_errmsg, check_errmsg_contains
+from .support import check_errmsg, check_errmsg_contains, to_tuple
 
 ###### NOTE: The QueryOutput tests need to be turned into QueryExecutor
 ###### tests. We can then delete QueryOutput which is not being used for
@@ -432,7 +432,7 @@ class ComparatorTestCase(unittest.TestCase):
         getter = make_input_alignment_functor([F], [F.acomplex])
         result = getter((f1,))
         tmp = ((1, 2),)
-        self.assertEqual(result, tmp)
+        self.assertEqual(to_tuple(result), tmp)
 
     # ------------------------------------------------------------------------------
     # ------------------------------------------------------------------------------
@@ -545,9 +545,9 @@ class ComparatorTestCase(unittest.TestCase):
 
         getter = make_input_alignment_functor([F], [F.acomplex])
         result = getter((f1,))
-        self.assertEqual(result, ((1, 2),))
+        self.assertEqual(to_tuple(result), ((1, 2),))
 
-        sc = SC(operator.eq, [F.acomplex, (1, 2)])
+        sc = SC(operator.eq, [F.acomplex, F.meta[1].defn.complex(1, 2)])
         cmp = sc.make_callable([F])
         self.assertTrue(cmp((f1,)))
         self.assertFalse(cmp((f2,)))
