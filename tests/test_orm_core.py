@@ -275,7 +275,7 @@ class FieldTestCase(unittest.TestCase):
     def test_api_field_function(self):
         with self.subTest("with single BaseField"):
             f = field(IntegerField)
-            self.assertEqual(f, IntegerField)
+            self.assertTrue(isinstance(f, IntegerField))
 
             f = field(IntegerField, default=4)
             self.assertEqual(type(f), IntegerField)
@@ -469,19 +469,14 @@ class FieldTestCase(unittest.TestCase):
         self.assertEqual(fld.default, 5)
         self.assertTrue(fld.has_default)
 
-        fld = IntegerField(default=inc)
-        self.assertTrue(fld.has_default)
+        fld = IntegerField(default_factory=inc)
+        self.assertTrue(fld.has_default_factory)
         self.assertEqual(fld.default, 1)
         self.assertEqual(fld.default, 2)
 
         # Added test for bug fix to distinguish a value that evaluates to False
         # from a None value
         fld = IntegerField(default=0)
-        self.assertEqual(fld.default, 0)
-        self.assertTrue(fld.has_default)
-
-        # A default can also be specified as a position argument
-        fld = IntegerField(0)
         self.assertEqual(fld.default, 0)
         self.assertTrue(fld.has_default)
 
@@ -524,10 +519,6 @@ class FieldTestCase(unittest.TestCase):
         self.assertTrue(fint2.index)
         self.assertTrue(fstr2.index)
         self.assertTrue(fconst2.index)
-
-        # Specify with positional arguments
-        f = IntegerField(1, True)
-        self.assertTrue(f.index)
 
     # --------------------------------------------------------------------------
     # Test the SimpleField class that handles all primitive types
@@ -1157,7 +1148,7 @@ class PredicateTestCase(unittest.TestCase):
     def test_predicate_anonymous_field_with_default(self):
         class P(Predicate):
             first = IntegerField
-            tuple_ = (IntegerField(2), StringField("42"))
+            tuple_ = (IntegerField(default=2), StringField(default="42"))
 
         p = P(first=15, tuple_=(1, "2"))
         raw_p = Function("p", [Number(15), Function("", [Number(1), String("2")])])
@@ -2182,7 +2173,7 @@ class PredicateInternalUnifyTestCase(unittest.TestCase):
     # --------------------------------------------------------------------------
     # Test a simple predicate with a field that has a function default
     # --------------------------------------------------------------------------
-    def test_predicate_with_function_default(self):
+    def test_predicate_with_default_factory(self):
         val = 0
 
         def inc():
@@ -2191,7 +2182,7 @@ class PredicateInternalUnifyTestCase(unittest.TestCase):
             return val
 
         class Fact(Predicate):
-            anum = IntegerField(default=inc)
+            anum = IntegerField(default_factory=inc)
             astr = StringField()
 
         func = Function("fact", [Number(1), String("test")])
@@ -2205,6 +2196,50 @@ class PredicateInternalUnifyTestCase(unittest.TestCase):
         self.assertEqual(f4.anum, 3)
         self.assertEqual(f1, f2)
         self.assertEqual(f1.raw, func)
+
+    # ---------------------------------------------------------------------------------------
+    # Test a predicate a complex field that has an implicit default based on its subfields
+    # ---------------------------------------------------------------------------------------
+    def test_predicate_with_anon_tuple_field_with_implicit_default_factory(self):
+        val = 0
+
+        def inc():
+            nonlocal val
+            val += 1
+            return val
+
+        class Outer(Predicate):
+            x = (IntegerField(default_factory=inc), StringField(default="blah"))
+
+        x1 = Function("", [Number(1), String("blah")])
+        x2 = Function("", [Number(2), String("blah")])
+
+        self.assertEqual(Outer().x, x1)
+        self.assertEqual(Outer().x, x2)
+
+    # ---------------------------------------------------------------------------------------
+    # Test a predicate a complex field that has an implicit default based on its subfields
+    # ---------------------------------------------------------------------------------------
+    def test_predicate_with_complex_field_with_implicit_default_factory(self):
+        val = 0
+
+        def inc():
+            nonlocal val
+            val += 1
+            return val
+
+        class X(Predicate):
+            a: int = field(IntegerField, default_factory=inc)
+            b: str = field(StringField, default="blah")
+
+        class Outer(Predicate):
+            x = field(X.Field)
+
+        x1 = Function("x", [Number(1), String("blah")])
+        x2 = Function("x", [Number(2), String("blah")])
+
+        self.assertEqual(Outer().x, x1)
+        self.assertEqual(Outer().x, x2)
 
     # --------------------------------------------------------------------------
     # Test that we can initialise using positional arguments
