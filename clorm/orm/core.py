@@ -1359,7 +1359,8 @@ class BaseField(object, metaclass=_AbstractBaseFieldMeta):
         value when none has been specified.
 
       index (bool): Determine if this field should be indexed by default in a
-        ``FactBase```. Defaults to ``False``.
+        ``FactBase```. Defaults to ``False``. WARNING: this parameter will be deprecated in
+        a future version of Clorm. Indexing should be explicitly set in the FactBase object.
 
     """
 
@@ -1370,6 +1371,21 @@ class BaseField(object, metaclass=_AbstractBaseFieldMeta):
         default_factory: Callable[[], Any] = MISSING,
         index: Any = MISSING,
     ) -> None:
+        """Initialize a field instance.
+
+        Args:
+
+          default: A default value to be used when instantiating a ``Predicate`` object and no
+            value has been specified.
+
+          default_factory: A unary function (ie. a function with no arguments) for generating a
+            value when none has been specified.
+
+          index (bool): Determine if this field should be indexed by default in a
+            ``FactBase```. Defaults to ``False``. WARNING: this parameter will be deprecated in
+            a future version of Clorm. Indexing should be explicitly set in the FactBase object.
+
+        """
         self._index = index if index is not MISSING else False
         if default is not MISSING and default_factory is not MISSING:
             raise ValueError("can not specify both default and default_factory")
