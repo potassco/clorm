@@ -79,6 +79,9 @@ ppa:
         - 'README.rst'
         - 'LICENSE'
     distributions:
+        noble:
+            source:
+                Build-Depends: 'debhelper-compat (= 13), dh-python, python3-all, python3-setuptools, python3-clingo'
         jammy:
         focal:
     source:
