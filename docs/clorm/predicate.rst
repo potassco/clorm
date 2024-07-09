@@ -97,8 +97,8 @@ There are some things to note here:
 * *Field order*: the order of declared term defintions in the predicate class is important.
 
 * *Field names*: besides the Python keywords, Clorm also disallows the following reserved
-  words: ``raw``, ``meta``, ``clone``, ``Field`` as these are used as properties or functions
-  of a :class:`~clorm.Predicate` object.
+  words: ``raw``, ``meta``, ``clone``, ``sign``, and ``Field`` as these are used as properties
+  or functions of a :class:`~clorm.Predicate` object.
 
 * *Constant vs string*: In the above example ``"bob"`` and ``"Sydney uni"`` are both Python
   strings but because the ``entity`` field is declared as :class:`~clorm.ConstantStr` (or the
@@ -526,12 +526,6 @@ restricts the values of an existing field class.
    except TypeError:
       print("Caught exception")
 
-.. note::
-
-   The :py:func:`~clorm.refine_field` function can also be called with only two arguments,
-   rather than three, by ignoring the name for the generated class. In this case an anonymously
-   generated name will be used.
-
 As well as explictly specifying the set of refinement values, :py:func:`~clorm.refine_field`
 also provides a more general approach where a function/functor/lambda can be provided. This
 function must take a single input and return ``True`` if that value is valid for the field. For
@@ -773,8 +767,8 @@ instance.
 
 .. code-block:: python
 
-   from clorm import *    # Predicate, ConstantField, StringField
-   from clingo import *   # Function, String
+   from clorm import Predicate, ConstantStr
+   from clingo import Function, String
 
    class Address(Predicate):
       entity: ConstantStr
@@ -922,9 +916,6 @@ For example encoding a list of "nodes" [1,2,c] for some predicate ``p``, might t
 .. code-block:: prolog
 
    p(nodes,(1,(2,(c,())))).
-
-While, such an encoding can be problematic and can lead to a grounding blowout, nevertheless
-when used with care can be very useful.
 
 Unfortunately, getting facts containing these sorts of nested lists into and out of Clingo can
 be very cumbersome. To help support this type of encoding Clorm provides the
