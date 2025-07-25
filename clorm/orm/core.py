@@ -1094,15 +1094,13 @@ def hashable_path(arg, exception=True):
 # API function to return the an alias path for a predicate
 # ------------------------------------------------------------------------------
 @overload
-def alias(predicate: Type[_P], name: str = "") -> Type[_P]:
-    ...
+def alias(predicate: Type[_P], name: str = "") -> Type[_P]: ...
 
 
 @overload
 def alias(
     predicate: Union[PredicatePath, PredicatePath.Hashable], name: str = ""
-) -> Type["Predicate"]:
-    ...
+) -> Type["Predicate"]: ...
 
 
 def alias(predicate: Any, name: str = "") -> Type["Predicate"]:
@@ -1498,23 +1496,19 @@ _FieldDefinition = Union[Type[BaseField], Tuple["_FieldDefinition", ...]]  # typ
 
 
 @overload
-def field(basefield: _FieldDefinition) -> Any:
-    ...
+def field(basefield: _FieldDefinition) -> Any: ...
 
 
 @overload
-def field(basefield: _FieldDefinition, *, default: _T) -> _T:
-    ...
+def field(basefield: _FieldDefinition, *, default: _T) -> _T: ...
 
 
 @overload
-def field(basefield: _FieldDefinition, *, default: _T, kw_only: bool) -> _T:
-    ...
+def field(basefield: _FieldDefinition, *, default: _T, kw_only: bool) -> _T: ...
 
 
 @overload
-def field(basefield: _FieldDefinition, *, default_factory: Callable[[], _T]) -> _T:
-    ...
+def field(basefield: _FieldDefinition, *, default_factory: Callable[[], _T]) -> _T: ...
 
 
 def field(
@@ -2460,18 +2454,15 @@ class SignAccessor(object):
 
 
 @overload
-def get_field_definition(defn: Type[_BF]) -> _BF:
-    ...
+def get_field_definition(defn: Type[_BF]) -> _BF: ...
 
 
 @overload
-def get_field_definition(defn: _BF) -> _BF:
-    ...
+def get_field_definition(defn: _BF) -> _BF: ...
 
 
 @overload
-def get_field_definition(defn: Tuple[Any, ...], module: str = "") -> BaseField:
-    ...
+def get_field_definition(defn: Tuple[Any, ...], module: str = "") -> BaseField: ...
 
 
 def get_field_definition(defn: Any, module: str = "") -> BaseField:
