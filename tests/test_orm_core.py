@@ -1460,7 +1460,7 @@ class PredicateTestCase(unittest.TestCase):
         raw_f1 = Function("f", [Number(101), raw_1st, Number(202)])
 
         self.assertEqual(f1.raw, raw_f1)
-        self.assertEqual(F._unify(raw_f1), f1)
+        self.assertEqual(F.meta.unify(raw_f1), f1)
 
         self.assertEqual(str(F(101, tuple([]), 202)), """f(101,(),202)""")
         self.assertEqual(str(F(1, tuple([1, 2, 3, 4]), 2)), """f(1,(1,(2,(3,(4,())))),2)""")
@@ -1731,9 +1731,9 @@ class PredicateTestCase(unittest.TestCase):
         self.assertEqual(str(p), "p(1)")
         p = P(2)
         self.assertEqual(str(p), "p(2)")
-        p = P._unify(Function("p", [String("off")]))
+        p = P.meta.unify(Function("p", [String("off")]))
         self.assertEqual(p.a, False)
-        p = P._unify(Function("p", [Number(-1)]))
+        p = P.meta.unify(Function("p", [Number(-1)]))
         self.assertEqual(p.a, -1)
 
     def test_predicate_annotated_fields_union_StrictBool_int(self):
@@ -1744,9 +1744,9 @@ class PredicateTestCase(unittest.TestCase):
         self.assertEqual(str(p), "p(1)")
         p = P(2)
         self.assertEqual(str(p), "p(2)")
-        p = P._unify(Function("p", [Number(0)]))
+        p = P.meta.unify(Function("p", [Number(0)]))
         self.assertEqual(p.a, False)
-        p = P._unify(Function("p", [Number(-1)]))
+        p = P.meta.unify(Function("p", [Number(-1)]))
         self.assertEqual(p.a, -1)
 
     def test_predicate_with_wrong_mixed_annotations_and_Fields(self):
@@ -2017,10 +2017,10 @@ class PredicateInternalUnifyTestCase(unittest.TestCase):
         self.assertEqual(f1.raw, func)
 
         func2 = Function("fact", [String("1"), String("test")])
-        self.assertEqual(Fact._unify(func2), None)
+        self.assertEqual(Fact.meta.unify(func2), None)
 
         with self.assertRaises(ValueError) as ctx:
-            Fact._unify([1, 2, 3])
+            Fact.meta.unify([1, 2, 3])
         check_errmsg("Cannot unify with object ", ctx)
 
     # --------------------------------------------------------------------------
@@ -2043,7 +2043,7 @@ class PredicateInternalUnifyTestCase(unittest.TestCase):
         neg_func = Function("f", [Number(1)], False)
         neg_f = F(1, sign=False)
         neg_f_alt1 = F(a=1, sign=False)
-        neg_f_alt2 = F._unify(neg_func)
+        neg_f_alt2 = F.meta.unify(neg_func)
 
         self.assertEqual(neg_func, neg_f.raw)
         self.assertEqual(neg_func, neg_f_alt1.raw)
@@ -2115,22 +2115,22 @@ class PredicateInternalUnifyTestCase(unittest.TestCase):
         # F1 handles all
         pos_f1 = F1(1, sign=True)
         neg_f1 = F1(1, sign=False)
-        pos_f1_alt = F1._unify(pos_raw)
-        neg_f1_alt = F1._unify(neg_raw)
+        pos_f1_alt = F1.meta.unify(pos_raw)
+        neg_f1_alt = F1.meta.unify(neg_raw)
         self.assertEqual(pos_f1, pos_f1_alt)
         self.assertEqual(neg_f1, neg_f1_alt)
         self.assertEqual(pos_f1.clone(sign=False).raw, neg_f1.raw)
 
         # F2 handles positive only
         pos_f1 = F2(1, sign=True)
-        pos_f1_alt = F2._unify(pos_raw)
+        pos_f1_alt = F2.meta.unify(pos_raw)
         self.assertEqual(pos_f1, pos_f1_alt)
 
         with self.assertRaises(ValueError) as ctx:
             neg_f1 = F2(a=1, sign=False)
         with self.assertRaises(ValueError) as ctx:
             neg_f1 = F2(1, sign=False)
-        self.assertEqual(F2._unify(neg_raw), None)
+        self.assertEqual(F2.meta.unify(neg_raw), None)
 
         with self.assertRaises(ValueError) as ctx:
             neg_tuple_g = G(1, 2, sign=False)
@@ -2142,14 +2142,14 @@ class PredicateInternalUnifyTestCase(unittest.TestCase):
 
         # F3 handles negative only
         neg_f1 = F3(1, sign=False)
-        neg_f1_alt = F3._unify(neg_raw)
+        neg_f1_alt = F3.meta.unify(neg_raw)
         self.assertEqual(neg_f1, neg_f1_alt)
 
         with self.assertRaises(ValueError) as ctx:
             pos_f1 = F3(a=1, sign=True)
         with self.assertRaises(ValueError) as ctx:
             pos_f1 = F3(1, sign=True)
-        self.assertEqual(F3._unify(pos_raw), None)
+        self.assertEqual(F3.meta.unify(pos_raw), None)
 
     # --------------------------------------------------------------------------
     # Test predicate equality
@@ -2433,7 +2433,7 @@ class PredicateInternalUnifyTestCase(unittest.TestCase):
         AnonPred3 = simple_predicate("predicate", 3)
 
         # Should unify
-        ap3 = AnonPred3._unify(p3.raw)
+        ap3 = AnonPred3.meta.unify(p3.raw)
         self.assertEqual(ap3.raw, p3.raw)
         self.assertEqual(ap3.arg1.symbol, String("string1"))
         self.assertEqual(ap3[0].symbol, String("string1"))
@@ -2441,15 +2441,15 @@ class PredicateInternalUnifyTestCase(unittest.TestCase):
         self.assertEqual(ap3[1].symbol, Number(10))
 
         # Mismatched arity so unify will fail
-        self.assertEqual(AnonPred3._unify(p2.raw), None)
+        self.assertEqual(AnonPred3.meta.unify(p2.raw), None)
         # Mismatched predicate name so unify will fail
-        self.assertEqual(AnonPred3._unify(b3.raw), None)
+        self.assertEqual(AnonPred3.meta.unify(b3.raw), None)
 
         # Define predicate with a class name
         AnonPred4 = simple_predicate("predicate", 3, name="AnonPred4")
 
         # Should unify
-        ap4 = AnonPred4._unify(p3.raw)
+        ap4 = AnonPred4.meta.unify(p3.raw)
         self.assertEqual(ap4.raw, p3.raw)
 
     # --------------------------------------------------------------------------
@@ -2591,13 +2591,13 @@ class PredicateInternalUnifyTestCase(unittest.TestCase):
             asim = ConstantField()
 
         gfact1_sym = Function("fact", [Number(1), String("Dave"), Function("ok", [])])
-        gfact1_pred = Fact._unify(gfact1_sym)
+        gfact1_pred = Fact.meta.unify(gfact1_sym)
         self.assertEqual(gfact1_pred.anum, 1)
         self.assertEqual(gfact1_pred.astr, "Dave")
         self.assertEqual(gfact1_pred.asim, "ok")
 
         bfact1_sym = Function("fact", [String("1"), String("Dave"), Function("ok", [])])
-        self.assertEqual(Fact._unify(bfact1_sym), None)
+        self.assertEqual(Fact.meta.unify(bfact1_sym), None)
 
     # --------------------------------------------------------------------------
     # Test unifying a symbol with a predicate
@@ -2614,11 +2614,11 @@ class PredicateInternalUnifyTestCase(unittest.TestCase):
         good_fact_symbol1 = Function("fact", [Function("fun", [Number(1), String("Dave")])])
         good_fact_symbol2 = Function("fact", [Function("fun", [Number(3), String("Dave")])])
         good_fact_symbol3 = Function("fact", [Function("fun", [Number(4), String("Bob")])])
-        good_fact_pred1 = Fact._unify(good_fact_symbol1)
+        good_fact_pred1 = Fact.meta.unify(good_fact_symbol1)
         self.assertEqual(good_fact_pred1.afun, Fact.Fun(1, "Dave"))
 
         bad_fact_symbol1 = Function("fact", [Function("fun", [Number(1)])])
-        self.assertEqual(Fact._unify(bad_fact_symbol1), None)
+        self.assertEqual(Fact.meta.unify(bad_fact_symbol1), None)
 
         # A field value can only be set at construction
         with self.assertRaises(AttributeError) as ctx:

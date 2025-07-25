@@ -2684,6 +2684,10 @@ class PredicateDefn(object):
         """Returns true if the definition corresponds to a tuple"""
         return self.name == ""
 
+    def unify(self: PredicateDefn, symbol: AnySymbol) -> Optional[_P]:
+        """Return the result of trying to unify a symbol with the Predicate."""
+        return self._parent_cls._unify(symbol)
+
     # Not sure if this property serves any useful purpose - but it probably
     # shouldn't be user accessible so shouldn't be documented.
     @property
