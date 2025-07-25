@@ -123,7 +123,10 @@ def resolve_annotations(
             else:
                 value = ForwardRef(value, is_argument=False)
         try:
-            type_ = _eval_type(value, base_globals, base_locals)
+            if sys.version_info < (3, 13):
+                type_ = _eval_type(value, base_globals, base_locals)
+            else:
+                type_ = _eval_type(value, base_globals, base_locals, type_params=())
 
         except NameError:
             # The type annotation could refer to a definition at a non-global scope so build
