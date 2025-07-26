@@ -1271,6 +1271,12 @@ class PredicateTestCase(unittest.TestCase):
 
         self.assertEqual(True, MyPredicateTuple.meta.is_tuple)
 
+        class MyPredicateEmptyName(Predicate, name=""):
+            a: str
+
+        self.assertEqual(True, MyPredicateEmptyName.meta.is_tuple)
+        self.assertEqual("", MyPredicateEmptyName.meta.name)
+
         class MyPredicateSign(Predicate, sign=False):
             a: str
             b: int
@@ -1344,15 +1350,6 @@ class PredicateTestCase(unittest.TestCase):
 
         # ------------------------------------------
         # Test incorrect Meta attributes
-
-        # Empty 'name' is invalid
-        with self.assertRaises(ValueError) as ctx:
-
-            class P(Predicate):
-                a = IntegerField
-
-                class Meta:
-                    name = ""
 
         # Name and is_tuple=True is invalid
         with self.assertRaises(ValueError) as ctx:

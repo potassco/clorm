@@ -3065,17 +3065,12 @@ def _make_predicatedefn(
         if "_anon" in meta_dct:
             anon = meta_dct["_anon"]
 
-        if name_def and not pname:
-            raise ValueError(
-                (
-                    "Empty 'name' attribute is invalid. Use "
-                    "'is_tuple=True' if you want to define a tuple."
-                )
-            )
         if name_def and is_tuple:
             raise ValueError(
                 ("Cannot specify a 'name' attribute if " "'is_tuple=True' has been set")
             )
+        if name_def and not pname:
+            is_tuple = True
         elif is_tuple:
             pname = ""
 
@@ -3353,9 +3348,6 @@ class Predicate(object, metaclass=_PredicateMeta):
       "clone", or "Field".
 
     The constructor creates a predicate instance (i.e., a *fact*).
-
-    Note: Using the ``raw`` parameter is no longer supported. You should use
-    the `unify()` function or `Unifier` class instead.
 
     Args:
       **kwargs:
