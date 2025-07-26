@@ -68,7 +68,7 @@ Unification
 ^^^^^^^^^^^
 
 In logical terms, unification involves transforming one expression into another through term
-substitution. We co-op this terminology for the process of transforming ``Clingo.Symbol``
+substitution. We co-opt this terminology for the process of transforming ``Clingo.Symbol``
 objects into Clorm facts. This unification process is integral to using Clorm since it is the
 main process by which the symbols within a Clingo model are transformed into Clorm facts.
 
@@ -130,7 +130,7 @@ for debugging purposes.
 
 The final option is the ``delayed_init=True`` option that allow for a delayed initialisation of
 the ``FactBase``. What this means is that the symbols are only processed (i.e., they are not
-unified agaist the predicates to generate facts) when the ``FactBase`` object is actually used.
+unified against the predicates to generate facts) when the ``FactBase`` object is actually used.
 
 This is also useful because there are cases where a fact base object is never actually used and
 is simply discarded. In particular this can happen when the ASP solver generates models as part

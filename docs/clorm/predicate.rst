@@ -335,7 +335,7 @@ Field Definitions
 -----------------
 
 Clorm provides a number of standard classes to specify the mapping between Clingo's internal
-representation (some form of ``Clingo.Symbol``) to more natural Python representations.  ASP
+representation (some form of ``clingo.Symbol``) to more natural Python representations.  ASP
 has three *simple terms*: *integer*, *string*, and *constant*, and Clorm provides three
 standard definition classes to provide a mapping to these fields: :class:`~clorm.IntegerField`,
 :class:`~clorm.StringField`, and :class:`~clorm.ConstantField`.
@@ -632,16 +632,46 @@ Tuples are a special case of complex terms that often appear in ASP programs. Fo
    booking("2018-12-31", ("Sydney", "Australia")).
 
 For Clorm tuples are simply a :class:`~clorm.Predicate` sub-class where the name of the
-corresponding predicate is empty. While this can be set using an ``is_tuple`` property of the
-complex term's class, Clorm also provides specialised support using the more intuitive syntax
-of a Python tuple type annotations. For example, a predicate definition that unifies with the
-above fact can be defined simply (using the ``DateField`` defined earlier):
+corresponding predicate is empty. This mirrors Clingo's implementation, where a tuple is simply
+a ``clingo.Symbol`` function object with an empty name. When explicitly defining a
+:class:`~clorm.Predicate` sub-class a tuple sub-class is specified either by setting
+``name=""``, or to be even more explicit, by setting ``is_tuple=True``. So in the following
+example the specification syntax for ``PTuple`` and ``PTupleAlt`` are equivalent.
+
+.. code-block:: python
+
+   class PTuple(Predicate, name=""):
+      field1: str
+      field2: str
+
+   class PTupleAlt(Predicate, is_tuple=True):
+      field1: str
+      field2: str
+
+   class Booking(Predicate):
+       date: datetime.date = field(DateField)
+       location: PTuple
+
+This defines a ``Predicate`` sub-class, ``Booking``, that unifies with the above ASP booking
+fact. To instantiate ``Booking`` an instance of ``PTuple`` can be specified for the
+``location`` field. Alternatively, a Python tuple can also be used and Clorm will automatically
+map this value to a ``PTuple`` instance.  For example, the following creates identical
+``Boooking`` instances corresponding to the ``booking/2`` fact above:
+
+.. code-block:: python
+
+   bk1 = Booking(date=datetime.date(2018,12,31), location=PTuple("Sydney","Australia"))
+   bk2 = Booking(date=datetime.date(2018,12,31), location=("Sydney","Australia"))
+
+This use of Python tuples points to a simpler class specification mechanism that relies on
+Python's built in ``tuple`` type. So, an equivalent sub-class can be defined more compactly
+using the Python ``tuple`` type annotation:
 
 .. code-block:: python
 
    class Booking(Predicate):
        date: datetime.date = field(DateField)
-       location: Tuple[str, str]
+       location: tuple[str, str]
 
 .. note::
 
@@ -658,33 +688,7 @@ above fact can be defined simply (using the ``DateField`` defined earlier):
 
 
 Here the ``location`` field is defined as a pair of strings, without having to explictly define
-a separate :class:`~clorm.Predicate` sub-class that corresponds to this pair. To instantiate
-the ``Booking`` class a Python tuple can also be used for the values of ``location`` field. For
-example, the following creates a ``Boooking`` instance corresponding to the ``booking/2`` fact
-above:
-
-.. code-block:: python
-
-   bk = Booking(date=datetime.date(2018,12,31), location=("Sydney","Australia"))
-
-
-While it is unnecessary to define a seperate :class:`~clorm.Predicate` sub-class corresponding
-to the tuple, internally this is in fact exactly what Clorm does. Clorm will transform the
-above definition into something similar to the following (ignoring the class and field names):
-
-.. code-block:: python
-
-   class SomeAnonymousName(Predicate, name=""):
-      field1: str
-      field2: str
-
-   class Booking(Predicate):
-       date: datetime.date = field(DateField)
-       location: Tuple[str, str] = field(SomeAnonymousName.Field)
-
-Here ``SomeAnonymousName`` has an empty name, so it will be treated as a tuple rather than a
-complex term with a function name.
-
+a separate :class:`~clorm.Predicate` sub-class that corresponds to this pair.
 One important difference between the implicitly defined and explicitly defined versions of a
 tuple is that the explicit version allows for field names to be given, while the implicit
 version will have automatically generated names. However, for simple implicitly defined tuples
@@ -703,6 +707,7 @@ preferred alternative. For example:
    sparingly as it can lead to brittle code that is more difficult to refactor. It should
    mainly be used for cases where the ordering of the fields in the tuple is unlikely to change
    when the ASP program is refactored.
+
 
 Debugging Auxiliary Predicates
 ------------------------------

@@ -120,6 +120,14 @@ cases, complex terms and predicates are both encapsulated in the ``Predicate`` c
 
          Arity of the predicate/complex-term.
 
+      .. method:: unify(symbol)
+
+         Try to unify a symbol object with the Predicate. Returns the instance or None.
+
+         :param symbol: the clingo symbol object to unify against.
+         :type param1: ``clingo.Symbol``
+         :returns: An fact (instance of the predicate) or ``None`` if it failed to unify.
+
 .. autoclass:: clorm.ComplexTerm
    :members:
 
