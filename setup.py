@@ -32,6 +32,6 @@ setup(
     packages=["clorm", "clorm.orm", "clorm.util", "clorm.lib"],
     package_data={"clorm": ["py.typed"]},
     zip_safe=False,  # https://mypy.readthedocs.io/en/latest/installed_packages.html
-    install_requires=["clingo"]
+    install_requires=["clingo"],
     long_description=read("README.rst"),
 )
