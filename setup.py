@@ -33,7 +33,5 @@ setup(
     package_data={"clorm": ["py.typed"]},
     zip_safe=False,  # https://mypy.readthedocs.io/en/latest/installed_packages.html
     install_requires=["clingo"]
-    if sys.version_info >= (3, 8)
-    else ["clingo", "typing_extensions"],
     long_description=read("README.rst"),
 )

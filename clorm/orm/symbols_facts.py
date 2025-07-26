@@ -19,6 +19,7 @@ from typing import (
     Iterable,
     Iterator,
     List,
+    Literal,
     Optional,
     Sequence,
     Set,
@@ -36,11 +37,6 @@ import clingo.ast as clast
 from .core import AnySymbol, ClormError, Predicate, PredicatePath, get_symbol_mode
 from .factbase import FactBase
 from .noclingo import Function, Number, String, SymbolMode
-
-if sys.version_info < (3, 8):
-    from typing_extensions import Literal
-else:
-    from typing import Literal
 
 __all__ = [
     "SymbolPredicateUnifier",
