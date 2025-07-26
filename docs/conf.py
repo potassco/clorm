@@ -18,6 +18,7 @@ import sys
 
 sys.path.insert(0, os.path.abspath(".."))
 
+
 # Utility functions so that we can populate the version number
 # automatically. Following semantic naming conventions we want the major and
 # minor version but ignore the bug-fix version number.

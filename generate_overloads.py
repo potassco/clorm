@@ -16,6 +16,7 @@ combinatoric generated code approach.
 copied from sqlalchemy
 
 """
+
 from __future__ import annotations
 
 import importlib
