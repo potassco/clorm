@@ -1,21 +1,21 @@
 """A library of Python timeslot functions and terms for use within an ASP
-   program. When reasoning with time it is often unnecessary (and expensive) to
-   reason at the minute (or smaller) granularity. Instead it is often useful to
-   reason in multi-minute time blocks, such as 15 minute blocks.
+program. When reasoning with time it is often unnecessary (and expensive) to
+reason at the minute (or smaller) granularity. Instead it is often useful to
+reason in multi-minute time blocks, such as 15 minute blocks.
 
-   This library provides a flexible mechanism to define timeslots and the
-   provides functions for converting times to timeslots. It also provides ASP
-   callable functions. The limitation is that the time granurality is minute
-   based and the must divide a day evenly (e.g., 15 minute blocks).
+This library provides a flexible mechanism to define timeslots and the
+provides functions for converting times to timeslots. It also provides ASP
+callable functions. The limitation is that the time granurality is minute
+based and the must divide a day evenly (e.g., 15 minute blocks).
 
-   Note: functions that are ASP callable have a prefix ``cl_``.
+Note: functions that are ASP callable have a prefix ``cl_``.
 
-   .. code-block:: none
+.. code-block:: none
 
-      date(@cl_date_range("2018-01-01", "2018-01-10")).
+   date(@cl_date_range("2018-01-01", "2018-01-10")).
 
-   This will generate a number of ``date/1`` facts, each containing a date
-   encoded string between the desired two dates.
+This will generate a number of ``date/1`` facts, each containing a date
+encoded string between the desired two dates.
 
 """
 

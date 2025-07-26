@@ -1,5 +1,5 @@
 """A library of Python bool functions and terms for use within an ASP
-   program.
+program.
 
 """
 

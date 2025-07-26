@@ -248,7 +248,7 @@ else:
 def _expand_assumptions(
     assumptions: Iterable[
         Tuple[Union[Iterable[Union[Predicate, Symbol]], Predicate, Symbol], bool]
-    ]
+    ],
 ) -> List[Tuple[Symbol, bool]]:
     clingo_assump = []
 
@@ -307,16 +307,13 @@ class ControlOverride(object):
         logger: Optional[oclingo.Logger] = None,
         message_limit: int = 20,
         unifier: Optional[Union[List[Predicate], SymbolPredicateUnifier]] = None,
-    ) -> None:
-        ...
+    ) -> None: ...
 
     @overload
-    def __init__(self, control_: OControl) -> None:
-        ...
+    def __init__(self, control_: OControl) -> None: ...
 
     @overload
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        ...
+    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         self._unifier = None

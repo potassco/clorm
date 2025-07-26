@@ -1,16 +1,16 @@
 """A library of Python date functions and terms for use within an ASP
-   program. Some Clorm fields and complex terms are defined as well as functions
-   to use them.
+program. Some Clorm fields and complex terms are defined as well as functions
+to use them.
 
-   Any function that is to be called from within an ASP program will be prefixed
-   with: ``cl_``.
+Any function that is to be called from within an ASP program will be prefixed
+with: ``cl_``.
 
-   .. code-block:: none
+.. code-block:: none
 
-      date(@cl_date_range("2018-01-01", "2018-01-10")).
+   date(@cl_date_range("2018-01-01", "2018-01-10")).
 
-   This will generate a number of ``date/1`` facts, each containing a date
-   encoded string between the desired two dates.
+This will generate a number of ``date/1`` facts, each containing a date
+encoded string between the desired two dates.
 
 """
 

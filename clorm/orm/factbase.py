@@ -369,24 +369,22 @@ class FactBase(object):
     # statically generated** by generate_overloads.py
 
     @overload
-    def query(self, __ent0: Type[_T0]) -> "UnGroupedQuery[_T0]":
-        ...
+    def query(self, __ent0: Type[_T0]) -> "UnGroupedQuery[_T0]": ...
 
     @overload
-    def query(self, __ent0: Type[_T0], __ent1: Type[_T1]) -> "UnGroupedQuery[Tuple[_T0, _T1]]":
-        ...
+    def query(
+        self, __ent0: Type[_T0], __ent1: Type[_T1]
+    ) -> "UnGroupedQuery[Tuple[_T0, _T1]]": ...
 
     @overload
     def query(
         self, __ent0: Type[_T0], __ent1: Type[_T1], __ent2: Type[_T2]
-    ) -> "UnGroupedQuery[Tuple[_T0, _T1, _T2]]":
-        ...
+    ) -> "UnGroupedQuery[Tuple[_T0, _T1, _T2]]": ...
 
     @overload
     def query(
         self, __ent0: Type[_T0], __ent1: Type[_T1], __ent2: Type[_T2], __ent3: Type[_T3]
-    ) -> "UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3]]":
-        ...
+    ) -> "UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3]]": ...
 
     @overload
     def query(
@@ -396,14 +394,12 @@ class FactBase(object):
         __ent2: Type[_T2],
         __ent3: Type[_T3],
         __ent4: Type[_T4],
-    ) -> "UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]":
-        ...
+    ) -> "UnGroupedQuery[Tuple[_T0, _T1, _T2, _T3, _T4]]": ...
 
     # END OVERLOADED FUNCTIONS self.query
 
     @overload
-    def query(self, *roots: Any) -> "UnGroupedQuery[Any]":
-        ...
+    def query(self, *roots: Any) -> "UnGroupedQuery[Any]": ...
 
     def query(self, *roots):
         """Define a query using the new Query API :class:`Query`.

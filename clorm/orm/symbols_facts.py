@@ -275,16 +275,14 @@ def unify(
     unifier: Union[Iterable[Type[Predicate]], SymbolPredicateUnifier],
     symbols: Iterable[AnySymbol],
     ordered: Literal[True],
-) -> List[Predicate]:
-    ...
+) -> List[Predicate]: ...
 
 
 @overload
 def unify(
     unifier: Union[Iterable[Type[Predicate]], SymbolPredicateUnifier],
     symbols: Iterable[AnySymbol],
-) -> FactBase:
-    ...
+) -> FactBase: ...
 
 
 def unify(
