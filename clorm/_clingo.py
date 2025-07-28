@@ -466,6 +466,8 @@ class ControlOverride(object):
         posnargs.extend(["on_statistics", "on_finish"])
         if oclingo.__version__ >= "5.5.0":
             posnargs.append("on_core")
+        if oclingo.__version__ >= "5.8.0":
+            posnargs.append("on_last")
         posnargs.extend(["yield_", async_keyword])
         validargs = set(posnargs)
 
@@ -498,6 +500,18 @@ class ControlOverride(object):
                 return on_model(ClormModel(model, self.unifier))
 
             nkwargs["on_model"] = on_model_wrapper
+
+        # generate a new on_last function if necessary
+        if (
+            oclingo.__version__ >= "5.8.0"
+            and "on_last" in nkwargs
+            and nkwargs["on_last"] is not None
+        ):
+            on_last = nkwargs["on_last"]
+
+            @functools.wraps(on_last)
+            def on_last_wrapper(model):
+                return on_last(ClormModel(model, self.unifier))
 
         # Call the wrapped solve function and handle the return value
         # appropriately

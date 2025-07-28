@@ -276,6 +276,49 @@ class ClingoTestCase(unittest.TestCase):
 # ------------------------------------------------------------------------------
 
 
+class Clingo58TestCase(unittest.TestCase):
+    def setUp(self):
+        pass
+
+    def tearDown(self):
+        pass
+
+    # --------------------------------------------------------------------------
+    # Test the solve with on_last
+    # --------------------------------------------------------------------------
+    def test_solve_with_on_last(self):
+        # There is no on_last for older versions.
+        if oclingo.__version__ < "5.8.0":
+            return
+
+        # Program to test on_last callback - use optimization to call on only the optimal
+        # model. Optimal model has only a single p(X).
+        prgstr = """
+1 { p(1..3) }.
+#minimize { 1,p,X: p(X) }.
+#maximize { 1,p(2): p(2) }.
+        """
+
+        ctrl = cclingo.Control()
+        conf = ctrl.configuration
+        add_program_string(ctrl, prgstr)
+        ctrl.ground([("base", [])])
+
+        def on_last(m):
+            nonlocal count
+            count += 1
+            self.assertTrue(m.contains(oclingo.Function("p", [oclingo.Number(2)])))
+
+        count = 0
+        sr = ctrl.solve(on_last=on_last)
+        self.assertEqual(count, 1)
+
+
+# ------------------------------------------------------------------------------
+#
+# ------------------------------------------------------------------------------
+
+
 class Clingo54TestCase(unittest.TestCase):
     def setUp(self):
         pass
