@@ -84,6 +84,10 @@ from .templating import (
     expand_template,
 )
 
+#from .asp_docs import (
+#    
+#)
+
 __all__ = [
     "ClormError",
     "Comparator",
@@ -2678,6 +2682,10 @@ class PredicateDefn(object):
     def unify(self: PredicateDefn, symbol: AnySymbol) -> Optional[_P]:
         """Return the result of trying to unify a symbol with the Predicate."""
         return self._parent_cls._unify(symbol)
+
+    def asp_docs(self: PredicateDefn, mkdoclingo=False) -> str:
+        """Return a formatted ASP documentation of the predicate."""
+        return ""
 
     # Not sure if this property serves any useful purpose - but it probably
     # shouldn't be user accessible so shouldn't be documented.
