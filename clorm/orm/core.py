@@ -3130,14 +3130,16 @@ def _make_predicatedefn(
 
     module = namespace.get("__module__", None)
 
-    annotations: dict[str, Any] = {} # mapping the field names to annotations
+    annotations: dict[str, Any] = {}  # mapping the field names to annotations
 
     # Python 3.14 behaves differently whether "from __future__ import annotations" is used, so
     # always fallback to looking at the "__annotations__" entry of the namespace dict.
     if sys.version_info >= (3, 14):
         annotate_func = annotationlib.get_annotate_from_class_namespace(namespace)
         if annotate_func:
-            annotations = annotationlib.call_annotate_function(annotate_func, format=annotationlib.Format.VALUE)
+            annotations = annotationlib.call_annotate_function(
+                annotate_func, format=annotationlib.Format.VALUE
+            )
     if not annotations:
         annotations = namespace.get("__annotations__", {})
 
