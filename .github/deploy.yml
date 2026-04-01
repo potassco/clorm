@@ -35,12 +35,12 @@ conda:
       git_url: https://github.com/potassco/{{ name }}.git
       requirements:
         host:
-          - python >=3.5
+          - python >=3.10
           - pip
-          - clingo >=5.4.0
+          - clingo >=5.7.0
         run:
-          - python >=3.5
-          - clingo >=5.4.0
+          - python >=3.10
+          - clingo >=5.7.0
       build:
         noarch: python
         script: 'python -m pip install --no-deps --ignore-installed .'
