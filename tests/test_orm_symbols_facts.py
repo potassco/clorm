@@ -886,11 +886,12 @@ class ParseTestCase(unittest.TestCase):
         with self.assertRaises(FactParserError) as ctx:
             fb_out = parse_fact_string(asp1, unifier=[], raise_nonfact=True)
         assert ctx.exception.line == 1
-    
+
         asp2 = "#false :- y."
         with self.assertRaises(FactParserError) as ctx:
             fb_out = parse_fact_string(asp2, unifier=[], raise_nonfact=True)
         assert ctx.exception.line == 1
+
 
 # ------------------------------------------------------------------------------
 # main
