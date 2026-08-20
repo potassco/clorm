@@ -981,7 +981,7 @@ class SelectImpl(Select):
     def query_plan(self, *args, **kwargs):
         qspec = self._qspec.fill_defaults()
 
-        (factsets, factindexes) = QueryExecutor.get_factmap_data(self._factbase.factmaps, qspec)
+        factsets, factindexes = QueryExecutor.get_factmap_data(self._factbase.factmaps, qspec)
         qplan = make_query_plan(factindexes.keys(), qspec)
 
         return qplan.ground(*args, **kwargs)

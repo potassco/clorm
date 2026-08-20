@@ -2392,9 +2392,9 @@ class JoinQueryPlan(object):
 
         rootcbs, catchall = partition_clauses(clauses)
         if not rootcbs:
-            (prejoincl, prejoincb) = (None, None)
+            prejoincl, prejoincb = (None, None)
         elif len(rootcbs) == 1:
-            (prejoincl, prejoincb) = make_prejoin_pair(indexes, rootcbs[0])
+            prejoincl, prejoincb = make_prejoin_pair(indexes, rootcbs[0])
             prejoincl = prejoincl.dealias() if prejoincl else None
             prejoincb = prejoincb.dealias() if prejoincb else None
 
@@ -2407,7 +2407,7 @@ class JoinQueryPlan(object):
                 ).format(rootcbs, root)
             )
 
-        (joinsc, postjoincb) = make_join_pair(joins, catchall)
+        joinsc, postjoincb = make_join_pair(joins, catchall)
 
         prejoinobb = None
         postjoinobb = None
@@ -4199,7 +4199,7 @@ class QueryExecutor(object):
         elif qspec.ordered:
             qspec = qspec.modp(order_by=process_ordered(qspec.roots))
 
-        (factsets, factindexes) = QueryExecutor.get_factmap_data(self._factmaps, qspec)
+        factsets, factindexes = QueryExecutor.get_factmap_data(self._factmaps, qspec)
         qplan = make_query_plan(factindexes.keys(), qspec)
         #        qplan = qplan.ground()
         query = make_query(qplan, factsets, factindexes)
@@ -4267,7 +4267,7 @@ class QueryExecutor(object):
         if self._qspec.distinct and not self._qspec.select:
             raise ValueError("'distinct' flag requires a 'select' projection")
 
-        (self._qplan, self._query) = self._make_plan_and_query()
+        self._qplan, self._query = self._make_plan_and_query()
 
         outsig = self._qspec.select
         roots = self._qspec.roots
@@ -4295,7 +4295,7 @@ class QueryExecutor(object):
         if self._qspec.tuple:
             raise ValueError("'tuple' is incompatible with 'delete'")
 
-        (self._qplan, self._query) = self._make_plan_and_query()
+        self._qplan, self._query = self._make_plan_and_query()
 
         selection = self._qspec.select
         roots = [hashable_path(p) for p in self._qspec.roots]
@@ -4408,7 +4408,7 @@ class QueryExecutor(object):
         if self._qspec.tuple:
             raise ValueError(f"'tuple' is incompatible with '{name}'")
 
-        (self._qplan, self._query) = self._make_plan_and_query()
+        self._qplan, self._query = self._make_plan_and_query()
 
         selection = self._qspec.select
         roots = [hashable_path(p) for p in self._qspec.roots]

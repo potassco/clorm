@@ -220,7 +220,7 @@ class BaseQueryImpl(Query, Generic[_T]):
     def query_plan(self, *args, **kwargs):
         qspec = self._qspec.fill_defaults()
 
-        (factsets, factindexes) = QueryExecutor.get_factmap_data(self._factmaps, qspec)
+        factsets, factindexes = QueryExecutor.get_factmap_data(self._factmaps, qspec)
         return make_query_plan(factindexes.keys(), qspec)
 
     # --------------------------------------------------------------------------
