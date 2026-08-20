@@ -13,12 +13,12 @@ source:
 
 requirements:
   host:
-  - python >=3.5
+  - python >=3.10
   - pip
-  - clingo >=5.4.0
+  - clingo >=5.5.0
   run:
-  - python >=3.5
-  - clingo >=5.4.0
+  - python >=3.10
+  - clingo >=5.5.0
 
 build:
   number: {{ build }}
