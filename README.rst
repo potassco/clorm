@@ -20,12 +20,12 @@ that makes it easier to refactor the python code as the ASP program evolves.
 
 The documentation is available online `here <https://clorm.readthedocs.io/>`_.
 
-Note: Clorm works with Python 3.9+ and Clingo 5.6+
+Note: Clorm works with Python 3.10+ and Clingo 5.6+
 
 Installation
 ------------
 
-Clorm requires Python 3.9+ and Clingo 5.6+. It can be installed using either the
+Clorm requires Python 3.10+ and Clingo 5.6+. It can be installed using either the
 `pip` or `conda` package managers.
 
 `pip` packages can be downloaded from PyPI:
@@ -367,7 +367,7 @@ Clorm library. These include:
 
 Development
 -----------
-* Python version: Clorm is tested with Python versions 3.9 - 3.14
+* Python version: Clorm is tested with Python versions 3.10 - 3.14
 * Clingo version: Clorm is typically tested with Clingo versions 5.7 - 5.8
 
 Alternatives
