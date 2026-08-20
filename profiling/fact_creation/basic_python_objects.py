@@ -137,27 +137,27 @@ def compare_generating_simple_objects():
     print("Comparing the generation of simple python object")
 
     # Time to generate Python P1 object
-    (p1s, p1t) = generate_list("P1", create_p1)
+    p1s, p1t = generate_list("P1", create_p1)
     print("Instantating {} Python {} objects in {}".format(len(p1s), p1t.name, p1t))
 
     # Time to generate Python PS1 (P1 with slots) object
-    (ps1s, ps1t) = generate_list("PS1", create_ps1)
+    ps1s, ps1t = generate_list("PS1", create_ps1)
     print("Instantating {} Python {} objects in {}".format(len(ps1s), ps1t.name, ps1t))
 
     # Time to generate Python P2 object
-    (p2s, p2t) = generate_list("P2", create_p2)
+    p2s, p2t = generate_list("P2", create_p2)
     print("Instantating {} Python {} objects in {}".format(len(p2s), p2t.name, p2t))
 
     # Time to generate Python P1 object
-    (p3s, p3t) = generate_list("P3", create_p3)
+    p3s, p3t = generate_list("P3", create_p3)
     print("Instantating {} Python {} objects in {}".format(len(p3s), p3t.name, p3t))
 
     # Time to generate Python PS3 (P1 with slots) object
-    (ps3s, ps3t) = generate_list("PS3", create_ps3)
+    ps3s, ps3t = generate_list("PS3", create_ps3)
     print("Instantating {} Python {} objects in {}".format(len(ps3s), ps3t.name, ps3t))
 
     # Time to generate Python P4 object
-    (p4s, p4t) = generate_list("P4", create_p4)
+    p4s, p4t = generate_list("P4", create_p4)
     print("Instantating {} Python {} objects in {}".format(len(p4s), p4t.name, p4t))
 
     print("--------------------------------------------------------\n")

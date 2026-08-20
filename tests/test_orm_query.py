@@ -1479,7 +1479,7 @@ class QueryPlanTestCase(unittest.TestCase):
         wsc = StandardComparator.from_where_qcondition
 
         clauses = pw((F.anum < 4) & (F.astr == "foo"), [F])
-        (prejoinsc, prejoincb) = make_prejoin_pair([F.anum, F.astr], clauses)
+        prejoinsc, prejoincb = make_prejoin_pair([F.anum, F.astr], clauses)
         self.assertEqual(type(prejoincb), ClauseBlock)
         self.assertEqual(len(prejoincb), 1)
         self.assertEqual(type(prejoincb[0]), Clause)
@@ -1506,14 +1506,14 @@ class QueryPlanTestCase(unittest.TestCase):
         where2 = pw(
             (FA.anum < 4) & (FA.anum == F.astr) & ((FA.anum > 10) | (FA.astr == "bar")), [FA, F]
         )
-        (prejoinsc, prejoincb) = make_prejoin_pair([F.anum, F.astr], where)
+        prejoinsc, prejoincb = make_prejoin_pair([F.anum, F.astr], where)
         self.assertEqual(prejoinsc, Clause([wsc(FA.astr == "foo")]))
         self.assertEqual(len(prejoincb), len(where2))
 
-        (prejoinsc, prejoincb) = make_prejoin_pair([F.anum], where)
+        prejoinsc, prejoincb = make_prejoin_pair([F.anum], where)
         self.assertEqual(prejoinsc, Clause([wsc(FA.anum < 4)]))
 
-        (prejoinsc, prejoincb) = make_prejoin_pair([], where)
+        prejoinsc, prejoincb = make_prejoin_pair([], where)
         self.assertEqual(prejoinsc, None)
         self.assertEqual(prejoincb, where)
 
@@ -1534,15 +1534,15 @@ class QueryPlanTestCase(unittest.TestCase):
         where = pw((FA.anum < G.anum) | ((FA.astr == "foo") & (FA.anum == FA.astr)), [FA, G])
         joins = pj([FA.anum == G.anum, G.anum > FA.anum], [FA, G])
 
-        (joinsc, joincb) = make_join_pair(joins, where)
+        joinsc, joincb = make_join_pair(joins, where)
         self.assertEqual(joinsc, pj([FA.anum == G.anum], [FA, G])[0])
         self.assertEqual(len(joincb), len(where) + 1)
 
-        (joinsc, joincb) = make_join_pair([], where)
+        joinsc, joincb = make_join_pair([], where)
         self.assertEqual(joinsc, None)
         self.assertEqual(len(joincb), len(where))
 
-        (joinsc, joincb) = make_join_pair([], None)
+        joinsc, joincb = make_join_pair([], None)
         self.assertEqual(joinsc, None)
         self.assertEqual(joincb, None)
 
@@ -2948,7 +2948,7 @@ class QueryExecutorTestCase(unittest.TestCase):
 
         qe = QueryExecutor(factmaps, qspec)
 
-        (qplan, query) = qe._make_plan_and_query()
+        qplan, query = qe._make_plan_and_query()
         result = list(qe.all())
 
         expected = [
@@ -2962,7 +2962,7 @@ class QueryExecutorTestCase(unittest.TestCase):
         # Alternative using the natural sort order specified by ordered()
         qspec = QuerySpec(roots=roots, join=joins1, ordered=True, joh=bjoh)
         qe = QueryExecutor(factmaps, qspec)
-        (qplan, query) = qe._make_plan_and_query()
+        qplan, query = qe._make_plan_and_query()
         result = list(qe.all())
         expected = [
             (F(1), G(1, "a", 5)),
@@ -3198,7 +3198,7 @@ class QueryExecutorTestCase(unittest.TestCase):
         qspec = QuerySpec(roots=roots, joh=fjoh(V, AT), join=join, where=where, order_by=order_by)
         qe = QueryExecutor(factmaps, qspec)
 
-        (qplan, _) = qe._make_plan_and_query()
+        qplan, _ = qe._make_plan_and_query()
         result = list(qe.all())
         expected = [gv12, gv11, gv21, gv22]
         self.assertEqual(expected, result)

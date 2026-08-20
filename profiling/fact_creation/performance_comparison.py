@@ -156,22 +156,22 @@ def compare_generating_simple_facts_and_symbols():
     )
 
     # Time to generate clingo symbols
-    (ssymbols, ssymbols_t) = generate_list(create_simple_symbol)
+    ssymbols, ssymbols_t = generate_list(create_simple_symbol)
     print("Instantating {} simple Clingo symbols in {}".format(len(ssymbols), ssymbols_t))
 
     # Time to generate P facts
-    (snfacts, snfacts_t) = generate_list(create_simple_fact_named)
+    snfacts, snfacts_t = generate_list(create_simple_fact_named)
     print("Instantating {} simple named Clorm facts in {}".format(len(snfacts), snfacts_t))
 
-    (spfacts, spfacts_t) = generate_list(create_simple_fact_positional)
+    spfacts, spfacts_t = generate_list(create_simple_fact_positional)
     print("Instantating {} simple positional Clorm facts in {}".format(len(spfacts), spfacts_t))
 
     # Time to generate basic python object
-    (nobjects, nobjects_t) = generate_list(create_pts_named)
+    nobjects, nobjects_t = generate_list(create_pts_named)
     print("Instantating {} basic named python objects in {}".format(len(nobjects), nobjects_t))
 
     # Time to generate basic python object
-    (pobjects, pobjects_t) = generate_list(create_pts_positional)
+    pobjects, pobjects_t = generate_list(create_pts_positional)
     print(
         "Instantating {} basic positional python objects in {}".format(len(pobjects), pobjects_t)
     )
@@ -206,11 +206,11 @@ def compare_generating_complex_facts_and_symbols():
     print("Comparing the generation of complex facts vs raw clingo symbols\n")
 
     # Time to generate P facts
-    (cfacts, cfacts_t) = generate_list(create_complex_fact)
+    cfacts, cfacts_t = generate_list(create_complex_fact)
     print("Instantating complex {} Clorm facts in {}".format(len(cfacts), cfacts_t))
 
     # Time to generate clingo symbols
-    (csymbols, csymbols_t) = generate_list(create_complex_symbol)
+    csymbols, csymbols_t = generate_list(create_complex_symbol)
     print("Instantating complex {} Clingo symbols in {}".format(len(csymbols), csymbols_t))
 
     assert csymbols == [f.raw for f in cfacts]
@@ -225,7 +225,7 @@ def time_to_instantiate_simple_from_raw():
     print("=========================================================")
     print("Comparing time to instantiate simple facts from a raw symbol\n")
 
-    (symbols, symbols_t) = generate_list(create_simple_symbol)
+    symbols, symbols_t = generate_list(create_simple_symbol)
 
     with Timer() as unify_timer:
         foall = [PT._unify(s) for s in symbols]
@@ -237,7 +237,7 @@ def time_to_instantiate_complex_from_raw():
     print("========================================================")
     print("Comparing time to instantiate complex facts from a raw symbol\n")
 
-    (symbols, symbols_t) = generate_list(create_complex_symbol)
+    symbols, symbols_t = generate_list(create_complex_symbol)
 
     with Timer() as unify_timer:
         foall = [P._unify(s) for s in symbols]
@@ -258,7 +258,7 @@ def compare_query_times():
     )
 
     # Build a list of complex facts and corresponding symbols
-    (facts, facts_t) = generate_list(create_complex_fact)
+    facts, facts_t = generate_list(create_complex_fact)
     symbols = [f.raw for f in facts]
 
     # Test time to import into a factbase with indexing

@@ -880,6 +880,18 @@ class ParseTestCase(unittest.TestCase):
 
         set_symbol_mode(SymbolMode.CLINGO)
 
+    def test_parse_fact_rule_with_body_error(self):
+        """Make sure parsing a rule with a body generates an error"""
+        asp1 = "x :- y."
+        with self.assertRaises(FactParserError) as ctx:
+            fb_out = parse_fact_string(asp1, unifier=[], raise_nonfact=True)
+        assert ctx.exception.line == 1
+
+        asp2 = "#false :- y."
+        with self.assertRaises(FactParserError) as ctx:
+            fb_out = parse_fact_string(asp2, unifier=[], raise_nonfact=True)
+        assert ctx.exception.line == 1
+
 
 # ------------------------------------------------------------------------------
 # main

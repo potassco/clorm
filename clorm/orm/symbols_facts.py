@@ -458,7 +458,6 @@ class NonFactVisitor:
             ASTType.BinaryOperation,
             ASTType.Interval,
             ASTType.Pool,
-            ASTType.BooleanConstant,
             ASTType.Comparison,
             getattr(ASTType, "Guard" if clingo.version() >= (5, 6, 0) else "AggregateGuard"),
             ASTType.ConditionalLiteral,
@@ -502,11 +501,21 @@ class NonFactVisitor:
         """
         Dispatch to a visit method.
         """
+        if (ast.ast_type == ASTType.Rule) and ast.body:
+            line = cast(clast.Location, ast.location).begin.line
+            column = cast(clast.Location, ast.location).begin.column
+            exc = FactParserError(message=f"Non-fact '{self._stmt}'", line=line, column=column)
+            raise ClingoParserWrapperError(exc)
+
         if ast.ast_type in NonFactVisitor.ERROR_AST or (
             ast.ast_type == ASTType.Function and ast.external
         ):
-            line = cast(clast.Location, ast.location).begin.line
-            column = cast(clast.Location, ast.location).begin.column
+            try:
+                line = cast(clast.Location, ast.location).begin.line
+                column = cast(clast.Location, ast.location).begin.column
+            except AttributeError:
+                line = -1
+                column = -1
             exc = FactParserError(message=f"Non-fact '{self._stmt}'", line=line, column=column)
             raise ClingoParserWrapperError(exc)
 

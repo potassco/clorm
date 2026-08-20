@@ -2482,7 +2482,7 @@ class PredicateInternalUnifyTestCase(unittest.TestCase):
         #        f[0]=2
         #        self.assertEqual(f.anum, 2)
 
-        (anum, astr) = f
+        anum, astr = f
         #        self.assertEqual(anum, 2)
         self.assertEqual(astr, "fun")
 
